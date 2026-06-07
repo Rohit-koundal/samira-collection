@@ -1,0 +1,14 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="catDress" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FAE6E3" />
+      <stop offset="100%" stop-color="#F8D5D0" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="50" fill="url(#catDress)" />
+  <path d="M360 190C360 190 330 90 420 90C510 90 480 190 480 190" fill="#FFF6F4" />
+  <path d="M420 90C440 130 500 150 540 210L560 520C560 550 530 560 530 560H410C410 560 380 550 380 520L400 210C410 160 400 130 420 90Z" fill="#FFF1EE" stroke="#D78E88" stroke-width="24" />
+  <path d="M390 520C400 540 430 560 450 560H490C510 560 540 540 550 520" stroke="#D78E88" stroke-width="22" stroke-linecap="round" />
+  <circle cx="860" cy="260" r="80" fill="#FFEDEB" />
+  <path d="M820 260C820 260 840 285 860 285C880 285 900 260 900 260" stroke="#D78E88" stroke-width="18" stroke-linecap="round" />
+</svg>

@@ -1,0 +1,13 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="catSuit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F7EAD3" />
+      <stop offset="100%" stop-color="#F1DFC4" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="50" fill="url(#catSuit)" />
+  <path d="M350 160L500 260L640 160L700 190L665 520L565 520L550 325L450 325L435 520L335 520L300 190L350 160Z" fill="#FFF6F0" stroke="#D2A17E" stroke-width="28" />
+  <path d="M500 260L540 520" stroke="#C99572" stroke-width="22" stroke-linecap="round" />
+  <circle cx="900" cy="190" r="85" fill="#FFF2E6" />
+  <path d="M860 190C860 190 880 210 900 210C920 210 940 190 940 190" stroke="#D2A17E" stroke-width="18" stroke-linecap="round" />
+</svg>

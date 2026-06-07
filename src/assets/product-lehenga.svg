@@ -1,0 +1,14 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="prodLehenga" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5E6F2" />
+      <stop offset="100%" stop-color="#E9D3EB" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="60" fill="url(#prodLehenga)" />
+  <path d="M320 200C320 200 290 120 390 120C490 120 460 200 460 200" fill="#FFFFFF" />
+  <path d="M390 120C410 160 460 190 500 250L520 620C520 660 480 690 430 690H390C340 690 300 660 300 620V250Z" fill="#FFF5FB" stroke="#C88FC1" stroke-width="30" />
+  <path d="M320 620C360 670 420 690 470 690H510C560 690 620 670 660 620" stroke="#C88FC1" stroke-width="24" stroke-linecap="round" />
+  <circle cx="900" cy="220" r="90" fill="#F7EBF7" />
+  <path d="M870 220C870 220 890 245 900 245C910 245 930 220 930 220" stroke="#C88FC1" stroke-width="18" stroke-linecap="round" />
+</svg>

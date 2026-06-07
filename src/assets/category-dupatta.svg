@@ -1,0 +1,13 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="catDupatta" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF2F3" />
+      <stop offset="100%" stop-color="#F8DEE4" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="50" fill="url(#catDupatta)" />
+  <path d="M300 240C320 180 420 150 520 160C620 170 700 230 720 280L710 580C710 620 680 650 640 650H420C380 650 340 620 340 580L300 240Z" fill="#FFFBFB" stroke="#E6BEC6" stroke-width="26" />
+  <path d="M340 280C410 220 540 210 620 260" stroke="#D8A3AE" stroke-width="28" stroke-linecap="round" />
+  <circle cx="860" cy="260" r="95" fill="#FFECEE" />
+  <path d="M820 260C820 260 840 280 860 280C880 280 900 260 900 260" stroke="#D8A3AE" stroke-width="18" stroke-linecap="round" />
+</svg>

@@ -1,0 +1,13 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="catKurti" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FCE7F0" />
+      <stop offset="100%" stop-color="#F9D0E2" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="50" fill="url(#catKurti)" />
+  <path d="M350 180C350 180 320 110 420 110C520 110 490 180 490 180" fill="#FFFFFF" />
+  <path d="M420 110C440 150 520 165 550 210L570 480C570 520 535 520 535 520H385C385 520 350 520 350 480L370 210C370 180 400 160 420 110Z" fill="#FFF4FA" stroke="#D998BC" stroke-width="26" />
+  <circle cx="850" cy="250" r="90" fill="#FFE9F2" />
+  <path d="M810 250C810 250 830 270 850 270C870 270 890 250 890 250" stroke="#D998BC" stroke-width="20" stroke-linecap="round" />
+</svg>

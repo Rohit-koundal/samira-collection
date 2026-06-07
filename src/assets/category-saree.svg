@@ -1,0 +1,15 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="catSaree" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FDEEE3" />
+      <stop offset="100%" stop-color="#F9D7D0" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="50" fill="url(#catSaree)" />
+  <path d="M340 200C340 200 330 120 440 120C550 120 540 200 540 200" fill="#FFF1F0" />
+  <path d="M360 200L500 600" stroke="#D79A93" stroke-width="40" stroke-linecap="round" />
+  <path d="M500 200L460 620" stroke="#C8827A" stroke-width="40" stroke-linecap="round" />
+  <circle cx="810" cy="245" r="95" fill="#FFE7E7" />
+  <line x1="810" y1="140" x2="810" y2="350" stroke="#D79A93" stroke-width="28" stroke-linecap="round" />
+  <path d="M760 260C760 260 775 280 810 280C845 280 860 260 860 260" stroke="#C8827A" stroke-width="24" stroke-linecap="round" />
+</svg>
