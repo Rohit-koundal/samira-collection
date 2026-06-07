@@ -1,15 +1,8 @@
-<svg width="260" height="72" viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#B68D68" />
-      <stop offset="100%" stop-color="#D4A96B" />
-    </linearGradient>
-  </defs>
-  <rect width="260" height="72" rx="24" fill="white" />
-  <path d="M34 16C27.37 16 22 21.37 22 28C22 34.63 27.37 40 34 40C40.63 40 46 34.63 46 28C46 21.37 40.63 16 34 16ZM22 50C22 43.37 27.37 38 34 38C40.63 38 46 43.37 46 50V62H22V50Z" fill="#8A4A42" />
-  <path d="M62 22C62 18.69 64.69 16 68 16H82C85.31 16 88 18.69 88 22V52C88 55.31 85.31 58 82 58H68C64.69 58 62 55.31 62 52V22Z" fill="#20232a" opacity="0.9" />
-  <path d="M96 16H126C130.42 16 134 19.58 134 24V44C134 48.42 130.42 52 126 52H96V16Z" fill="#8A4A42" opacity="0.95" />
-  <text x="148" y="27" fill="#111827" font-family="Playfair Display, serif" font-size="22" font-weight="700">Samira</text>
-  <text x="148" y="48" fill="#6B7280" font-family="Inter, sans-serif" font-size="16" font-weight="600">Collection</text>
-  <path d="M182 34C182 26.82 188.82 20 196 20C203.18 20 210 26.82 210 34C210 41.18 203.18 48 196 48C188.82 48 182 41.18 182 34ZM196 28C193.79 28 192 29.79 192 32C192 34.21 193.79 36 196 36C198.21 36 200 34.21 200 32C200 29.79 198.21 28 196 28Z" fill="url(#goldGrad)" opacity="0.95" />
+<svg width="280" height="88" viewBox="0 0 280 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="280" height="88" rx="18" fill="#FFFAF2"/>
+  <path d="M38 61C48 35 57 25 66 25C76 25 83 37 89 61" stroke="#6D1F34" stroke-width="6" stroke-linecap="round"/>
+  <path d="M48 61C56 43 61 36 66 36C72 36 76 44 81 61" stroke="#FF5F86" stroke-width="6" stroke-linecap="round"/>
+  <path d="M34 24C45 16 67 15 82 24" stroke="#B8914A" stroke-width="4" stroke-linecap="round"/>
+  <text x="108" y="39" fill="#17161A" font-family="Georgia, serif" font-size="24" font-weight="700">Samira</text>
+  <text x="108" y="62" fill="#6D1F34" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="800" letter-spacing="3">COLLECTION</text>
 </svg>

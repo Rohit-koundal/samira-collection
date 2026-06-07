@@ -1,70 +1,66 @@
-# Getting Started with Create React App
+# Samira Collection MERN E-Commerce
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Premium women fashion e-commerce system with a customer storefront, app-like mobile UI, and complete admin panel foundation.
 
-## Available Scripts
+## Included
 
-In the project directory, you can run:
+- Customer site: home, products, product detail, wishlist, cart, checkout, auth, profile, orders, contact and policy-ready pages.
+- Admin panel at `#/admin`: dashboard, products, categories, orders, customers, coupons, banners, reviews, returns/exchange, inventory, reports and settings.
+- Backend: Express, MongoDB, Mongoose schemas, JWT auth, bcrypt password hashing, role-based middleware, upload middleware and REST routes.
+- Seed data: 1 admin, 3 customers, 8 categories, 30 products, 5 banners, 5 coupons, 10 sample orders and reviews.
 
-### `npm start`
+## Frontend
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+npm install
+npm start
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Runs at `http://localhost:3000`.
 
-### `npm test`
+## Backend
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Create `.env` from `.env.example`, then run:
 
-### `npm run build`
+```bash
+npm run server
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Runs at `http://localhost:5000`.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Seed Database
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm run seed
+```
 
-### `npm run eject`
+Admin login:
+- `admin@samiracollection.com`
+- `Admin@123`
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Customer login:
+- `customer@test.com`
+- `Customer@123`
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Environment Variables
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+MONGO_URI=
+JWT_SECRET=
+PORT=5000
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+REACT_APP_API_URL=http://localhost:5000/api
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Future Enhancements
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Razorpay live checkout.
+- Cloudinary image upload adapter.
+- Advanced analytics charts.
+- Courier API automation.
+- Native mobile app.
+- AI recommendation engine.

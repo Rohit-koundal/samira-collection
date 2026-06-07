@@ -3,6 +3,12 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        wine: '#6D1F34',
+        rose: '#FF5F86',
+        blush: '#FFF0F4',
+        ivory: '#FFFAF2',
+        gold: '#B8914A',
+        charcoal: '#17161A',
         brand: {
           soft: '#F8E8E4',
           primary: '#8A4A42',
