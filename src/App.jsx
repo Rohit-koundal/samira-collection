@@ -168,7 +168,7 @@ function App() {
     <div className="min-h-screen overflow-x-hidden bg-[#faf5f1] text-slate-900 antialiased">
       <DesktopHeader />
       <MobileHeader activeNav={activeNav} onAction={setActiveNav} />
-      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pb-28 md:pb-16">
+      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pb-32 md:pb-16">
         {activeNav === 'home' ? (
           <>
             <Hero />

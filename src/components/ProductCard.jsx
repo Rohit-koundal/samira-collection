@@ -18,9 +18,9 @@ export default function ProductCard({ product }) {
   const image = productImages[product.image];
 
   return (
-    <article className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-soft transition hover:-translate-y-1 hover:shadow-xl">
+    <article className="group min-w-0 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-soft transition hover:-translate-y-1 hover:shadow-xl">
       <div className="relative overflow-hidden rounded-[1.75rem] bg-slate-100 p-4">
-        <img src={image} alt={product.name} className="h-36 w-full object-contain" />
+        <img src={image} alt={product.name} className="h-36 w-full max-w-full object-contain" />
         <div className="absolute right-4 top-4 rounded-full bg-white/95 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-sm">
           {product.discount}% off
         </div>
