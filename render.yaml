@@ -1,6 +1,7 @@
 services:
-  - type: static
-    name: samira-collection
-    env: static
+  - name: samira-collection
+    type: web
+    runtime: static
+    branch: main
     buildCommand: npm install && npm run build
     staticPublishPath: build
