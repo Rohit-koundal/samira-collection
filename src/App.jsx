@@ -103,6 +103,7 @@ export default function App() {
   const [route, navigate] = useHashRoute();
   const routePath = route.split('?')[0];
   const isAdmin = routePath.startsWith('/admin');
+  const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const Page = useMemo(() => {
     if (routePath === '/admin/login') return AdminLogin;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
@@ -125,8 +126,8 @@ export default function App() {
             ) : (
               <>
                 <DesktopHeader navigate={navigate} />
-                <MobileHeader navigate={navigate} />
-                <main className="pb-20 md:pb-0">
+                {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} />}
+                <main className="pb-24 md:pb-0">
                   {['/profile', '/orders', '/checkout', '/order-detail', '/order-success'].includes(routePath) ? (
                     <ProtectedRoute>
                       <Page navigate={navigate} route={route} />
@@ -135,7 +136,9 @@ export default function App() {
                     <Page navigate={navigate} route={route} />
                   )}
                 </main>
-                <Footer navigate={navigate} />
+                <div className="hidden md:block">
+                  <Footer navigate={navigate} />
+                </div>
                 <MobileBottomNav active={routePath} navigate={navigate} />
               </>
             )}

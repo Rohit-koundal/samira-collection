@@ -11,7 +11,7 @@ export default function ProductGrid({ products, navigate }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-5 xl:grid-cols-4">
       {products.map((product) => <ProductCard key={product.id} product={product} navigate={navigate} />)}
     </div>
   );

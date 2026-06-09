@@ -33,7 +33,7 @@ export default function Home({ navigate }) {
       <TrendingNow products={catalog.filter((p) => p.showInTrending).slice(0, 8)} navigate={navigate} />
       <NewArrivals products={catalog.filter((p) => p.isNewArrival).slice(0, 8)} navigate={navigate} />
       <BestSellers products={catalog.filter((p) => p.isBestSeller).slice(0, 8)} navigate={navigate} />
-      <section className="container-page py-10">
+      <section className="container-page hidden py-10 md:block">
         <div className="rounded-3xl bg-white p-8 shadow-sm md:p-12">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-wine">Customer reviews</p>
           <h2 className="mt-2 text-3xl font-black">Loved for fit, fabric, and finish.</h2>
@@ -44,7 +44,7 @@ export default function Home({ navigate }) {
           </div>
         </div>
       </section>
-      <section className="container-page pb-12">
+      <section className="container-page hidden pb-12 md:block">
         <div className="rounded-3xl bg-charcoal p-8 text-white md:flex md:items-center md:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.24em] text-white/50">Newsletter</p>

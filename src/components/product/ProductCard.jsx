@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import Icon from '../layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -17,11 +18,11 @@ const swatches = {
 export function ProductVisual({ product, compact = false }) {
   const image = product.images?.[0]?.url;
   if (image) {
-    return <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-44' : 'h-64'}`}><img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /></div>;
+    return <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}><img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /></div>;
   }
   const color = swatches[product.colors?.[0]] || '#6d1f34';
   return (
-    <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-44' : 'h-64'}`}>
+    <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}>
       <div className="absolute inset-x-5 bottom-0 h-[86%] rounded-t-[90px]" style={{ background: `linear-gradient(145deg, ${color}, #f9d4dd)` }} />
       <div className="absolute left-1/2 top-8 h-24 w-20 -translate-x-1/2 rounded-t-full bg-[#f6d2bf]" />
       <div className="absolute bottom-0 left-1/2 h-[70%] w-[54%] -translate-x-1/2 rounded-t-[80px] bg-white/20 ring-8 ring-white/30" />
@@ -35,29 +36,64 @@ export function ProductVisual({ product, compact = false }) {
 export default function ProductCard({ product, navigate }) {
   const cart = useCart();
   const wishlist = useWishlist();
+  const [added, setAdded] = useState(false);
+  const productId = product._id || product.id || product.slug;
+  const isWishlisted = useMemo(
+    () => wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
+    [wishlist.items, productId],
+  );
+
+  useEffect(() => {
+    if (!added) return undefined;
+    const timer = window.setTimeout(() => setAdded(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [added]);
+
+  const openProduct = () => navigate(`/product?id=${productId}`);
+
+  const handleWishlist = (event) => {
+    event.stopPropagation();
+    wishlist.toggleWishlist(product);
+  };
+
+  const handleAddToBag = (event) => {
+    event.stopPropagation();
+    cart.addToCart(product);
+    setAdded(true);
+  };
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
-      <button onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full text-left">
+    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl md:rounded-2xl">
+      <button type="button" onClick={openProduct} className="block w-full text-left" aria-label={`View ${product.name}`}>
         <ProductVisual product={product} compact />
       </button>
-      <div className="space-y-2 p-3">
+      <div className="space-y-1.5 p-2.5 md:space-y-2 md:p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-black text-charcoal">{product.name}</h3>
-            <p className="truncate text-xs font-semibold text-slate-500">{product.category} | {product.fabric}</p>
+            <h3 className="truncate text-[13px] font-black leading-5 text-charcoal md:text-sm">{product.name}</h3>
+            <p className="truncate text-[11px] font-semibold text-slate-500 md:text-xs">{product.category} | {product.fabric}</p>
           </div>
-          <button onClick={() => wishlist.toggleWishlist(product)} className="shrink-0 text-slate-500" aria-label="Toggle wishlist">
-            <Icon name="heart" className="h-5 w-5" />
+          <button
+            type="button"
+            onClick={handleWishlist}
+            className={`shrink-0 rounded-full p-1 transition ${isWishlisted ? 'bg-rose/10 text-rose' : 'text-slate-500'}`}
+            aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+            aria-pressed={isWishlisted}
+          >
+            <Icon name="heart" className="h-4 w-4 md:h-5 md:w-5" />
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1 text-xs">
+        <div className="flex flex-wrap items-center gap-1 text-[11px] md:text-xs">
           <span className="font-black text-charcoal">Rs. {product.price}</span>
           <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span>
           <span className="font-black text-rose">({product.discountPercentage}% OFF)</span>
         </div>
-        <button onClick={() => cart.addToCart(product)} className="h-10 w-full rounded-xl bg-wine text-xs font-black text-white">
-          Add to Bag
+        <button
+          type="button"
+          onClick={handleAddToBag}
+          className={`h-9 w-full rounded-lg text-xs font-black text-white transition md:h-10 md:rounded-xl ${added ? 'bg-emerald-600' : 'bg-wine'}`}
+        >
+          {added ? 'Added to Bag' : 'Add to Bag'}
         </button>
       </div>
     </article>

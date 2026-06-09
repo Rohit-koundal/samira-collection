@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import ProductImageGallery from '../../components/product/ProductImageGallery';
+import { useEffect, useMemo, useState } from 'react';
 import SizeChartModal from '../../components/product/SizeChartModal';
-import ProductGrid from '../../components/product/ProductGrid';
+import { ProductVisual } from '../../components/product/ProductCard';
+import Icon from '../../components/layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import api from '../../services/api';
-import { normalizeProduct, normalizeProducts } from '../../services/normalize';
+import { normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
 
 export default function ProductDetail({ navigate, route = '' }) {
   const productKey = new URLSearchParams(route.split('?')[1] || '').get('id');
@@ -13,61 +13,360 @@ export default function ProductDetail({ navigate, route = '' }) {
   const wishlist = useWishlist();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
+  const [activeImage, setActiveImage] = useState(0);
+  const [added, setAdded] = useState(false);
   const [openSizeChart, setOpenSizeChart] = useState(false);
+  const [deliveryPin, setDeliveryPin] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!productKey) return setError('Product not found.');
-    api.get(`/products/${productKey}`).then((data) => {
-      const item = normalizeProduct(data);
-      setProduct(item);
-      setSize(item.sizes?.[0] || 'Free Size');
-      setColor(item.colors?.[0] || 'Wine');
-      return api.get(`/products?category=${item.categoryId || ''}`);
-    }).then((items) => setRelated(normalizeProducts(items).filter((item) => (item._id || item.id) !== productKey).slice(0, 4))).catch((err) => setError(err.message));
+    if (!productKey) {
+      setError('Product not found.');
+      return;
+    }
+
+    setError('');
+    setProduct(null);
+    api.get(`/products/${productKey}`)
+      .then((data) => {
+        const item = normalizeProduct(data);
+        setProduct(item);
+        setSize(item.sizes?.[0] || 'Free Size');
+        setColor(item.colors?.[0] || 'Wine');
+        setActiveImage(0);
+
+        const relatedQuery = item.categoryId ? `/products?category=${item.categoryId}` : '/products?sort=rating';
+        api.get(relatedQuery)
+          .then((items) => setRelated(normalizeProducts(items).filter((entry) => (entry._id || entry.id || entry.slug) !== (item._id || item.id || item.slug)).slice(0, 10)))
+          .catch(() => setRelated([]));
+
+        api.get(`/reviews/${item._id || item.id}`)
+          .then((items) => setReviews(Array.isArray(items) ? items : []))
+          .catch(() => setReviews([]));
+      })
+      .catch((err) => setError(err.message));
   }, [productKey]);
 
-  if (error) return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">{error}</div></section>;
-  if (!product) return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold">Loading product...</div></section>;
+  const productId = product?._id || product?.id || product?.slug;
+  const isWishlisted = useMemo(
+    () => Boolean(productId) && wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
+    [wishlist.items, productId],
+  );
+  const images = product?.images?.length ? product.images.map((image) => normalizeImageUrl(image.url)) : [];
+  const selectedImage = images[activeImage];
+  const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
+  const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
 
-  const add = () => cart.addToCart(product, size, color);
+  useEffect(() => {
+    if (!added) return undefined;
+    const timer = window.setTimeout(() => setAdded(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [added]);
+
+  if (error) {
+    return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">{error}</div></section>;
+  }
+
+  if (!product) {
+    return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold">Loading product...</div></section>;
+  }
+
+  const add = () => {
+    cart.addToCart(product, size, color);
+    setAdded(true);
+  };
+
+  const buyNow = () => {
+    add();
+    navigate('/checkout');
+  };
 
   return (
-    <section className="container-page pb-24 pt-6 md:py-10">
-      <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
-        <ProductImageGallery product={product} />
-        <div className="space-y-6">
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm font-black text-wine">{product.brand || 'Samira Collection'}</p>
-            <h1 className="mt-2 text-3xl font-black">{product.name}</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">{product.description}</p>
-            <p className="mt-5 text-3xl font-black">Rs. {product.price} <span className="text-base text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="text-base text-rose">({product.discountPercentage}% OFF)</span></p>
-            <p className="mt-1 text-xs font-bold text-emerald-600">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</p>
+    <section className="bg-white pb-36 md:bg-ivory md:pb-10 md:pt-8">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <button type="button" onClick={() => navigate('/products')} className="grid h-10 w-8 place-items-center text-2xl" aria-label="Back">&lt;</button>
+          <span className="truncate text-base font-black">{product.brand || 'Samira Collection'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-slate-800">
+          <button type="button" onClick={() => navigate('/search')} className="grid h-10 w-10 place-items-center" aria-label="Search"><Icon name="search" className="h-6 w-6" /></button>
+          <button type="button" onClick={() => wishlist.toggleWishlist(product)} className={`grid h-10 w-10 place-items-center ${isWishlisted ? 'text-rose' : ''}`} aria-label="Wishlist"><Icon name="heart" className="h-6 w-6" /></button>
+          <button type="button" onClick={() => navigate('/cart')} className="grid h-10 w-10 place-items-center" aria-label="Cart"><Icon name="bag" className="h-6 w-6" /></button>
+        </div>
+      </header>
+      <div className="mx-auto max-w-6xl md:grid md:grid-cols-[0.95fr_1fr] md:gap-8 md:px-6">
+        <div className="md:sticky md:top-24 md:self-start">
+          <div className="relative overflow-hidden bg-[#f6efe8] md:rounded-2xl">
+            {selectedImage ? (
+              <img src={selectedImage} alt={product.name} className="h-[390px] w-full object-cover sm:h-[520px] md:h-[650px]" />
+            ) : (
+              <ProductVisual product={product} />
+            )}
+            <div className="absolute bottom-4 left-4 rounded-xl bg-white px-3 py-2 text-xs font-black shadow">View Similar</div>
+            <div className="absolute bottom-4 right-4 rounded-xl bg-white px-3 py-2 text-xs font-black shadow">
+              {Number(product.rating || 0).toFixed(1)} star <span className="mx-2 text-slate-300">|</span> {product.numReviews || reviews.length || 0}
+            </div>
           </div>
-          <Panel title="Select Size" action={<button onClick={() => setOpenSizeChart(true)} className="text-sm font-black text-rose">Size Chart</button>}>
-            <div className="flex flex-wrap gap-2">{(product.sizes || ['Free Size']).map((item) => <button key={item} onClick={() => setSize(item)} className={`rounded-xl px-4 py-3 text-sm font-black ${size === item ? 'bg-charcoal text-white' : 'bg-slate-100'}`}>{item}</button>)}</div>
-          </Panel>
-          <Panel title="Select Color"><div className="flex flex-wrap gap-2">{(product.colors || ['Wine']).map((item) => <button key={item} onClick={() => setColor(item)} className={`rounded-xl px-4 py-3 text-sm font-black ${color === item ? 'bg-wine text-white' : 'bg-slate-100'}`}>{item}</button>)}</div></Panel>
-          <Panel title="Product Details"><p className="text-sm leading-7 text-slate-600">Fabric: {product.fabric || '-'} Occasion: {product.occasion || '-'} Care: {product.careInstructions || '-'} Return: {product.returnPolicy || '-'}</p></Panel>
+          {images.length > 1 && (
+            <div className="mt-3 flex justify-center gap-2">
+              {images.slice(0, 8).map((image, index) => (
+                <button
+                  key={image}
+                  type="button"
+                  onClick={() => setActiveImage(index)}
+                  className={`h-2 w-2 rounded-full ${activeImage === index ? 'bg-slate-700' : 'bg-slate-300'}`}
+                  aria-label={`Show image ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-7 px-4 pt-5 md:px-0 md:pt-0">
+          <div className="relative pr-16">
+            <p className="text-xl leading-snug text-slate-900"><span className="font-black">{product.brand || 'Samira Collection'}</span> {product.name}</p>
+            <button
+              type="button"
+              onClick={() => wishlist.toggleWishlist(product)}
+              className={`absolute right-0 top-0 grid h-14 w-14 place-items-center rounded-2xl border transition ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
+              aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+              aria-pressed={isWishlisted}
+            >
+              <Icon name="heart" className="h-7 w-7" />
+            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-slate-400 line-through">MRP Rs. {product.originalPrice}</span>
+              <span className="text-2xl font-black text-charcoal">Rs. {product.price}</span>
+              <span className="font-black text-amber-600">({product.discountPercentage}% OFF)</span>
+            </div>
+            <p className="mt-2 text-sm font-black text-amber-600">Crazy Deal</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-[#f8f5ff] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase text-rose">Mega Deal</p>
+                <p className="mt-1 text-2xl font-black">Get at Rs. {dealPrice || product.price}</p>
+              </div>
+              <span className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-black text-white">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-sm">
+              <span>With Coupon + Bank Offer</span>
+              <button type="button" className="font-black text-rose">Details</button>
+            </div>
+          </div>
+
+          <section>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black">Size: {size || 'Free Size'}</h2>
+              <button type="button" onClick={() => setOpenSizeChart(true)} className="text-sm font-black text-rose">Size Chart</button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
+                <button key={item} type="button" onClick={() => setSize(item)} className={`min-w-24 rounded-2xl border px-5 py-4 text-sm font-black ${size === item ? 'border-charcoal bg-charcoal text-white' : 'border-slate-200 bg-white'}`}>{item}</button>
+              ))}
+            </div>
+            {product.colors?.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {product.colors.map((item) => (
+                  <button key={item} type="button" onClick={() => setColor(item)} className={`rounded-full border px-4 py-2 text-xs font-black ${color === item ? 'border-wine bg-wine text-white' : 'border-slate-200'}`}>{item}</button>
+                ))}
+              </div>
+            )}
+            <p className="mt-4 text-sm">
+              <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="font-black">Rs. {product.price}</span> <span className="font-black text-amber-600">({product.discountPercentage}% OFF)</span>
+            </p>
+            <p className="mt-2 text-sm">Seller: <span className="font-black text-rose">Samira Collection</span></p>
+          </section>
+
           <div className="hidden gap-3 md:flex">
-            <button disabled={product.stock <= 0} onClick={add} className="h-12 flex-1 rounded-xl bg-rose text-sm font-black text-white disabled:opacity-50">Add to Bag</button>
-            <button onClick={() => wishlist.toggleWishlist(product)} className="h-12 flex-1 rounded-xl border border-slate-200 text-sm font-black">Wishlist</button>
-            <button disabled={product.stock <= 0} onClick={() => { add(); navigate('/checkout'); }} className="h-12 flex-1 rounded-xl bg-charcoal text-sm font-black text-white disabled:opacity-50">Buy Now</button>
+            <button disabled={product.stock <= 0} onClick={add} className="h-14 flex-1 rounded-xl bg-rose px-5 py-4 text-sm font-black text-white disabled:opacity-50">{added ? 'Added to Bag' : 'Add to Bag'}</button>
+            <button disabled={product.stock <= 0} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
           </div>
+
+          <section className="space-y-4 border-t border-slate-100 pt-6">
+            <h2 className="text-xl font-black">Check Delivery</h2>
+            <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-14 w-full rounded-xl border border-slate-300 px-4 text-sm font-black outline-none focus:border-rose" placeholder="Enter PIN Code" />
+            <div className="space-y-3 text-sm">
+              <Feature icon="box" title="Express delivery" text="might be available" />
+              <Feature icon="bag" title="Pay on delivery" text="might be available" />
+              <Feature icon="heart" title="Hassle free returns" text={product.returnPolicy || '7, 15 and 30 days return & exchange might be available'} />
+            </div>
+          </section>
+
+          <DetailsCard product={product} />
+
+          <section className="grid grid-cols-2 gap-4 text-center">
+            <TrustBadge title="Genuine Product" />
+            <TrustBadge title="Quality Checked" />
+          </section>
+
+          <section>
+            <h2 className="text-xl font-black">Easy returns and exchanges</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{product.returnPolicy || 'Choose to return or exchange for a different size, if available, within the allowed return window.'}</p>
+          </section>
         </div>
       </div>
-      <div className="fixed bottom-16 left-0 right-0 z-40 grid grid-cols-2 gap-2 bg-white p-3 md:hidden">
-        <button disabled={product.stock <= 0} onClick={add} className="h-12 rounded-xl bg-rose text-sm font-black text-white disabled:opacity-50">Add to Bag</button>
-        <button disabled={product.stock <= 0} onClick={() => { add(); navigate('/checkout'); }} className="h-12 rounded-xl bg-charcoal text-sm font-black text-white disabled:opacity-50">Buy Now</button>
+
+      {related.length > 0 && (
+        <div className="mx-auto mt-9 max-w-6xl space-y-9 px-4 md:px-6">
+          <ProductRail title="Fastest Selling Similar Products" subtitle="Don't miss out on these in-demand products" products={related.slice(0, 6)} navigate={navigate} />
+          <ProductRail title="Similar Products" products={related.slice(2, 8)} navigate={navigate} />
+          <ProductRail title="Customers Also Liked" products={related.slice(4, 10)} navigate={navigate} />
+        </div>
+      )}
+
+      <ReviewsSection product={product} reviews={reviews} />
+
+      <div className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5">
+          {[
+            `More ${product.category} by ${product.brand || 'Samira Collection'}`,
+            `More ${product.colors?.[0] || ''} ${product.category}`,
+            `More ${product.category}`,
+          ].map((label) => (
+            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between border-b border-slate-100 py-4 text-left text-lg font-black last:border-b-0">
+              {label.trim()}
+              <span className="text-rose">&gt;</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-8 text-sm text-slate-500">Product Code: {product.sku || productId}</p>
       </div>
-      {related.length > 0 && <div className="mt-10"><ProductGrid products={related} navigate={navigate} /></div>}
+
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
+        <button disabled={product.stock <= 0} onClick={add} className="h-14 w-full rounded-xl bg-rose px-5 py-4 text-base font-black text-white disabled:opacity-50">
+          {product.stock <= 0 ? 'Out of Stock' : added ? 'Added to Bag' : 'Add to Bag'}
+        </button>
+      </div>
+
       <SizeChartModal open={openSizeChart} onClose={() => setOpenSizeChart(false)} />
     </section>
   );
 }
 
-function Panel({ title, action, children }) {
-  return <div className="rounded-3xl bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-black">{title}</h2>{action}</div>{children}</div>;
+function DetailsCard({ product }) {
+  const highlights = product.highlights?.length ? product.highlights : [
+    product.shortDescription || product.description,
+    product.fabric ? `${product.fabric} fabric` : '',
+    product.occasion ? `Best for ${product.occasion}` : '',
+  ].filter(Boolean);
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-5">
+      <div className="grid grid-cols-2 gap-5">
+        <Spec label="Category" value={product.category} />
+        <Spec label="Fabric" value={product.fabric || 'Premium fabric'} />
+        <Spec label="Occasion" value={product.occasion || 'Everyday festive'} />
+        <Spec label="Pattern" value={product.tags?.[0] || 'Designer'} />
+      </div>
+      <div className="mt-7 space-y-4">
+        <h2 className="text-lg font-black">Product Details</h2>
+        {highlights.length > 0 && (
+          <div>
+            <p className="font-black">Design Details</p>
+            <ul className="mt-2 list-disc space-y-1 pl-6 text-sm leading-6 text-slate-700">
+              {highlights.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
+        )}
+        <div>
+          <p className="font-black">Size & Fit</p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">Available sizes: {(product.sizes?.length ? product.sizes : ['Free Size']).join(', ')}</p>
+        </div>
+        <div>
+          <p className="font-black">Material & Care</p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">{product.careInstructions || `Fabric: ${product.fabric || 'Premium fabric'}. Dry clean recommended.`}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Spec({ label, value }) {
+  return <div><p className="text-sm font-black text-charcoal">{label}</p><p className="mt-1 text-sm text-slate-600">{value || '-'}</p></div>;
+}
+
+function Feature({ icon, title, text }) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon name={icon} className="mt-0.5 h-6 w-6 text-charcoal" />
+      <p><span className="font-black">{title}</span> <span className="text-slate-600">{text}</span></p>
+    </div>
+  );
+}
+
+function TrustBadge({ title }) {
+  return (
+    <div className="rounded-2xl bg-rose/5 p-4">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-rose text-rose">
+        <Icon name="star" />
+      </div>
+      <p className="mt-2 text-sm font-black text-rose">{title}</p>
+    </div>
+  );
+}
+
+function ProductRail({ title, subtitle, products, navigate }) {
+  if (!products.length) return null;
+  return (
+    <section>
+      <h2 className="text-xl font-black">{title}</h2>
+      {subtitle && <p className="mt-1 text-sm font-black text-amber-600">{subtitle}</p>}
+      <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
+        {products.map((product) => <RailProduct key={product.id} product={product} navigate={navigate} />)}
+      </div>
+    </section>
+  );
+}
+
+function RailProduct({ product, navigate }) {
+  const cart = useCart();
+  const image = product.images?.[0]?.url;
+  return (
+    <article className="w-40 shrink-0 md:w-52">
+      <button type="button" onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f6efe8]">
+        {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-48 w-full object-cover md:h-64" /> : <ProductVisual product={product} compact />}
+      </button>
+      <h3 className="mt-2 truncate text-base font-black">{product.brand || 'Samira Collection'}</h3>
+      <p className="truncate text-sm text-slate-500">{product.name}</p>
+      <p className="mt-1 text-sm"><span className="text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="font-black">Rs. {product.price}</span></p>
+      <button type="button" onClick={() => cart.addToCart(product)} className="mt-3 h-10 w-full rounded-xl border border-rose text-sm font-black text-rose">Add to Bag</button>
+    </article>
+  );
+}
+
+function ReviewsSection({ product, reviews }) {
+  return (
+    <section className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
+      <h2 className="text-xl font-black">Ratings & Reviews</h2>
+      <div className="mt-4 flex items-center gap-3">
+        <span className="rounded-xl bg-amber-400 px-4 py-3 text-lg font-black text-white">{Number(product.rating || 0).toFixed(1)} star</span>
+        <span className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">{product.numReviews || reviews.length || 0} ratings</span>
+      </div>
+      {reviews.length > 0 && (
+        <>
+          <div className="mt-5 flex items-center justify-between">
+            <h3 className="text-lg font-black">Customer Reviews ({reviews.length})</h3>
+            <button type="button" className="text-sm font-black underline">View All</button>
+          </div>
+          <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
+            {reviews.slice(0, 6).map((review) => (
+              <article key={review._id} className="w-72 shrink-0 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-rose px-2 py-1 font-black text-white">{review.rating} star</span>
+                  <span className="text-slate-500">{new Date(review.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-slate-700">{review.comment}</p>
+                <p className="mt-4 text-sm font-black text-emerald-700">{review.user?.name || 'Verified customer'}</p>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
 }

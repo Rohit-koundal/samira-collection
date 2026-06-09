@@ -23,27 +23,35 @@ export default function MobileHeader({ navigate }) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white md:hidden">
-        <div className="flex h-14 items-center justify-between px-3">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
+        <div className="flex h-[52px] items-center justify-between px-3 pt-1">
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center text-slate-600" aria-label="Open menu">
-            <Icon name="menu" />
+            <Icon name="menu" className="h-5 w-5" />
           </button>
           <button onClick={() => navigate('/')} className="flex-1">
-            <img src={logo} alt="Samira Collection" className="mx-auto h-11 w-auto" />
+            <img src={logo} alt="Samira Collection" className="mx-auto h-10 w-auto" />
           </button>
           <div className="flex gap-1">
-            <button onClick={() => navigate('/wishlist')} className="relative grid h-10 w-10 place-items-center text-slate-700">
-              <Icon name="heart" />
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-rose" aria-label={`${wishlist.items.length} wishlist items`} />
+            <button onClick={() => navigate('/wishlist')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open wishlist">
+              <Icon name="heart" className="h-5 w-5" />
+              {wishlist.items.length > 0 && (
+                <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-rose px-1 text-[9px] font-black leading-none text-white">
+                  {wishlist.items.length}
+                </span>
+              )}
             </button>
-            <button onClick={() => navigate('/cart')} className="relative grid h-10 w-10 place-items-center text-slate-700">
-              <Icon name="bag" />
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-wine" aria-label={`${cart.items.length} cart items`} />
+            <button onClick={() => navigate('/cart')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open cart">
+              <Icon name="bag" className="h-5 w-5" />
+              {cart.items.length > 0 && (
+                <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-wine px-1 text-[9px] font-black leading-none text-white">
+                  {cart.items.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
-        <div className="px-3 pb-3">
-          <button onClick={() => navigate('/products')} className="flex h-11 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-sm font-semibold text-slate-500">
+        <div className="px-3 pb-2">
+          <button onClick={() => navigate('/search')} className="flex h-10 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
             <Icon name="search" className="h-4 w-4" />
             Search sarees, suits, kurtis...
           </button>

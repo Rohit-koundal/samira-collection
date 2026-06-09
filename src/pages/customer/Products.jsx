@@ -14,13 +14,14 @@ export default function Products({ navigate, route = '/products' }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
   const params = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
-    navigate(`/products${next.toString() ? `?${next}` : ''}`);
+    navigate(`${basePath}${next.toString() ? `?${next}` : ''}`);
   };
 
   useEffect(() => {
@@ -42,18 +43,18 @@ export default function Products({ navigate, route = '/products' }) {
   }, [params]);
 
   return (
-    <section className="container-page py-4 md:py-10">
-      <div className="sticky top-0 z-30 -mx-4 mb-5 bg-ivory px-4 py-3 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
+    <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
+      <div className="sticky top-[104px] z-30 -mx-3.5 mb-4 bg-white px-3.5 py-2 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
         <input value={params.get('search') || ''} onChange={(event) => updateParam('search', event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold md:hidden" placeholder="Search Samira products" />
       </div>
       <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">Home / Products</p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">Home / Products</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3 md:mt-3 md:gap-4">
           <div>
-            <h1 className="text-3xl font-black md:text-5xl">Samira Collection Products</h1>
+            <h1 className="max-w-sm text-[22px] font-black leading-tight sm:text-3xl md:max-w-none md:text-5xl">Samira Collection Products</h1>
             <p className="mt-2 text-sm font-semibold text-slate-500">{loading ? 'Loading styles...' : `${catalog.length} styles available`}</p>
           </div>
-          <select value={params.get('sort') || 'newest'} onChange={(event) => updateParam('sort', event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black">
+          <select value={params.get('sort') || 'newest'} onChange={(event) => updateParam('sort', event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black md:h-11 md:px-4 md:text-sm">
             <option value="newest">Newest</option>
             <option value="priceLowHigh">Price Low-High</option>
             <option value="priceHighLow">Price High-Low</option>
@@ -62,7 +63,7 @@ export default function Products({ navigate, route = '/products' }) {
           </select>
         </div>
       </div>
-      <div className="mb-5 flex gap-2 overflow-x-auto md:hidden">
+      <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto md:hidden">
         {categories.map((category) => <button key={category._id} onClick={() => updateParam('category', category._id)} className="min-w-max rounded-full bg-white px-4 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
       </div>
       <div className="flex gap-6">

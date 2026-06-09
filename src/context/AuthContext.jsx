@@ -1,12 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
-
-const demoUsers = {
-  'admin@samiracollection.com': { name: 'Admin', email: 'admin@samiracollection.com', role: 'admin' },
-  'customer@test.com': { name: 'Demo Customer', email: 'customer@test.com', role: 'customer' },
-};
 
 export function AuthProvider({ children, navigate }) {
   const [user, setUser] = useState(() => {
@@ -15,30 +10,46 @@ export function AuthProvider({ children, navigate }) {
   });
   const [toast, setToast] = useState('');
 
+  const persist = useCallback((data) => {
+    if (data.token) localStorage.setItem('samira_token', data.token);
+    localStorage.setItem('samira_user', JSON.stringify(data.user));
+    setUser(data.user);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('samira_token');
+    if (!token) return;
+    api.get('/auth/me').then((profile) => {
+      localStorage.setItem('samira_user', JSON.stringify(profile));
+      setUser(profile);
+    }).catch(() => {});
+  }, []);
+
+  const sendOtp = useCallback((phone) => api.post('/auth/send-otp', { phone }), []);
+  const resendOtp = useCallback((phone) => api.post('/auth/resend-otp', { phone }), []);
+
+  const verifyOtp = useCallback(async ({ phone, otp }) => {
+    const data = await api.post('/auth/verify-otp', { phone, otp });
+    persist(data);
+    setToast(`Welcome ${data.user.name}`);
+    navigate(data.user.role === 'admin' ? '/profile' : '/profile');
+    return data;
+  }, [navigate, persist]);
+
   const login = useCallback(async ({ email, password = '' }) => {
-    try {
-      const path = email.includes('admin') ? '/admin/login' : '/auth/login';
-      const data = await api.post(path, { email, password });
-      localStorage.setItem('samira_user', JSON.stringify(data.user));
-      localStorage.setItem('samira_token', data.token);
-      setUser(data.user);
-      setToast(`Welcome ${data.user.name}`);
-      navigate(data.user.role === 'admin' ? '/admin' : '/profile');
-      return { ok: true };
-    } catch (error) {
-      const account = demoUsers[email];
-      if (!account || process.env.NODE_ENV === 'production') {
-        setToast(error.message);
-        return { ok: false, error: error.message };
-      }
-      localStorage.setItem('samira_user', JSON.stringify(account));
-      localStorage.setItem('samira_token', '');
-      setUser(account);
-      setToast('Demo mode login. Start the API for live admin changes.');
-      navigate(account.role === 'admin' ? '/admin' : '/profile');
-      return { ok: true };
-    }
-  }, [navigate]);
+    const path = email.includes('admin') ? '/admin/login' : '/auth/login';
+    const data = await api.post(path, { email, password });
+    persist(data);
+    navigate(data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile');
+    return { ok: true };
+  }, [navigate, persist]);
+
+  const switchMode = useCallback(async (mode) => {
+    const data = await api.post('/auth/switch-mode', { mode });
+    persist(data);
+    setToast(mode === 'admin' ? 'Switched to Admin Mode' : 'Switched to Customer Mode');
+    navigate(mode === 'admin' ? '/admin' : '/');
+  }, [navigate, persist]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('samira_user');
@@ -47,7 +58,21 @@ export function AuthProvider({ children, navigate }) {
     navigate('/');
   }, [navigate]);
 
-  const value = useMemo(() => ({ user, login, logout, toast, setToast, isAdmin: user?.role === 'admin' }), [login, logout, toast, user]);
+  const value = useMemo(() => ({
+    user,
+    login,
+    sendOtp,
+    resendOtp,
+    verifyOtp,
+    switchMode,
+    logout,
+    toast,
+    setToast,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
+    activeMode: user?.activeMode || 'customer',
+    availableModes: user?.availableModes || ['customer'],
+  }), [login, logout, resendOtp, sendOtp, switchMode, toast, user, verifyOtp]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -9,14 +9,14 @@ const offers = [
 export default function OfferBanners({ navigate, banners }) {
   const list = banners?.length ? banners.map((banner) => [banner.title, banner.subtitle, 'from-wine to-rose', banner.image, banner.link]) : offers;
   return (
-    <section className="container-page pb-8">
-      <div className="hide-scrollbar flex gap-4 overflow-x-auto">
+    <section className="container-page bg-white pb-5 md:bg-transparent md:pb-8">
+      <div className="hide-scrollbar flex gap-3 overflow-x-auto md:gap-4">
         {list.map(([title, subtitle, gradient, image, link]) => (
-          <button key={title} onClick={() => navigate(link || '/products')} className={`relative min-w-[280px] flex-1 overflow-hidden rounded-3xl bg-gradient-to-br ${gradient} p-6 text-left text-white shadow-lg`}>
+          <button key={title} onClick={() => navigate(link || '/products')} className={`relative min-w-[238px] flex-1 overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-4 text-left text-white shadow-lg md:min-w-[280px] md:rounded-3xl md:p-6`}>
             {image && <img src={normalizeImageUrl(image)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30" />}
             <span className="relative block">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/70">Offer</p>
-            <h3 className="mt-3 text-2xl font-black">{title}</h3>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70 md:text-xs md:tracking-[0.22em]">Offer</p>
+            <h3 className="mt-2 text-lg font-black md:mt-3 md:text-2xl">{title}</h3>
             <p className="mt-2 text-sm font-semibold text-white/80">{subtitle}</p>
             </span>
           </button>

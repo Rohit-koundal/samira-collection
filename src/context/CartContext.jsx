@@ -12,18 +12,18 @@ export function CartProvider({ children }) {
 
   const addToCart = (product, size = product.sizes?.[0] || 'M', color = product.colors?.[0] || 'Wine') => {
     setItems((current) => {
-      const productId = product._id || product.id;
-      const existing = current.find((item) => (item.product._id || item.product.id) === productId && item.size === size && item.color === color);
+      const productId = product._id || product.id || product.slug;
+      const existing = current.find((item) => (item.product._id || item.product.id || item.product.slug) === productId && item.size === size && item.color === color);
       if (existing) return current.map((item) => (item === existing ? { ...item, quantity: item.quantity + 1 } : item));
       return [...current, { product, size, color, quantity: 1 }];
     });
   };
 
   const updateQuantity = (productId, quantity) => {
-    setItems((current) => current.map((item) => ((item.product._id || item.product.id) === productId ? { ...item, quantity: Math.max(1, quantity) } : item)));
+    setItems((current) => current.map((item) => ((item.product._id || item.product.id || item.product.slug) === productId ? { ...item, quantity: Math.max(1, quantity) } : item)));
   };
 
-  const removeFromCart = (productId) => setItems((current) => current.filter((item) => (item.product._id || item.product.id) !== productId));
+  const removeFromCart = (productId) => setItems((current) => current.filter((item) => (item.product._id || item.product.id || item.product.slug) !== productId));
   const clearCart = () => {
     setItems([]);
     setCoupon(null);

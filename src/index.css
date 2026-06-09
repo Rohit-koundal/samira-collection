@@ -34,6 +34,8 @@ body {
   background: var(--ivory);
   color: var(--charcoal);
   font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -69,6 +71,37 @@ img {
   border: 1px solid rgba(109, 31, 52, 0.12);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 20px 60px rgba(23, 22, 26, 0.08);
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-height: 100%;
+    background: #fff;
+  }
+
+  body {
+    font-size: 14px;
+    line-height: 1.45;
+    overscroll-behavior-y: none;
+  }
+
+  .container-page {
+    width: 100%;
+    padding-inline: 14px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @media print {

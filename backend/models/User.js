@@ -19,17 +19,20 @@ const addressSchema = new mongoose.Schema({
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  phone: String,
-  password: { type: String, required: true },
+  email: { type: String, unique: true, sparse: true },
+  phone: { type: String, required: true, unique: true },
+  password: String,
+  isPhoneVerified: { type: Boolean, default: false },
   role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  availableModes: [{ type: String, enum: ['customer', 'admin'] }],
+  activeMode: { type: String, enum: ['customer', 'admin'], default: 'customer' },
   addresses: [addressSchema],
   wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   isBlocked: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.pre('save', async function hashPassword(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.password || !this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });

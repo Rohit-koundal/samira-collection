@@ -10,8 +10,8 @@ export function WishlistProvider({ children }) {
   }, [items]);
 
   const toggleWishlist = (product) => {
-    const productId = product._id || product.id;
-    setItems((current) => (current.some((item) => (item._id || item.id) === productId) ? current.filter((item) => (item._id || item.id) !== productId) : [...current, product]));
+    const productId = product._id || product.id || product.slug;
+    setItems((current) => (current.some((item) => (item._id || item.id || item.slug) === productId) ? current.filter((item) => (item._id || item.id || item.slug) !== productId) : [...current, product]));
   };
 
   const value = useMemo(() => ({ items, toggleWishlist }), [items]);
