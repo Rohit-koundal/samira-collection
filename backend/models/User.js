@@ -3,14 +3,17 @@ const bcrypt = require('bcryptjs');
 
 const addressSchema = new mongoose.Schema({
   fullName: String,
+  mobile: String,
+  alternateMobile: String,
   phone: String,
   pincode: String,
   state: String,
   city: String,
+  houseNo: String,
   houseNumber: String,
   area: String,
   landmark: String,
-  addressType: { type: String, enum: ['Home', 'Work'], default: 'Home' },
+  addressType: { type: String, enum: ['Home', 'Work', 'Other'], default: 'Home' },
   isDefault: { type: Boolean, default: false },
 });
 

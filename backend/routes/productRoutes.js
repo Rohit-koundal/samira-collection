@@ -4,6 +4,7 @@ const { protect } = require('../middleware/authMiddleware');
 const { adminOnly } = require('../middleware/adminMiddleware');
 
 router.get('/', product.getProducts);
+router.get('/admin/:id', protect, adminOnly, product.getProductById);
 router.get('/:slug', product.getProductBySlug);
 router.post('/', protect, adminOnly, product.createProduct);
 router.put('/:id', protect, adminOnly, product.updateProduct);

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Hero from '../../components/home/Hero';
 import CategoryStrip from '../../components/home/CategoryStrip';
 import OfferBanners from '../../components/home/OfferBanners';
@@ -6,17 +7,32 @@ import TrendingNow from '../../components/home/TrendingNow';
 import NewArrivals from '../../components/home/NewArrivals';
 import BestSellers from '../../components/home/BestSellers';
 import products from '../../data/seedProducts';
+import api from '../../services/api';
+import { normalizeProducts } from '../../services/normalize';
 
 export default function Home({ navigate }) {
+  const [catalog, setCatalog] = useState(products);
+  const [categories, setCategories] = useState([]);
+  const [banners, setBanners] = useState([]);
+
+  useEffect(() => {
+    api.get('/products').then((items) => setCatalog(normalizeProducts(items))).catch(() => {
+      if (process.env.NODE_ENV === 'development') setCatalog(products);
+      else setCatalog([]);
+    });
+    api.get('/categories').then(setCategories).catch(() => setCategories([]));
+    api.get('/banners').then(setBanners).catch(() => setBanners([]));
+  }, []);
+
   return (
     <>
-      <Hero navigate={navigate} />
-      <CategoryStrip navigate={navigate} />
-      <OfferBanners navigate={navigate} />
-      <FeaturedProducts products={products.filter((p) => p.isFeatured).slice(0, 8)} navigate={navigate} />
-      <TrendingNow products={products.slice(8, 12)} navigate={navigate} />
-      <NewArrivals products={products.filter((p) => p.isNewArrival).slice(0, 8)} navigate={navigate} />
-      <BestSellers products={products.filter((p) => p.isBestSeller).slice(0, 8)} navigate={navigate} />
+      <Hero navigate={navigate} banner={banners.find((banner) => banner.type === 'Hero')} />
+      <CategoryStrip navigate={navigate} categories={categories} />
+      <OfferBanners navigate={navigate} banners={banners.filter((banner) => ['Offer', 'Category', 'Sale'].includes(banner.type))} />
+      <FeaturedProducts products={catalog.filter((p) => p.isFeatured || p.showOnHomepage).slice(0, 8)} navigate={navigate} />
+      <TrendingNow products={catalog.filter((p) => p.showInTrending).slice(0, 8)} navigate={navigate} />
+      <NewArrivals products={catalog.filter((p) => p.isNewArrival).slice(0, 8)} navigate={navigate} />
+      <BestSellers products={catalog.filter((p) => p.isBestSeller).slice(0, 8)} navigate={navigate} />
       <section className="container-page py-10">
         <div className="rounded-3xl bg-white p-8 shadow-sm md:p-12">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-wine">Customer reviews</p>

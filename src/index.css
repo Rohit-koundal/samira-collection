@@ -70,3 +70,26 @@ img {
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 20px 60px rgba(23, 22, 26, 0.08);
 }
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  header,
+  footer,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  #samira-receipt {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

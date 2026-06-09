@@ -17,8 +17,11 @@ import Checkout from './pages/customer/Checkout';
 import Login from './pages/customer/Login';
 import Register from './pages/customer/Register';
 import Profile from './pages/customer/Profile';
+import AddressManagement from './pages/customer/AddressManagement';
 import MyOrders from './pages/customer/MyOrders';
 import OrderDetail from './pages/customer/OrderDetail';
+import OrderSuccess from './pages/customer/OrderSuccess';
+import PaymentFailed from './pages/customer/PaymentFailed';
 import Contact from './pages/customer/Contact';
 import AdminLogin from './pages/admin/AdminLogin';
 import Dashboard from './pages/admin/Dashboard';
@@ -49,8 +52,11 @@ const customerRoutes = {
   '/login': Login,
   '/register': Register,
   '/profile': Profile,
+  '/profile/addresses': AddressManagement,
   '/orders': MyOrders,
   '/order-detail': OrderDetail,
+  '/order-success': OrderSuccess,
+  '/payment-failed': PaymentFailed,
   '/contact': Contact,
   '/privacy-policy': Contact,
   '/terms': Contact,
@@ -95,12 +101,13 @@ function useHashRoute() {
 
 export default function App() {
   const [route, navigate] = useHashRoute();
-  const isAdmin = route.startsWith('/admin');
+  const routePath = route.split('?')[0];
+  const isAdmin = routePath.startsWith('/admin');
   const Page = useMemo(() => {
-    if (route === '/admin/login') return AdminLogin;
-    if (isAdmin) return adminRoutes[route] || Dashboard;
-    return customerRoutes[route] || Home;
-  }, [isAdmin, route]);
+    if (routePath === '/admin/login') return AdminLogin;
+    if (isAdmin) return adminRoutes[routePath] || Dashboard;
+    return customerRoutes[routePath] || Home;
+  }, [isAdmin, routePath]);
 
   return (
     <AuthProvider navigate={navigate}>
@@ -108,11 +115,11 @@ export default function App() {
         <WishlistProvider>
           <div className="min-h-screen bg-ivory text-charcoal">
             {isAdmin ? (
-              route === '/admin/login' ? (
+              routePath === '/admin/login' ? (
                 <Page navigate={navigate} />
               ) : (
                 <AdminRoute>
-                  <Page navigate={navigate} />
+                  <Page navigate={navigate} route={route} />
                 </AdminRoute>
               )
             ) : (
@@ -120,16 +127,16 @@ export default function App() {
                 <DesktopHeader navigate={navigate} />
                 <MobileHeader navigate={navigate} />
                 <main className="pb-20 md:pb-0">
-                  {['/profile', '/orders', '/checkout'].includes(route) ? (
+                  {['/profile', '/orders', '/checkout', '/order-detail', '/order-success'].includes(routePath) ? (
                     <ProtectedRoute>
-                      <Page navigate={navigate} />
+                      <Page navigate={navigate} route={route} />
                     </ProtectedRoute>
                   ) : (
-                    <Page navigate={navigate} />
+                    <Page navigate={navigate} route={route} />
                   )}
                 </main>
                 <Footer navigate={navigate} />
-                <MobileBottomNav active={route} navigate={navigate} />
+                <MobileBottomNav active={routePath} navigate={navigate} />
               </>
             )}
           </div>

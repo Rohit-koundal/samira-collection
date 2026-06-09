@@ -24,6 +24,19 @@ const api = {
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  upload: async (path, files) => {
+    const token = localStorage.getItem('samira_token');
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('images', file));
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'Upload failed');
+    return data;
+  },
 };
 
 export default api;

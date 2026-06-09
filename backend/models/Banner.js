@@ -6,7 +6,7 @@ const bannerSchema = new mongoose.Schema({
   image: String,
   buttonText: String,
   link: String,
-  type: { type: String, enum: ['Hero', 'Offer', 'Category'], default: 'Hero' },
+  type: { type: String, enum: ['Hero', 'Offer', 'Category', 'Sale'], default: 'Hero' },
   isActive: { type: Boolean, default: true },
   displayOrder: { type: Number, default: 0 },
 }, { timestamps: true });

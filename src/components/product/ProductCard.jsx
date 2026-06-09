@@ -1,6 +1,7 @@
 import Icon from '../layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { normalizeImageUrl } from '../../services/normalize';
 
 const swatches = {
   Wine: '#6d1f34',
@@ -14,6 +15,10 @@ const swatches = {
 };
 
 export function ProductVisual({ product, compact = false }) {
+  const image = product.images?.[0]?.url;
+  if (image) {
+    return <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-44' : 'h-64'}`}><img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /></div>;
+  }
   const color = swatches[product.colors?.[0]] || '#6d1f34';
   return (
     <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-44' : 'h-64'}`}>
@@ -33,7 +38,7 @@ export default function ProductCard({ product, navigate }) {
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
-      <button onClick={() => navigate('/product')} className="block w-full text-left">
+      <button onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full text-left">
         <ProductVisual product={product} compact />
       </button>
       <div className="space-y-2 p-3">

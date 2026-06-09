@@ -1,4 +1,12 @@
 import ProductForm from '../../components/admin/ProductForm';
-export default function EditProduct() {
-  return <section className="space-y-5"><h1 className="text-3xl font-black">Edit Product</h1><ProductForm mode="Update" /></section>;
+import PageHeader from '../../components/admin/PageHeader';
+
+export default function EditProduct({ route = '' }) {
+  const productId = new URLSearchParams(route.split('?')[1] || '').get('id');
+  return (
+    <section className="space-y-5">
+      <PageHeader title="Edit Product" note="Update product details, images, pricing and catalog visibility." />
+      <ProductForm mode="Update" productId={productId} />
+    </section>
+  );
 }

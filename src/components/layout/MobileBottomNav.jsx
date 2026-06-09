@@ -2,8 +2,8 @@ import Icon from './Icon';
 
 const tabs = [
   ['/', 'Home', 'home'],
-  ['/category', 'Categories', 'grid'],
-  ['/search', 'Search', 'search'],
+  ['/products', 'Products', 'grid'],
+  ['/products', 'Search', 'search'],
   ['/wishlist', 'Wishlist', 'heart'],
   ['/cart', 'Cart', 'bag'],
   ['/profile', 'Profile', 'user'],

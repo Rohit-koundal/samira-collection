@@ -1,31 +1,79 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import products from '../../data/seedProducts';
 import ProductGrid from '../../components/product/ProductGrid';
-import ProductFilters from '../../components/product/ProductFilters';
-import SortDropdown from '../../components/product/SortDropdown';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
 import Icon from '../../components/layout/Icon';
+import api from '../../services/api';
+import { normalizeProducts } from '../../services/normalize';
 
-export default function Products({ navigate }) {
+const isDev = process.env.NODE_ENV === 'development';
+
+export default function Products({ navigate, route = '/products' }) {
   const [openFilters, setOpenFilters] = useState(false);
-  const filtered = useMemo(() => products, []);
+  const [catalog, setCatalog] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const params = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
+
+  const updateParam = (key, value) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    navigate(`/products${next.toString() ? `?${next}` : ''}`);
+  };
+
+  useEffect(() => {
+    api.get('/categories').then(setCategories).catch(() => setCategories([]));
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/products${params.toString() ? `?${params}` : ''}`)
+      .then((items) => {
+        setCatalog(normalizeProducts(items));
+        setError('');
+      })
+      .catch((err) => {
+        setError(err.message);
+        setCatalog(isDev ? products : []);
+      })
+      .finally(() => setLoading(false));
+  }, [params]);
 
   return (
-    <section className="container-page py-6 md:py-10">
+    <section className="container-page py-4 md:py-10">
+      <div className="sticky top-0 z-30 -mx-4 mb-5 bg-ivory px-4 py-3 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
+        <input value={params.get('search') || ''} onChange={(event) => updateParam('search', event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold md:hidden" placeholder="Search Samira products" />
+      </div>
       <div className="mb-6">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">Home / Products</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black md:text-5xl">Samira Collection Products</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">{filtered.length} styles available</p>
+            <p className="mt-2 text-sm font-semibold text-slate-500">{loading ? 'Loading styles...' : `${catalog.length} styles available`}</p>
           </div>
-          <SortDropdown />
+          <select value={params.get('sort') || 'newest'} onChange={(event) => updateParam('sort', event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black">
+            <option value="newest">Newest</option>
+            <option value="priceLowHigh">Price Low-High</option>
+            <option value="priceHighLow">Price High-Low</option>
+            <option value="discount">Discount</option>
+            <option value="rating">Rating</option>
+          </select>
         </div>
       </div>
+      <div className="mb-5 flex gap-2 overflow-x-auto md:hidden">
+        {categories.map((category) => <button key={category._id} onClick={() => updateParam('category', category._id)} className="min-w-max rounded-full bg-white px-4 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
+      </div>
       <div className="flex gap-6">
-        <ProductFilters />
+        <aside className="hidden w-64 shrink-0 space-y-3 rounded-2xl bg-white p-4 shadow-sm md:block">
+          <FilterSelect label="Category" value={params.get('category') || ''} onChange={(value) => updateParam('category', value)} options={[['', 'All'], ...categories.map((category) => [category._id, category.name])]} />
+          <FilterSelect label="Size" value={params.get('size') || ''} onChange={(value) => updateParam('size', value)} options={[['', 'All'], ['S', 'S'], ['M', 'M'], ['L', 'L'], ['XL', 'XL'], ['Free Size', 'Free Size']]} />
+          <FilterSelect label="Fabric" value={params.get('fabric') || ''} onChange={(value) => updateParam('fabric', value)} options={[['', 'All'], ['Cotton', 'Cotton'], ['Silk', 'Silk'], ['Georgette', 'Georgette'], ['Rayon', 'Rayon']]} />
+          <FilterSelect label="Stock" value={params.get('stock') || ''} onChange={(value) => updateParam('stock', value)} options={[['', 'All'], ['in', 'In Stock'], ['out', 'Out of Stock']]} />
+        </aside>
         <div className="min-w-0 flex-1">
-          <ProductGrid products={filtered} navigate={navigate} />
+          {error && !isDev ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">{error}</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={catalog} navigate={navigate} />}
         </div>
       </div>
       <div className="fixed bottom-16 left-0 right-0 z-40 grid grid-cols-2 border-t border-slate-200 bg-white md:hidden">
@@ -35,4 +83,8 @@ export default function Products({ navigate }) {
       <MobileFilterSheet open={openFilters} onClose={() => setOpenFilters(false)} />
     </section>
   );
+}
+
+function FilterSelect({ label, value, onChange, options }) {
+  return <label className="grid gap-2 text-sm font-black">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold">{options.map(([optionValue, text]) => <option key={optionValue} value={optionValue}>{text}</option>)}</select></label>;
 }

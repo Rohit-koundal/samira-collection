@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import logo from '../../assets/samira-collection-logo.svg';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import categories from '../../data/categories';
+import seedCategories from '../../data/categories';
+import api from '../../services/api';
 
 export default function MobileHeader({ navigate }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const [open, setOpen] = useState(false);
+  const [categories, setCategories] = useState(seedCategories);
+
+  useEffect(() => {
+    api.get('/categories').then(setCategories).catch(() => {});
+  }, []);
 
   const go = (path) => {
     setOpen(false);
@@ -37,7 +43,7 @@ export default function MobileHeader({ navigate }) {
           </div>
         </div>
         <div className="px-3 pb-3">
-          <button onClick={() => navigate('/search')} className="flex h-11 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-sm font-semibold text-slate-500">
+          <button onClick={() => navigate('/products')} className="flex h-11 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-sm font-semibold text-slate-500">
             <Icon name="search" className="h-4 w-4" />
             Search sarees, suits, kurtis...
           </button>
@@ -68,9 +74,9 @@ export default function MobileHeader({ navigate }) {
             <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-wine">Categories</p>
             <div className="mt-3 grid gap-2">
               {categories.map((category) => (
-                <button key={category.id} onClick={() => go('/category')} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left text-sm font-bold text-slate-700">
+                <button key={category._id || category.id} onClick={() => go(`/products?category=${category._id || ''}`)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left text-sm font-bold text-slate-700">
                   {category.name}
-                  <span className="text-xs text-slate-400">{category.count}</span>
+                  <span className="text-xs text-slate-400">{category.count || ''}</span>
                 </button>
               ))}
             </div>

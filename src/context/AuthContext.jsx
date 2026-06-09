@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -14,13 +15,29 @@ export function AuthProvider({ children, navigate }) {
   });
   const [toast, setToast] = useState('');
 
-  const login = useCallback(({ email }) => {
-    const account = demoUsers[email] || { name: 'Samira Customer', email, role: 'customer' };
-    localStorage.setItem('samira_user', JSON.stringify(account));
-    localStorage.setItem('samira_token', 'demo-jwt-token');
-    setUser(account);
-    setToast(`Welcome ${account.name}`);
-    navigate(account.role === 'admin' ? '/admin' : '/profile');
+  const login = useCallback(async ({ email, password = '' }) => {
+    try {
+      const path = email.includes('admin') ? '/admin/login' : '/auth/login';
+      const data = await api.post(path, { email, password });
+      localStorage.setItem('samira_user', JSON.stringify(data.user));
+      localStorage.setItem('samira_token', data.token);
+      setUser(data.user);
+      setToast(`Welcome ${data.user.name}`);
+      navigate(data.user.role === 'admin' ? '/admin' : '/profile');
+      return { ok: true };
+    } catch (error) {
+      const account = demoUsers[email];
+      if (!account || process.env.NODE_ENV === 'production') {
+        setToast(error.message);
+        return { ok: false, error: error.message };
+      }
+      localStorage.setItem('samira_user', JSON.stringify(account));
+      localStorage.setItem('samira_token', '');
+      setUser(account);
+      setToast('Demo mode login. Start the API for live admin changes.');
+      navigate(account.role === 'admin' ? '/admin' : '/profile');
+      return { ok: true };
+    }
   }, [navigate]);
 
   const logout = useCallback(() => {
