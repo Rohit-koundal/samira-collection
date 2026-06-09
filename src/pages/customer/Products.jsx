@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import products from '../../data/seedProducts';
 import ProductGrid from '../../components/product/ProductGrid';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
@@ -15,6 +15,7 @@ export default function Products({ navigate, route = '/products' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
+  const searchInputRef = useRef(null);
   const params = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
 
   const updateParam = (key, value) => {
@@ -27,6 +28,18 @@ export default function Products({ navigate, route = '/products' }) {
   useEffect(() => {
     api.get('/categories').then(setCategories).catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    if (basePath !== '/search') return;
+    const focusTimer = window.setTimeout(() => {
+      const input = searchInputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    }, 80);
+    return () => window.clearTimeout(focusTimer);
+  }, [basePath]);
 
   useEffect(() => {
     setLoading(true);
@@ -45,7 +58,7 @@ export default function Products({ navigate, route = '/products' }) {
   return (
     <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
       <div className="sticky top-[104px] z-30 -mx-3.5 mb-4 bg-white px-3.5 py-2 md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
-        <input value={params.get('search') || ''} onChange={(event) => updateParam('search', event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold md:hidden" placeholder="Search Samira products" />
+        <input ref={searchInputRef} value={params.get('search') || ''} onChange={(event) => updateParam('search', event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold md:hidden" placeholder="Search Samira products" inputMode="search" enterKeyHint="search" />
       </div>
       <div className="mb-6">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">Home / Products</p>

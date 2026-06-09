@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 
-const uploadDir = path.join(process.cwd(), 'uploads');
+const uploadDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
