@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Icon from '../layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { normalizeImageUrl } from '../../services/normalize';
+import { isUsableImageUrl, normalizeImageUrl } from '../../services/normalize';
 
 const swatches = {
   Wine: '#6d1f34',
@@ -16,9 +16,14 @@ const swatches = {
 };
 
 export function ProductVisual({ product, compact = false }) {
-  const image = product.images?.[0]?.url;
-  if (image) {
-    return <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}><img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /></div>;
+  const [imageFailed, setImageFailed] = useState(false);
+  const image = product.images?.find((item) => isUsableImageUrl(item?.url))?.url;
+  if (image && !imageFailed) {
+    return (
+      <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}>
+        <img src={normalizeImageUrl(image)} alt={product.name} onError={() => setImageFailed(true)} className="h-full w-full object-cover" />
+      </div>
+    );
   }
   const color = swatches[product.colors?.[0]] || '#6d1f34';
   return (

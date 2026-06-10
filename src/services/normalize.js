@@ -1,5 +1,7 @@
 export function normalizeProduct(product) {
-  const images = (product.images || []).map((image) => ({ ...image, url: normalizeImageUrl(image.url) }));
+  const images = (product.images || [])
+    .map((image) => ({ ...image, url: normalizeImageUrl(image.url) }))
+    .filter((image) => isUsableImageUrl(image.url));
   return {
     ...product,
     images,
@@ -19,7 +21,8 @@ export function normalizeProducts(products = []) {
 }
 
 export function normalizeImageUrl(url) {
-  if (!url || url.startsWith('http') || url.startsWith('data:')) return url;
+  if (!url || isKnownMissingImage(url)) return '';
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
   const configuredUrl = process.env.REACT_APP_API_URL;
   const isBrowser = typeof window !== 'undefined';
   const isLocalPage = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -28,4 +31,12 @@ export function normalizeImageUrl(url) {
     : isLocalPage ? 'http://localhost:5000/api' : 'https://samira-collection-backend-1.onrender.com/api';
   const apiRoot = apiUrl.replace(/\/api\/?$/, '');
   return `${apiRoot}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+export function isUsableImageUrl(url) {
+  return Boolean(url && !isKnownMissingImage(url));
+}
+
+function isKnownMissingImage(url) {
+  return /(^|\/)placeholder\.jpe?g($|\?)/i.test(String(url || ''));
 }
