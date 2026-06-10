@@ -10,9 +10,13 @@ export default function Inventory() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
   const load = () => {
     setLoading(true);
-    api.get('/admin/products?admin=true').then(setProducts).finally(() => setLoading(false));
+    api.get('/admin/products?admin=true').then((items) => {
+      setProducts(items);
+      setMessage('');
+    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -26,13 +30,18 @@ export default function Inventory() {
   }), [filter, products, query]);
 
   const updateStock = async (product, stock) => {
-    await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock) });
-    setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: Number(stock) } : item));
+    try {
+      await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock) });
+      setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: Number(stock) } : item));
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Inventory" note="Quickly update stock and track low-stock alerts." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search product or SKU">
         <select value={filter} onChange={(event) => setFilter(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"><option value="">All Stock</option><option value="low">Low Stock</option><option value="out">Out of Stock</option></select>
       </SearchFilterBar>

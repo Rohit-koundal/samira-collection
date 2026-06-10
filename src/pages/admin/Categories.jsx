@@ -12,8 +12,12 @@ export default function Categories() {
   }, []);
 
   const remove = async (category) => {
-    await api.delete(`/admin/categories/${category._id}`);
-    load();
+    try {
+      await api.delete(`/admin/categories/${category._id}`);
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (

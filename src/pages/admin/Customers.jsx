@@ -9,9 +9,13 @@ export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
   const load = () => {
     setLoading(true);
-    api.get('/admin/customers').then(setCustomers).finally(() => setLoading(false));
+    api.get('/admin/customers').then((items) => {
+      setCustomers(items);
+      setMessage('');
+    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -19,23 +23,36 @@ export default function Customers() {
 
   const filtered = useMemo(() => customers.filter((customer) => [customer.name, customer.email, customer.phone, customer.role].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase())), [customers, query]);
   const toggle = async (customer) => {
-    await api.patch(`/admin/customers/${customer._id}/block`, { isBlocked: !customer.isBlocked });
-    load();
+    try {
+      await api.patch(`/admin/customers/${customer._id}/block`, { isBlocked: !customer.isBlocked });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
   const promote = async (customer) => {
     if (!window.confirm('Are you sure you want to make this user an admin?')) return;
-    await api.patch(`/admin/customers/${customer._id}/promote-admin`, {});
-    load();
+    try {
+      await api.patch(`/admin/customers/${customer._id}/promote-admin`, {});
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
   const demote = async (customer) => {
     if (!window.confirm('Are you sure you want to demote this admin to customer?')) return;
-    await api.patch(`/admin/customers/${customer._id}/demote-admin`, {});
-    load();
+    try {
+      await api.patch(`/admin/customers/${customer._id}/demote-admin`, {});
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Customers" note="View and control customer access." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search customer name, email or phone" />
       <DataTable loading={loading} emptyTitle="No customers found" heads={['Name', 'Phone', 'Email', 'Role', 'Modes', 'Status', 'Joined', 'Actions']} rows={filtered.map((customer) => (
         <tr key={customer._id} className="border-t border-slate-100">

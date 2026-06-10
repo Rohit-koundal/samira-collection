@@ -30,11 +30,31 @@ export default function AddressManagement() {
     setEditingId(address._id);
   };
 
+  const setDefault = async (address) => {
+    setMessage('');
+    try {
+      await api.patch(`/user/addresses/${address._id}/default`);
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  const remove = async (address) => {
+    setMessage('');
+    try {
+      await api.delete(`/user/addresses/${address._id}`);
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
   return (
     <section className="container-page py-8">
       <h1 className="mb-6 text-3xl font-black">My Addresses</h1>
       <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-        <div className="space-y-3">{addresses.map((address) => <div key={address._id} className="rounded-3xl bg-white p-5 shadow-sm"><div className="flex justify-between gap-3"><div><p className="font-black">{address.fullName}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p>{address.isDefault && <span className="mt-3 inline-flex rounded-full bg-blush px-3 py-1 text-xs font-black text-wine">Default</span>}</div><div className="grid gap-2"><button onClick={() => edit(address)} className="text-sm font-black text-wine">Edit</button><button onClick={() => api.patch(`/user/addresses/${address._id}/default`).then(load)} className="text-sm font-black text-emerald-700">Default</button><button onClick={() => api.delete(`/user/addresses/${address._id}`).then(load)} className="text-sm font-black text-rose">Delete</button></div></div></div>)}</div>
+        <div className="space-y-3">{addresses.map((address) => <div key={address._id} className="rounded-3xl bg-white p-5 shadow-sm"><div className="flex justify-between gap-3"><div><p className="font-black">{address.fullName}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p>{address.isDefault && <span className="mt-3 inline-flex rounded-full bg-blush px-3 py-1 text-xs font-black text-wine">Default</span>}</div><div className="grid gap-2"><button onClick={() => edit(address)} className="text-sm font-black text-wine">Edit</button><button onClick={() => setDefault(address)} className="text-sm font-black text-emerald-700">Default</button><button onClick={() => remove(address)} className="text-sm font-black text-rose">Delete</button></div></div></div>)}</div>
         <AddressForm form={form} setForm={setForm} onSubmit={save} message={message} editing={!!editingId} />
       </div>
     </section>

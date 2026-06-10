@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Receipt from '../../components/order/Receipt';
 import ReceiptActions from '../../components/order/ReceiptActions';
 import PageHeader from '../../components/admin/PageHeader';
@@ -14,21 +14,29 @@ export default function OrderDetail({ route = '' }) {
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState('');
 
-  const load = () => {
+  const load = useCallback(() => {
     if (!orderId) return;
     api.get(`/admin/orders/${orderId}`).then(setOrder).catch((error) => setMessage(error.message));
     api.get(`/admin/orders/${orderId}/receipt`).then(setReceipt).catch(() => {});
-  };
-  useEffect(() => { load(); }, [orderId]);
+  }, [orderId]);
+  useEffect(() => { load(); }, [load]);
 
   const updateStatus = async (orderStatus) => {
-    await api.put(`/admin/orders/${orderId}/status`, { orderStatus, note: 'Updated by admin' });
-    load();
+    try {
+      await api.put(`/admin/orders/${orderId}/status`, { orderStatus, note: 'Updated by admin' });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const updatePayment = async (paymentStatus) => {
-    await api.put(`/admin/orders/${orderId}/payment-status`, { paymentStatus });
-    load();
+    try {
+      await api.put(`/admin/orders/${orderId}/payment-status`, { paymentStatus });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   if (message) return <section className="space-y-5"><PageHeader title="Order Detail" /><p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p></section>;

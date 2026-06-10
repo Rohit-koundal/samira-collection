@@ -14,10 +14,14 @@ export default function Orders() {
   const [status, setStatus] = useState('');
   const [payment, setPayment] = useState('');
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
 
   const load = () => {
     setLoading(true);
-    api.get('/admin/orders').then(setOrders).finally(() => setLoading(false));
+    api.get('/admin/orders').then((items) => {
+      setOrders(items);
+      setMessage('');
+    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
   };
   useEffect(load, []);
 
@@ -27,17 +31,26 @@ export default function Orders() {
   }), [orders, payment, query, status]);
 
   const updateOrder = async (order, orderStatus) => {
-    await api.put(`/admin/orders/${order._id}/status`, { orderStatus });
-    load();
+    try {
+      await api.put(`/admin/orders/${order._id}/status`, { orderStatus });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
   const updatePayment = async (order, paymentStatus) => {
-    await api.put(`/admin/orders/${order._id}/payment-status`, { paymentStatus });
-    load();
+    try {
+      await api.put(`/admin/orders/${order._id}/payment-status`, { paymentStatus });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Orders" note="Search, filter and update order/payment statuses." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search order, customer, email or phone">
         <Select value={status} onChange={setStatus} options={['', ...orderStatuses]} label="All order status" />
         <Select value={payment} onChange={setPayment} options={['', ...paymentStatuses]} label="All payments" />

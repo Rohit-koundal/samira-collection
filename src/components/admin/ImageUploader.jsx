@@ -9,11 +9,12 @@ export default function ImageUploader({ value = [], onChange, multiple = false, 
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  const files = Array.isArray(value) ? value : value ? [value] : [];
+  const files = (Array.isArray(value) ? value : value ? [value] : []).filter((file) => file?.url);
 
   const addFiles = async (selected) => {
     setError('');
     const incoming = Array.from(selected);
+    if (!incoming.length) return;
     if (files.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
 
     const converted = [];
@@ -25,11 +26,14 @@ export default function ImageUploader({ value = [], onChange, multiple = false, 
     setUploading(true);
     try {
       const data = await api.upload('/admin/uploads', converted);
-      const uploaded = data.files.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));
+      const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
+      if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
+      const uploaded = uploadedFiles.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));
       onChange(multiple ? [...files, ...uploaded] : uploaded.slice(0, 1));
     } catch (uploadError) {
       setError(uploadError.message);
     } finally {
+      if (inputRef.current) inputRef.current.value = '';
       setUploading(false);
     }
   };

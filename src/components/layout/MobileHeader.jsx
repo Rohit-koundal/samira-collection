@@ -3,14 +3,17 @@ import logo from '../../assets/samira-collection-logo.svg';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { useAuth } from '../../context/AuthContext';
 import seedCategories from '../../data/categories';
 import api from '../../services/api';
 
-export default function MobileHeader({ navigate }) {
+export default function MobileHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
+  const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState(seedCategories);
+  const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
 
   useEffect(() => {
     api.get('/categories').then(setCategories).catch(() => {});
@@ -19,6 +22,13 @@ export default function MobileHeader({ navigate }) {
   const go = (path) => {
     setOpen(false);
     navigate(path);
+  };
+
+  const updateSearch = (value) => {
+    const params = new URLSearchParams(route.split('?')[1] || '');
+    if (value) params.set('search', value);
+    else params.delete('search');
+    navigate(`/search${params.toString() ? `?${params}` : ''}`);
   };
 
   return (
@@ -51,10 +61,20 @@ export default function MobileHeader({ navigate }) {
           </div>
         </div>
         <div className="px-3 pb-2">
-          <button onClick={() => navigate('/search')} className="flex h-10 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
+          <label className="flex h-10 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
             <Icon name="search" className="h-4 w-4" />
-            Search sarees, suits, kurtis...
-          </button>
+            <input
+              value={searchValue}
+              onFocus={() => {
+                if (!route.startsWith('/search')) navigate('/search');
+              }}
+              onChange={(event) => updateSearch(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent font-semibold text-charcoal outline-none placeholder:text-slate-500"
+              placeholder="Search sarees, suits, kurtis..."
+              inputMode="search"
+              enterKeyHint="search"
+            />
+          </label>
         </div>
       </header>
       {open && (
@@ -79,6 +99,11 @@ export default function MobileHeader({ navigate }) {
                 </button>
               ))}
             </div>
+            {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+              <button onClick={() => switchMode('admin')} className="mt-3 w-full rounded-2xl bg-wine px-4 py-3 text-left text-sm font-black text-white">
+                Switch to Admin
+              </button>
+            )}
             <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-wine">Categories</p>
             <div className="mt-3 grid gap-2">
               {categories.map((category) => (

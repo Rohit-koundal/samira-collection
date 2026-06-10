@@ -12,9 +12,13 @@ export default function Reviews() {
   const [rating, setRating] = useState('');
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [message, setMessage] = useState('');
   const load = () => {
     setLoading(true);
-    api.get('/admin/reviews').then(setReviews).finally(() => setLoading(false));
+    api.get('/admin/reviews').then((items) => {
+      setReviews(items);
+      setMessage('');
+    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -26,18 +30,27 @@ export default function Reviews() {
   }), [query, rating, reviews]);
 
   const toggle = async (review) => {
-    await api.patch(`/admin/reviews/${review._id}/visibility`, { isVisible: !review.isVisible });
-    load();
+    try {
+      await api.patch(`/admin/reviews/${review._id}/visibility`, { isVisible: !review.isVisible });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
   const remove = async () => {
-    await api.delete(`/admin/reviews/${deleteTarget._id}`);
-    setDeleteTarget(null);
-    load();
+    try {
+      await api.delete(`/admin/reviews/${deleteTarget._id}`);
+      setDeleteTarget(null);
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Reviews" note="Moderate customer reviews and visibility." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search product, customer or comment">
         <select value={rating} onChange={(event) => setRating(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"><option value="">All Ratings</option>{[5, 4, 3, 2, 1].map((item) => <option key={item} value={item}>{item} star</option>)}</select>
       </SearchFilterBar>

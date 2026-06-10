@@ -2,6 +2,7 @@ import logo from '../../assets/samira-collection-logo.svg';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { useAuth } from '../../context/AuthContext';
 
 const links = [
   ['Home', '/'],
@@ -14,9 +15,18 @@ const links = [
   ['Contact', '/contact'],
 ];
 
-export default function DesktopHeader({ navigate }) {
+export default function DesktopHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
+  const { user, switchMode } = useAuth();
+  const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+
+  const updateSearch = (value) => {
+    const params = new URLSearchParams(route.split('?')[1] || '');
+    if (value) params.set('search', value);
+    else params.delete('search');
+    navigate(`/search${params.toString() ? `?${params}` : ''}`);
+  };
 
   return (
     <header className="sticky top-0 z-50 hidden bg-white/95 shadow-sm backdrop-blur md:block">
@@ -34,11 +44,26 @@ export default function DesktopHeader({ navigate }) {
             </button>
           ))}
         </nav>
-        <button onClick={() => navigate('/search')} className="flex h-11 min-w-[280px] items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-sm font-semibold text-slate-500">
+        <label className="flex h-11 min-w-[280px] items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-sm font-semibold text-slate-500">
           <Icon name="search" className="h-4 w-4" />
-          Search sarees, suits, kurtis...
-        </button>
+          <input
+            value={searchValue}
+            onFocus={() => {
+              if (!route.startsWith('/search')) navigate('/search');
+            }}
+            onChange={(event) => updateSearch(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent font-semibold text-charcoal outline-none placeholder:text-slate-500"
+            placeholder="Search sarees, suits, kurtis..."
+            inputMode="search"
+            enterKeyHint="search"
+          />
+        </label>
         <div className="flex items-center gap-3">
+          {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+            <button onClick={() => switchMode('admin')} className="h-11 rounded-full bg-wine px-4 text-xs font-black uppercase text-white">
+              Admin Mode
+            </button>
+          )}
           <button onClick={() => navigate('/profile')} className="grid h-11 w-11 place-items-center rounded-full border border-slate-200"><Icon name="user" /></button>
           <button onClick={() => navigate('/wishlist')} className="relative grid h-11 w-11 place-items-center rounded-full border border-slate-200">
             <Icon name="heart" />

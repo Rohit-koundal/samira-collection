@@ -32,6 +32,10 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await sendOtp(normalizedPhone);
+      if (data.token && data.user) {
+        setMessageType('success');
+        return setMessage('Logged in successfully.');
+      }
       setStep('otp');
       setCooldown(60);
       setMessageType('success');

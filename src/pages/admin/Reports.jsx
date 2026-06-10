@@ -8,17 +8,20 @@ import api from '../../services/api';
 export default function Reports() {
   const [stats, setStats] = useState({});
   const [lowStock, setLowStock] = useState([]);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     Promise.all([api.get('/admin/dashboard/stats'), api.get('/admin/dashboard/low-stock')]).then(([statsData, lowStockData]) => {
       setStats(statsData);
       setLowStock(lowStockData);
-    });
+      setMessage('');
+    }).catch((error) => setMessage(error.message));
   }, []);
 
   return (
     <section className="space-y-6">
       <PageHeader title="Reports" note="Sales, orders, product and inventory overview." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <DashboardCard title="Total Sales" value={`Rs. ${stats.revenue || 0}`} note="Paid revenue" />
         <DashboardCard title="Total Orders" value={stats.orders || 0} note="All orders" />

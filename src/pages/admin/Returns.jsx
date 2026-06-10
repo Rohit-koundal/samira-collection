@@ -12,9 +12,13 @@ export default function Returns() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
   const load = () => {
     setLoading(true);
-    api.get('/admin/returns').then(setRequests).finally(() => setLoading(false));
+    api.get('/admin/returns').then((items) => {
+      setRequests(items);
+      setMessage('');
+    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -26,13 +30,18 @@ export default function Returns() {
   }), [query, requests, status]);
 
   const update = async (request, nextStatus) => {
-    await api.put(`/admin/returns/${request._id}/status`, { status: nextStatus });
-    load();
+    try {
+      await api.put(`/admin/returns/${request._id}/status`, { status: nextStatus });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Returns / Exchange" note="Approve, reject and track customer return requests." />
+      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search request, customer or product">
         <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"><option value="">All Status</option>{statuses.map((item) => <option key={item}>{item}</option>)}</select>
       </SearchFilterBar>

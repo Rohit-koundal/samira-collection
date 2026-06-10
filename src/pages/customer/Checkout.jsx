@@ -76,6 +76,7 @@ export default function Checkout({ navigate }) {
   const placeOrder = async () => {
     setError('');
     if (!user) return navigate('/login');
+    if (!user.isPhoneVerified) return setError('Please verify your mobile number to continue checkout.');
     if (!cart.items.length) return setError('Your cart is empty.');
     if (!selectedAddress) return setError('Please select or add a delivery address.');
     setPlacing(true);
@@ -105,6 +106,7 @@ export default function Checkout({ navigate }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-5">
           {!user && <section className="rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Login Required</h2><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Login to continue</button></section>}
+          {user && !user.isPhoneVerified && <section className="rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Mobile verification required</h2><p className="mt-2 text-sm font-semibold text-slate-600">Please verify your mobile number to continue checkout.</p><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Verify Mobile</button></section>}
           <section className="rounded-3xl bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between"><h2 className="text-lg font-black">1. Delivery Address</h2><button onClick={() => setShowAddressForm((value) => !value)} className="text-sm font-black text-wine">Add New</button></div>
             <div className="mt-4 grid gap-3">

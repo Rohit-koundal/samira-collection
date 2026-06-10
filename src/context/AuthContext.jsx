@@ -6,23 +6,51 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children, navigate }) {
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem('samira_user');
-    return stored ? JSON.parse(stored) : null;
+    try {
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      localStorage.removeItem('samira_user');
+      return null;
+    }
   });
   const [toast, setToast] = useState('');
 
   const persist = useCallback((data) => {
     if (data.token) localStorage.setItem('samira_token', data.token);
+    if (data.refreshToken) localStorage.setItem('samira_refresh_token', data.refreshToken);
     localStorage.setItem('samira_user', JSON.stringify(data.user));
     setUser(data.user);
   }, []);
 
-  useEffect(() => {
+  const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('samira_token');
-    if (!token) return;
-    api.get('/auth/me').then((profile) => {
+    if (!token) return null;
+    try {
+      const profile = await api.get('/auth/me');
       localStorage.setItem('samira_user', JSON.stringify(profile));
       setUser(profile);
-    }).catch(() => {});
+      return profile;
+    } catch {
+      localStorage.removeItem('samira_token');
+      localStorage.removeItem('samira_user');
+      setUser(null);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshProfile();
+  }, [refreshProfile]);
+
+  useEffect(() => {
+    const onRefreshed = (event) => setUser(event.detail);
+    const onExpired = () => setUser(null);
+    window.addEventListener('samira:session-refreshed', onRefreshed);
+    window.addEventListener('samira:session-expired', onExpired);
+    return () => {
+      window.removeEventListener('samira:session-refreshed', onRefreshed);
+      window.removeEventListener('samira:session-expired', onExpired);
+    };
   }, []);
 
   const sendOtp = useCallback((phone) => api.post('/auth/send-otp', { phone }), []);
@@ -37,23 +65,35 @@ export function AuthProvider({ children, navigate }) {
   }, [navigate, persist]);
 
   const login = useCallback(async ({ email, password = '' }) => {
-    const path = email.includes('admin') ? '/admin/login' : '/auth/login';
-    const data = await api.post(path, { email, password });
-    persist(data);
-    navigate(data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile');
-    return { ok: true };
+    try {
+      const path = email.includes('admin') ? '/admin/login' : '/auth/login';
+      const data = await api.post(path, { email, password });
+      persist(data);
+      navigate(data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile');
+      return { ok: true };
+    } catch (error) {
+      setToast(error.message);
+      return { ok: false, error: error.message };
+    }
   }, [navigate, persist]);
 
   const switchMode = useCallback(async (mode) => {
-    const data = await api.post('/auth/switch-mode', { mode });
-    persist(data);
-    setToast(mode === 'admin' ? 'Switched to Admin Mode' : 'Switched to Customer Mode');
-    navigate(mode === 'admin' ? '/admin' : '/');
+    try {
+      const data = await api.post('/auth/switch-mode', { mode });
+      persist(data);
+      setToast(mode === 'admin' ? 'Switched to Admin Mode' : 'Switched to Customer Mode');
+      navigate(mode === 'admin' ? '/admin' : '/');
+      return { ok: true };
+    } catch (error) {
+      setToast(error.message);
+      return { ok: false, error: error.message };
+    }
   }, [navigate, persist]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('samira_user');
     localStorage.removeItem('samira_token');
+    localStorage.removeItem('samira_refresh_token');
     setUser(null);
     navigate('/');
   }, [navigate]);
@@ -65,6 +105,7 @@ export function AuthProvider({ children, navigate }) {
     resendOtp,
     verifyOtp,
     switchMode,
+    refreshProfile,
     logout,
     toast,
     setToast,
@@ -72,7 +113,7 @@ export function AuthProvider({ children, navigate }) {
     isAdmin: user?.role === 'admin',
     activeMode: user?.activeMode || 'customer',
     availableModes: user?.availableModes || ['customer'],
-  }), [login, logout, resendOtp, sendOtp, switchMode, toast, user, verifyOtp]);
+  }), [login, logout, refreshProfile, resendOtp, sendOtp, switchMode, toast, user, verifyOtp]);
 
   return (
     <AuthContext.Provider value={value}>

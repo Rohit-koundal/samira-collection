@@ -64,19 +64,31 @@ export default function Products() {
   const updateStock = async (product, nextStock) => {
     const value = Number(nextStock);
     setProducts((current) => current.map((item) => item._id === product._id ? { ...item, stock: value } : item));
-    await api.patch(`/admin/products/${product._id}/stock`, { stock: value });
+    try {
+      await api.patch(`/admin/products/${product._id}/stock`, { stock: value });
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const toggleStatus = async (product) => {
     const isActive = !product.isActive;
     setProducts((current) => current.map((item) => item._id === product._id ? { ...item, isActive } : item));
-    await api.patch(`/admin/products/${product._id}/status`, { isActive });
+    try {
+      await api.patch(`/admin/products/${product._id}/status`, { isActive });
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const removeProduct = async () => {
-    await api.delete(`/admin/products/${deleteTarget._id}`);
-    setProducts((current) => current.filter((item) => item._id !== deleteTarget._id));
-    setDeleteTarget(null);
+    try {
+      await api.delete(`/admin/products/${deleteTarget._id}`);
+      setProducts((current) => current.filter((item) => item._id !== deleteTarget._id));
+      setDeleteTarget(null);
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (

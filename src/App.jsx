@@ -125,8 +125,8 @@ export default function App() {
               )
             ) : (
               <>
-                <DesktopHeader navigate={navigate} />
-                {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} />}
+                <DesktopHeader navigate={navigate} route={route} />
+                {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
                 <main className="pb-24 md:pb-0">
                   {['/profile', '/orders', '/checkout', '/order-detail', '/order-success'].includes(routePath) ? (
                     <ProtectedRoute>

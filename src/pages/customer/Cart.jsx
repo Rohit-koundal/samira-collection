@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import products from '../../data/seedProducts';
+import seedCoupons from '../../data/coupons';
 import api from '../../services/api';
 import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 
@@ -24,7 +25,7 @@ export default function Cart({ navigate }) {
     api.get('/products?sort=rating')
       .then((items) => setRecommended(normalizeProducts(items).slice(0, 8)))
       .catch(() => setRecommended(isDev ? products.slice(0, 8) : []));
-    api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons([]));
+    api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons(seedCoupons));
   }, []);
 
   const selectedCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -45,7 +46,14 @@ export default function Cart({ navigate }) {
       setCode(data.couponCode || data.coupon?.code || couponCode);
       setMessage(`${data.couponCode || data.coupon?.code || couponCode} applied`);
     } catch (error) {
-      setMessage(error.message);
+      const localCoupon = applyLocalCoupon(couponCode, cart.sellingTotal);
+      if (localCoupon) {
+        cart.setCoupon({ code: localCoupon.code, discount: localCoupon.discountAmount });
+        setCode(localCoupon.code);
+        setMessage(`${localCoupon.code} applied`);
+      } else {
+        setMessage(error.message);
+      }
     }
   };
 
@@ -181,6 +189,18 @@ export default function Cart({ navigate }) {
       </div>
     </section>
   );
+}
+
+function applyLocalCoupon(code, cartTotal) {
+  const coupon = seedCoupons.find((item) => item.code === String(code || '').toUpperCase() && item.isActive);
+  if (!coupon || new Date(coupon.expiryDate) < new Date()) return null;
+  const amount = Number(cartTotal || 0);
+  if (amount < Number(coupon.minOrderAmount || 0)) return null;
+  const raw = coupon.type === 'Percentage' ? (amount * Number(coupon.discountValue || 0)) / 100 : Number(coupon.discountValue || 0);
+  return {
+    code: coupon.code,
+    discountAmount: Math.min(raw, Number(coupon.maxDiscountAmount || raw), amount),
+  };
 }
 
 function BagHeader({ navigate }) {

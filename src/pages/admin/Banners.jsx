@@ -10,8 +10,12 @@ export default function Banners() {
   useEffect(load, []);
 
   const remove = async (banner) => {
-    await api.delete(`/admin/banners/${banner._id}`);
-    load();
+    try {
+      await api.delete(`/admin/banners/${banner._id}`);
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   return (
