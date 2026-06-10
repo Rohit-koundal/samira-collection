@@ -20,6 +20,12 @@ export function normalizeProducts(products = []) {
 
 export function normalizeImageUrl(url) {
   if (!url || url.startsWith('http') || url.startsWith('data:')) return url;
-  const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+  const configuredUrl = process.env.REACT_APP_API_URL;
+  const isBrowser = typeof window !== 'undefined';
+  const isLocalPage = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const apiUrl = configuredUrl && !(isBrowser && configuredUrl.includes('localhost') && !isLocalPage)
+    ? configuredUrl
+    : isLocalPage ? 'http://localhost:5000/api' : 'https://samira-collection-backend-1.onrender.com/api';
+  const apiRoot = apiUrl.replace(/\/api\/?$/, '');
   return `${apiRoot}${url.startsWith('/') ? url : `/${url}`}`;
 }

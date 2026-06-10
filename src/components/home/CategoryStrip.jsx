@@ -17,9 +17,10 @@ export default function CategoryStrip({ navigate, categories = seedCategories })
         {visibleCategories.map((category, index) => {
           const categoryId = category._id || category.id || category.slug || '';
           const subtitle = category.count ? `${category.count} styles` : category.description || (index % 2 ? 'Under Rs. 999' : 'Fresh styles');
+          const canRenderImage = isRealImagePath(category.image);
           return (
           <button key={categoryId || category.name} onClick={() => navigate(`/products?category=${categoryId}`)} className="min-w-[112px] rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-xl md:min-w-[136px] md:rounded-3xl md:p-4">
-            {category.image ? <img src={normalizeImageUrl(category.image)} alt="" className="h-16 w-full rounded-xl object-cover md:h-20 md:rounded-2xl" /> : <div className="grid h-16 place-items-center rounded-xl bg-gradient-to-br from-blush to-[#f7e4c7] text-2xl font-black text-wine md:h-20 md:rounded-2xl md:text-3xl">SC</div>}
+            {canRenderImage ? <img src={normalizeImageUrl(category.image)} alt="" className="h-16 w-full rounded-xl object-cover md:h-20 md:rounded-2xl" /> : <div className="grid h-16 place-items-center rounded-xl bg-gradient-to-br from-blush to-[#f7e4c7] text-2xl font-black text-wine md:h-20 md:rounded-2xl md:text-3xl">SC</div>}
             <h3 className="mt-3 truncate text-xs font-black md:mt-4 md:text-sm">{category.name}</h3>
             <p className="mt-1 text-xs font-semibold text-slate-500">{subtitle}</p>
           </button>
@@ -28,4 +29,9 @@ export default function CategoryStrip({ navigate, categories = seedCategories })
       </div>
     </section>
   );
+}
+
+function isRealImagePath(value) {
+  if (!value) return false;
+  return value.startsWith('http') || value.startsWith('data:') || value.startsWith('/uploads/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(value);
 }
