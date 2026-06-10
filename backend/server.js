@@ -1,8 +1,11 @@
 const dotenv = require('dotenv');
+const path = require('path');
+
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config();
+
 const app = require('./app');
 const connectDB = require('./config/db');
-
-dotenv.config();
 
 async function startServer() {
   await connectDB();

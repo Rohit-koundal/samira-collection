@@ -1,12 +1,15 @@
 const User = require('../models/User');
-const Otp = require('../models/Otp');
-const generateToken = require('../utils/generateToken');
-const { normalizePhone, generateOtp, hashOtp, verifyOtpHash } = require('../services/otpService');
-const { sendOtp } = require('../services/smsProvider');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const { generateRefreshToken, generateToken } = require('../utils/generateToken');
+const { normalizePhone, createOtp, invalidateOtp, verifyOtp: verifyOtpRecord } = require('../services/otpService');
+const { sendOtp } = require('../services/smsService');
+
+const otpRateLimit = new Map();
 
 exports.register = async (req, res) => {
   const user = await User.create(req.body);
-  res.status(201).json({ user: sanitize(user), token: generateToken(user) });
+  res.status(201).json(authPayload(user));
 };
 
 exports.login = async (req, res) => {
@@ -18,53 +21,120 @@ exports.login = async (req, res) => {
     user.activeMode = 'admin';
     await user.save();
   }
-  res.json({ user: sanitize(user), token: generateToken(user) });
+  res.json(authPayload(user));
 };
 
 exports.profile = async (req, res) => res.json(req.user);
 
 exports.updateProfile = async (req, res) => {
-  const { role, availableModes, activeMode, isBlocked, ...safeBody } = req.body;
+  const { role, availableModes, activeMode, isBlocked, phone, ...safeBody } = req.body;
   Object.assign(req.user, safeBody);
   await req.user.save();
   res.json(sanitize(req.user));
 };
 
 exports.sendOtp = async (req, res) => {
-  const phone = normalizePhone(req.body.phone);
-  if (!phone) return res.status(400).json({ message: 'Valid 10-digit mobile number is required' });
-  const latest = await Otp.findOne({ phone, isUsed: false }).sort('-createdAt');
-  const cooldown = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60);
-  if (latest && Date.now() - latest.createdAt.getTime() < cooldown * 1000) {
-    return res.status(429).json({ message: `Please wait ${cooldown}s before requesting another OTP` });
+  try {
+    const phone = normalizePhone(req.body.phone);
+    if (!phone) return res.status(400).json({ message: 'Valid 10-digit Indian mobile number is required' });
+    if (!allowOtpRequest(phone, req.ip)) {
+      return res.status(429).json({ message: 'Too many OTP requests. Please try again shortly.' });
+    }
+
+    const { otp, record } = await createOtp(phone, 'login', req);
+    let delivery;
+    try {
+      delivery = await sendOtp(phone, otp);
+    } catch (deliveryError) {
+      await invalidateOtp(record);
+      throw deliveryError;
+    }
+    const response = { success: true, message: 'OTP sent successfully' };
+    if (delivery.devOtp) response.devOtp = delivery.devOtp;
+    res.json(response);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
-  const otp = generateOtp();
-  const expiresAt = new Date(Date.now() + Number(process.env.OTP_EXPIRY_MINUTES || 5) * 60 * 1000);
-  await Otp.create({ phone, otpHash: hashOtp(phone, otp), expiresAt, purpose: 'login' });
-  await sendOtp(phone, otp);
-  res.json({ success: true, message: 'OTP sent successfully', devOtp: process.env.NODE_ENV === 'production' ? undefined : otp });
 };
 
 exports.resendOtp = exports.sendOtp;
 
 exports.verifyOtp = async (req, res) => {
-  const phone = normalizePhone(req.body.phone);
-  const otp = String(req.body.otp || '');
-  if (!phone || !/^\d{6}$/.test(otp)) return res.status(400).json({ message: 'Valid phone and OTP are required' });
-  const record = await Otp.findOne({ phone, isUsed: false }).sort('-createdAt');
-  if (!record) return res.status(400).json({ message: 'OTP not found or expired' });
-  if (record.expiresAt < new Date()) return res.status(400).json({ message: 'OTP expired' });
-  if (record.attempts >= Number(process.env.OTP_MAX_ATTEMPTS || 5)) return res.status(429).json({ message: 'Maximum OTP attempts exceeded' });
-  if (!verifyOtpHash(phone, otp, record.otpHash)) {
-    record.attempts += 1;
-    await record.save();
-    return res.status(400).json({ message: 'Invalid OTP' });
+  try {
+    const { phone } = await verifyOtpRecord(req.body.phone, req.body.otp);
+    const user = mongoose.connection.readyState === 1
+      ? await upsertPhoneLoginUser(phone, { activeMode: 'customer' })
+      : buildOfflineLoginUser(phone, { activeMode: 'customer' });
+    res.json({ success: true, ...authPayload(user) });
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
-  record.isUsed = true;
-  await record.save();
+};
 
-  const adminPhones = String(process.env.ADMIN_PHONE_NUMBERS || '').split(',').map((item) => normalizePhone(item)).filter(Boolean);
-  const isAdminPhone = adminPhones.includes(phone);
+exports.me = async (req, res) => res.json(sanitize(req.user));
+
+exports.logout = async (req, res) => {
+  res.json({ success: true, message: 'Logged out successfully' });
+};
+
+exports.refresh = async (req, res) => {
+  const token = req.body.refreshToken;
+  if (!token) return res.status(401).json({ message: 'Refresh token required' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'dev_secret_change_me');
+    if (decoded.tokenType !== 'refresh') return res.status(401).json({ message: 'Invalid refresh token' });
+
+    let user;
+    if (canRefreshOfflineSession(decoded)) {
+      user = buildOfflineLoginUser(decoded.phone, { activeMode: decoded.activeMode || 'customer' });
+    } else {
+      user = await User.findById(decoded.id).select('-password');
+      if (!user || user.isBlocked) return res.status(401).json({ message: 'Account unavailable' });
+    }
+
+    res.json({ success: true, ...authPayload(user) });
+  } catch (error) {
+    res.status(401).json({ message: 'Refresh token expired. Please login again.' });
+  }
+};
+
+exports.switchMode = async (req, res) => {
+  const mode = req.body.mode;
+  if (!['customer', 'admin'].includes(mode)) return res.status(400).json({ message: 'Invalid mode' });
+  if (mode === 'admin' && (req.user.role !== 'admin' || !req.user.availableModes?.includes('admin'))) {
+    return res.status(403).json({ message: 'Admin mode is not allowed' });
+  }
+  if (req.user.offlineSession) {
+    req.user.activeMode = mode;
+    return res.json({ success: true, ...authPayload(req.user) });
+  }
+  req.user.activeMode = mode;
+  await req.user.save();
+  res.json({ success: true, ...authPayload(req.user) });
+};
+
+function sanitize(user) {
+  const data = typeof user.toObject === 'function' ? user.toObject() : { ...user };
+  delete data.password;
+  data.id = String(data._id || data.id);
+  return data;
+}
+
+function authPayload(user) {
+  return {
+    user: sanitize(user),
+    token: generateToken(user),
+    refreshToken: generateRefreshToken(user),
+  };
+}
+
+function getAdminPhones() {
+  return String(process.env.ADMIN_PHONE_NUMBERS || '').split(',').map((item) => normalizePhone(item)).filter(Boolean);
+}
+
+async function upsertPhoneLoginUser(phone, { activeMode = 'customer' } = {}) {
+  const isAdminPhone = getAdminPhones().includes(phone);
   let user = await User.findOne({ phone });
   if (!user) {
     user = await User.create({
@@ -73,38 +143,67 @@ exports.verifyOtp = async (req, res) => {
       isPhoneVerified: true,
       role: isAdminPhone ? 'admin' : 'customer',
       availableModes: isAdminPhone ? ['customer', 'admin'] : ['customer'],
-      activeMode: 'customer',
+      activeMode,
     });
+    return user;
+  }
+
+  if (user.isBlocked) {
+    const error = new Error('Account is blocked');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  user.isPhoneVerified = true;
+  if (isAdminPhone || user.role === 'admin') {
+    user.role = 'admin';
+    user.availableModes = ['customer', 'admin'];
   } else {
-    if (user.isBlocked) return res.status(403).json({ message: 'Account is blocked' });
-    user.isPhoneVerified = true;
-    if (isAdminPhone && user.role !== 'admin') {
-      user.role = 'admin';
-      user.availableModes = ['customer', 'admin'];
-    }
-    if (!user.availableModes?.length) user.availableModes = user.role === 'admin' ? ['customer', 'admin'] : ['customer'];
-    user.activeMode = user.activeMode || 'customer';
-    await user.save();
+    user.role = 'customer';
+    user.availableModes = ['customer'];
   }
+  user.activeMode = activeMode;
+  await user.save();
+  return user;
+}
 
-  res.json({ success: true, user: sanitize(user), token: generateToken(user) });
-};
-
-exports.me = async (req, res) => res.json(sanitize(req.user));
-
-exports.switchMode = async (req, res) => {
-  const mode = req.body.mode;
-  if (!['customer', 'admin'].includes(mode)) return res.status(400).json({ message: 'Invalid mode' });
-  if (mode === 'admin' && (req.user.role !== 'admin' || !req.user.availableModes?.includes('admin'))) {
-    return res.status(403).json({ message: 'Admin mode is not allowed' });
+function buildOfflineLoginUser(phone, { activeMode = 'customer' } = {}) {
+  if (process.env.NODE_ENV === 'production') {
+    const error = new Error('Database is unavailable');
+    error.statusCode = 503;
+    throw error;
   }
-  req.user.activeMode = mode;
-  await req.user.save();
-  res.json({ success: true, user: sanitize(req.user), token: generateToken(req.user) });
-};
+  const isAdminPhone = getAdminPhones().includes(phone);
+  const user = {
+    _id: `offline-${phone}`,
+    id: `offline-${phone}`,
+    name: `Samira User ${phone.slice(-4)}`,
+    phone,
+    isPhoneVerified: true,
+    role: isAdminPhone ? 'admin' : 'customer',
+    availableModes: isAdminPhone ? ['customer', 'admin'] : ['customer'],
+    activeMode,
+    isBlocked: false,
+    offlineSession: true,
+  };
+  user.toObject = () => ({ ...user });
+  return user;
+}
 
-function sanitize(user) {
-  const data = user.toObject();
-  delete data.password;
-  return data;
+function canRefreshOfflineSession(decoded) {
+  return process.env.NODE_ENV !== 'production'
+    && mongoose.connection.readyState !== 1
+    && decoded?.offlineSession
+    && String(decoded.userId || decoded.id || '').startsWith('offline-');
+}
+
+function allowOtpRequest(phone, ip) {
+  const key = `${phone}:${ip || 'unknown'}`;
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const limit = 8;
+  const hits = (otpRateLimit.get(key) || []).filter((time) => now - time < windowMs);
+  hits.push(now);
+  otpRateLimit.set(key, hits);
+  return hits.length <= limit;
 }

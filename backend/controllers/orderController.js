@@ -5,6 +5,9 @@ const Coupon = require('../models/Coupon');
 
 exports.createOrder = async (req, res) => {
   try {
+    if (!req.user?.isPhoneVerified) {
+      return res.status(403).json({ message: 'Please verify your mobile number to continue checkout.' });
+    }
     const { items, totals } = await prepareOrder(req.body.orderItems, req.body.coupon?.code);
     const order = await Order.create({
       ...req.body,

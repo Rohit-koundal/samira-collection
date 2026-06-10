@@ -18,7 +18,7 @@ const addressSchema = new mongoose.Schema({
 });
 
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+  name: { type: String, trim: true },
   email: { type: String, unique: true, sparse: true },
   phone: { type: String, required: true, unique: true },
   password: String,
