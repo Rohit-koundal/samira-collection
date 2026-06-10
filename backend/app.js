@@ -6,10 +6,13 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const devFallback = require('./middleware/devFallbackMiddleware');
 const { protect } = require('./middleware/authMiddleware');
 const { adminOnly } = require('./middleware/adminMiddleware');
+const { corsOptions, getAllowedOrigins } = require('./config/corsOptions');
 
 const app = express();
 
-app.use(cors());
+app.set('trust proxy', 1);
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '30mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -20,6 +23,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     database: dbStates[mongoose.connection.readyState] || 'unknown',
     environment: process.env.NODE_ENV || 'development',
+    allowedOrigins: getAllowedOrigins(),
   });
 });
 
