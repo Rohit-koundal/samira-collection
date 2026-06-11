@@ -1,21 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import products from '../../data/seedProducts';
 import ProductGrid from '../../components/product/ProductGrid';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
 import Icon from '../../components/layout/Icon';
-import api from '../../services/api';
 import { normalizeProducts } from '../../services/normalize';
+import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 export default function Products({ navigate, route = '/products' }) {
   const [openFilters, setOpenFilters] = useState(false);
-  const [catalog, setCatalog] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
   const params = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
+  const query = useMemo(() => Object.fromEntries(params.entries()), [params]);
+  const { data: categories = [] } = useGetCategoriesQuery();
+  const { data: productData = [], isLoading, isFetching, error } = useGetProductsQuery(query);
+  const loading = isLoading || isFetching;
+  const catalog = normalizeProducts(productData?.length ? productData : (isDev ? products : []));
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(params);
@@ -23,24 +24,6 @@ export default function Products({ navigate, route = '/products' }) {
     else next.delete(key);
     navigate(`${basePath}${next.toString() ? `?${next}` : ''}`);
   };
-
-  useEffect(() => {
-    api.get('/categories').then(setCategories).catch(() => setCategories([]));
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    api.get(`/products${params.toString() ? `?${params}` : ''}`)
-      .then((items) => {
-        setCatalog(normalizeProducts(items));
-        setError('');
-      })
-      .catch((err) => {
-        setError(err.message);
-        setCatalog(isDev ? products : []);
-      })
-      .finally(() => setLoading(false));
-  }, [params]);
 
   return (
     <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
@@ -71,7 +54,7 @@ export default function Products({ navigate, route = '/products' }) {
           <FilterSelect label="Stock" value={params.get('stock') || ''} onChange={(value) => updateParam('stock', value)} options={[['', 'All'], ['in', 'In Stock'], ['out', 'Out of Stock']]} />
         </aside>
         <div className="min-w-0 flex-1">
-          {error && !isDev ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">{error}</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={catalog} navigate={navigate} />}
+          {error && !isDev ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={catalog} navigate={navigate} />}
         </div>
       </div>
       <div className="fixed bottom-16 left-0 right-0 z-40 grid grid-cols-2 border-t border-slate-200 bg-white md:hidden">

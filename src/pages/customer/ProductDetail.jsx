@@ -1,56 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
+import { skipToken } from '@reduxjs/toolkit/query';
 import SizeChartModal from '../../components/product/SizeChartModal';
 import { ProductVisual } from '../../components/product/ProductCard';
 import Icon from '../../components/layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import api from '../../services/api';
 import { normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
+import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery } from '../../store/apiSlice';
 
 export default function ProductDetail({ navigate, route = '' }) {
   const productKey = new URLSearchParams(route.split('?')[1] || '').get('id');
   const cart = useCart();
   const wishlist = useWishlist();
-  const [product, setProduct] = useState(null);
-  const [related, setRelated] = useState([]);
-  const [reviews, setReviews] = useState([]);
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
   const [activeImage, setActiveImage] = useState(0);
   const [added, setAdded] = useState(false);
   const [openSizeChart, setOpenSizeChart] = useState(false);
   const [deliveryPin, setDeliveryPin] = useState('');
-  const [error, setError] = useState('');
+  const { data: productData, isLoading, error } = useGetProductQuery(productKey || skipToken);
+  const product = productData ? normalizeProduct(productData) : null;
+  const productId = product?._id || product?.id || product?.slug;
+  const relatedQuery = product?.categoryId ? { category: product.categoryId } : { sort: 'rating' };
+  const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
+  const { data: reviewsData = [] } = useGetReviewsQuery(productId || skipToken);
+  const related = normalizeProducts(relatedData)
+    .filter((entry) => (entry._id || entry.id || entry.slug) !== productId)
+    .slice(0, 10);
+  const reviews = Array.isArray(reviewsData) ? reviewsData : [];
 
   useEffect(() => {
-    if (!productKey) {
-      setError('Product not found.');
-      return;
-    }
+    if (!productData) return;
+    const item = normalizeProduct(productData);
+    setSize(item.sizes?.[0] || 'Free Size');
+    setColor(item.colors?.[0] || 'Wine');
+    setActiveImage(0);
+  }, [productData]);
 
-    setError('');
-    setProduct(null);
-    api.get(`/products/${productKey}`)
-      .then((data) => {
-        const item = normalizeProduct(data);
-        setProduct(item);
-        setSize(item.sizes?.[0] || 'Free Size');
-        setColor(item.colors?.[0] || 'Wine');
-        setActiveImage(0);
-
-        const relatedQuery = item.categoryId ? `/products?category=${item.categoryId}` : '/products?sort=rating';
-        api.get(relatedQuery)
-          .then((items) => setRelated(normalizeProducts(items).filter((entry) => (entry._id || entry.id || entry.slug) !== (item._id || item.id || item.slug)).slice(0, 10)))
-          .catch(() => setRelated([]));
-
-        api.get(`/reviews/${item._id || item.id}`)
-          .then((items) => setReviews(Array.isArray(items) ? items : []))
-          .catch(() => setReviews([]));
-      })
-      .catch((err) => setError(err.message));
-  }, [productKey]);
-
-  const productId = product?._id || product?.id || product?.slug;
   const isWishlisted = useMemo(
     () => Boolean(productId) && wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
     [wishlist.items, productId],
@@ -66,11 +52,11 @@ export default function ProductDetail({ navigate, route = '' }) {
     return () => window.clearTimeout(timer);
   }, [added]);
 
-  if (error) {
-    return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">{error}</div></section>;
+  if (!productKey || error) {
+    return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Product not found.</div></section>;
   }
 
-  if (!product) {
+  if (isLoading || !product) {
     return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold">Loading product...</div></section>;
   }
 

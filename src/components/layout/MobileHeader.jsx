@@ -1,23 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import logo from '../../assets/samira-collection-logo.svg';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import seedCategories from '../../data/categories';
-import api from '../../services/api';
+import { useGetCategoriesQuery } from '../../store/apiSlice';
 
 export default function MobileHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
-  const [categories, setCategories] = useState(seedCategories);
+  const { data: categories = seedCategories } = useGetCategoriesQuery();
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
-
-  useEffect(() => {
-    api.get('/categories').then(setCategories).catch(() => {});
-  }, []);
 
   const go = (path) => {
     setOpen(false);

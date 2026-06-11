@@ -1,12 +1,8 @@
 import logo from '../../assets/samira-collection-logo.svg';
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import { useGetSettingsQuery } from '../../store/apiSlice';
 
 export default function Footer({ navigate }) {
-  const [settings, setSettings] = useState({});
-  useEffect(() => {
-    api.get('/settings').then(setSettings).catch(() => {});
-  }, []);
+  const { data: settings = {} } = useGetSettingsQuery();
   return (
     <footer className="hidden bg-charcoal text-white md:block">
       <div className="container-page grid gap-10 py-14 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">

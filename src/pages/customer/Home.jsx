@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import Hero from '../../components/home/Hero';
 import CategoryStrip from '../../components/home/CategoryStrip';
 import OfferBanners from '../../components/home/OfferBanners';
@@ -7,22 +6,14 @@ import TrendingNow from '../../components/home/TrendingNow';
 import NewArrivals from '../../components/home/NewArrivals';
 import BestSellers from '../../components/home/BestSellers';
 import products from '../../data/seedProducts';
-import api from '../../services/api';
 import { normalizeProducts } from '../../services/normalize';
+import { useGetBannersQuery, useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 
 export default function Home({ navigate }) {
-  const [catalog, setCatalog] = useState(products);
-  const [categories, setCategories] = useState([]);
-  const [banners, setBanners] = useState([]);
-
-  useEffect(() => {
-    api.get('/products').then((items) => setCatalog(normalizeProducts(items))).catch(() => {
-      if (process.env.NODE_ENV === 'development') setCatalog(products);
-      else setCatalog([]);
-    });
-    api.get('/categories').then(setCategories).catch(() => setCategories([]));
-    api.get('/banners').then(setBanners).catch(() => setBanners([]));
-  }, []);
+  const { data: productData = products } = useGetProductsQuery();
+  const { data: categories = [] } = useGetCategoriesQuery();
+  const { data: banners = [] } = useGetBannersQuery();
+  const catalog = normalizeProducts(productData?.length ? productData : products);
 
   return (
     <>

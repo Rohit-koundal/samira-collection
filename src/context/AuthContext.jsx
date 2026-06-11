@@ -1,57 +1,46 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import api from '../services/api';
+import { logout as logoutAction, selectUser, setCredentials, setUser as setUserAction } from '../store/authSlice';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children, navigate }) {
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('samira_user');
-    try {
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      localStorage.removeItem('samira_user');
-      return null;
-    }
-  });
+  const dispatch = useDispatch();
+  const user = useSelector(selectUser);
   const [toast, setToast] = useState('');
 
   const persist = useCallback((data) => {
-    if (data.token) localStorage.setItem('samira_token', data.token);
-    if (data.refreshToken) localStorage.setItem('samira_refresh_token', data.refreshToken);
-    localStorage.setItem('samira_user', JSON.stringify(data.user));
-    setUser(data.user);
-  }, []);
+    dispatch(setCredentials(data));
+  }, [dispatch]);
 
   const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('samira_token');
     if (!token) return null;
     try {
       const profile = await api.get('/auth/me');
-      localStorage.setItem('samira_user', JSON.stringify(profile));
-      setUser(profile);
+      dispatch(setUserAction(profile));
       return profile;
     } catch {
-      localStorage.removeItem('samira_token');
-      localStorage.removeItem('samira_user');
-      setUser(null);
+      dispatch(logoutAction());
       return null;
     }
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     refreshProfile();
   }, [refreshProfile]);
 
   useEffect(() => {
-    const onRefreshed = (event) => setUser(event.detail);
-    const onExpired = () => setUser(null);
+    const onRefreshed = (event) => dispatch(setUserAction(event.detail));
+    const onExpired = () => dispatch(logoutAction());
     window.addEventListener('samira:session-refreshed', onRefreshed);
     window.addEventListener('samira:session-expired', onExpired);
     return () => {
       window.removeEventListener('samira:session-refreshed', onRefreshed);
       window.removeEventListener('samira:session-expired', onExpired);
     };
-  }, []);
+  }, [dispatch]);
 
   const sendOtp = useCallback((phone) => api.post('/auth/send-otp', { phone }), []);
   const resendOtp = useCallback((phone) => api.post('/auth/resend-otp', { phone }), []);
@@ -91,12 +80,9 @@ export function AuthProvider({ children, navigate }) {
   }, [navigate, persist]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('samira_user');
-    localStorage.removeItem('samira_token');
-    localStorage.removeItem('samira_refresh_token');
-    setUser(null);
+    dispatch(logoutAction());
     navigate('/');
-  }, [navigate]);
+  }, [dispatch, navigate]);
 
   const value = useMemo(() => ({
     user,
