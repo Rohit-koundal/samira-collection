@@ -32,6 +32,12 @@ export function AuthProvider({ children, navigate }) {
   }, [refreshProfile]);
 
   useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(''), 3500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
     const onRefreshed = (event) => dispatch(setUserAction(event.detail));
     const onExpired = () => dispatch(logoutAction());
     window.addEventListener('samira:session-refreshed', onRefreshed);

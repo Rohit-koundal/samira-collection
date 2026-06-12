@@ -136,9 +136,7 @@ export default function App() {
                     <Page navigate={navigate} route={route} />
                   )}
                 </main>
-                <div className="hidden md:block">
-                  <Footer navigate={navigate} />
-                </div>
+                <Footer navigate={navigate} />
                 <MobileBottomNav active={routePath} navigate={navigate} />
               </>
             )}

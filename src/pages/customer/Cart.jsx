@@ -20,6 +20,7 @@ export default function Cart({ navigate }) {
   const [recommended, setRecommended] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [donation, setDonation] = useState(0);
+  const [showOffers, setShowOffers] = useState(false);
 
   useEffect(() => {
     api.get('/products?sort=rating')
@@ -42,13 +43,13 @@ export default function Cart({ navigate }) {
     setMessage('');
     try {
       const data = await api.post('/coupons/apply', { code: couponCode, cartTotal: cart.sellingTotal });
-      cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: data.discountAmount || data.discount });
+      cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: Number(data.discountAmount ?? data.discount ?? 0) });
       setCode(data.couponCode || data.coupon?.code || couponCode);
       setMessage(`${data.couponCode || data.coupon?.code || couponCode} applied`);
     } catch (error) {
       const localCoupon = applyLocalCoupon(couponCode, cart.sellingTotal);
       if (localCoupon) {
-        cart.setCoupon({ code: localCoupon.code, discount: localCoupon.discountAmount });
+        cart.setCoupon({ code: localCoupon.code, discount: Number(localCoupon.discountAmount || 0) });
         setCode(localCoupon.code);
         setMessage(`${localCoupon.code} applied`);
       } else {
@@ -58,8 +59,33 @@ export default function Cart({ navigate }) {
   };
 
   const moveToWishlist = (item) => {
-    wishlist.toggleWishlist(item.product);
-    cart.removeFromCart(item.product._id || item.product.id || item.product.slug);
+    wishlist.addToWishlist(item.product);
+    setMessage('Added to wishlist. It will remain in your bag too.');
+  };
+
+  const removeCoupon = () => {
+    cart.setCoupon(null);
+    setCode('');
+    setMessage('Coupon removed');
+  };
+
+  const shareCart = async () => {
+    const text = `Samira Collection bag: ${selectedCount} item${selectedCount === 1 ? '' : 's'} worth Rs. ${payable}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Samira Collection Bag', text, url: window.location.href });
+      } else {
+        await navigator.clipboard.writeText(`${text} - ${window.location.href}`);
+        setMessage('Bag link copied');
+      }
+    } catch {
+      setMessage('Sharing was cancelled');
+    }
+  };
+
+  const addAllToWishlist = () => {
+    cart.items.forEach((item) => wishlist.addToWishlist(item.product));
+    setMessage('Bag items added to wishlist');
   };
 
   if (!cart.items.length) {
@@ -100,9 +126,9 @@ export default function Cart({ navigate }) {
                 <p className="text-sm font-black">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
               </div>
               <div className="flex gap-4 text-slate-800">
-                <Icon name="share" className="h-5 w-5" />
-                <Icon name="trash" className="h-5 w-5" />
-                <Icon name="heart" className="h-5 w-5" />
+                <button type="button" onClick={shareCart} aria-label="Share bag"><Icon name="share" className="h-5 w-5" /></button>
+                <button type="button" onClick={cart.clearCart} aria-label="Delete all bag items"><Icon name="trash" className="h-5 w-5" /></button>
+                <button type="button" onClick={addAllToWishlist} aria-label="Add bag items to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
               </div>
             </div>
           </section>
@@ -148,8 +174,18 @@ export default function Cart({ navigate }) {
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-black">Coupon & Bank Offers</h2>
-                <button className="text-sm font-black text-rose">All Offers &gt;</button>
+                <button type="button" onClick={() => setShowOffers((value) => !value)} className="text-sm font-black text-rose">All Offers &gt;</button>
               </div>
+              {showOffers && (
+                <div className="mt-4 grid gap-2">
+                  {coupons.map((coupon) => (
+                    <button key={coupon.code} type="button" onClick={() => applyCoupon(coupon.code)} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-sm">
+                      <span><span className="font-black">{coupon.code}</span> - {coupon.discountValue}{coupon.type === 'Percentage' ? '% off' : ' rupees off'}</span>
+                      <span className="font-black text-rose">Apply</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 rounded-xl border border-emerald-200 p-4">
                 <p className="text-base font-black">Extra Rs. {bestCoupon?.maxDiscountAmount || 136} OFF</p>
                 <p className="mt-2 text-sm text-slate-600">{bestCoupon ? `${bestCoupon.discountValue}${bestCoupon.type === 'Percentage' ? '% off' : ' rupees off'} on minimum purchase of Rs. ${bestCoupon.minOrderAmount}` : '15% off upto Rs. 150 on minimum purchase of Rs. 300'}</p>
@@ -163,6 +199,12 @@ export default function Cart({ navigate }) {
                 <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Enter coupon code" />
                 <button onClick={() => applyCoupon()} className="rounded-xl bg-wine px-4 text-sm font-black text-white">Apply</button>
               </div>
+              {cart.coupon && (
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3 text-sm">
+                  <span className="font-black text-emerald-700">{cart.coupon.code} applied: Rs. {cart.couponDiscount} off</span>
+                  <button type="button" onClick={removeCoupon} className="font-black text-rose">Remove</button>
+                </div>
+              )}
             </div>
           </section>
 
@@ -247,8 +289,8 @@ function BagItem({ item, deliveryDate, updateQuantity, removeFromCart, moveToWis
         <p className="mt-2 text-sm font-semibold"><span className="font-black text-emerald-600">OK</span> Delivery by <span className="font-black">{deliveryDate}</span></p>
       </div>
       <div className="absolute right-3 top-3 flex gap-3">
-        <button onClick={() => moveToWishlist(item)} className="text-slate-600" aria-label="Move to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
-        <button onClick={() => removeFromCart(productId)} className="text-2xl leading-none" aria-label="Remove">x</button>
+        <button type="button" onClick={() => moveToWishlist(item)} className="text-slate-600" aria-label="Add to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
+        <button type="button" onClick={() => removeFromCart(productId)} className="text-2xl leading-none" aria-label="Remove">x</button>
       </div>
     </article>
   );

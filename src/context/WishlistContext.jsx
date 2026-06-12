@@ -13,8 +13,12 @@ export function WishlistProvider({ children }) {
     const productId = product._id || product.id || product.slug;
     setItems((current) => (current.some((item) => (item._id || item.id || item.slug) === productId) ? current.filter((item) => (item._id || item.id || item.slug) !== productId) : [...current, product]));
   };
+  const addToWishlist = (product) => {
+    const productId = product._id || product.id || product.slug;
+    setItems((current) => (current.some((item) => (item._id || item.id || item.slug) === productId) ? current : [...current, product]));
+  };
 
-  const value = useMemo(() => ({ items, toggleWishlist }), [items]);
+  const value = useMemo(() => ({ items, toggleWishlist, addToWishlist }), [items]);
   return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;
 }
 

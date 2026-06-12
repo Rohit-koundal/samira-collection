@@ -6,12 +6,12 @@ import { useAuth } from '../../context/AuthContext';
 
 const links = [
   ['Home', '/'],
-  ['New Arrivals', '/products?tag=new'],
-  ['Sarees', '/category?sarees'],
-  ['Suits', '/category?suits'],
-  ['Kurtis', '/category?kurtis'],
-  ['Dresses', '/category?dresses'],
-  ['Sale', '/products?sale'],
+  ['New Arrivals', '/products?newArrival=true'],
+  ['Sarees', '/products?search=Saree'],
+  ['Suits', '/products?search=Suit'],
+  ['Kurtis', '/products?search=Kurti'],
+  ['Dresses', '/products?search=Dress'],
+  ['Sale', '/products?discount=20'],
   ['Contact', '/contact'],
 ];
 

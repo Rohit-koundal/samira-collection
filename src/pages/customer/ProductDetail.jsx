@@ -15,7 +15,6 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
   const [activeImage, setActiveImage] = useState(0);
-  const [added, setAdded] = useState(false);
   const [openSizeChart, setOpenSizeChart] = useState(false);
   const [deliveryPin, setDeliveryPin] = useState('');
   const { data: productData, isLoading, error } = useGetProductQuery(productKey || skipToken);
@@ -46,11 +45,10 @@ export default function ProductDetail({ navigate, route = '' }) {
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
   const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
 
-  useEffect(() => {
-    if (!added) return undefined;
-    const timer = window.setTimeout(() => setAdded(false), 1400);
-    return () => window.clearTimeout(timer);
-  }, [added]);
+  const isInCart = useMemo(
+    () => Boolean(productId) && cart.items.some((item) => (item.product._id || item.product.id || item.product.slug) === productId),
+    [cart.items, productId],
+  );
 
   if (!productKey || error) {
     return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Product not found.</div></section>;
@@ -62,7 +60,6 @@ export default function ProductDetail({ navigate, route = '' }) {
 
   const add = () => {
     cart.addToCart(product, size, color);
-    setAdded(true);
   };
 
   const buyNow = () => {
@@ -169,7 +166,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           </section>
 
           <div className="hidden gap-3 md:flex">
-            <button disabled={product.stock <= 0} onClick={add} className="h-14 flex-1 rounded-xl bg-rose px-5 py-4 text-sm font-black text-white disabled:opacity-50">{added ? 'Added to Bag' : 'Add to Bag'}</button>
+            <button disabled={product.stock <= 0} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${isInCart ? 'bg-emerald-600' : 'bg-rose'}`}>{isInCart ? 'Added to Bag' : 'Add to Bag'}</button>
             <button disabled={product.stock <= 0} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
           </div>
 
@@ -224,8 +221,8 @@ export default function ProductDetail({ navigate, route = '' }) {
       </div>
 
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <button disabled={product.stock <= 0} onClick={add} className="h-14 w-full rounded-xl bg-rose px-5 py-4 text-base font-black text-white disabled:opacity-50">
-          {product.stock <= 0 ? 'Out of Stock' : added ? 'Added to Bag' : 'Add to Bag'}
+        <button disabled={product.stock <= 0} onClick={add} className={`h-14 w-full rounded-xl px-5 py-4 text-base font-black text-white disabled:opacity-50 ${isInCart ? 'bg-emerald-600' : 'bg-rose'}`}>
+          {product.stock <= 0 ? 'Out of Stock' : isInCart ? 'Added to Bag' : 'Add to Bag'}
         </button>
       </div>
 

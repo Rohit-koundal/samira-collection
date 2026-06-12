@@ -5,6 +5,7 @@ import logo from '../../assets/samira-collection-logo.svg';
 export default function Login() {
   const { sendOtp, verifyOtp, resendOtp } = useAuth();
   const [step, setStep] = useState('phone');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [cooldown, setCooldown] = useState(0);
@@ -19,7 +20,7 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone = normalizePhone(phone, countryCode);
 
   const requestOtp = async (event) => {
     event?.preventDefault();
@@ -27,7 +28,7 @@ export default function Login() {
     setMessageType('info');
     if (!normalizedPhone) {
       setMessageType('error');
-      return setMessage('Enter a valid 10-digit mobile number.');
+      return setMessage('Enter a valid mobile number for the selected country code.');
     }
     setLoading(true);
     try {
@@ -99,19 +100,24 @@ export default function Login() {
   };
 
   return (
-    <section className="grid min-h-[76vh] place-items-center px-4 py-10">
-      <form onSubmit={step === 'phone' ? requestOtp : submitOtp} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl md:rounded-3xl md:p-7">
-        <img src={logo} alt="Samira Collection" className="mx-auto h-20" />
+    <section className="grid min-h-[76vh] place-items-center overflow-x-hidden px-4 py-10">
+      <form onSubmit={step === 'phone' ? requestOtp : submitOtp} className="w-full max-w-[400px] rounded-2xl bg-white p-5 shadow-xl sm:max-w-md md:rounded-3xl md:p-7">
+        <img src={logo} alt="Samira Collection" className="mx-auto h-16 max-w-full sm:h-20" />
         <p className="mt-5 text-[11px] font-black uppercase tracking-[0.2em] text-wine md:mt-6 md:text-xs md:tracking-[0.24em]">Secure mobile login</p>
         <h1 className="mt-2 text-[28px] font-black leading-tight md:text-3xl">Login with Mobile Number</h1>
         {step === 'phone' ? (
           <>
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-6 h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Enter mobile number" />
+            <div className="mt-6 grid w-full grid-cols-[122px_minmax(0,1fr)] gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
+              <select value={countryCode} onChange={(event) => setCountryCode(event.target.value)} className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black">
+                {countryCodes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <input value={phone} onChange={(event) => setPhone(event.target.value)} className="h-12 min-w-0 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Enter mobile number" inputMode="tel" />
+            </div>
             <button disabled={loading} className="mt-5 h-12 w-full rounded-xl bg-rose text-sm font-black text-white disabled:opacity-60">{loading ? 'Sending...' : 'Continue'}</button>
           </>
         ) : (
           <>
-            <p className="mt-5 text-sm font-semibold text-slate-500">Enter OTP sent to +91 {maskPhone(normalizedPhone)}</p>
+            <p className="mt-5 text-sm font-semibold text-slate-500">Enter OTP sent to {countryCode} {maskPhone(phone)}</p>
             <div className="mt-4 grid grid-cols-6 gap-2" onPaste={pasteOtp}>
               {otp.map((digit, index) => <input key={index} ref={(node) => { inputs.current[index] = node; }} value={digit} onChange={(event) => handleOtp(index, event.target.value)} className="h-12 rounded-xl border border-slate-200 text-center text-lg font-black" inputMode="numeric" />)}
             </div>
@@ -147,9 +153,21 @@ function StatusMessage({ type, message, onRetry, loading }) {
   );
 }
 
-function normalizePhone(value) {
-  const digits = String(value).replace(/\D/g, '').replace(/^91/, '');
-  return /^[6-9]\d{9}$/.test(digits) ? digits : '';
+const countryCodes = [
+  { value: '+91', label: 'IN +91' },
+  { value: '+1', label: 'US +1' },
+  { value: '+44', label: 'UK +44' },
+  { value: '+971', label: 'AE +971' },
+  { value: '+61', label: 'AU +61' },
+];
+
+function normalizePhone(value, countryCode) {
+  const digits = String(value).replace(/\D/g, '');
+  if (countryCode === '+91') {
+    const local = digits.replace(/^91/, '');
+    return /^[6-9]\d{9}$/.test(local) ? local : '';
+  }
+  return digits.length >= 6 ? `${countryCode}${digits}` : '';
 }
 
 function maskPhone(value) {

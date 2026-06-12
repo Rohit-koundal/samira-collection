@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Icon from '../layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -41,18 +41,16 @@ export function ProductVisual({ product, compact = false }) {
 export default function ProductCard({ product, navigate }) {
   const cart = useCart();
   const wishlist = useWishlist();
-  const [added, setAdded] = useState(false);
   const productId = product._id || product.id || product.slug;
   const isWishlisted = useMemo(
     () => wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
     [wishlist.items, productId],
   );
 
-  useEffect(() => {
-    if (!added) return undefined;
-    const timer = window.setTimeout(() => setAdded(false), 1400);
-    return () => window.clearTimeout(timer);
-  }, [added]);
+  const isInCart = useMemo(
+    () => cart.items.some((item) => (item.product._id || item.product.id || item.product.slug) === productId),
+    [cart.items, productId],
+  );
 
   const openProduct = () => navigate(`/product?id=${productId}`);
 
@@ -64,7 +62,6 @@ export default function ProductCard({ product, navigate }) {
   const handleAddToBag = (event) => {
     event.stopPropagation();
     cart.addToCart(product);
-    setAdded(true);
   };
 
   return (
@@ -96,9 +93,9 @@ export default function ProductCard({ product, navigate }) {
         <button
           type="button"
           onClick={handleAddToBag}
-          className={`h-9 w-full rounded-lg text-xs font-black text-white transition md:h-10 md:rounded-xl ${added ? 'bg-emerald-600' : 'bg-wine'}`}
+          className={`h-9 w-full rounded-lg text-xs font-black text-white transition md:h-10 md:rounded-xl ${isInCart ? 'bg-emerald-600' : 'bg-wine'}`}
         >
-          {added ? 'Added to Bag' : 'Add to Bag'}
+          {isInCart ? 'Added to Bag' : 'Add to Bag'}
         </button>
       </div>
     </article>

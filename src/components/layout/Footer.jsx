@@ -4,8 +4,8 @@ import { useGetSettingsQuery } from '../../store/apiSlice';
 export default function Footer({ navigate }) {
   const { data: settings = {} } = useGetSettingsQuery();
   return (
-    <footer className="hidden bg-charcoal text-white md:block">
-      <div className="container-page grid gap-10 py-14 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+    <footer className="bg-charcoal pb-24 text-white md:pb-0">
+      <div className="container-page grid gap-8 py-10 md:gap-10 md:py-14 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
           <img src={logo} alt="Samira Collection" className="h-16 rounded-xl bg-white p-1" />
           <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
@@ -26,13 +26,20 @@ export default function Footer({ navigate }) {
   );
 }
 
+const supportRoutes = {
+  Contact: '/contact',
+  'Return Policy': '/return-policy',
+  'Privacy Policy': '/privacy-policy',
+  Terms: '/terms',
+};
+
 function FooterList({ title, items, navigate }) {
   return (
     <div>
       <h3 className="text-sm font-black uppercase tracking-[0.24em] text-slate-400">{title}</h3>
       <div className="mt-4 grid gap-3">
         {items.map((item) => (
-          <button key={item} onClick={() => navigate(item === 'Contact' ? '/contact' : '/products')} className="text-left text-sm text-slate-300 hover:text-white">
+          <button key={item} onClick={() => navigate(supportRoutes[item] || `/products?category=${item.toLowerCase()}`)} className="text-left text-sm text-slate-300 hover:text-white">
             {item}
           </button>
         ))}

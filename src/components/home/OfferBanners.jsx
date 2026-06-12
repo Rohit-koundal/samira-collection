@@ -1,9 +1,9 @@
 import { normalizeImageUrl } from '../../services/normalize';
 
 const offers = [
-  ['Festive Sale', 'Flat 20% off with FESTIVE20', 'from-wine to-rose'],
-  ['New User Deal', 'Extra 15% off with NEWUSER15', 'from-charcoal to-wine'],
-  ['Free Shipping', 'Orders above Rs. 999', 'from-[#ad7b2c] to-[#e7b75d]'],
+  ['Festive Sale', 'Flat 20% off with FESTIVE20', 'from-wine to-rose', null, '/products?discount=20'],
+  ['New User Deal', 'Extra 15% off with NEWUSER15', 'from-charcoal to-wine', null, '/cart'],
+  ['Free Shipping', 'Orders above Rs. 999', 'from-[#ad7b2c] to-[#e7b75d]', null, '/products'],
 ];
 
 export default function OfferBanners({ navigate, banners }) {
