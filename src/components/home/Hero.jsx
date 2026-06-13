@@ -7,7 +7,7 @@ export default function Hero({ navigate, banner }) {
       <div className="container-page grid min-h-[280px] items-center gap-6 py-7 md:min-h-[500px] md:grid-cols-[1fr_0.85fr] md:gap-10 md:py-14">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ffd6df] md:text-sm md:tracking-[0.28em]">New festive collection</p>
-          <h1 className="mt-3 max-w-3xl font-display text-[28px] font-black leading-tight sm:text-3xl md:mt-5 md:text-6xl">{banner?.title || 'Premium fashion for every celebration.'}</h1>
+          <h1 className="mt-3 max-w-3xl font-display text-[28px] font-black leading-tight md:mt-5 md:text-6xl">{banner?.title || 'Premium fashion for every celebration.'}</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-white/80 md:mt-5 md:text-base md:leading-8">{banner?.subtitle || 'Shop sarees, suits, kurtis, dresses, lehengas, gowns and curated daily wear with an app-like shopping experience.'}</p>
           <div className="mt-5 flex flex-wrap gap-2 md:mt-8 md:gap-3">
             <button onClick={() => navigate(banner?.link || '/products')} className="rounded-full bg-white px-5 py-3 text-xs font-black text-wine md:px-7 md:py-4 md:text-sm">{banner?.buttonText || 'Shop Collection'}</button>
