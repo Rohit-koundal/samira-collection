@@ -26,7 +26,7 @@ export default function Home({ navigate }) {
       <BestSellers products={catalog.filter((p) => p.isBestSeller).slice(0, 8)} navigate={navigate} />
       <section className="container-page hidden py-10 md:block">
         <div className="rounded-2xl bg-white p-8 shadow-sm md:p-10">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-wine">Customer reviews</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-wine">Customer reviews</p>
           <h2 className="mt-2 text-2xl font-black md:text-3xl">Loved for fit, fabric, and finish.</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {['Beautiful festive collection and fast delivery.', 'The saree quality feels premium.', 'Admin helped me exchange size quickly.'].map((review) => (
@@ -38,7 +38,7 @@ export default function Home({ navigate }) {
       <section className="container-page hidden pb-12 md:block">
         <div className="rounded-2xl bg-charcoal p-8 text-white md:flex md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-white/50">Newsletter</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/50">Newsletter</p>
             <h2 className="mt-2 text-2xl font-black md:text-3xl">Get new drops and sale alerts.</h2>
           </div>
           <div className="mt-5 flex max-w-md flex-1 gap-2 md:ml-8 md:mt-0">

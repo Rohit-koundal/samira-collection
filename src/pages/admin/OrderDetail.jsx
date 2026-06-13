@@ -46,7 +46,7 @@ export default function OrderDetail({ route = '' }) {
     <section className="space-y-5">
       <PageHeader title={`Order #${order._id.slice(-8).toUpperCase()}`} note="Payment, delivery, receipt and status timeline." />
       {receipt && <ReceiptActions receipt={receipt} />}
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
           <div className="rounded-2xl bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Ordered Items</h2>

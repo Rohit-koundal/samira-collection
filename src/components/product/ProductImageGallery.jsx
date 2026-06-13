@@ -8,7 +8,7 @@ export default function ProductImageGallery({ product }) {
 
   if (!images.length) {
     return (
-      <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm md:rounded-3xl">
         <ProductVisual product={product} />
       </div>
     );
@@ -23,8 +23,8 @@ export default function ProductImageGallery({ product }) {
           </button>
         ))}
       </div>
-      <div className="order-1 overflow-hidden rounded-3xl bg-white shadow-sm md:order-2">
-        <img src={normalizeImageUrl(images[active].url)} alt={product.name} className="h-[420px] w-full object-cover" />
+      <div className="order-1 overflow-hidden rounded-xl bg-white shadow-sm md:order-2 md:rounded-3xl">
+        <img src={normalizeImageUrl(images[active].url)} alt={product.name} className="h-[340px] w-full object-cover md:h-[420px]" />
       </div>
     </div>
   );

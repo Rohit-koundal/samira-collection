@@ -11,7 +11,7 @@ const filters = {
 
 export default function ProductFilters() {
   return (
-    <aside className="hidden w-72 shrink-0 rounded-3xl bg-white p-5 shadow-sm lg:block">
+    <aside className="hidden w-64 shrink-0 rounded-2xl bg-white p-4 shadow-sm lg:block xl:w-72 xl:p-5">
       <h2 className="text-sm font-black uppercase tracking-[0.2em] text-charcoal">Filters</h2>
       <div className="mt-5 space-y-6">
         <FilterGroup title="Category" items={categories.map((category) => category.name)} />

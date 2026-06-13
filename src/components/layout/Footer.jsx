@@ -15,7 +15,7 @@ export default function Footer({ navigate }) {
         <FooterList title="Shop" items={['Sarees', 'Suits', 'Kurtis', 'Dresses', 'Sale']} navigate={navigate} />
         <FooterList title="Support" items={['Contact', 'Return Policy', 'Privacy Policy', 'Terms']} navigate={navigate} />
         <div>
-          <h3 className="text-sm font-black uppercase tracking-[0.24em] text-slate-400">Contact</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400 md:text-sm md:tracking-[0.24em]">Contact</h3>
           <p className="mt-4 text-sm text-slate-300">{settings.contactEmail || 'hello@samiracollection.com'}</p>
           <p className="mt-2 text-sm text-slate-300">{settings.contactPhone || '+91 98765 43210'}</p>
           <p className="mt-2 text-sm text-slate-300">{settings.whatsappNumber || ''}</p>
@@ -36,7 +36,7 @@ const supportRoutes = {
 function FooterList({ title, items, navigate }) {
   return (
     <div>
-      <h3 className="text-sm font-black uppercase tracking-[0.24em] text-slate-400">{title}</h3>
+      <h3 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400 md:text-sm md:tracking-[0.24em]">{title}</h3>
       <div className="mt-4 grid gap-3">
         {items.map((item) => (
           <button key={item} onClick={() => navigate(supportRoutes[item] || `/products?category=${item.toLowerCase()}`)} className="text-left text-sm text-slate-300 hover:text-white">
