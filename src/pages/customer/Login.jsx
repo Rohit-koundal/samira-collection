@@ -103,8 +103,8 @@ export default function Login() {
     <section className="grid min-h-[76vh] place-items-center overflow-x-hidden px-4 py-10">
       <form onSubmit={step === 'phone' ? requestOtp : submitOtp} className="w-full max-w-[400px] rounded-2xl bg-white p-5 shadow-xl sm:max-w-md md:rounded-3xl md:p-7">
         <img src={logo} alt="Samira Collection" className="mx-auto h-16 max-w-full sm:h-20" />
-        <p className="mt-5 text-[11px] font-black uppercase tracking-[0.2em] text-wine md:mt-6 md:text-xs md:tracking-[0.24em]">Secure mobile login</p>
-        <h1 className="mt-2 text-[28px] font-black leading-tight md:text-3xl">Login with Mobile Number</h1>
+        <p className="mt-5 text-[10px] font-black uppercase tracking-[0.14em] text-wine md:mt-6 md:text-xs md:tracking-[0.22em]">Secure mobile login</p>
+        <h1 className="mt-2 text-2xl font-black leading-tight md:text-3xl">Login with Mobile Number</h1>
         {step === 'phone' ? (
           <>
             <div className="mt-6 grid w-full grid-cols-[122px_minmax(0,1fr)] gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
