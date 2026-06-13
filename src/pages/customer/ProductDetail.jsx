@@ -143,11 +143,11 @@ export default function ProductDetail({ navigate, route = '' }) {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase text-rose">Mega Deal</p>
-                <p className="mt-1 text-xl font-black md:text-2xl">Get at Rs. {dealPrice || product.price}</p>
+                <p className="mt-1 text-md font-black md:text-xl">Get at Rs. {dealPrice || product.price}</p>
               </div>
               <span className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white md:text-sm">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
             </div>
-            <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-sm">
+            <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-3 text-xs">
               <span>With Coupon + Bank Offer</span>
               <button type="button" className="font-black text-rose">Details</button>
             </div>
@@ -155,25 +155,25 @@ export default function ProductDetail({ navigate, route = '' }) {
 
           <section>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black md:text-xl">Size: {size || 'Free Size'}</h2>
+              <h2 className="text-sm font-black md:text-xl">Size: {size || 'Free Size'}</h2>
               <button type="button" onClick={() => setOpenSizeChart(true)} className="text-sm font-black text-rose">Size Chart</button>
             </div>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-2 flex flex-wrap gap-3">
               {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
-                <button key={item} type="button" onClick={() => setSize(item)} className={`min-w-20 rounded-xl border px-4 py-3 text-sm font-black md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-charcoal bg-charcoal text-white' : 'border-slate-200 bg-white'}`}>{item}</button>
+                <button key={item} type="button" onClick={() => setSize(item)} className={`min-w-10 rounded-xl border px-2 py-1 text-sm font-black md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-charcoal bg-charcoal text-white' : 'border-slate-200 bg-white'}`}>{item}</button>
               ))}
             </div>
             {product.colors?.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {product.colors.map((item) => (
-                  <button key={item} type="button" onClick={() => setColor(item)} className={`rounded-full border px-4 py-2 text-xs font-black ${color === item ? 'border-wine bg-wine text-white' : 'border-slate-200'}`}>{item}</button>
+                  <button key={item} type="button" onClick={() => setColor(item)} className={`rounded-xl border px-4 py-2 text-xs font-black ${color === item ? 'border-wine bg-wine text-white' : 'border-slate-200'}`}>{item}</button>
                 ))}
               </div>
             )}
-            <p className="mt-4 text-sm">
+            <p className="mt-2 text-sm">
               <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="font-black">Rs. {product.price}</span> <span className="font-black text-amber-600">({product.discountPercentage}% OFF)</span>
             </p>
-            <p className="mt-2 text-sm">Seller: <span className="font-black text-rose">Samira Collection</span></p>
+            <p className="mt-2 text-xs">Seller: <span className="font-black text-rose">Samira Collection</span></p>
           </section>
 
           <div className="hidden gap-3 md:flex">
@@ -183,10 +183,10 @@ export default function ProductDetail({ navigate, route = '' }) {
             <button disabled={product.stock <= 0} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
           </div>
 
-          <section className="space-y-4 border-t border-slate-100 pt-6">
-            <h2 className="text-lg font-black md:text-xl">Check Delivery</h2>
-            <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-14 w-full rounded-xl border border-slate-300 px-4 text-sm font-black outline-none focus:border-rose" placeholder="Enter PIN Code" />
-            <div className="space-y-3 text-sm">
+          <section className="space-y-2 border-t border-slate-100 pt-2">
+            <h2 className="text-md font-black md:text-xl">Check Delivery</h2>
+            <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm font-black outline-none focus:border-rose" placeholder="Enter PIN Code" />
+            <div className="space-y-3 text-md">
               <Feature icon="box" title="Express delivery" text="might be available" />
               <Feature icon="bag" title="Pay on delivery" text="might be available" />
               <Feature icon="heart" title="Hassle free returns" text={product.returnPolicy || '7, 15 and 30 days return & exchange might be available'} />
@@ -195,20 +195,20 @@ export default function ProductDetail({ navigate, route = '' }) {
 
           <DetailsCard product={product} />
 
-          <section className="grid grid-cols-2 gap-4 text-center">
+          <section className="grid grid-cols-2 gap-2 text-center">
             <TrustBadge title="Genuine Product" />
             <TrustBadge title="Quality Checked" />
           </section>
 
           <section>
-            <h2 className="text-xl font-black">Easy returns and exchanges</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{product.returnPolicy || 'Choose to return or exchange for a different size, if available, within the allowed return window.'}</p>
+            <h2 className="text-md font-black">Easy returns and exchanges</h2>
+            <p className=" text-xs leading-6 text-slate-600">{product.returnPolicy || 'Choose to return or exchange for a different size, if available, within the allowed return window.'}</p>
           </section>
         </div>
       </div>
 
       {related.length > 0 && (
-        <div className="mx-auto mt-9 max-w-6xl space-y-9 px-4 md:px-6">
+        <div className="mx-auto mt-4 max-w-6xl space-y-9 px-4 md:px-6">
           <ProductRail title="Fastest Selling Similar Products" subtitle="Don't miss out on these in-demand products" products={related.slice(0, 6)} navigate={navigate} />
           <ProductRail title="Similar Products" products={related.slice(2, 8)} navigate={navigate} />
           <ProductRail title="Customers Also Liked" products={related.slice(4, 10)} navigate={navigate} />
@@ -310,8 +310,8 @@ function ProductRail({ title, subtitle, products, navigate }) {
   if (!products.length) return null;
   return (
     <section>
-      <h2 className="text-lg font-black md:text-xl">{title}</h2>
-      {subtitle && <p className="mt-1 text-sm font-black text-amber-600">{subtitle}</p>}
+      <h2 className="text-md font-black md:text-xl">{title}</h2>
+      {subtitle && <p className="mt-1 text-xs font-black text-amber-600">{subtitle}</p>}
       <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
         {products.map((product) => <RailProduct key={product.id} product={product} navigate={navigate} />)}
       </div>
@@ -340,10 +340,10 @@ function RailProduct({ product, navigate }) {
 
 function ReviewsSection({ product, reviews }) {
   return (
-    <section className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
-      <h2 className="text-lg font-black md:text-xl">Ratings & Reviews</h2>
-      <div className="mt-4 flex items-center gap-3">
-        <span className="rounded-xl bg-amber-400 px-4 py-3 text-lg font-black text-white">{Number(product.rating || 0).toFixed(1)} star</span>
+    <section className="mx-auto mt-4 max-w-2xl px-4 md:px-6">
+      <h2 className="text-md font-black md:text-md">Ratings & Reviews</h2>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="rounded-xl bg-amber-400 px-4 py-3 text-md font-black text-white">{Number(product.rating || 0).toFixed(1)} star</span>
         <span className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">{product.numReviews || reviews.length || 0} ratings</span>
       </div>
       {reviews.length > 0 && (
