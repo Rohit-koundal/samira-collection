@@ -10,7 +10,7 @@ export default function AdminLayout({ children }) {
       <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="min-w-0 flex-1 pb-20 lg:pb-0">
         <AdminHeader onOpenSidebar={() => setSidebarOpen(true)} />
-        <main className="mx-auto max-w-[1500px] p-3 sm:p-4 lg:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1220px] p-3 sm:p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );

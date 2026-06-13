@@ -35,10 +35,10 @@ export default function Dashboard() {
 
   return (
     <section className="space-y-6">
-      <div><h1 className="text-3xl font-black">Dashboard</h1><p className="mt-1 text-sm font-semibold text-slate-500">Store overview, orders, revenue, and alerts from MongoDB.</p></div>
+      <div><h1 className="text-2xl font-black md:text-3xl">Dashboard</h1><p className="mt-1 text-sm font-semibold text-slate-500">Store overview, orders, revenue, and alerts from MongoDB.</p></div>
       {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-wine">{message}</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{cards.map(([title, value, note]) => <DashboardCard key={title} title={title} value={value} note={note} />)}</div>
-      <div className="grid gap-6 xl:grid-cols-[1fr_420px]"><StatsChart /><StatsChart title="Orders by Status" /></div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-6"><StatsChart /><StatsChart title="Orders by Status" /></div>
       <div><h2 className="mb-4 text-xl font-black">Recent Orders</h2><OrderTable orders={orders.slice(0, 5)} /></div>
     </section>
   );

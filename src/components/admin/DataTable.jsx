@@ -6,9 +6,9 @@ export default function DataTable({ heads, rows, loading, emptyTitle }) {
   if (!rows.length) return <EmptyState title={emptyTitle} />;
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm md:rounded-2xl">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm md:min-w-[860px]">
           <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.14em] text-slate-500">
             <tr>{heads.map((head) => <th key={head} className="px-4 py-4">{head}</th>)}</tr>
           </thead>

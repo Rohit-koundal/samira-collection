@@ -1,6 +1,6 @@
 export default function OrderSummary({ items }) {
   return (
-    <section className="rounded-3xl bg-white p-5 shadow-sm">
+    <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
       <h2 className="text-lg font-black">Order Summary</h2>
       <div className="mt-4 grid gap-3">
         {items.map((item) => (

@@ -1,7 +1,7 @@
 export default function PriceSummary({ cart, cta = 'Checkout', onAction }) {
   return (
-    <aside className="rounded-3xl bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-black uppercase tracking-[0.2em] text-charcoal">Price Summary</h2>
+    <aside className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
+      <h2 className="text-xs font-black uppercase tracking-[0.14em] text-charcoal md:text-sm md:tracking-[0.2em]">Price Summary</h2>
       <div className="mt-5 space-y-3 text-sm font-semibold text-slate-600">
         <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />

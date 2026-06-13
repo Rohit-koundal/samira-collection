@@ -14,10 +14,10 @@ export default function OrderSuccess({ navigate, route = '' }) {
   }, [orderId]);
 
   return (
-    <section className="container-page py-10">
-      <div className="mx-auto max-w-3xl rounded-3xl bg-white p-8 text-center shadow-sm">
-        <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-600">Order placed</p>
-        <h1 className="mt-3 text-3xl font-black">Order Placed Successfully</h1>
+    <section className="container-page py-6 md:py-10">
+      <div className="mx-auto max-w-3xl rounded-xl bg-white p-5 text-center shadow-sm md:rounded-3xl md:p-8">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-600 md:text-sm md:tracking-[0.22em]">Order placed</p>
+        <h1 className="mt-3 text-2xl font-black md:text-3xl">Order Placed Successfully</h1>
         <p className="mt-3 text-sm font-semibold text-slate-500">Order ID: {orderId?.slice(-8).toUpperCase()}</p>
         {receipt && <p className="mt-2 text-lg font-black">Rs. {receipt.finalAmount} | {receipt.paymentStatus}</p>}
         <div className="no-print mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

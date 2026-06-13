@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -8,37 +8,38 @@ import MobileBottomNav from './components/layout/MobileBottomNav';
 import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
-import Home from './pages/customer/Home';
-import Products from './pages/customer/Products';
-import ProductDetail from './pages/customer/ProductDetail';
-import Wishlist from './pages/customer/Wishlist';
-import Cart from './pages/customer/Cart';
-import Checkout from './pages/customer/Checkout';
-import Login from './pages/customer/Login';
-import Register from './pages/customer/Register';
-import Profile from './pages/customer/Profile';
-import AddressManagement from './pages/customer/AddressManagement';
-import MyOrders from './pages/customer/MyOrders';
-import OrderDetail from './pages/customer/OrderDetail';
-import OrderSuccess from './pages/customer/OrderSuccess';
-import PaymentFailed from './pages/customer/PaymentFailed';
-import Contact from './pages/customer/Contact';
-import AdminLogin from './pages/admin/AdminLogin';
-import Dashboard from './pages/admin/Dashboard';
-import AdminProducts from './pages/admin/Products';
-import AddProduct from './pages/admin/AddProduct';
-import EditProduct from './pages/admin/EditProduct';
-import Categories from './pages/admin/Categories';
-import Orders from './pages/admin/Orders';
-import AdminOrderDetail from './pages/admin/OrderDetail';
-import Customers from './pages/admin/Customers';
-import Coupons from './pages/admin/Coupons';
-import Banners from './pages/admin/Banners';
-import Reviews from './pages/admin/Reviews';
-import Returns from './pages/admin/Returns';
-import Inventory from './pages/admin/Inventory';
-import Reports from './pages/admin/Reports';
-import Settings from './pages/admin/Settings';
+
+const Home = lazy(() => import('./pages/customer/Home'));
+const Products = lazy(() => import('./pages/customer/Products'));
+const ProductDetail = lazy(() => import('./pages/customer/ProductDetail'));
+const Wishlist = lazy(() => import('./pages/customer/Wishlist'));
+const Cart = lazy(() => import('./pages/customer/Cart'));
+const Checkout = lazy(() => import('./pages/customer/Checkout'));
+const Login = lazy(() => import('./pages/customer/Login'));
+const Register = lazy(() => import('./pages/customer/Register'));
+const Profile = lazy(() => import('./pages/customer/Profile'));
+const AddressManagement = lazy(() => import('./pages/customer/AddressManagement'));
+const MyOrders = lazy(() => import('./pages/customer/MyOrders'));
+const OrderDetail = lazy(() => import('./pages/customer/OrderDetail'));
+const OrderSuccess = lazy(() => import('./pages/customer/OrderSuccess'));
+const PaymentFailed = lazy(() => import('./pages/customer/PaymentFailed'));
+const Contact = lazy(() => import('./pages/customer/Contact'));
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminProducts = lazy(() => import('./pages/admin/Products'));
+const AddProduct = lazy(() => import('./pages/admin/AddProduct'));
+const EditProduct = lazy(() => import('./pages/admin/EditProduct'));
+const Categories = lazy(() => import('./pages/admin/Categories'));
+const Orders = lazy(() => import('./pages/admin/Orders'));
+const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'));
+const Customers = lazy(() => import('./pages/admin/Customers'));
+const Coupons = lazy(() => import('./pages/admin/Coupons'));
+const Banners = lazy(() => import('./pages/admin/Banners'));
+const Reviews = lazy(() => import('./pages/admin/Reviews'));
+const Returns = lazy(() => import('./pages/admin/Returns'));
+const Inventory = lazy(() => import('./pages/admin/Inventory'));
+const Reports = lazy(() => import('./pages/admin/Reports'));
+const Settings = lazy(() => import('./pages/admin/Settings'));
 
 const customerRoutes = {
   '/': Home,
@@ -90,11 +91,11 @@ function useHashRoute() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const navigate = (path) => {
+  const navigate = useCallback((path) => {
     window.location.hash = path;
     setRoute(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
   return [route, navigate];
 }
@@ -109,6 +110,11 @@ export default function App() {
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
     return customerRoutes[routePath] || Home;
   }, [isAdmin, routePath]);
+  const page = (
+    <Suspense fallback={<RouteFallback />}>
+      <Page navigate={navigate} route={route} />
+    </Suspense>
+  );
 
   return (
     <AuthProvider navigate={navigate}>
@@ -117,10 +123,10 @@ export default function App() {
           <div className="min-h-screen bg-ivory text-charcoal">
             {isAdmin ? (
               routePath === '/admin/login' ? (
-                <Page navigate={navigate} />
+                page
               ) : (
                 <AdminRoute>
-                  <Page navigate={navigate} route={route} />
+                  {page}
                 </AdminRoute>
               )
             ) : (
@@ -130,10 +136,10 @@ export default function App() {
                 <main className="pb-24 md:pb-0">
                   {['/profile', '/orders', '/checkout', '/order-detail', '/order-success'].includes(routePath) ? (
                     <ProtectedRoute>
-                      <Page navigate={navigate} route={route} />
+                      {page}
                     </ProtectedRoute>
                   ) : (
-                    <Page navigate={navigate} route={route} />
+                    page
                   )}
                 </main>
                 <Footer navigate={navigate} />
@@ -144,5 +150,13 @@ export default function App() {
         </WishlistProvider>
       </CartProvider>
     </AuthProvider>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <div className="grid min-h-[50vh] place-items-center px-4 text-sm font-black text-slate-500">
+      Loading...
+    </div>
   );
 }

@@ -93,8 +93,8 @@ export default function Cart({ navigate }) {
       <section className="bg-white pb-28 md:bg-ivory md:py-10">
         <BagHeader navigate={navigate} />
         <div className="container-page py-10">
-          <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
-            <h1 className="text-2xl font-black">Your shopping bag is empty</h1>
+          <div className="rounded-xl bg-white p-6 text-center shadow-sm md:rounded-3xl md:p-8">
+            <h1 className="text-xl font-black md:text-2xl">Your shopping bag is empty</h1>
             <p className="mt-2 text-sm text-slate-500">Add products to continue checkout.</p>
             <button onClick={() => navigate('/products')} className="mt-5 rounded-xl bg-rose px-6 py-3 text-sm font-black text-white">Shop Now</button>
           </div>
@@ -107,7 +107,7 @@ export default function Cart({ navigate }) {
     <section className="bg-white pb-36 md:bg-ivory md:pb-10">
       <BagHeader navigate={navigate} />
 
-      <div className="mx-auto max-w-5xl md:grid md:grid-cols-[1fr_360px] md:gap-6 md:px-6 md:pt-6">
+      <div className="mx-auto max-w-5xl md:grid md:grid-cols-[minmax(0,1fr)_340px] md:gap-6 md:px-6 md:pt-6">
         <div className="min-w-0">
           <section className="border-b border-slate-100 bg-white px-4 py-4">
             <div className="flex items-center justify-between gap-4">
@@ -120,12 +120,12 @@ export default function Cart({ navigate }) {
           </section>
 
           <section className="bg-[#f4f4f5] px-4 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="grid h-6 w-6 place-items-center rounded bg-rose text-[10px] font-black text-white">OK</span>
-                <p className="text-sm font-black">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
+                <p className="text-xs font-black sm:text-sm">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
               </div>
-              <div className="flex gap-4 text-slate-800">
+              <div className="flex shrink-0 gap-3 text-slate-800 sm:gap-4">
                 <button type="button" onClick={shareCart} aria-label="Share bag"><Icon name="share" className="h-5 w-5" /></button>
                 <button type="button" onClick={cart.clearCart} aria-label="Delete all bag items"><Icon name="trash" className="h-5 w-5" /></button>
                 <button type="button" onClick={addAllToWishlist} aria-label="Add bag items to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
@@ -155,7 +155,7 @@ export default function Cart({ navigate }) {
             <p className="px-4 py-4 text-xs font-black uppercase tracking-wide text-slate-600">Support transformative social work in India</p>
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-3 text-base font-black">
+                <label className="flex min-w-0 items-center gap-3 text-sm font-black sm:text-base">
                   <input type="checkbox" checked={donation > 0} onChange={(event) => setDonation(event.target.checked ? 10 : 0)} className="h-5 w-5 accent-rose" />
                   Donate and make a difference
                 </label>
@@ -163,7 +163,7 @@ export default function Cart({ navigate }) {
               </div>
               <div className="mt-4 flex gap-3 overflow-x-auto">
                 {[10, 20, 50, 100].map((amount) => (
-                  <button key={amount} onClick={() => setDonation(amount)} className={`min-w-24 rounded-full border px-5 py-2 text-sm font-black ${donation === amount ? 'border-rose text-rose' : 'border-slate-200'}`}>Rs. {amount}</button>
+                  <button key={amount} onClick={() => setDonation(amount)} className={`min-w-20 rounded-full border px-4 py-2 text-sm font-black sm:min-w-24 sm:px-5 ${donation === amount ? 'border-rose text-rose' : 'border-slate-200'}`}>Rs. {amount}</button>
                 ))}
               </div>
             </div>
@@ -189,8 +189,8 @@ export default function Cart({ navigate }) {
               <div className="mt-4 rounded-xl border border-emerald-200 p-4">
                 <p className="text-base font-black">Extra Rs. {bestCoupon?.maxDiscountAmount || 136} OFF</p>
                 <p className="mt-2 text-sm text-slate-600">{bestCoupon ? `${bestCoupon.discountValue}${bestCoupon.type === 'Percentage' ? '% off' : ' rupees off'} on minimum purchase of Rs. ${bestCoupon.minOrderAmount}` : '15% off upto Rs. 150 on minimum purchase of Rs. 300'}</p>
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <span className="border border-dashed border-emerald-400 px-4 py-3 text-sm font-black">{bestCoupon?.code || 'FWDEORS15'}</span>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <span className="border border-dashed border-emerald-400 px-3 py-3 text-sm font-black">{bestCoupon?.code || 'FWDEORS15'}</span>
                   <button onClick={() => applyCoupon(bestCoupon?.code || code)} className="rounded border border-rose px-4 py-3 text-sm font-black text-rose">APPLY COUPON</button>
                 </div>
                 {message && <p className="mt-3 text-sm font-bold text-wine">{message}</p>}
@@ -226,7 +226,7 @@ export default function Cart({ navigate }) {
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
         <p className="border-t border-slate-200 bg-[#fff6f4] py-2 text-center text-sm font-black">{selectedCount} Item selected for order</p>
         <div className="p-3">
-          <button onClick={() => navigate('/checkout')} className="h-14 w-full rounded bg-rose text-base font-black uppercase tracking-[0.16em] text-white">Place Order</button>
+          <button onClick={() => navigate('/checkout')} className="h-14 w-full rounded bg-rose text-sm font-black uppercase tracking-[0.12em] text-white">Place Order</button>
         </div>
       </div>
     </section>

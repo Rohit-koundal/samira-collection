@@ -99,15 +99,15 @@ export default function Checkout({ navigate }) {
 
   return (
     <section className="container-page pb-24 pt-6 md:py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div><p className="text-xs font-black uppercase tracking-[0.2em] text-wine">Bag / Address / Payment</p><h1 className="mt-1 text-3xl font-black">Checkout</h1></div>
+      <div className="mb-5 flex items-center justify-between gap-4 md:mb-6">
+        <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.2em]">Bag / Address / Payment</p><h1 className="mt-1 text-2xl font-black md:text-3xl">Checkout</h1></div>
         <button onClick={() => navigate('/profile/addresses')} className="hidden rounded-xl border border-slate-200 px-4 py-2 text-sm font-black md:block">Manage Addresses</button>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
         <div className="space-y-5">
-          {!user && <section className="rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Login Required</h2><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Login to continue</button></section>}
-          {user && !user.isPhoneVerified && <section className="rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Mobile verification required</h2><p className="mt-2 text-sm font-semibold text-slate-600">Please verify your mobile number to continue checkout.</p><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Verify Mobile</button></section>}
-          <section className="rounded-3xl bg-white p-5 shadow-sm">
+          {!user && <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">Login Required</h2><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Login to continue</button></section>}
+          {user && !user.isPhoneVerified && <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">Mobile verification required</h2><p className="mt-2 text-sm font-semibold text-slate-600">Please verify your mobile number to continue checkout.</p><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Verify Mobile</button></section>}
+          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
             <div className="flex items-center justify-between"><h2 className="text-lg font-black">1. Delivery Address</h2><button onClick={() => setShowAddressForm((value) => !value)} className="text-sm font-black text-wine">Add New</button></div>
             <div className="mt-4 grid gap-3">
               {addresses.map((address) => <button key={address._id} onClick={() => setSelectedAddressId(address._id)} className={`rounded-2xl border p-4 text-left ${selectedAddressId === address._id ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="font-black">{address.fullName} {address.isDefault && <span className="rounded-full bg-wine px-2 py-1 text-[10px] text-white">Default</span>}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p></button>)}
@@ -115,13 +115,13 @@ export default function Checkout({ navigate }) {
             </div>
             {showAddressForm || !addresses.length ? <div className="mt-4"><AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={error} /></div> : null}
           </section>
-          <section className="rounded-3xl bg-white p-5 shadow-sm"><h2 className="text-lg font-black">2. Order Summary</h2><OrderSummary items={cart.items} /></section>
-          <section className="rounded-3xl bg-white p-5 shadow-sm">
+          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">2. Order Summary</h2><OrderSummary items={cart.items} /></section>
+          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
             <h2 className="text-lg font-black">3. Apply Coupon</h2>
             <div className="mt-4 flex gap-2"><input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} className="h-12 min-w-0 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Coupon code" /><button onClick={applyCoupon} className="rounded-xl bg-wine px-4 text-sm font-black text-white">Apply</button></div>
             {cart.coupon && <p className="mt-2 text-sm font-black text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
           </section>
-          <section className="rounded-3xl bg-white p-5 shadow-sm">
+          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
             <h2 className="text-lg font-black">4. Payment Method</h2>
             <div className="mt-4 grid gap-3">
               {[

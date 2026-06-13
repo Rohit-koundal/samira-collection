@@ -51,10 +51,10 @@ export default function AddressManagement() {
   };
 
   return (
-    <section className="container-page py-8">
-      <h1 className="mb-6 text-3xl font-black">My Addresses</h1>
-      <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-        <div className="space-y-3">{addresses.map((address) => <div key={address._id} className="rounded-3xl bg-white p-5 shadow-sm"><div className="flex justify-between gap-3"><div><p className="font-black">{address.fullName}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p>{address.isDefault && <span className="mt-3 inline-flex rounded-full bg-blush px-3 py-1 text-xs font-black text-wine">Default</span>}</div><div className="grid gap-2"><button onClick={() => edit(address)} className="text-sm font-black text-wine">Edit</button><button onClick={() => setDefault(address)} className="text-sm font-black text-emerald-700">Default</button><button onClick={() => remove(address)} className="text-sm font-black text-rose">Delete</button></div></div></div>)}</div>
+    <section className="container-page py-6 md:py-8">
+      <h1 className="mb-5 text-2xl font-black md:mb-6 md:text-3xl">My Addresses</h1>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6">
+        <div className="space-y-3">{addresses.map((address) => <div key={address._id} className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><div className="flex justify-between gap-3"><div className="min-w-0"><p className="font-black">{address.fullName}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p>{address.isDefault && <span className="mt-3 inline-flex rounded-full bg-blush px-3 py-1 text-xs font-black text-wine">Default</span>}</div><div className="grid shrink-0 gap-2"><button onClick={() => edit(address)} className="text-sm font-black text-wine">Edit</button><button onClick={() => setDefault(address)} className="text-sm font-black text-emerald-700">Default</button><button onClick={() => remove(address)} className="text-sm font-black text-rose">Delete</button></div></div></div>)}</div>
         <AddressForm form={form} setForm={setForm} onSubmit={save} message={message} editing={!!editingId} />
       </div>
     </section>
@@ -64,7 +64,7 @@ export default function AddressManagement() {
 export function AddressForm({ form, setForm, onSubmit, message, editing }) {
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-5 shadow-sm md:grid-cols-2">
+    <form onSubmit={onSubmit} className="grid gap-3 rounded-xl bg-white p-4 shadow-sm md:grid-cols-2 md:rounded-3xl md:p-5">
       {[
         ['fullName', 'Full Name'],
         ['mobile', 'Mobile Number'],

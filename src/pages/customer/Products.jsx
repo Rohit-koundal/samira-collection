@@ -28,10 +28,10 @@ export default function Products({ navigate, route = '/products' }) {
   return (
     <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
       <div className="mb-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">Home / Products</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 md:text-xs md:tracking-[0.2em]">Home / Products</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3 md:mt-3 md:gap-4">
           <div>
-            <h1 className="max-w-sm text-[22px] font-black leading-tight sm:text-3xl md:max-w-none md:text-5xl">Samira Collection Products</h1>
+            <h1 className="max-w-sm text-[22px] font-black leading-tight sm:text-2xl md:max-w-none md:text-4xl">Samira Collection Products</h1>
             <p className="mt-2 text-sm font-semibold text-slate-500">{loading ? 'Loading styles...' : `${catalog.length} styles available`}</p>
           </div>
           <select value={params.get('sort') || 'newest'} onChange={(event) => updateParam('sort', event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black md:h-11 md:px-4 md:text-sm">
@@ -44,7 +44,7 @@ export default function Products({ navigate, route = '/products' }) {
         </div>
       </div>
       <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto md:hidden">
-        {categories.map((category) => <button key={category._id} onClick={() => updateParam('category', category._id)} className="min-w-max rounded-full bg-white px-4 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
+        {categories.map((category) => <button key={category._id} onClick={() => updateParam('category', category._id)} className="min-w-max rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
       </div>
       <div className="flex gap-6">
         <aside className="hidden w-64 shrink-0 space-y-3 rounded-2xl bg-white p-4 shadow-sm md:block">

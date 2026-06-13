@@ -25,9 +25,9 @@ export default function Home({ navigate }) {
       <NewArrivals products={catalog.filter((p) => p.isNewArrival).slice(0, 8)} navigate={navigate} />
       <BestSellers products={catalog.filter((p) => p.isBestSeller).slice(0, 8)} navigate={navigate} />
       <section className="container-page hidden py-10 md:block">
-        <div className="rounded-3xl bg-white p-8 shadow-sm md:p-12">
+        <div className="rounded-2xl bg-white p-8 shadow-sm md:p-10">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-wine">Customer reviews</p>
-          <h2 className="mt-2 text-3xl font-black">Loved for fit, fabric, and finish.</h2>
+          <h2 className="mt-2 text-2xl font-black md:text-3xl">Loved for fit, fabric, and finish.</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {['Beautiful festive collection and fast delivery.', 'The saree quality feels premium.', 'Admin helped me exchange size quickly.'].map((review) => (
               <blockquote key={review} className="rounded-2xl bg-[#f8f2ec] p-5 text-sm font-semibold leading-7 text-slate-600">{review}</blockquote>
@@ -36,10 +36,10 @@ export default function Home({ navigate }) {
         </div>
       </section>
       <section className="container-page hidden pb-12 md:block">
-        <div className="rounded-3xl bg-charcoal p-8 text-white md:flex md:items-center md:justify-between">
+        <div className="rounded-2xl bg-charcoal p-8 text-white md:flex md:items-center md:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.24em] text-white/50">Newsletter</p>
-            <h2 className="mt-2 text-3xl font-black">Get new drops and sale alerts.</h2>
+            <h2 className="mt-2 text-2xl font-black md:text-3xl">Get new drops and sale alerts.</h2>
           </div>
           <div className="mt-5 flex max-w-md flex-1 gap-2 md:ml-8 md:mt-0">
             <input className="h-12 min-w-0 flex-1 rounded-full px-5 text-sm font-semibold text-charcoal" placeholder="Email address" />

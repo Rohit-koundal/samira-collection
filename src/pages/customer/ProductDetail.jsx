@@ -84,7 +84,7 @@ export default function ProductDetail({ navigate, route = '' }) {
         <div className="md:sticky md:top-24 md:self-start">
           <div className="relative overflow-hidden bg-[#f6efe8] md:rounded-2xl">
             {selectedImage ? (
-              <img src={selectedImage} alt={product.name} className="h-[390px] w-full object-cover sm:h-[520px] md:h-[650px]" />
+              <img src={selectedImage} alt={product.name} className="h-[340px] w-full object-cover sm:h-[430px] md:h-[620px]" />
             ) : (
               <ProductVisual product={product} />
             )}
@@ -108,9 +108,9 @@ export default function ProductDetail({ navigate, route = '' }) {
           )}
         </div>
 
-        <div className="space-y-7 px-4 pt-5 md:px-0 md:pt-0">
+        <div className="space-y-5 px-3 pt-4 md:space-y-7 md:px-0 md:pt-0">
           <div className="relative pr-16">
-            <p className="text-xl leading-snug text-slate-900"><span className="font-black">{product.brand || 'Samira Collection'}</span> {product.name}</p>
+            <p className="text-lg leading-snug text-slate-900 md:text-xl"><span className="font-black">{product.brand || 'Samira Collection'}</span> {product.name}</p>
             <button
               type="button"
               onClick={() => wishlist.toggleWishlist(product)}
@@ -122,19 +122,19 @@ export default function ProductDetail({ navigate, route = '' }) {
             </button>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-slate-400 line-through">MRP Rs. {product.originalPrice}</span>
-              <span className="text-2xl font-black text-charcoal">Rs. {product.price}</span>
+              <span className="text-xl font-black text-charcoal md:text-2xl">Rs. {product.price}</span>
               <span className="font-black text-amber-600">({product.discountPercentage}% OFF)</span>
             </div>
             <p className="mt-2 text-sm font-black text-amber-600">Crazy Deal</p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-[#f8f5ff] p-4">
+          <div className="rounded-xl border border-slate-200 bg-[#f8f5ff] p-4 md:rounded-2xl">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase text-rose">Mega Deal</p>
-                <p className="mt-1 text-2xl font-black">Get at Rs. {dealPrice || product.price}</p>
+                <p className="mt-1 text-xl font-black md:text-2xl">Get at Rs. {dealPrice || product.price}</p>
               </div>
-              <span className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-black text-white">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
+              <span className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white md:text-sm">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-sm">
               <span>With Coupon + Bank Offer</span>
@@ -144,12 +144,12 @@ export default function ProductDetail({ navigate, route = '' }) {
 
           <section>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-black">Size: {size || 'Free Size'}</h2>
+              <h2 className="text-lg font-black md:text-xl">Size: {size || 'Free Size'}</h2>
               <button type="button" onClick={() => setOpenSizeChart(true)} className="text-sm font-black text-rose">Size Chart</button>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
               {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
-                <button key={item} type="button" onClick={() => setSize(item)} className={`min-w-24 rounded-2xl border px-5 py-4 text-sm font-black ${size === item ? 'border-charcoal bg-charcoal text-white' : 'border-slate-200 bg-white'}`}>{item}</button>
+                <button key={item} type="button" onClick={() => setSize(item)} className={`min-w-20 rounded-xl border px-4 py-3 text-sm font-black md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-charcoal bg-charcoal text-white' : 'border-slate-200 bg-white'}`}>{item}</button>
               ))}
             </div>
             {product.colors?.length > 0 && (
@@ -171,7 +171,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           </div>
 
           <section className="space-y-4 border-t border-slate-100 pt-6">
-            <h2 className="text-xl font-black">Check Delivery</h2>
+            <h2 className="text-lg font-black md:text-xl">Check Delivery</h2>
             <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-14 w-full rounded-xl border border-slate-300 px-4 text-sm font-black outline-none focus:border-rose" placeholder="Enter PIN Code" />
             <div className="space-y-3 text-sm">
               <Feature icon="box" title="Express delivery" text="might be available" />
@@ -205,13 +205,13 @@ export default function ProductDetail({ navigate, route = '' }) {
       <ReviewsSection product={product} reviews={reviews} />
 
       <div className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 md:rounded-3xl md:p-5">
           {[
             `More ${product.category} by ${product.brand || 'Samira Collection'}`,
             `More ${product.colors?.[0] || ''} ${product.category}`,
             `More ${product.category}`,
           ].map((label) => (
-            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between border-b border-slate-100 py-4 text-left text-lg font-black last:border-b-0">
+            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 py-4 text-left text-base font-black last:border-b-0 md:text-lg">
               {label.trim()}
               <span className="text-rose">&gt;</span>
             </button>
@@ -239,7 +239,7 @@ function DetailsCard({ product }) {
   ].filter(Boolean);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 md:rounded-3xl md:p-5">
       <div className="grid grid-cols-2 gap-5">
         <Spec label="Category" value={product.category} />
         <Spec label="Fabric" value={product.fabric || 'Premium fabric'} />
@@ -297,7 +297,7 @@ function ProductRail({ title, subtitle, products, navigate }) {
   if (!products.length) return null;
   return (
     <section>
-      <h2 className="text-xl font-black">{title}</h2>
+      <h2 className="text-lg font-black md:text-xl">{title}</h2>
       {subtitle && <p className="mt-1 text-sm font-black text-amber-600">{subtitle}</p>}
       <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
         {products.map((product) => <RailProduct key={product.id} product={product} navigate={navigate} />)}
@@ -325,7 +325,7 @@ function RailProduct({ product, navigate }) {
 function ReviewsSection({ product, reviews }) {
   return (
     <section className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
-      <h2 className="text-xl font-black">Ratings & Reviews</h2>
+      <h2 className="text-lg font-black md:text-xl">Ratings & Reviews</h2>
       <div className="mt-4 flex items-center gap-3">
         <span className="rounded-xl bg-amber-400 px-4 py-3 text-lg font-black text-white">{Number(product.rating || 0).toFixed(1)} star</span>
         <span className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">{product.numReviews || reviews.length || 0} ratings</span>

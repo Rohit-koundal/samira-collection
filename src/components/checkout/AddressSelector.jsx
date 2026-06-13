@@ -1,6 +1,6 @@
 export default function AddressSelector() {
   return (
-    <section className="rounded-3xl bg-white p-5 shadow-sm">
+    <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
       <h2 className="text-lg font-black">Select Delivery Address</h2>
       <div className="mt-4 rounded-2xl border-2 border-wine p-4">
         <p className="font-black">Demo Customer</p>

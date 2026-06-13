@@ -33,18 +33,18 @@ export default function DesktopHeader({ navigate, route = '/' }) {
       <div className="bg-wine px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.24em] text-white">
         Free Shipping on Orders Above Rs. 999 | New Festive Collection Live Now
       </div>
-      <div className="container-page flex h-20 items-center gap-6">
+      <div className="container-page flex h-[72px] items-center gap-4 lg:h-20 lg:gap-5">
         <button onClick={() => navigate('/')} className="shrink-0" aria-label="Samira Collection home">
           <img src={logo} alt="Samira Collection" className="h-14 w-auto" />
         </button>
-        <nav className="hidden flex-1 items-center justify-center gap-5 text-sm font-bold text-charcoal lg:flex">
+        <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-bold text-charcoal lg:flex xl:gap-5">
           {links.map(([label, path]) => (
             <button key={label} onClick={() => navigate(path)} className="transition hover:text-wine">
               {label}
             </button>
           ))}
         </nav>
-        <label className="flex h-11 min-w-[280px] items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-sm font-semibold text-slate-500">
+        <label className="flex h-11 min-w-[220px] max-w-[320px] flex-1 items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-sm font-semibold text-slate-500">
           <Icon name="search" className="h-4 w-4" />
           <input
             value={searchValue}

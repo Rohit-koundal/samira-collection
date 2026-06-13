@@ -3,12 +3,12 @@ import { formatAddress } from '../../utils/receiptMessage';
 
 export default function Receipt({ receipt }) {
   return (
-    <section id="samira-receipt" className="rounded-3xl bg-white p-5 shadow-sm print:shadow-none">
+    <section id="samira-receipt" className="rounded-xl bg-white p-4 shadow-sm print:shadow-none md:rounded-3xl md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
         <div className="flex items-center gap-3">
           <img src={logo} alt="Samira Collection" className="h-14 rounded-xl border border-slate-100 bg-white p-1" />
           <div>
-            <h2 className="text-2xl font-black">{receipt.storeDetails?.storeName || 'Samira Collection'}</h2>
+            <h2 className="text-xl font-black md:text-2xl">{receipt.storeDetails?.storeName || 'Samira Collection'}</h2>
             <p className="text-xs font-bold text-slate-500">{receipt.storeDetails?.contactPhone || receipt.storeDetails?.whatsappNumber || ''}</p>
           </div>
         </div>
@@ -23,7 +23,7 @@ export default function Receipt({ receipt }) {
         <Info title="Delivery Address" lines={[formatAddress(receipt.shippingAddress)]} />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[620px] text-left text-sm">
+        <table className="w-full min-w-[560px] text-left text-sm md:min-w-[620px]">
           <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.14em] text-slate-500"><tr><th className="p-3">Product</th><th className="p-3">Size/Color</th><th className="p-3">Qty</th><th className="p-3">Price</th><th className="p-3">Total</th></tr></thead>
           <tbody>{receipt.items.map((item, index) => <tr key={`${item.name}-${index}`} className="border-b border-slate-100"><td className="p-3 font-bold">{item.name}</td><td className="p-3">{item.size || '-'} / {item.color || '-'}</td><td className="p-3">{item.quantity}</td><td className="p-3">Rs. {item.price}</td><td className="p-3 font-black">Rs. {item.price * item.quantity}</td></tr>)}</tbody>
         </table>

@@ -5,6 +5,7 @@ import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
 import StatusBadge from '../../components/admin/StatusBadge';
+import { Select as UiSelect } from '../../components/ui/Field';
 
 const pageSize = 10;
 
@@ -147,7 +148,7 @@ export default function Products() {
 }
 
 function Select({ value, onChange, options }) {
-  return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</select>;
+  return <UiSelect value={value} onChange={(event) => onChange(event.target.value)} className="w-full sm:w-auto">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</UiSelect>;
 }
 
 export function AdminPage({ title, action, href, children }) {

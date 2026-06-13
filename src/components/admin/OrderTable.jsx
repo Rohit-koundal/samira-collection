@@ -1,9 +1,9 @@
 export default function OrderTable({ orders }) {
   return (
-    <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm md:rounded-3xl">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.16em] text-slate-500">
+        <table className="w-full min-w-[700px] text-left text-sm md:min-w-[760px]">
+          <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.12em] text-slate-500 md:tracking-[0.16em]">
             <tr>{['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Status', 'Actions'].map((head) => <th key={head} className="px-4 py-4">{head}</th>)}</tr>
           </thead>
           <tbody>

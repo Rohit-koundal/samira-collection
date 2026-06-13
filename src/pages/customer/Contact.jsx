@@ -30,10 +30,10 @@ export default function Contact({ route = '/contact' }) {
 
   if (policy) {
     return (
-      <section className="container-page py-10">
-        <article className="mx-auto max-w-3xl rounded-3xl bg-white p-7 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-wine">Samira Collection</p>
-          <h1 className="mt-3 text-3xl font-black">{policy.title}</h1>
+      <section className="container-page py-6 md:py-10">
+        <article className="mx-auto max-w-3xl rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.22em]">Samira Collection</p>
+          <h1 className="mt-3 text-2xl font-black md:text-3xl">{policy.title}</h1>
           <p className="mt-5 whitespace-pre-line text-sm leading-7 text-slate-600">
             {settings[policy.key] || policy.fallback}
           </p>
@@ -48,14 +48,14 @@ export default function Contact({ route = '/contact' }) {
   };
 
   return (
-    <section className="container-page py-10">
+    <section className="container-page py-6 md:py-10">
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-3xl bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-black">Contact Samira Collection</h1>
+        <div className="rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
+          <h1 className="text-2xl font-black md:text-3xl">Contact Samira Collection</h1>
           <p className="mt-4 leading-7 text-slate-600">Email {settings.contactEmail || 'hello@samiracollection.com'} or WhatsApp {settings.whatsappNumber || settings.contactPhone || '+91 98765 43210'} for product inquiries, returns, and store support.</p>
           {settings.address && <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{settings.address}</p>}
         </div>
-        <form onSubmit={submit} className="rounded-3xl bg-white p-7 shadow-sm">
+        <form onSubmit={submit} className="rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
           <input className="h-12 w-full rounded-xl border border-slate-200 px-4" placeholder="Name" />
           <input className="mt-3 h-12 w-full rounded-xl border border-slate-200 px-4" placeholder="Email" />
           <textarea className="mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4" placeholder="Message" />

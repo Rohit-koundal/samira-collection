@@ -20,14 +20,14 @@ export function ProductVisual({ product, compact = false }) {
   const image = product.images?.find((item) => isUsableImageUrl(item?.url))?.url;
   if (image && !imageFailed) {
     return (
-      <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}>
+      <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-32 sm:h-40 md:h-44' : 'h-56 md:h-64'}`}>
         <img src={normalizeImageUrl(image)} alt={product.name} onError={() => setImageFailed(true)} className="h-full w-full object-cover" />
       </div>
     );
   }
   const color = swatches[product.colors?.[0]] || '#6d1f34';
   return (
-    <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-36 sm:h-44' : 'h-64'}`}>
+    <div className={`relative overflow-hidden bg-[#f6efe8] ${compact ? 'h-32 sm:h-40 md:h-44' : 'h-56 md:h-64'}`}>
       <div className="absolute inset-x-5 bottom-0 h-[86%] rounded-t-[90px]" style={{ background: `linear-gradient(145deg, ${color}, #f9d4dd)` }} />
       <div className="absolute left-1/2 top-8 h-24 w-20 -translate-x-1/2 rounded-t-full bg-[#f6d2bf]" />
       <div className="absolute bottom-0 left-1/2 h-[70%] w-[54%] -translate-x-1/2 rounded-t-[80px] bg-white/20 ring-8 ring-white/30" />
@@ -69,10 +69,10 @@ export default function ProductCard({ product, navigate }) {
       <button type="button" onClick={openProduct} className="block w-full text-left" aria-label={`View ${product.name}`}>
         <ProductVisual product={product} compact />
       </button>
-      <div className="space-y-1.5 p-2.5 md:space-y-2 md:p-3">
+      <div className="space-y-1.5 p-2 md:space-y-2 md:p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="truncate text-[13px] font-black leading-5 text-charcoal md:text-sm">{product.name}</h3>
+            <h3 className="truncate text-xs font-black leading-5 text-charcoal md:text-sm">{product.name}</h3>
             <p className="truncate text-[11px] font-semibold text-slate-500 md:text-xs">{product.category} | {product.fabric}</p>
           </div>
           <button
