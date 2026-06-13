@@ -1,71 +1,133 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import seedCategories from '../../data/categories';
 import products from '../../data/seedProducts';
 import ProductGrid from '../../components/product/ProductGrid';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
+import ProductFilters from '../../components/product/ProductFilters';
 import Icon from '../../components/layout/Icon';
 import { normalizeProducts } from '../../services/normalize';
+import {
+  clearCatalogFilters,
+  createCatalogSearchParams,
+  normalizeCatalogQuery,
+  replaceCatalogFilters,
+  selectCatalogFilters,
+  selectVisibleProducts,
+  setCatalogFilterValue,
+} from '../../store/catalogSlice';
 import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 export default function Products({ navigate, route = '/products' }) {
+  const dispatch = useDispatch();
   const [openFilters, setOpenFilters] = useState(false);
+  const [openSort, setOpenSort] = useState(false);
   const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
-  const params = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
-  const query = useMemo(() => Object.fromEntries(params.entries()), [params]);
-  const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: productData = [], isLoading, isFetching, error } = useGetProductsQuery(query);
+  const routeQuery = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
+  const filters = useSelector(selectCatalogFilters);
+  const params = useMemo(() => createCatalogSearchParams(filters), [filters]);
+  const { data: categories = seedCategories } = useGetCategoriesQuery();
+  const { data: productData = [], isLoading, isFetching, error } = useGetProductsQuery();
   const loading = isLoading || isFetching;
-  const catalog = normalizeProducts(productData?.length ? productData : (isDev ? products : []));
+  const catalog = useMemo(() => {
+    const source = Array.isArray(productData) && (!error || productData.length) ? productData : (isDev ? products : []);
+    return normalizeProducts(source);
+  }, [error, productData]);
+  const visibleProducts = useSelector((state) => selectVisibleProducts(state, catalog, categories));
+
+  useLayoutEffect(() => {
+    dispatch(replaceCatalogFilters(normalizeCatalogQuery(routeQuery)));
+  }, [dispatch, routeQuery]);
+
+  const syncCatalogRoute = (nextFilters) => {
+    const nextParams = createCatalogSearchParams(nextFilters);
+    navigate(`${basePath}${nextParams.toString() ? `?${nextParams}` : ''}`);
+  };
 
   const updateParam = (key, value) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    navigate(`${basePath}${next.toString() ? `?${next}` : ''}`);
+    const nextFilters = setCatalogFilterValue(filters, key, value);
+    dispatch(replaceCatalogFilters(nextFilters));
+    syncCatalogRoute(nextFilters);
+  };
+
+  const clearFilterParams = () => {
+    const nextFilters = clearCatalogFilters(filters);
+    dispatch(replaceCatalogFilters(nextFilters));
+    syncCatalogRoute(nextFilters);
   };
 
   return (
     <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
       <div className="mb-6">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 md:text-xs md:tracking-[0.2em]">Home / Products</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3 md:mt-3 md:gap-4">
-          <div>
-            <h1 className="max-w-sm text-[22px] font-black leading-tight sm:text-2xl md:max-w-none md:text-4xl">Samira Collection Products</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">{loading ? 'Loading styles...' : `${catalog.length} styles available`}</p>
+        {/* <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 md:text-xs md:tracking-[0.2em]">Home / Products</p> */}
+        <div className="mt-2 md:mt-3">
+          <div className="flex items-start justify-between gap-3 md:flex-wrap md:items-end md:gap-4">
+            <div className="min-w-0">
+              <h1 className="text-[18px] font-black leading-tight sm:text-2xl md:max-w-none md:text-2xl">Products</h1>
+              <p className="mt-2 text-[10px] font-semibold text-slate-500">{loading ? 'Loading styles...' : `${visibleProducts.length} styles available`}</p>
+            </div>
+            <div className="shrink-0">
+              <select value={filters.sort} onChange={(event) => updateParam('sort', event.target.value)} className="h-10 min-w-[134px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-black md:h-11 md:px-4 md:text-sm">
+                <option value="newest">Newest</option>
+                <option value="">All</option>
+                <option value="priceLowHigh">Price Low-High</option>
+                <option value="priceHighLow">Price High-Low</option>
+                <option value="discount">Discount</option>
+                <option value="rating">Rating</option>
+              </select>
+            </div>
           </div>
-          <select value={params.get('sort') || 'newest'} onChange={(event) => updateParam('sort', event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black md:h-11 md:px-4 md:text-sm">
-            <option value="newest">Newest</option>
-            <option value="priceLowHigh">Price Low-High</option>
-            <option value="priceHighLow">Price High-Low</option>
-            <option value="discount">Discount</option>
-            <option value="rating">Rating</option>
-          </select>
         </div>
       </div>
       <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto md:hidden">
-        {categories.map((category) => <button key={category._id} onClick={() => updateParam('category', category._id)} className="min-w-max rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
+        {categories.map((category) => <button key={category._id || category.id} onClick={() => updateParam('category', category._id || category.id || category.slug || category.name)} className="min-w-max rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm">{category.name}</button>)}
       </div>
       <div className="flex gap-6">
-        <aside className="hidden w-64 shrink-0 space-y-3 rounded-2xl bg-white p-4 shadow-sm md:block">
-          <FilterSelect label="Category" value={params.get('category') || ''} onChange={(value) => updateParam('category', value)} options={[['', 'All'], ...categories.map((category) => [category._id, category.name])]} />
-          <FilterSelect label="Size" value={params.get('size') || ''} onChange={(value) => updateParam('size', value)} options={[['', 'All'], ['S', 'S'], ['M', 'M'], ['L', 'L'], ['XL', 'XL'], ['Free Size', 'Free Size']]} />
-          <FilterSelect label="Fabric" value={params.get('fabric') || ''} onChange={(value) => updateParam('fabric', value)} options={[['', 'All'], ['Cotton', 'Cotton'], ['Silk', 'Silk'], ['Georgette', 'Georgette'], ['Rayon', 'Rayon']]} />
-          <FilterSelect label="Stock" value={params.get('stock') || ''} onChange={(value) => updateParam('stock', value)} options={[['', 'All'], ['in', 'In Stock'], ['out', 'Out of Stock']]} />
-        </aside>
+        <div className="hidden shrink-0 md:block">
+          <ProductFilters categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
+        </div>
         <div className="min-w-0 flex-1">
-          {error && !isDev ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={catalog} navigate={navigate} />}
+          {error && !isDev ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={visibleProducts} navigate={navigate} />}
         </div>
       </div>
       <div className="fixed bottom-16 left-0 right-0 z-40 grid grid-cols-2 border-t border-slate-200 bg-white md:hidden">
-        <button className="h-12 border-r border-slate-200 text-sm font-black">Sort</button>
+        <button onClick={() => setOpenSort(true)} className="h-12 border-r border-slate-200 text-sm font-black">Sort</button>
         <button onClick={() => setOpenFilters(true)} className="flex h-12 items-center justify-center gap-2 text-sm font-black"><Icon name="filter" className="h-4 w-4" /> Filter</button>
       </div>
-      <MobileFilterSheet open={openFilters} onClose={() => setOpenFilters(false)} />
+      {openSort && (
+        <div className="fixed inset-0 z-[70] bg-black/40 md:hidden">
+          <div className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-black">Sort By</h2>
+              <button onClick={() => setOpenSort(false)} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black">Close</button>
+            </div>
+            <div className="grid gap-2">
+              {[
+                ['newest', 'Newest'],
+                ['priceLowHigh', 'Price Low-High'],
+                ['priceHighLow', 'Price High-Low'],
+                ['discount', 'Discount'],
+                ['rating', 'Rating'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    updateParam('sort', value);
+                    setOpenSort(false);
+                  }}
+                  className={`rounded-xl px-4 py-3 text-left text-sm font-black ${filters.sort === value ? 'bg-blush text-wine' : 'bg-slate-50 text-slate-700'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      <MobileFilterSheet open={openFilters} onClose={() => setOpenFilters(false)} categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
     </section>
   );
-}
-
-function FilterSelect({ label, value, onChange, options }) {
-  return <label className="grid gap-2 text-sm font-black">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold">{options.map(([optionValue, text]) => <option key={optionValue} value={optionValue}>{text}</option>)}</select></label>;
 }

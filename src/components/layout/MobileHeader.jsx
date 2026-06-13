@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -29,15 +29,15 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
-        <div className="flex h-[52px] items-center justify-between px-3 pt-1">
+      <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
+        <div className="grid h-[52px] grid-cols-[40px_minmax(0,1fr)_76px] items-center gap-2 px-3 pt-1">
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5 w-5" />
           </button>
-          <button onClick={() => navigate('/')} className="flex-1">
-            <img src={logo} alt="Samira Collection" className="mx-auto h-10 w-auto" />
+          <button onClick={() => navigate('/')} className="min-w-0 px-1">
+            <img src={logo} alt="Samira Collection" className="mx-auto h-9 w-auto max-w-full" />
           </button>
-          <div className="flex gap-1">
+          <div className="flex shrink-0 justify-end gap-1">
             <button onClick={() => navigate('/wishlist')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open wishlist">
               <Icon name="heart" className="h-5 w-5" />
               {wishlist.items.length > 0 && (
@@ -48,16 +48,16 @@ export default function MobileHeader({ navigate, route = '/' }) {
             </button>
             <button onClick={() => navigate('/cart')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open cart">
               <Icon name="bag" className="h-5 w-5" />
-              {cart.items.length > 0 && (
+              {cart.itemCount > 0 && (
                 <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-wine px-1 text-[9px] font-black leading-none text-white">
-                  {cart.items.length}
+                  {cart.itemCount}
                 </span>
               )}
             </button>
           </div>
         </div>
         <div className="px-3 pb-2">
-          <label className="flex h-10 w-full items-center gap-2 rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
+          <label className="flex h-10 w-full max-w-full items-center gap-2 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
             <Icon name="search" className="h-4 w-4" />
             <input
               value={searchValue}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 
 export default function AdminLogin() {
   const { login } = useAuth();

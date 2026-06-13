@@ -45,10 +45,12 @@ export default function ProductDetail({ navigate, route = '' }) {
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
   const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
 
-  const isInCart = useMemo(
-    () => Boolean(productId) && cart.items.some((item) => (item.product._id || item.product.id || item.product.slug) === productId),
-    [cart.items, productId],
-  );
+  const cartItem = product ? cart.getCartItem(product, { size, color }) : null;
+  const similarPath = product?.categoryId
+    ? `/products?category=${product.categoryId}`
+    : product?.category
+      ? `/products?search=${encodeURIComponent(product.category)}`
+      : '/products';
 
   if (!productKey || error) {
     return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Product not found.</div></section>;
@@ -72,7 +74,7 @@ export default function ProductDetail({ navigate, route = '' }) {
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" onClick={() => navigate('/products')} className="grid h-10 w-8 place-items-center text-2xl" aria-label="Back">&lt;</button>
-          <span className="truncate text-base font-black">{product.brand || 'Samira Collection'}</span>
+          <span className="truncate text-[15px] font-black">{product.brand || 'Samira Collection'}</span>
         </div>
         <div className="flex items-center gap-2 text-slate-800">
           <button type="button" onClick={() => navigate('/search')} className="grid h-10 w-10 place-items-center" aria-label="Search"><Icon name="search" className="h-6 w-6" /></button>
@@ -86,10 +88,16 @@ export default function ProductDetail({ navigate, route = '' }) {
             {selectedImage ? (
               <img src={selectedImage} alt={product.name} className="h-[340px] w-full object-cover sm:h-[430px] md:h-[620px]" />
             ) : (
-              <ProductVisual product={product} />
+              <ProductVisual product={product} showMeta={false} />
             )}
-            <div className="absolute bottom-4 left-4 rounded-xl bg-white px-3 py-2 text-xs font-black shadow">View Similar</div>
-            <div className="absolute bottom-4 right-4 rounded-xl bg-white px-3 py-2 text-xs font-black shadow">
+            <button
+              type="button"
+              onClick={() => navigate(similarPath)}
+              className="absolute bottom-4 left-4 min-w-[106px] rounded-xl bg-white px-3 py-2 text-center text-xs font-black shadow"
+            >
+              View Similar
+            </button>
+            <div className="absolute bottom-4 right-4 min-w-[106px] rounded-xl bg-white px-3 py-2 text-center text-xs font-black shadow">
               {Number(product.rating || 0).toFixed(1)} star <span className="mx-2 text-slate-300">|</span> {product.numReviews || reviews.length || 0}
             </div>
           </div>
@@ -110,22 +118,25 @@ export default function ProductDetail({ navigate, route = '' }) {
 
         <div className="space-y-5 px-3 pt-4 md:space-y-7 md:px-0 md:pt-0">
           <div className="relative pr-16">
-            <p className="text-lg leading-snug text-slate-900 md:text-xl"><span className="font-black">{product.brand || 'Samira Collection'}</span> {product.name}</p>
+            <p className="text-xs font-black uppercase tracking-[0.08em] text-slate-500 md:text-base md:tracking-[0.12em]">{product.brand || 'Samira Collection'}</p>
+            <h1 className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 md:text-[22px]">
+              {product.name}
+            </h1>
             <button
               type="button"
               onClick={() => wishlist.toggleWishlist(product)}
-              className={`absolute right-0 top-0 grid h-14 w-14 place-items-center rounded-2xl border transition ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
+              className={`absolute right-0 top-0 grid h-8 w-8 place-items-center rounded-xl border transition ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
               aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
               aria-pressed={isWishlisted}
             >
-              <Icon name="heart" className="h-7 w-7" />
+              <Icon name="heart" className="h-5 w-5" />
             </button>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-slate-400 line-through">MRP Rs. {product.originalPrice}</span>
-              <span className="text-xl font-black text-charcoal md:text-2xl">Rs. {product.price}</span>
+              <span className="text-md font-black text-charcoal md:text-2xl">Rs. {product.price}</span>
               <span className="font-black text-amber-600">({product.discountPercentage}% OFF)</span>
             </div>
-            <p className="mt-2 text-sm font-black text-amber-600">Crazy Deal</p>
+            <p className="mt-1 text-xs font-black text-amber-600">Crazy Deal</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-[#f8f5ff] p-4 md:rounded-2xl">
@@ -166,7 +177,9 @@ export default function ProductDetail({ navigate, route = '' }) {
           </section>
 
           <div className="hidden gap-3 md:flex">
-            <button disabled={product.stock <= 0} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${isInCart ? 'bg-emerald-600' : 'bg-rose'}`}>{isInCart ? 'Added to Bag' : 'Add to Bag'}</button>
+            <button disabled={product.stock <= 0} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
+              {cartItem ? 'Add More' : 'Add to Cart'}
+            </button>
             <button disabled={product.stock <= 0} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
           </div>
 
@@ -221,8 +234,8 @@ export default function ProductDetail({ navigate, route = '' }) {
       </div>
 
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <button disabled={product.stock <= 0} onClick={add} className={`h-14 w-full rounded-xl px-5 py-4 text-base font-black text-white disabled:opacity-50 ${isInCart ? 'bg-emerald-600' : 'bg-rose'}`}>
-          {product.stock <= 0 ? 'Out of Stock' : isInCart ? 'Added to Bag' : 'Add to Bag'}
+        <button disabled={product.stock <= 0} onClick={add} className={`h-14 w-full rounded-xl px-5 py-4 text-base font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
+          {product.stock <= 0 ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
         </button>
       </div>
 
@@ -309,6 +322,7 @@ function ProductRail({ title, subtitle, products, navigate }) {
 function RailProduct({ product, navigate }) {
   const cart = useCart();
   const image = product.images?.[0]?.url;
+  const cartItem = cart.getCartItem(product);
   return (
     <article className="w-40 shrink-0 md:w-52">
       <button type="button" onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f6efe8]">
@@ -317,7 +331,9 @@ function RailProduct({ product, navigate }) {
       <h3 className="mt-2 truncate text-base font-black">{product.brand || 'Samira Collection'}</h3>
       <p className="truncate text-sm text-slate-500">{product.name}</p>
       <p className="mt-1 text-sm"><span className="text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="font-black">Rs. {product.price}</span></p>
-      <button type="button" onClick={() => cart.addToCart(product)} className="mt-3 h-10 w-full rounded-xl border border-rose text-sm font-black text-rose">Add to Bag</button>
+      <button type="button" onClick={() => cart.addToCart(product)} className={`mt-3 h-10 w-full rounded-xl border text-sm font-black ${cartItem ? 'border-emerald-600 text-emerald-700' : 'border-rose text-rose'}`}>
+        {cartItem ? 'Add More' : 'Add to Cart'}
+      </button>
     </article>
   );
 }

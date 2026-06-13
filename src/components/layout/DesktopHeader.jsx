@@ -1,4 +1,4 @@
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -71,7 +71,7 @@ export default function DesktopHeader({ navigate, route = '/' }) {
           </button>
           <button onClick={() => navigate('/cart')} className="relative grid h-11 w-11 place-items-center rounded-full bg-charcoal text-white">
             <Icon name="bag" />
-            <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{cart.items.length}</span>
+            <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{cart.itemCount}</span>
           </button>
         </div>
       </div>

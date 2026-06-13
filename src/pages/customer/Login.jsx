@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 
 export default function Login() {
   const { sendOtp, verifyOtp, resendOtp } = useAuth();
@@ -100,14 +100,14 @@ export default function Login() {
   };
 
   return (
-    <section className="grid min-h-[76vh] place-items-center overflow-x-hidden px-4 py-10">
-      <form onSubmit={step === 'phone' ? requestOtp : submitOtp} className="w-full max-w-[400px] rounded-2xl bg-white p-5 shadow-xl sm:max-w-md md:rounded-3xl md:p-7">
-        <img src={logo} alt="Samira Collection" className="mx-auto h-16 max-w-full sm:h-20" />
+    <section className="grid min-h-[76vh] place-items-center overflow-x-hidden px-3 py-8 sm:px-4 sm:py-10">
+      <form onSubmit={step === 'phone' ? requestOtp : submitOtp} className="w-full max-w-[400px] overflow-hidden rounded-2xl bg-white p-4 shadow-xl sm:max-w-md sm:p-5 md:rounded-3xl md:p-7">
+        <img src={logo} alt="Samira Collection" className="mx-auto h-14 max-w-full sm:h-20" />
         <p className="mt-5 text-[10px] font-black uppercase tracking-[0.14em] text-wine md:mt-6 md:text-xs md:tracking-[0.22em]">Secure mobile login</p>
-        <h1 className="mt-2 text-2xl font-black leading-tight md:text-3xl">Login with Mobile Number</h1>
+        <h1 className="mt-2 text-xl font-black leading-tight sm:text-2xl md:text-3xl">Login with Mobile Number</h1>
         {step === 'phone' ? (
           <>
-            <div className="mt-6 grid w-full grid-cols-[122px_minmax(0,1fr)] gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
+            <div className="mt-6 grid w-full grid-cols-1 gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
               <select value={countryCode} onChange={(event) => setCountryCode(event.target.value)} className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black">
                 {countryCodes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
@@ -119,7 +119,7 @@ export default function Login() {
           <>
             <p className="mt-5 text-sm font-semibold text-slate-500">Enter OTP sent to {countryCode} {maskPhone(phone)}</p>
             <div className="mt-4 grid grid-cols-6 gap-2" onPaste={pasteOtp}>
-              {otp.map((digit, index) => <input key={index} ref={(node) => { inputs.current[index] = node; }} value={digit} onChange={(event) => handleOtp(index, event.target.value)} className="h-12 rounded-xl border border-slate-200 text-center text-lg font-black" inputMode="numeric" />)}
+              {otp.map((digit, index) => <input key={index} ref={(node) => { inputs.current[index] = node; }} value={digit} onChange={(event) => handleOtp(index, event.target.value)} className="h-11 min-w-0 rounded-xl border border-slate-200 text-center text-base font-black sm:h-12 sm:text-lg" inputMode="numeric" />)}
             </div>
             <button disabled={loading} className="mt-5 h-12 w-full rounded-xl bg-rose text-sm font-black text-white disabled:opacity-60">{loading ? 'Verifying...' : 'Verify OTP'}</button>
             <div className="mt-4 flex items-center justify-between text-sm font-black">

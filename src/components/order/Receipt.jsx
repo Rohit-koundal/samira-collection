@@ -1,4 +1,4 @@
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 import { formatAddress } from '../../utils/receiptMessage';
 
 export default function Receipt({ receipt }) {

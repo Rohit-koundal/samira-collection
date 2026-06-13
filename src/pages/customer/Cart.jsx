@@ -29,7 +29,7 @@ export default function Cart({ navigate }) {
     api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons(seedCoupons));
   }, []);
 
-  const selectedCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedCount = cart.itemCount;
   const platformFee = cart.items.length ? 23 : 0;
   const payable = cart.finalAmount + platformFee + donation;
   const deliveryDate = useMemo(() => {
@@ -139,8 +139,10 @@ export default function Cart({ navigate }) {
                 key={`${item.product._id || item.product.id || item.product.slug}-${item.size}-${item.color}`}
                 item={item}
                 deliveryDate={deliveryDate}
-                updateQuantity={cart.updateQuantity}
+                increaseQuantity={cart.increaseQuantity}
+                decreaseQuantity={cart.decreaseQuantity}
                 removeFromCart={cart.removeFromCart}
+                updateItemOptions={cart.updateItemOptions}
                 moveToWishlist={moveToWishlist}
               />
             ))}
@@ -257,10 +259,10 @@ function BagHeader({ navigate }) {
   );
 }
 
-function BagItem({ item, deliveryDate, updateQuantity, removeFromCart, moveToWishlist }) {
+function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, removeFromCart, updateItemOptions, moveToWishlist }) {
   const product = item.product;
-  const productId = product._id || product.id || product.slug;
   const image = product.images?.[0]?.url;
+  const sizes = Array.isArray(product.sizes) && product.sizes.length ? product.sizes : [item.size || 'Free Size'];
   const originalTotal = Number(product.originalPrice || product.price || 0) * item.quantity;
   const sellingTotal = Number(product.price || 0) * item.quantity;
   const discount = Math.max(0, originalTotal - sellingTotal);
@@ -275,11 +277,23 @@ function BagItem({ item, deliveryDate, updateQuantity, removeFromCart, moveToWis
         <h2 className="truncate text-sm font-black">{product.brand || 'Samira Collection'}</h2>
         <p className="mt-1 truncate text-sm text-slate-700">{product.name}</p>
         <p className="mt-1 truncate text-xs text-slate-400">Sold by: Samira Collection</p>
-        <div className="mt-3 flex gap-2">
-          <button type="button" className="h-8 rounded bg-slate-100 px-2 text-xs font-black">Size: {item.size}</button>
-          <select value={item.quantity} onChange={(event) => updateQuantity(productId, Number(event.target.value))} className="h-8 rounded bg-slate-100 px-2 text-xs font-black" aria-label="Quantity">
-            {[1, 2, 3, 4, 5].map((qty) => <option key={qty} value={qty}>Qty: {qty}</option>)}
-          </select>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <label className="flex h-8 items-center gap-1 rounded bg-slate-100 px-2 text-xs font-black">
+            Size:
+            <select
+              value={item.size}
+              onChange={(event) => updateItemOptions(item.cartKey, { cartKey: item.cartKey, size: event.target.value })}
+              className="bg-transparent font-black outline-none"
+              aria-label="Select size"
+            >
+              {sizes.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <div className="grid h-8 grid-cols-[2rem_3rem_2rem] overflow-hidden rounded bg-slate-100 text-xs font-black" aria-label="Quantity controls">
+            <button type="button" onClick={() => decreaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Decrease quantity">-</button>
+            <span className="grid place-items-center">Qty {item.quantity}</span>
+            <button type="button" onClick={() => increaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Increase quantity">+</button>
+          </div>
         </div>
         <p className="mt-3 text-sm">
           <span className="font-black">Rs. {sellingTotal}</span>
@@ -290,7 +304,7 @@ function BagItem({ item, deliveryDate, updateQuantity, removeFromCart, moveToWis
       </div>
       <div className="absolute right-3 top-3 flex gap-3">
         <button type="button" onClick={() => moveToWishlist(item)} className="text-slate-600" aria-label="Add to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
-        <button type="button" onClick={() => removeFromCart(productId)} className="text-2xl leading-none" aria-label="Remove">x</button>
+        <button type="button" onClick={() => removeFromCart(item.cartKey, { cartKey: item.cartKey })} className="text-2xl leading-none" aria-label="Remove">x</button>
       </div>
     </article>
   );
@@ -303,6 +317,7 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
       <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
         {items.map((product) => {
           const image = product.images?.[0]?.url;
+          const cartItem = cart.getCartItem(product);
           return (
             <article key={product.id} className="w-40 shrink-0 border border-slate-200 bg-white">
               <button onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block h-44 w-full overflow-hidden bg-[#f6efe8]">
@@ -313,7 +328,9 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
                 <p className="truncate text-xs text-slate-500">{product.name}</p>
                 <p className="mt-1 text-xs"><span className="font-black">Rs. {product.price}</span> <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span></p>
               </div>
-              <button onClick={() => cart.addToCart(product)} className="h-11 w-full border-t border-slate-200 text-sm font-black text-rose">ADD TO BAG</button>
+              <button onClick={() => cart.addToCart(product)} className={`h-11 w-full border-t text-sm font-black ${cartItem ? 'border-emerald-200 text-emerald-700' : 'border-slate-200 text-rose'}`}>
+                {cartItem ? 'ADD MORE' : 'ADD TO CART'}
+              </button>
             </article>
           );
         })}
@@ -325,7 +342,7 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
 function PriceDetails({ cart, platformFee, donation, payable }) {
   return (
     <section className="bg-white px-4 py-6 md:rounded-2xl md:shadow-sm">
-      <h2 className="text-sm font-black uppercase">Price Details ({cart.items.length} Item)</h2>
+      <h2 className="text-sm font-black uppercase">Price Details ({cart.itemCount} Item)</h2>
       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 text-sm">
         <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />

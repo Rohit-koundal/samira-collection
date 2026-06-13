@@ -1,4 +1,4 @@
-import logo from '../../assets/samira-collection-logo.svg';
+import logo from '../../assets/samira-collection-logo.png';
 import { useGetSettingsQuery } from '../../store/apiSlice';
 
 export default function Footer({ navigate }) {
