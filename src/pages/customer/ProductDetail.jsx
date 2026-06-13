@@ -233,8 +233,8 @@ export default function ProductDetail({ navigate, route = '' }) {
         <p className="mt-8 text-sm text-slate-500">Product Code: {product.sku || productId}</p>
       </div>
 
-      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <button disabled={product.stock <= 0} onClick={add} className={`h-14 w-full rounded-xl px-5 py-4 text-base font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white p-2 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
+        <button disabled={product.stock <= 0} onClick={add} className={`h-10 w-full rounded-xl px-3 py-2 text-base font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
           {product.stock <= 0 ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
         </button>
       </div>
