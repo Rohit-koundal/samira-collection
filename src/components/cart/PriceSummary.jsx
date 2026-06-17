@@ -1,22 +1,28 @@
+import { Button, Card, CardContent, CardHeader, CardTitle } from '../ui';
+
 export default function PriceSummary({ cart, cta = 'Checkout', onAction }) {
   return (
-    <aside className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
-      <h2 className="text-xs font-black uppercase tracking-[0.14em] text-charcoal md:text-sm md:tracking-[0.2em]">Price Summary</h2>
-      <div className="mt-5 space-y-3 text-sm font-semibold text-slate-600">
+    <Card as="aside">
+      <CardHeader>
+        <CardTitle className="small-text uppercase tracking-[0.14em] text-charcoal md:text-sm md:tracking-[0.2em]">Price Summary</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="body-text space-y-3 text-slate-600">
         <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
         <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
         <Row label="Delivery Charges" value={cart.deliveryCharge ? `Rs. ${cart.deliveryCharge}` : 'FREE'} />
-      </div>
-      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-5 text-lg font-black">
-        <span>Total</span>
-        <span>Rs. {cart.finalAmount}</span>
-      </div>
-      <button onClick={onAction} className="mt-5 h-12 w-full rounded-xl bg-rose text-sm font-black text-white">{cta}</button>
-    </aside>
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-100 pt-5">
+          <span className="label-text text-charcoal">Total</span>
+          <span className="price">Rs. {cart.finalAmount}</span>
+        </div>
+        <Button onClick={onAction} className="w-full" variant="accent">{cta}</Button>
+      </CardContent>
+    </Card>
   );
 }
 
 function Row({ label, value, good }) {
-  return <div className="flex justify-between"><span>{label}</span><span className={good ? 'text-emerald-600' : ''}>{value}</span></div>;
+  return <div className="flex justify-between gap-4"><span>{label}</span><span className={good ? 'font-semibold text-emerald-600' : 'font-semibold text-charcoal'}>{value}</span></div>;
 }

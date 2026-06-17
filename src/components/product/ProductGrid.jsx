@@ -1,12 +1,15 @@
+import { Card, CardContent, CardTitle } from '../ui';
 import ProductCard from './ProductCard';
 
 export default function ProductGrid({ products, navigate }) {
   if (!products.length) {
     return (
-      <div className="rounded-xl bg-white p-6 text-center shadow-sm md:rounded-3xl md:p-10">
-        <h2 className="text-xl font-black">No products found</h2>
-        <p className="mt-2 text-sm text-slate-500">Try changing filters or search terms.</p>
-      </div>
+      <Card className="text-center">
+        <CardContent className="p-6 md:p-10">
+          <CardTitle className="text-xl">No products found</CardTitle>
+          <p className="body-text mt-2 text-slate-500">Try changing filters or search terms.</p>
+        </CardContent>
+      </Card>
     );
   }
 

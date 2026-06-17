@@ -1,5 +1,6 @@
 import OrderSummary from '../../components/checkout/OrderSummary';
 import PriceSummary from '../../components/cart/PriceSummary';
+import { Button, Card, CardContent, CardHeader, CardTitle, TextInput } from '../../components/ui';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useEffect, useState } from 'react';
@@ -100,29 +101,34 @@ export default function Checkout({ navigate }) {
   return (
     <section className="container-page pb-24 pt-6 md:py-8">
       <div className="mb-5 flex items-center justify-between gap-4 md:mb-6">
-        <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.2em]">Bag / Address / Payment</p><h1 className="mt-1 text-2xl font-black md:text-3xl">Checkout</h1></div>
-        <button onClick={() => navigate('/profile/addresses')} className="hidden rounded-xl border border-slate-200 px-4 py-2 text-sm font-black md:block">Manage Addresses</button>
+        <div><p className="small-text font-bold uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.2em]">Bag / Address / Payment</p><h1 className="page-title mt-1 md:text-3xl">Checkout</h1></div>
+        <Button onClick={() => navigate('/profile/addresses')} variant="outline" className="hidden md:inline-flex">Manage Addresses</Button>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
         <div className="space-y-5">
-          {!user && <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">Login Required</h2><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Login to continue</button></section>}
-          {user && !user.isPhoneVerified && <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">Mobile verification required</h2><p className="mt-2 text-sm font-semibold text-slate-600">Please verify your mobile number to continue checkout.</p><button onClick={() => navigate('/login')} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Verify Mobile</button></section>}
-          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
-            <div className="flex items-center justify-between"><h2 className="text-lg font-black">1. Delivery Address</h2><button onClick={() => setShowAddressForm((value) => !value)} className="text-sm font-black text-wine">Add New</button></div>
+          {!user && <Card as="section"><CardHeader><CardTitle className="text-xl">Login Required</CardTitle></CardHeader><CardContent><Button onClick={() => navigate('/login')}>Login to continue</Button></CardContent></Card>}
+          {user && !user.isPhoneVerified && <Card as="section"><CardHeader><CardTitle className="text-xl">Mobile verification required</CardTitle></CardHeader><CardContent className="space-y-4"><p className="body-text text-slate-600">Please verify your mobile number to continue checkout.</p><Button onClick={() => navigate('/login')}>Verify Mobile</Button></CardContent></Card>}
+          <Card as="section">
+            <CardHeader className="flex-row items-center justify-between"><CardTitle className="text-xl">1. Delivery Address</CardTitle><Button onClick={() => setShowAddressForm((value) => !value)} variant="ghost" size="sm" className="text-wine">Add New</Button></CardHeader>
+            <CardContent>
             <div className="mt-4 grid gap-3">
-              {addresses.map((address) => <button key={address._id} onClick={() => setSelectedAddressId(address._id)} className={`rounded-2xl border p-4 text-left ${selectedAddressId === address._id ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="font-black">{address.fullName} {address.isDefault && <span className="rounded-full bg-wine px-2 py-1 text-[10px] text-white">Default</span>}</p><p className="mt-1 text-sm font-semibold text-slate-600">{address.mobile || address.phone}</p><p className="mt-2 text-sm leading-6 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p></button>)}
-              {!addresses.length && <p className="rounded-2xl bg-[#fbf8f4] p-4 text-sm font-bold text-slate-500">No saved addresses. Add one below.</p>}
+              {addresses.map((address) => <button key={address._id} onClick={() => setSelectedAddressId(address._id)} className={`rounded-2xl border p-4 text-left ${selectedAddressId === address._id ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="label-text">{address.fullName} {address.isDefault && <span className="badge-text rounded-full bg-wine px-2 py-1 text-white">Default</span>}</p><p className="body-text mt-1 text-slate-600">{address.mobile || address.phone}</p><p className="body-text mt-2 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p></button>)}
+              {!addresses.length && <p className="body-text rounded-2xl bg-[#fbf8f4] p-4 text-slate-500">No saved addresses. Add one below.</p>}
             </div>
             {showAddressForm || !addresses.length ? <div className="mt-4"><AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={error} /></div> : null}
-          </section>
-          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5"><h2 className="text-lg font-black">2. Order Summary</h2><OrderSummary items={cart.items} /></section>
-          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
-            <h2 className="text-lg font-black">3. Apply Coupon</h2>
-            <div className="mt-4 flex gap-2"><input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} className="h-12 min-w-0 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Coupon code" /><button onClick={applyCoupon} className="rounded-xl bg-wine px-4 text-sm font-black text-white">Apply</button></div>
-            {cart.coupon && <p className="mt-2 text-sm font-black text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
-          </section>
-          <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
-            <h2 className="text-lg font-black">4. Payment Method</h2>
+            </CardContent>
+          </Card>
+          <section><OrderSummary items={cart.items} /></section>
+          <Card as="section">
+            <CardHeader><CardTitle className="text-xl">3. Apply Coupon</CardTitle></CardHeader>
+            <CardContent>
+            <div className="mt-4 flex gap-2"><TextInput value={couponCode} onChange={(event) => setCouponCode(event.target.value)} className="flex-1" placeholder="Coupon code" /><Button onClick={applyCoupon}>Apply</Button></div>
+            {cart.coupon && <p className="label-text mt-2 text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
+            </CardContent>
+          </Card>
+          <Card as="section">
+            <CardHeader><CardTitle className="text-xl">4. Payment Method</CardTitle></CardHeader>
+            <CardContent>
             <div className="mt-4 grid gap-3">
               {[
                 ['UPI', 'Pay using UPI', 'Google Pay, PhonePe, Paytm and other UPI apps'],
@@ -130,16 +136,17 @@ export default function Checkout({ navigate }) {
                 ['NETBANKING', 'Net Banking', 'Bank selection through gateway'],
                 ['WALLET', 'Wallet', 'Paytm Wallet and other wallets ready'],
                 ['COD', 'Cash on Delivery', 'Pay when the product is delivered'],
-              ].map(([key, title, note]) => <button key={key} onClick={() => setPaymentMethod(key)} className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="font-black">{title}</p><p className="mt-1 text-sm font-semibold text-slate-500">{note}</p></button>)}
+              ].map(([key, title, note]) => <button key={key} onClick={() => setPaymentMethod(key)} className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="label-text">{title}</p><p className="body-text mt-1 text-slate-500">{note}</p></button>)}
             </div>
-            {paymentMethod === 'UPI' && <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4"><div className="flex flex-wrap gap-2">{['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => <button key={app} onClick={() => setPaymentApp(app)} className={`rounded-xl px-4 py-2 text-sm font-black ${paymentApp === app ? 'bg-wine text-white' : 'bg-white'}`}>{app}</button>)}</div><input value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="yourname@upi" /><div className="mt-3 grid h-28 place-items-center rounded-xl border border-dashed border-slate-300 text-sm font-bold text-slate-500">QR payment placeholder</div></div>}
-            {paymentMethod === 'COD' && <p className="mt-4 rounded-2xl bg-[#fbf8f4] p-4 text-sm font-bold text-slate-600">Please keep exact amount ready at delivery.</p>}
-          </section>
-          {error && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{error}</p>}
+            {paymentMethod === 'UPI' && <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4"><div className="flex flex-wrap gap-2">{['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => <Button key={app} onClick={() => setPaymentApp(app)} variant={paymentApp === app ? 'primary' : 'secondary'} size="sm">{app}</Button>)}</div><TextInput value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 w-full" placeholder="yourname@upi" /><p className="body-text mt-3 rounded-xl border border-dashed border-slate-300 p-4 text-slate-500">UPI payment details will appear when gateway checkout is connected.</p></div>}
+            {paymentMethod === 'COD' && <p className="body-text mt-4 rounded-2xl bg-[#fbf8f4] p-4 text-slate-600">Please keep exact amount ready at delivery.</p>}
+            </CardContent>
+          </Card>
+          {error && <p className="body-text rounded-xl bg-rose/10 p-3 text-rose">{error}</p>}
         </div>
         <PriceSummary cart={cart} cta={placing ? 'Placing...' : 'Place Order'} onAction={placeOrder} />
       </div>
-      <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white p-3 md:hidden"><span className="font-black">Rs. {cart.finalAmount}</span><button onClick={placeOrder} className="rounded-xl bg-rose px-5 py-3 text-sm font-black text-white">{placing ? 'Placing...' : 'Place Order'}</button></div>
+      <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white p-3 md:hidden"><span className="price">Rs. {cart.finalAmount}</span><Button onClick={placeOrder} variant="accent">{placing ? 'Placing...' : 'Place Order'}</Button></div>
     </section>
   );
 }

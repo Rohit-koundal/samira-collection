@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, TextInput } from '../../components/ui';
 import Icon from '../../components/layout/Icon';
 import { ProductVisual } from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import products from '../../data/seedProducts';
-import seedCoupons from '../../data/coupons';
 import api from '../../services/api';
 import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
-
-const isDev = process.env.NODE_ENV === 'development';
 
 export default function Cart({ navigate }) {
   const cart = useCart();
@@ -25,8 +22,8 @@ export default function Cart({ navigate }) {
   useEffect(() => {
     api.get('/products?sort=rating')
       .then((items) => setRecommended(normalizeProducts(items).slice(0, 8)))
-      .catch(() => setRecommended(isDev ? products.slice(0, 8) : []));
-    api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons(seedCoupons));
+      .catch(() => setRecommended([]));
+    api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons([]));
   }, []);
 
   const selectedCount = cart.itemCount;
@@ -47,14 +44,7 @@ export default function Cart({ navigate }) {
       setCode(data.couponCode || data.coupon?.code || couponCode);
       setMessage(`${data.couponCode || data.coupon?.code || couponCode} applied`);
     } catch (error) {
-      const localCoupon = applyLocalCoupon(couponCode, cart.sellingTotal);
-      if (localCoupon) {
-        cart.setCoupon({ code: localCoupon.code, discount: Number(localCoupon.discountAmount || 0) });
-        setCode(localCoupon.code);
-        setMessage(`${localCoupon.code} applied`);
-      } else {
-        setMessage(error.message);
-      }
+      setMessage(error.message);
     }
   };
 
@@ -93,11 +83,13 @@ export default function Cart({ navigate }) {
       <section className="bg-white pb-28 md:bg-ivory md:py-10">
         <BagHeader navigate={navigate} />
         <div className="container-page py-10">
-          <div className="rounded-xl bg-white p-6 text-center shadow-sm md:rounded-3xl md:p-8">
-            <h1 className="text-xl font-black md:text-2xl">Your shopping bag is empty</h1>
-            <p className="mt-2 text-sm text-slate-500">Add products to continue checkout.</p>
-            <button onClick={() => navigate('/products')} className="mt-5 rounded-xl bg-rose px-6 py-3 text-sm font-black text-white">Shop Now</button>
-          </div>
+          <Card className="text-center">
+            <CardContent className="p-6 md:p-8">
+              <h1 className="section-title md:text-2xl">Your shopping bag is empty</h1>
+              <p className="body-text mt-2 text-slate-500">Add products to continue checkout.</p>
+              <Button onClick={() => navigate('/products')} variant="accent" className="mt-5">Shop Now</Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
     );
@@ -112,18 +104,18 @@ export default function Cart({ navigate }) {
           <section className="border-b border-slate-100 bg-white px-4 py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm">Deliver to: <span className="font-black">{user?.name || 'Customer'}, {user?.pincode || 'Add PIN'}</span></p>
-                <p className="mt-1 truncate text-sm text-slate-500">{user?.address || 'Add delivery address during checkout'}</p>
+                <p className="body-text">Deliver to: <span className="label-text">{user?.name || 'Customer'}, {user?.pincode || 'Add PIN'}</span></p>
+                <p className="body-text mt-1 truncate text-slate-500">{user?.address || 'Add delivery address during checkout'}</p>
               </div>
-              <button onClick={() => navigate('/checkout')} className="shrink-0 text-sm font-black text-rose">Change</button>
+              <Button onClick={() => navigate('/checkout')} variant="ghost" size="sm" className="shrink-0 px-0 text-rose">Change</Button>
             </div>
           </section>
 
           <section className="bg-[#f4f4f5] px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="grid h-6 w-6 place-items-center rounded bg-rose text-[10px] font-black text-white">OK</span>
-                <p className="text-xs font-black sm:text-sm">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
+                <Badge variant="accent" className="grid h-6 w-6 place-items-center rounded px-0 py-0 text-[10px] text-white">OK</Badge>
+                <p className="label-text sm:text-sm">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
               </div>
               <div className="flex shrink-0 gap-3 text-slate-800 sm:gap-4">
                 <button type="button" onClick={shareCart} aria-label="Share bag"><Icon name="share" className="h-5 w-5" /></button>
@@ -149,34 +141,34 @@ export default function Cart({ navigate }) {
           </div>
 
           <button onClick={() => navigate('/wishlist')} className="flex w-full items-center justify-between border-y border-slate-100 bg-white px-4 py-5 text-left">
-            <span className="flex items-center gap-3 text-base font-black"><Icon name="bookmark" className="h-6 w-6" /> Add More From Wishlist</span>
+            <span className="flex items-center gap-3 label-text text-base"><Icon name="bookmark" className="h-6 w-6" /> Add More From Wishlist</span>
             <span className="text-2xl">&gt;</span>
           </button>
 
           <section className="bg-[#f5f5f6]">
-            <p className="px-4 py-4 text-xs font-black uppercase tracking-wide text-slate-600">Support transformative social work in India</p>
+            <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Support transformative social work in India</p>
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
-                <label className="flex min-w-0 items-center gap-3 text-sm font-black sm:text-base">
+                <label className="label-text flex min-w-0 items-center gap-3 sm:text-base">
                   <input type="checkbox" checked={donation > 0} onChange={(event) => setDonation(event.target.checked ? 10 : 0)} className="h-5 w-5 accent-rose" />
                   Donate and make a difference
                 </label>
-                <button className="text-sm font-black text-rose">Know More</button>
+                <Button variant="ghost" size="sm" className="px-0 text-rose">Know More</Button>
               </div>
               <div className="mt-4 flex gap-3 overflow-x-auto">
                 {[10, 20, 50, 100].map((amount) => (
-                  <button key={amount} onClick={() => setDonation(amount)} className={`min-w-20 rounded-full border px-4 py-2 text-sm font-black sm:min-w-24 sm:px-5 ${donation === amount ? 'border-rose text-rose' : 'border-slate-200'}`}>Rs. {amount}</button>
+                  <Button key={amount} onClick={() => setDonation(amount)} variant={donation === amount ? 'outline' : 'secondary'} size="sm" className={`min-w-20 rounded-full sm:min-w-24 sm:px-5 ${donation === amount ? 'border-rose text-rose' : ''}`}>Rs. {amount}</Button>
                 ))}
               </div>
             </div>
           </section>
 
           <section className="bg-[#f5f5f6]">
-            <p className="px-4 py-4 text-xs font-black uppercase tracking-wide text-slate-600">Offers</p>
+            <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Offers</p>
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-black">Coupon & Bank Offers</h2>
-                <button type="button" onClick={() => setShowOffers((value) => !value)} className="text-sm font-black text-rose">All Offers &gt;</button>
+                <h2 className="section-title text-base">Coupon & Bank Offers</h2>
+                <Button type="button" onClick={() => setShowOffers((value) => !value)} variant="ghost" size="sm" className="px-0 text-rose">All Offers &gt;</Button>
               </div>
               {showOffers && (
                 <div className="mt-4 grid gap-2">
@@ -190,21 +182,21 @@ export default function Cart({ navigate }) {
               )}
               <div className="mt-4 rounded-xl border border-emerald-200 p-4">
                 <p className="text-base font-black">Extra Rs. {bestCoupon?.maxDiscountAmount || 136} OFF</p>
-                <p className="mt-2 text-sm text-slate-600">{bestCoupon ? `${bestCoupon.discountValue}${bestCoupon.type === 'Percentage' ? '% off' : ' rupees off'} on minimum purchase of Rs. ${bestCoupon.minOrderAmount}` : '15% off upto Rs. 150 on minimum purchase of Rs. 300'}</p>
+                <p className="body-text mt-2 text-slate-600">{bestCoupon ? `${bestCoupon.discountValue}${bestCoupon.type === 'Percentage' ? '% off' : ' rupees off'} on minimum purchase of Rs. ${bestCoupon.minOrderAmount}` : '15% off upto Rs. 150 on minimum purchase of Rs. 300'}</p>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <span className="border border-dashed border-emerald-400 px-3 py-3 text-sm font-black">{bestCoupon?.code || 'FWDEORS15'}</span>
-                  <button onClick={() => applyCoupon(bestCoupon?.code || code)} className="rounded border border-rose px-4 py-3 text-sm font-black text-rose">APPLY COUPON</button>
+                  <span className="label-text border border-dashed border-emerald-400 px-3 py-3">{bestCoupon?.code || 'FWDEORS15'}</span>
+                  <Button onClick={() => applyCoupon(bestCoupon?.code || code)} variant="outline" className="border-rose text-rose hover:bg-rose/5">APPLY COUPON</Button>
                 </div>
-                {message && <p className="mt-3 text-sm font-bold text-wine">{message}</p>}
+                {message && <p className="label-text mt-3 text-wine">{message}</p>}
               </div>
               <div className="mt-4 flex gap-2">
-                <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Enter coupon code" />
-                <button onClick={() => applyCoupon()} className="rounded-xl bg-wine px-4 text-sm font-black text-white">Apply</button>
+                <TextInput value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="flex-1" placeholder="Enter coupon code" />
+                <Button onClick={() => applyCoupon()}>Apply</Button>
               </div>
               {cart.coupon && (
-                <div className="mt-3 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3 text-sm">
-                  <span className="font-black text-emerald-700">{cart.coupon.code} applied: Rs. {cart.couponDiscount} off</span>
-                  <button type="button" onClick={removeCoupon} className="font-black text-rose">Remove</button>
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
+                  <span className="label-text text-emerald-700">{cart.coupon.code} applied: Rs. {cart.couponDiscount} off</span>
+                  <Button type="button" onClick={removeCoupon} variant="ghost" size="sm" className="px-0 text-rose">Remove</Button>
                 </div>
               )}
             </div>
@@ -215,7 +207,7 @@ export default function Cart({ navigate }) {
 
         <aside className="hidden md:block">
           <PriceDetails cart={cart} platformFee={platformFee} donation={donation} payable={payable} />
-          <button onClick={() => navigate('/checkout')} className="mt-4 h-12 w-full rounded-xl bg-rose text-sm font-black text-white">Place Order</button>
+          <Button onClick={() => navigate('/checkout')} variant="accent" className="mt-4 w-full">Place Order</Button>
         </aside>
       </div>
 
@@ -226,25 +218,13 @@ export default function Cart({ navigate }) {
       <TrustStrip />
 
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <p className="border-t border-slate-200 bg-[#fff6f4] py-2 text-center text-sm font-black">{selectedCount} Item selected for order</p>
+        <p className="label-text border-t border-slate-200 bg-[#fff6f4] py-2 text-center">{selectedCount} Item selected for order</p>
         <div className="p-3">
-          <button onClick={() => navigate('/checkout')} className="h-14 w-full rounded bg-rose text-sm font-black uppercase tracking-[0.12em] text-white">Place Order</button>
+          <Button onClick={() => navigate('/checkout')} variant="accent" className="h-14 w-full uppercase tracking-[0.12em]">Place Order</Button>
         </div>
       </div>
     </section>
   );
-}
-
-function applyLocalCoupon(code, cartTotal) {
-  const coupon = seedCoupons.find((item) => item.code === String(code || '').toUpperCase() && item.isActive);
-  if (!coupon || new Date(coupon.expiryDate) < new Date()) return null;
-  const amount = Number(cartTotal || 0);
-  if (amount < Number(coupon.minOrderAmount || 0)) return null;
-  const raw = coupon.type === 'Percentage' ? (amount * Number(coupon.discountValue || 0)) / 100 : Number(coupon.discountValue || 0);
-  return {
-    code: coupon.code,
-    discountAmount: Math.min(raw, Number(coupon.maxDiscountAmount || raw), amount),
-  };
 }
 
 function BagHeader({ navigate }) {
@@ -252,9 +232,9 @@ function BagHeader({ navigate }) {
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:static md:rounded-b-2xl">
       <div className="flex items-center gap-4">
         <button onClick={() => navigate('/products')} className="text-2xl leading-none" aria-label="Back">&lt;</button>
-        <h1 className="text-lg font-black uppercase tracking-wide text-slate-800">Shopping Bag</h1>
+        <h1 className="header-title uppercase tracking-wide text-slate-800">Shopping Bag</h1>
       </div>
-      <span className="text-sm font-semibold text-slate-700">STEP 1/3</span>
+      <span className="label-text text-slate-700">STEP 1/3</span>
     </header>
   );
 }
@@ -271,14 +251,14 @@ function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, remov
     <article className="relative flex gap-3 border-b border-slate-100 bg-white px-4 py-4">
       <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded bg-[#f6efe8]">
         {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /> : <ProductVisual product={product} compact />}
-        <span className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded bg-rose text-[10px] font-black text-white">OK</span>
+        <Badge variant="accent" className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded px-0 py-0 text-[10px] text-white">OK</Badge>
       </div>
       <div className="min-w-0 flex-1 pr-6">
-        <h2 className="truncate text-sm font-black">{product.brand || 'Samira Collection'}</h2>
-        <p className="mt-1 truncate text-sm text-slate-700">{product.name}</p>
-        <p className="mt-1 truncate text-xs text-slate-400">Sold by: Samira Collection</p>
+        <h2 className="product-brand truncate text-charcoal">{product.brand || 'Samira Collection'}</h2>
+        <p className="product-name mt-1 truncate text-slate-700">{product.name}</p>
+        <p className="small-text mt-1 truncate text-slate-400">Sold by: Samira Collection</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <label className="flex h-8 items-center gap-1 rounded bg-slate-100 px-2 text-xs font-black">
+          <label className="small-text flex h-8 items-center gap-1 rounded bg-slate-100 px-2 font-bold">
             Size:
             <select
               value={item.size}
@@ -289,18 +269,18 @@ function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, remov
               {sizes.map((size) => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
-          <div className="grid h-8 grid-cols-[2rem_3rem_2rem] overflow-hidden rounded bg-slate-100 text-xs font-black" aria-label="Quantity controls">
+          <div className="small-text grid h-8 grid-cols-[2rem_3rem_2rem] overflow-hidden rounded bg-slate-100 font-bold" aria-label="Quantity controls">
             <button type="button" onClick={() => decreaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Decrease quantity">-</button>
             <span className="grid place-items-center">Qty {item.quantity}</span>
             <button type="button" onClick={() => increaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Increase quantity">+</button>
           </div>
         </div>
-        <p className="mt-3 text-sm">
-          <span className="font-black">Rs. {sellingTotal}</span>
-          <span className="ml-2 text-slate-400 line-through">Rs. {originalTotal}</span>
-          <span className="ml-2 text-rose">Rs. {discount} OFF</span>
+        <p className="mt-3 body-text">
+          <span className="price">Rs. {sellingTotal}</span>
+          <span className="old-price ml-2 text-slate-400 line-through">Rs. {originalTotal}</span>
+          <span className="discount ml-2 text-rose">Rs. {discount} OFF</span>
         </p>
-        <p className="mt-2 text-sm font-semibold"><span className="font-black text-emerald-600">OK</span> Delivery by <span className="font-black">{deliveryDate}</span></p>
+        <p className="label-text mt-2"><span className="text-emerald-600">OK</span> Delivery by <span className="text-charcoal">{deliveryDate}</span></p>
       </div>
       <div className="absolute right-3 top-3 flex gap-3">
         <button type="button" onClick={() => moveToWishlist(item)} className="text-slate-600" aria-label="Add to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
@@ -313,25 +293,25 @@ function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, remov
 function RecommendationRail({ title, products: items, cart, navigate }) {
   return (
     <section className="bg-[#fff7f9] px-4 py-5">
-      <h2 className="flex items-center gap-3 text-base font-black"><Icon name="bag" className="h-6 w-6" /> {title}</h2>
+      <h2 className="section-title flex items-center gap-3 text-base"><Icon name="bag" className="h-6 w-6" /> {title}</h2>
       <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
         {items.map((product) => {
           const image = product.images?.[0]?.url;
           const cartItem = cart.getCartItem(product);
           return (
-            <article key={product.id} className="w-40 shrink-0 border border-slate-200 bg-white">
+            <Card key={product.id} className="w-40 shrink-0 rounded-2xl">
               <button onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block h-44 w-full overflow-hidden bg-[#f6efe8]">
                 {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /> : <ProductVisual product={product} compact />}
               </button>
-              <div className="p-3">
-                <h3 className="truncate text-sm font-semibold">{product.brand || 'Samira Collection'}</h3>
-                <p className="truncate text-xs text-slate-500">{product.name}</p>
-                <p className="mt-1 text-xs"><span className="font-black">Rs. {product.price}</span> <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span></p>
-              </div>
-              <button onClick={() => cart.addToCart(product)} className={`h-11 w-full border-t text-sm font-black ${cartItem ? 'border-emerald-200 text-emerald-700' : 'border-slate-200 text-rose'}`}>
+              <CardContent className="p-3">
+                <h3 className="label-text truncate text-charcoal">{product.brand || 'Samira Collection'}</h3>
+                <p className="product-name truncate text-slate-500">{product.name}</p>
+                <p className="mt-1 small-text"><span className="price">Rs. {product.price}</span> <span className="old-price text-slate-400 line-through">Rs. {product.originalPrice}</span></p>
+              </CardContent>
+              <Button onClick={() => cart.addToCart(product)} variant={cartItem ? 'secondary' : 'ghost'} className={`w-full rounded-t-none border-t ${cartItem ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-200 text-rose hover:bg-rose/5'}`}>
                 {cartItem ? 'ADD MORE' : 'ADD TO CART'}
-              </button>
-            </article>
+              </Button>
+            </Card>
           );
         })}
       </div>
@@ -341,20 +321,22 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
 
 function PriceDetails({ cart, platformFee, donation, payable }) {
   return (
-    <section className="bg-white px-4 py-6 md:rounded-2xl md:shadow-sm">
-      <h2 className="text-sm font-black uppercase">Price Details ({cart.itemCount} Item)</h2>
-      <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 text-sm">
+    <Card className="rounded-none md:rounded-2xl">
+      <CardHeader>
+        <CardTitle className="small-text uppercase tracking-[0.14em] text-charcoal">Price Details ({cart.itemCount} Item)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 border-t border-slate-100 pt-4 body-text">
         <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
         <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
         <Row label="Platform Fee" value={`Rs. ${platformFee}`} />
         {donation > 0 && <Row label="Donation" value={`Rs. ${donation}`} />}
-        <div className="flex justify-between border-t border-slate-100 pt-4 text-base font-black">
+        <div className="flex justify-between border-t border-slate-100 pt-4">
           <span>Total Amount</span>
-          <span>Rs. {payable}</span>
+          <span className="price">Rs. {payable}</span>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -365,12 +347,12 @@ function Row({ label, value, good }) {
 function TrustStrip() {
   return (
     <section className="bg-white px-4 pb-28 pt-5 md:mx-auto md:mt-6 md:max-w-5xl md:rounded-2xl md:pb-5">
-      <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-500">
+      <div className="grid grid-cols-3 gap-2 text-center small-text text-slate-500">
         <div><Icon name="star" className="mx-auto h-6 w-6" /><p className="mt-2">Genuine Products</p></div>
         <div><Icon name="box" className="mx-auto h-6 w-6" /><p className="mt-2">Contactless Delivery</p></div>
         <div><Icon name="bag" className="mx-auto h-6 w-6" /><p className="mt-2">Secure Payments</p></div>
       </div>
-      <p className="mt-5 text-sm leading-6 text-slate-600">By placing the order, you agree to Samira Collection's <span className="font-black text-rose">Terms of Use</span> and <span className="font-black text-rose">Privacy Policy</span>.</p>
+      <p className="body-text mt-5 text-slate-600">By placing the order, you agree to Samira Collection's <span className="font-bold text-rose">Terms of Use</span> and <span className="font-bold text-rose">Privacy Policy</span>.</p>
     </section>
   );
 }

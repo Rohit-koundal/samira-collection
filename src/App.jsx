@@ -8,6 +8,8 @@ import MobileBottomNav from './components/layout/MobileBottomNav';
 import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
+import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
+import { useAuth } from './context/AuthContext';
 
 const Home = lazy(() => import('./pages/customer/Home'));
 const Products = lazy(() => import('./pages/customer/Products'));
@@ -102,9 +104,31 @@ function useHashRoute() {
 
 export default function App() {
   const [route, navigate] = useHashRoute();
+
+  return (
+    <AuthProvider navigate={navigate}>
+      <CartProvider>
+        <WishlistProvider>
+          <AppShell route={route} navigate={navigate} />
+        </WishlistProvider>
+      </CartProvider>
+    </AuthProvider>
+  );
+}
+
+function AppShell({ route, navigate }) {
   const routePath = route.split('?')[0];
   const isAdmin = routePath.startsWith('/admin');
+  const { user } = useAuth();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
+  const standaloneAuthRoutes = ['/login', '/register'];
+  const loginFallback = (
+    <Suspense fallback={<RouteFallback />}>
+      <Login route={`/login?redirect=${encodeURIComponent(route)}`} />
+    </Suspense>
+  );
   const Page = useMemo(() => {
     if (routePath === '/admin/login') return AdminLogin;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
@@ -116,40 +140,80 @@ export default function App() {
     </Suspense>
   );
 
+  useEffect(() => {
+    if (isAdmin || user) {
+      setShowLoginPrompt(false);
+      return;
+    }
+
+    if (routePath === '/login' || routePath === '/register' || routePath === '/admin/login') {
+      setShowLoginPrompt(false);
+      return;
+    }
+
+    if (routePath === '/profile') {
+      clearLoginPromptDismissed();
+      setShowLoginPrompt(false);
+      return;
+    }
+
+    if (isLoginPromptDismissed()) {
+      setShowLoginPrompt(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowLoginPrompt(true), 250);
+    return () => window.clearTimeout(timer);
+  }, [isAdmin, routePath, user]);
+
+  const closeLoginPrompt = () => {
+    markLoginPromptDismissed();
+    setShowLoginPrompt(false);
+  };
+  const shouldShowStandaloneAuth = standaloneAuthRoutes.includes(routePath) || (protectedRoutes.includes(routePath) && !user);
+  const authContent = protectedRoutes.includes(routePath) && !user ? loginFallback : page;
+
   return (
-    <AuthProvider navigate={navigate}>
-      <CartProvider>
-        <WishlistProvider>
-          <div className="min-h-screen bg-ivory text-charcoal">
-            {isAdmin ? (
-              routePath === '/admin/login' ? (
-                page
-              ) : (
-                <AdminRoute>
-                  {page}
-                </AdminRoute>
-              )
+    <div className="min-h-screen bg-ivory text-charcoal">
+      {isAdmin ? (
+        routePath === '/admin/login' ? (
+          page
+        ) : (
+          <AdminRoute>
+            {page}
+          </AdminRoute>
+        )
+      ) : shouldShowStandaloneAuth ? (
+        authContent
+      ) : (
+        <>
+          <DesktopHeader navigate={navigate} route={route} />
+          {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
+          <main className="pb-24 md:pb-0">
+            {protectedRoutes.includes(routePath) ? (
+              <ProtectedRoute>
+                {page}
+              </ProtectedRoute>
             ) : (
-              <>
-                <DesktopHeader navigate={navigate} route={route} />
-                {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
-                <main className="pb-24 md:pb-0">
-                  {['/profile', '/orders', '/checkout', '/order-detail', '/order-success'].includes(routePath) ? (
-                    <ProtectedRoute>
-                      {page}
-                    </ProtectedRoute>
-                  ) : (
-                    page
-                  )}
-                </main>
-                <Footer navigate={navigate} />
-                <MobileBottomNav active={routePath} navigate={navigate} />
-              </>
+              page
             )}
-          </div>
-        </WishlistProvider>
-      </CartProvider>
-    </AuthProvider>
+          </main>
+          <Footer navigate={navigate} />
+          <MobileBottomNav active={routePath} navigate={navigate} />
+          <LoginPrompt
+            open={showLoginPrompt}
+            onClose={closeLoginPrompt}
+            onContinue={(phone) => {
+              markLoginPromptDismissed();
+              setShowLoginPrompt(false);
+              const redirectQuery = `redirect=${encodeURIComponent(route)}`;
+              const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
+              navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
+            }}
+          />
+        </>
+      )}
+    </div>
   );
 }
 

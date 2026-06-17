@@ -1,5 +1,6 @@
 import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
+import { Button, TextInput } from '../ui';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
@@ -30,29 +31,29 @@ export default function DesktopHeader({ navigate, route = '/' }) {
 
   return (
     <header className="sticky top-0 z-50 hidden bg-white/95 shadow-sm backdrop-blur md:block">
-      <div className="bg-wine px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.24em] text-white">
+      <div className="small-text bg-wine px-4 py-2 text-center font-bold uppercase tracking-[0.24em] text-white">
         Free Shipping on Orders Above Rs. 999 | New Festive Collection Live Now
       </div>
       <div className="container-page flex h-[72px] items-center gap-4 lg:h-20 lg:gap-5">
         <button onClick={() => navigate('/')} className="shrink-0" aria-label="Samira Collection home">
           <img src={logo} alt="Samira Collection" className="h-14 w-auto" />
         </button>
-        <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-bold text-charcoal lg:flex xl:gap-5">
+        <nav className="hidden flex-1 items-center justify-center gap-4 label-text text-charcoal lg:flex xl:gap-5">
           {links.map(([label, path]) => (
             <button key={label} onClick={() => navigate(path)} className="transition hover:text-wine">
               {label}
             </button>
           ))}
         </nav>
-        <label className="flex h-11 min-w-[220px] max-w-[320px] flex-1 items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-sm font-semibold text-slate-500">
+        <label className="flex min-w-[220px] max-w-[320px] flex-1 items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-slate-500">
           <Icon name="search" className="h-4 w-4" />
-          <input
+          <TextInput
             value={searchValue}
             onFocus={() => {
               if (!route.startsWith('/search')) navigate('/search');
             }}
             onChange={(event) => updateSearch(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent font-semibold text-charcoal outline-none placeholder:text-slate-500"
+            className="h-11 min-w-0 flex-1 border-0 bg-transparent px-0 text-charcoal shadow-none ring-0 placeholder:text-slate-500 focus:border-0 focus:ring-0"
             placeholder="Search sarees, suits, kurtis..."
             inputMode="search"
             enterKeyHint="search"
@@ -60,19 +61,19 @@ export default function DesktopHeader({ navigate, route = '/' }) {
         </label>
         <div className="flex items-center gap-3">
           {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-            <button onClick={() => switchMode('admin')} className="h-11 rounded-full bg-wine px-4 text-xs font-black uppercase text-white">
+            <Button onClick={() => switchMode('admin')} className="h-11 rounded-full px-4 text-xs uppercase">
               Admin Mode
-            </button>
+            </Button>
           )}
-          <button onClick={() => navigate('/profile')} className="grid h-11 w-11 place-items-center rounded-full border border-slate-200"><Icon name="user" /></button>
-          <button onClick={() => navigate('/wishlist')} className="relative grid h-11 w-11 place-items-center rounded-full border border-slate-200">
+          <Button onClick={() => navigate('/profile')} variant="outline" size="icon" className="rounded-full"><Icon name="user" /></Button>
+          <Button onClick={() => navigate('/wishlist')} variant="outline" size="icon" className="relative rounded-full">
             <Icon name="heart" />
             <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{wishlist.items.length}</span>
-          </button>
-          <button onClick={() => navigate('/cart')} className="relative grid h-11 w-11 place-items-center rounded-full bg-charcoal text-white">
+          </Button>
+          <Button onClick={() => navigate('/cart')} variant="secondary" size="icon" className="relative rounded-full bg-charcoal text-white hover:bg-charcoal/90">
             <Icon name="bag" />
             <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{cart.itemCount}</span>
-          </button>
+          </Button>
         </div>
       </div>
     </header>

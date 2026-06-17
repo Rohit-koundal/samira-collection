@@ -4,7 +4,6 @@ import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
-import seedCategories from '../../data/categories';
 import { useGetCategoriesQuery } from '../../store/apiSlice';
 
 export default function MobileHeader({ navigate, route = '/' }) {
@@ -12,7 +11,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
-  const { data: categories = seedCategories } = useGetCategoriesQuery();
+  const { data: categories = [] } = useGetCategoriesQuery();
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
 
   const go = (path) => {
@@ -34,7 +33,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5 w-5" />
           </button>
-          <button onClick={() => navigate('/')} className="min-w-0 px-1">
+          <button onClick={() => navigate('/')} className="header-title min-w-0 px-1">
             <img src={logo} alt="Samira Collection" className="mx-auto h-9 w-auto max-w-full" />
           </button>
           <div className="flex shrink-0 justify-end gap-1">
@@ -57,7 +56,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           </div>
         </div>
         <div className="px-3 pb-2">
-          <label className="flex h-10 w-full max-w-full items-center gap-2 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-[13px] font-semibold text-slate-500">
+          <label className="label-text flex h-10 w-full max-w-full items-center gap-2 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-slate-500">
             <Icon name="search" className="h-4 w-4" />
             <input
               value={searchValue}
@@ -65,7 +64,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
                 if (!route.startsWith('/search')) navigate('/search');
               }}
               onChange={(event) => updateSearch(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent font-semibold text-charcoal outline-none placeholder:text-slate-500"
+              className="body-text min-w-0 flex-1 bg-transparent text-charcoal outline-none placeholder:text-slate-500"
               placeholder="Search sarees, suits, kurtis..."
               inputMode="search"
               enterKeyHint="search"
@@ -79,7 +78,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           <aside className="absolute inset-y-0 left-0 w-80 max-w-[86vw] overflow-y-auto bg-white p-5 shadow-2xl">
             <div className="flex items-center justify-between">
               <img src={logo} alt="Samira Collection" className="h-14 w-auto" />
-              <button onClick={() => setOpen(false)} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black">Close</button>
+              <button onClick={() => setOpen(false)} className="rounded-full bg-slate-100 px-4 py-2">Close</button>
             </div>
             <div className="mt-6 grid gap-2">
               {[
@@ -90,22 +89,22 @@ export default function MobileHeader({ navigate, route = '/' }) {
                 ['Profile', '/profile'],
                 ['Contact', '/contact'],
               ].map(([label, path]) => (
-                <button key={label} onClick={() => go(path)} className="rounded-2xl bg-[#f8f2ec] px-4 py-3 text-left text-sm font-black text-charcoal">
+                <button key={label} onClick={() => go(path)} className="rounded-2xl bg-[#f8f2ec] px-4 py-3 text-left text-charcoal">
                   {label}
                 </button>
               ))}
             </div>
             {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-              <button onClick={() => switchMode('admin')} className="mt-3 w-full rounded-2xl bg-wine px-4 py-3 text-left text-sm font-black text-white">
+              <button onClick={() => switchMode('admin')} className="mt-3 w-full rounded-2xl bg-wine px-4 py-3 text-left text-white">
                 Switch to Admin
               </button>
             )}
-            <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-wine">Categories</p>
+            <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-wine">Categories</p>
             <div className="mt-3 grid gap-2">
               {categories.map((category) => (
-                <button key={category._id || category.id} onClick={() => go(`/products?category=${category._id || ''}`)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left text-sm font-bold text-slate-700">
+                <button key={category._id || category.id} onClick={() => go(`/products?category=${category._id || ''}`)} className="label-text flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left text-slate-700">
                   {category.name}
-                  <span className="text-xs text-slate-400">{category.count || ''}</span>
+                  <span className="small-text text-slate-400">{category.count || ''}</span>
                 </button>
               ))}
             </div>

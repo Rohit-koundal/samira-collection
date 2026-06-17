@@ -51,20 +51,20 @@ export function AuthProvider({ children, navigate }) {
   const sendOtp = useCallback((phone) => api.post('/auth/send-otp', { phone }), []);
   const resendOtp = useCallback((phone) => api.post('/auth/resend-otp', { phone }), []);
 
-  const verifyOtp = useCallback(async ({ phone, otp }) => {
+  const verifyOtp = useCallback(async ({ phone, otp, redirectTo = '/profile' }) => {
     const data = await api.post('/auth/verify-otp', { phone, otp });
     persist(data);
     setToast(`Welcome ${data.user.name}`);
-    navigate(data.user.role === 'admin' ? '/profile' : '/profile');
+    navigate(redirectTo || '/profile');
     return data;
   }, [navigate, persist]);
 
-  const login = useCallback(async ({ email, password = '' }) => {
+  const login = useCallback(async ({ email, password = '', redirectTo = '/profile' }) => {
     try {
       const path = email.includes('admin') ? '/admin/login' : '/auth/login';
       const data = await api.post(path, { email, password });
       persist(data);
-      navigate(data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile');
+      navigate(redirectTo || (data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile'));
       return { ok: true };
     } catch (error) {
       setToast(error.message);
@@ -87,6 +87,11 @@ export function AuthProvider({ children, navigate }) {
 
   const logout = useCallback(() => {
     dispatch(logoutAction());
+    try {
+      localStorage.removeItem('samira_login_prompt_dismissed');
+    } catch {
+      // Ignore storage failures.
+    }
     navigate('/');
   }, [dispatch, navigate]);
 

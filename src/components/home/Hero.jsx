@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { normalizeImageUrl } from '../../services/normalize';
 
 export default function Hero({ navigate, banner }) {
@@ -6,12 +7,16 @@ export default function Hero({ navigate, banner }) {
       {banner?.image && <img src={normalizeImageUrl(banner.image)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />}
       <div className="container-page grid min-h-[280px] items-center gap-6 py-7 md:min-h-[500px] md:grid-cols-[1fr_0.85fr] md:gap-10 md:py-14">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ffd6df] md:text-sm md:tracking-[0.28em]">New festive collection</p>
-          <h1 className="mt-3 max-w-3xl font-display text-[28px] font-black leading-tight md:mt-5 md:text-6xl">{banner?.title || 'Premium fashion for every celebration.'}</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-white/80 md:mt-5 md:text-base md:leading-8">{banner?.subtitle || 'Shop sarees, suits, kurtis, dresses, lehengas, gowns and curated daily wear with an app-like shopping experience.'}</p>
+          <p className="small-text font-bold uppercase tracking-[0.16em] text-[#ffd6df] md:text-sm md:tracking-[0.28em]">New festive collection</p>
+          <h1 className="mt-3 max-w-3xl text-[24px] font-bold leading-[1.12] md:mt-5 md:text-6xl">{banner?.title || 'Premium fashion for every celebration.'}</h1>
+          <p className="body-text mt-3 max-w-xl text-white/80 md:mt-5 md:text-base md:leading-8">{banner?.subtitle || 'Shop sarees, suits, kurtis, dresses, lehengas, gowns and curated daily wear with an app-like shopping experience.'}</p>
           <div className="mt-5 flex flex-wrap gap-2 md:mt-8 md:gap-3">
-            <button onClick={() => navigate(banner?.link || '/products')} className="rounded-full bg-white px-5 py-3 text-xs font-black text-wine md:px-7 md:py-4 md:text-sm">{banner?.buttonText || 'Shop Collection'}</button>
-            <button onClick={() => navigate('/category')} className="rounded-full border border-white/40 px-5 py-3 text-xs font-black text-white md:px-7 md:py-4 md:text-sm">Explore Categories</button>
+            <Button onClick={() => navigate(banner?.link || '/products')} variant="secondary" size="lg" className="rounded-full bg-white px-5 text-wine hover:bg-white/90 md:px-7">
+              {banner?.buttonText || 'Shop Collection'}
+            </Button>
+            <Button onClick={() => navigate('/category')} variant="ghost" size="lg" className="rounded-full border border-white/40 px-5 text-white hover:bg-white/10 md:px-7">
+              Explore Categories
+            </Button>
           </div>
         </div>
         <div className="relative hidden h-[430px] md:block">

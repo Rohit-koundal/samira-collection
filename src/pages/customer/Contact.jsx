@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button, Card, CardContent, TextInput } from '../../components/ui';
 import api from '../../services/api';
 
 const pageCopy = {
@@ -31,13 +32,15 @@ export default function Contact({ route = '/contact' }) {
   if (policy) {
     return (
       <section className="container-page py-6 md:py-10">
-        <article className="mx-auto max-w-3xl rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.22em]">Samira Collection</p>
-          <h1 className="mt-3 text-2xl font-black md:text-3xl">{policy.title}</h1>
-          <p className="mt-5 whitespace-pre-line text-sm leading-7 text-slate-600">
+        <Card as="article" className="mx-auto max-w-3xl">
+          <CardContent className="p-5 md:p-7">
+          <p className="small-text font-bold uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.22em]">Samira Collection</p>
+          <h1 className="page-title mt-3 md:text-3xl">{policy.title}</h1>
+          <p className="body-text mt-5 whitespace-pre-line text-slate-600 md:leading-7">
             {settings[policy.key] || policy.fallback}
           </p>
-        </article>
+          </CardContent>
+        </Card>
       </section>
     );
   }
@@ -50,18 +53,22 @@ export default function Contact({ route = '/contact' }) {
   return (
     <section className="container-page py-6 md:py-10">
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
-          <h1 className="text-2xl font-black md:text-3xl">Contact Samira Collection</h1>
-          <p className="mt-4 leading-7 text-slate-600">Email {settings.contactEmail || 'hello@samiracollection.com'} or WhatsApp {settings.whatsappNumber || settings.contactPhone || '+91 98765 43210'} for product inquiries, returns, and store support.</p>
-          {settings.address && <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{settings.address}</p>}
-        </div>
-        <form onSubmit={submit} className="rounded-xl bg-white p-5 shadow-sm md:rounded-3xl md:p-7">
-          <input className="h-12 w-full rounded-xl border border-slate-200 px-4" placeholder="Name" />
-          <input className="mt-3 h-12 w-full rounded-xl border border-slate-200 px-4" placeholder="Email" />
-          <textarea className="mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4" placeholder="Message" />
-          <button className="mt-3 h-12 w-full rounded-xl bg-wine text-sm font-black text-white">Send Message</button>
-          {sent && <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">Message sent. We will contact you shortly.</p>}
-        </form>
+        <Card>
+          <CardContent className="p-5 md:p-7">
+            <h1 className="page-title md:text-3xl">Contact Samira Collection</h1>
+            <p className="body-text mt-4 text-slate-600">Email {settings.contactEmail || 'hello@samiracollection.com'} or WhatsApp {settings.whatsappNumber || settings.contactPhone || '+91 98765 43210'} for product inquiries, returns, and store support.</p>
+            {settings.address && <p className="body-text mt-3 text-slate-500">{settings.address}</p>}
+          </CardContent>
+        </Card>
+        <Card as="form" onSubmit={submit}>
+          <CardContent className="p-5 md:p-7">
+            <TextInput placeholder="Name" />
+            <TextInput className="mt-3" placeholder="Email" />
+            <textarea className="body-text mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4 outline-none transition focus:border-wine focus:ring-2 focus:ring-wine/10" placeholder="Message" />
+            <Button className="mt-3 w-full">Send Message</Button>
+            {sent && <p className="label-text mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-emerald-700">Message sent. We will contact you shortly.</p>}
+          </CardContent>
+        </Card>
       </div>
     </section>
   );

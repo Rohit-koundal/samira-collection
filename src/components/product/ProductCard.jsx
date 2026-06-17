@@ -34,7 +34,7 @@ export function ProductVisual({ product, compact = false, showMeta = true }) {
       <div className="absolute bottom-0 left-1/2 h-[70%] w-[54%] -translate-x-1/2 rounded-t-[80px] bg-white/20 ring-8 ring-white/30" />
       {showMeta && (
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 to-transparent p-2">
-          <span className="rounded bg-white/95 px-2 py-1 text-[10px] font-black text-slate-700">{product.rating} star | {product.numReviews}</span>
+          <span className="badge-text rounded bg-white/95 px-2 py-1 font-bold text-slate-700">{product.rating} star | {product.numReviews}</span>
         </div>
       )}
     </div>
@@ -74,8 +74,8 @@ export default function ProductCard({ product, navigate }) {
       <div className="p-2 md:p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="line-clamp-2 min-h-[2.5rem] text-xs font-black leading-5 text-charcoal md:min-h-[2.75rem] md:text-sm">{product.name}</h3>
-            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500 md:text-xs">{product.category} | {product.fabric}</p>
+            <h3 className="product-brand line-clamp-2 min-h-[2.5rem] text-charcoal md:min-h-[2.75rem] md:text-sm">{product.name}</h3>
+            <p className="product-name mt-0.5 truncate text-slate-500 md:text-xs">{product.category} | {product.fabric}</p>
           </div>
           <button
             type="button"
@@ -88,11 +88,11 @@ export default function ProductCard({ product, navigate }) {
           </button>
         </div>
         <div className="mt-2 min-h-[2.2rem]">
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] md:text-xs">
-            <span className="font-black text-charcoal">Rs. {product.price}</span>
-            <span className="text-slate-400 line-through">Rs. {product.originalPrice}</span>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 md:text-xs">
+            <span className="price text-charcoal">Rs. {product.price}</span>
+            <span className="old-price text-slate-400 line-through">Rs. {product.originalPrice}</span>
           </div>
-          <p className="mt-0.5 text-[11px] font-black leading-4 text-rose md:text-xs">
+          <p className="discount mt-0.5 font-bold text-rose md:text-xs">
             ({product.discountPercentage}% OFF)
           </p>
         </div>

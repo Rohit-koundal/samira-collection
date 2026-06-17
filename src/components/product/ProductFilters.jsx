@@ -1,5 +1,3 @@
-import seedCategories from '../../data/categories';
-
 const filterGroups = [
   { title: 'Size', param: 'size', items: ['XS', 'S', 'M', 'L', 'XL', 'Free Size'] },
   { title: 'Color', param: 'color', items: ['Wine', 'Blush', 'Gold', 'Ivory', 'Black', 'Emerald', 'Navy', 'Rose'] },
@@ -9,8 +7,8 @@ const filterGroups = [
   { title: 'Rating', param: 'rating', items: [['4', '4 star and above'], ['3', '3 star and above']] },
 ];
 
-export default function ProductFilters({ categories = seedCategories, params = new URLSearchParams(), updateParam, clearFilters }) {
-  const visibleCategories = categories?.length ? categories : seedCategories;
+export default function ProductFilters({ categories = [], params = new URLSearchParams(), updateParam, clearFilters }) {
+  const visibleCategories = categories || [];
   const setFilter = (param, value) => {
     updateParam?.(param, value);
   };

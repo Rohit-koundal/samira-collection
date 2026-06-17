@@ -1,15 +1,19 @@
+import { Card, CardContent, CardHeader, CardTitle } from '../ui';
+
 export default function OrderSummary({ items }) {
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm md:rounded-3xl md:p-5">
-      <h2 className="text-lg font-black">Order Summary</h2>
-      <div className="mt-4 grid gap-3">
+    <Card as="section">
+      <CardHeader>
+        <CardTitle className="text-xl">Order Summary</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
         {items.map((item) => (
-          <div key={item.product.id} className="flex justify-between gap-4 text-sm">
-            <span className="font-semibold text-slate-600">{item.product.name} x {item.quantity}</span>
-            <span className="font-black">Rs. {item.product.price * item.quantity}</span>
+          <div key={item.cartKey || `${item.product._id || item.product.id}-${item.size || ''}-${item.color || ''}`} className="flex justify-between gap-4">
+            <span className="body-text text-slate-600">{item.product.name} x {item.quantity}</span>
+            <span className="price">Rs. {item.product.price * item.quantity}</span>
           </div>
         ))}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
