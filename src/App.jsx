@@ -56,6 +56,8 @@ const customerRoutes = {
   '/register': Register,
   '/profile': Profile,
   '/profile/addresses': AddressManagement,
+  '/profile/addresses/new': AddressManagement,
+  '/profile/addresses/edit': AddressManagement,
   '/orders': MyOrders,
   '/order-detail': OrderDetail,
   '/order-success': OrderSuccess,
@@ -121,9 +123,11 @@ function AppShell({ route, navigate }) {
   const isAdmin = routePath.startsWith('/admin');
   const { user } = useAuth();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const standaloneAuthRoutes = ['/login', '/register'];
+  const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const loginFallback = (
     <Suspense fallback={<RouteFallback />}>
       <Login route={`/login?redirect=${encodeURIComponent(route)}`} />
@@ -166,12 +170,21 @@ function AppShell({ route, navigate }) {
     return () => window.clearTimeout(timer);
   }, [isAdmin, routePath, user]);
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const onChange = (event) => setIsMobile(event.matches);
+    media.addEventListener('change', onChange);
+    setIsMobile(media.matches);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
   const closeLoginPrompt = () => {
     markLoginPromptDismissed();
     setShowLoginPrompt(false);
   };
   const shouldShowStandaloneAuth = standaloneAuthRoutes.includes(routePath) || (protectedRoutes.includes(routePath) && !user);
   const authContent = protectedRoutes.includes(routePath) && !user ? loginFallback : page;
+  const showShell = !(isMobile && immersiveRoutes.includes(routePath));
 
   return (
     <div className="min-h-screen bg-ivory text-charcoal">
@@ -187,9 +200,9 @@ function AppShell({ route, navigate }) {
         authContent
       ) : (
         <>
-          <DesktopHeader navigate={navigate} route={route} />
-          {!focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
-          <main className="pb-24 md:pb-0">
+          {showShell && <DesktopHeader navigate={navigate} route={route} />}
+          {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
+          <main className={`${showShell ? 'pb-20 md:pb-0' : ''}`}>
             {protectedRoutes.includes(routePath) ? (
               <ProtectedRoute>
                 {page}
@@ -198,19 +211,21 @@ function AppShell({ route, navigate }) {
               page
             )}
           </main>
-          <Footer navigate={navigate} />
-          <MobileBottomNav active={routePath} navigate={navigate} />
-          <LoginPrompt
-            open={showLoginPrompt}
-            onClose={closeLoginPrompt}
-            onContinue={(phone) => {
-              markLoginPromptDismissed();
-              setShowLoginPrompt(false);
-              const redirectQuery = `redirect=${encodeURIComponent(route)}`;
-              const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
-              navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
-            }}
-          />
+          {showShell && <Footer navigate={navigate} />}
+          {showShell && <MobileBottomNav active={routePath} navigate={navigate} />}
+          {showShell && (
+            <LoginPrompt
+              open={showLoginPrompt}
+              onClose={closeLoginPrompt}
+              onContinue={(phone) => {
+                markLoginPromptDismissed();
+                setShowLoginPrompt(false);
+                const redirectQuery = `redirect=${encodeURIComponent(route)}`;
+                const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
+                navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
+              }}
+            />
+          )}
         </>
       )}
     </div>

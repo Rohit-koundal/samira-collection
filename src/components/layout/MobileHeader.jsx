@@ -4,14 +4,13 @@ import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
-import { useGetCategoriesQuery } from '../../store/apiSlice';
+import { X } from 'lucide-react';
 
 export default function MobileHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
-  const { data: categories = [] } = useGetCategoriesQuery();
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
 
   const go = (path) => {
@@ -75,36 +74,87 @@ export default function MobileHeader({ navigate, route = '/' }) {
       {open && (
         <div className="fixed inset-0 z-[75] md:hidden">
           <button type="button" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/45" aria-label="Close menu" />
-          <aside className="absolute inset-y-0 left-0 w-80 max-w-[86vw] overflow-y-auto bg-white p-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <img src={logo} alt="Samira Collection" className="h-14 w-auto" />
-              <button onClick={() => setOpen(false)} className="rounded-full bg-slate-100 px-4 py-2">Close</button>
+          <aside className="absolute inset-y-0 left-0 w-80 max-w-[86vw] overflow-y-auto bg-white shadow-2xl">
+            <div className="bg-[#3e3648] px-4 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-12 w-12 place-items-center rounded-xl bg-white/10">
+                    <Icon name="user" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold leading-[1.1]">{user?.name || 'Guest'}</p>
+                    <p className="mt-1 text-[11px] text-white/70">{user?.phone || user?.email || 'Sign in for a better experience'}</p>
+                  </div>
+                </div>
+                <button onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-full text-white/90" aria-label="Close menu">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
             </div>
-            <div className="mt-6 grid gap-2">
+            <div className="border-b border-slate-100 px-4 py-4">
+              <button onClick={() => go('/profile')} className="flex w-full items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
+                <span className="text-[14px] font-bold text-charcoal">Account</span>
+                <span className="text-slate-400">›</span>
+              </button>
+            </div>
+
+            <div className="px-4 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Shop for Women</p>
+              <div className="mt-3 grid gap-2">
+                {[
+                  ['Sarees', '/products?search=Saree'],
+                  ['Suits', '/products?search=Suit'],
+                  ['Kurtis', '/products?search=Kurti'],
+                  ['Dresses', '/products?search=Dress'],
+                  ['Lehengas', '/products?search=Lehenga'],
+                  ['Sale', '/products?discount=20'],
+                ].map(([label, path]) => (
+                  <button key={label} onClick={() => go(path)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
+                    <span className="text-[14px] font-semibold text-charcoal">{label}</span>
+                    <span className="text-slate-300">›</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 px-4 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Quick Links</p>
+              <div className="mt-3 grid gap-2">
+                {[
+                  ['Orders', '/orders'],
+                  ['Wishlist', '/wishlist'],
+                  ['Addresses', '/profile/addresses'],
+                  ['Coupons', '/profile'],
+                  ['Gift Cards', '/contact'],
+                ].map(([label, path]) => (
+                  <button key={label} onClick={() => go(path)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
+                    <span className="text-[14px] text-slate-700">{label}</span>
+                    <span className="text-slate-300">›</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+              <div className="border-t border-slate-100 px-4 py-4">
+                <button
+                  onClick={() => switchMode('admin')}
+                  className="w-full rounded-2xl bg-wine px-4 py-3 text-left text-[14px] font-semibold text-white"
+                >
+                  Switch to Admin
+                </button>
+              </div>
+            )}
+
+            <div className="mt-0 grid gap-2 px-4 pb-5">
               {[
                 ['Home', '/'],
                 ['Products', '/products'],
-                ['Wishlist', '/wishlist'],
                 ['Cart', '/cart'],
-                ['Profile', '/profile'],
                 ['Contact', '/contact'],
               ].map(([label, path]) => (
-                <button key={label} onClick={() => go(path)} className="rounded-2xl bg-[#f8f2ec] px-4 py-3 text-left text-charcoal">
+                <button key={label} onClick={() => go(path)} className="rounded-2xl bg-[#f8f2ec] px-4 py-3 text-left text-[14px] text-charcoal">
                   {label}
-                </button>
-              ))}
-            </div>
-            {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-              <button onClick={() => switchMode('admin')} className="mt-3 w-full rounded-2xl bg-wine px-4 py-3 text-left text-white">
-                Switch to Admin
-              </button>
-            )}
-            <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-wine">Categories</p>
-            <div className="mt-3 grid gap-2">
-              {categories.map((category) => (
-                <button key={category._id || category.id} onClick={() => go(`/products?category=${category._id || ''}`)} className="label-text flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left text-slate-700">
-                  {category.name}
-                  <span className="small-text text-slate-400">{category.count || ''}</span>
                 </button>
               ))}
             </div>
