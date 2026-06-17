@@ -124,7 +124,7 @@ function AppShell({ route, navigate }) {
   const { user } = useAuth();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
-  const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success'];
+  const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
@@ -161,6 +161,11 @@ function AppShell({ route, navigate }) {
       return;
     }
 
+    if (routePath === '/cart') {
+      setShowLoginPrompt(false);
+      return;
+    }
+
     if (isLoginPromptDismissed()) {
       setShowLoginPrompt(false);
       return;
@@ -182,9 +187,21 @@ function AppShell({ route, navigate }) {
     markLoginPromptDismissed();
     setShowLoginPrompt(false);
   };
-  const shouldShowStandaloneAuth = standaloneAuthRoutes.includes(routePath) || (protectedRoutes.includes(routePath) && !user);
+  const desktopProfileLogin = routePath === '/profile' && !user && !isMobile;
+  const shouldShowStandaloneAuth =
+    standaloneAuthRoutes.includes(routePath) ||
+    ((protectedRoutes.includes(routePath) && !user) && !desktopProfileLogin);
   const authContent = protectedRoutes.includes(routePath) && !user ? loginFallback : page;
   const showShell = !(isMobile && immersiveRoutes.includes(routePath));
+  const mainContent = desktopProfileLogin
+    ? loginFallback
+    : protectedRoutes.includes(routePath)
+      ? (
+        <ProtectedRoute>
+          {page}
+        </ProtectedRoute>
+      )
+      : page;
 
   return (
     <div className="min-h-screen bg-ivory text-charcoal">
@@ -203,13 +220,7 @@ function AppShell({ route, navigate }) {
           {showShell && <DesktopHeader navigate={navigate} route={route} />}
           {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
           <main className={`${showShell ? 'pb-20 md:pb-0' : ''}`}>
-            {protectedRoutes.includes(routePath) ? (
-              <ProtectedRoute>
-                {page}
-              </ProtectedRoute>
-            ) : (
-              page
-            )}
+            {mainContent}
           </main>
           {showShell && <Footer navigate={navigate} />}
           {showShell && <MobileBottomNav active={routePath} navigate={navigate} />}

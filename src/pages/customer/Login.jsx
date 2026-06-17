@@ -157,7 +157,7 @@ export default function Login({ route = '/login' }) {
 
   return (
     <section className="auth-font min-h-screen bg-[#f6f7fb] px-0 py-0">
-      <div className="mx-auto min-h-screen w-full max-w-[470px] overflow-hidden bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+      <div className="mx-auto min-h-screen w-full max-w-[470px] overflow-hidden bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:max-w-[560px]">
         <div className="relative h-[160px] overflow-hidden bg-gradient-to-r from-[#f8e6db] via-[#fff1e6] to-[#f9e7f1] px-4 pt-4">
           <button
             type="button"
@@ -247,11 +247,11 @@ export default function Login({ route = '/login' }) {
               </div>
               <div className="grid grid-cols-1 gap-3">
                 <TextInput value={email} onChange={(event) => setEmail(event.target.value)} className="h-10 rounded-xl border-slate-300 text-[13px]" placeholder="Email" type="email" />
-                <div className="overflow-hidden rounded-xl border border-slate-300">
+                <div className="w-full overflow-hidden rounded-xl border border-slate-300">
                   <div className="flex items-center">
                     <span className="px-4 text-[11px] font-semibold text-slate-500 sm:text-[12px]">+91</span>
                     <span className="h-10 w-px bg-slate-300" />
-                    <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} className="h-10 w-full flex-1 min-w-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px]" placeholder="Mobile Number*" inputMode="tel" />
+                    <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} className="h-10 w-full min-w-0 flex-1 basis-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px] md:text-[16px] md:tracking-normal" placeholder="Mobile Number*" inputMode="tel" />
                   </div>
                 </div>
                 <TextInput value={password} onChange={(event) => setPassword(event.target.value)} className="h-10 rounded-xl border-slate-300 text-[13px]" placeholder="Password" type="password" />
@@ -268,20 +268,18 @@ export default function Login({ route = '/login' }) {
                 <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login or Signup</h2>
                 <p className="mt-2 text-[11px] text-slate-500 sm:text-[12px]">Enter your mobile number to receive a one-time password.</p>
               </div>
-              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[116px_minmax(0,1fr)]">
-                <div className="overflow-hidden rounded-xl border border-slate-300">
-                  <div className="flex items-center">
-                    <span className="px-4 text-[16px] font-semibold text-slate-500 sm:text-[14px]">{countryCode}</span>
-                    <span className="h-10 w-px bg-slate-300" />
-                    <TextInput
-                      value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
-                      className="h-10 w-full flex-1 min-w-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px]"
-                      style={{ fontSize: '16px' }}
-                      placeholder="Mobile Number*"
-                      inputMode="tel"
-                    />
-                  </div>
+              <div className="w-full overflow-hidden rounded-xl border border-slate-300">
+                <div className="flex w-full items-center">
+                  <span className="shrink-0 px-4 text-[16px] font-semibold text-slate-500 sm:text-[14px]">{countryCode}</span>
+                  <span className="h-10 w-px shrink-0 bg-slate-300" />
+                  <TextInput
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    className="h-10 w-full min-w-0 flex-1 basis-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px] md:text-[16px] md:tracking-normal"
+                    style={{ fontSize: '16px' }}
+                    placeholder="Mobile Number*"
+                    inputMode="tel"
+                  />
                 </div>
               </div>
               <label className="flex cursor-pointer items-start gap-3 text-[11px] text-slate-600 sm:text-[12px]">

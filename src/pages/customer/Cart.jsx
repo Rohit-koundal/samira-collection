@@ -80,16 +80,43 @@ export default function Cart({ navigate }) {
 
   if (!cart.items.length) {
     return (
-      <section className="bg-white pb-28 md:bg-ivory md:py-10">
+      <section className="bg-white pb-28 md:min-h-screen md:bg-white md:pb-0">
         <BagHeader navigate={navigate} />
-        <div className="container-page py-10">
-          <Card className="text-center">
-            <CardContent className="p-6 md:p-8">
-              <h1 className="section-title md:text-2xl">Your shopping bag is empty</h1>
-              <p className="body-text mt-2 text-slate-500">Add products to continue checkout.</p>
-              <Button onClick={() => navigate('/products')} variant="accent" className="mt-5">Shop Now</Button>
-            </CardContent>
-          </Card>
+        <div className="container-page py-10 md:flex md:min-h-[calc(100vh-72px)] md:items-center md:justify-center md:py-12">
+          <div className="flex w-full flex-col items-center text-center md:hidden">
+            <div className="relative mt-6 flex h-56 w-full max-w-[320px] items-center justify-center">
+              <div className="absolute left-8 top-28 h-1 w-7 rounded-full bg-slate-600/80" />
+              <div className="absolute left-11 top-24 h-1 w-14 rounded-full bg-slate-600/80" />
+              <div className="absolute left-16 top-20 h-1 w-5 rounded-full bg-slate-600/80" />
+              <div className="absolute left-[calc(50%-42px)] top-14 h-[150px] w-[108px] rounded-[20px] bg-[#ff557f] shadow-[0_20px_30px_rgba(255,85,127,0.18)]" />
+              <div className="absolute left-[calc(50%-5px)] top-10 h-14 w-7 rounded-t-full border-4 border-b-0 border-slate-600/80" />
+              <div className="absolute left-[calc(50%-13px)] top-[92px] text-white">
+                <Icon name="bag" className="h-14 w-14" />
+              </div>
+              <div className="absolute bottom-8 h-3 w-24 rounded-full bg-slate-200/80 blur-[1px]" />
+            </div>
+            <h1 className="mt-2 text-[20px] font-extrabold leading-tight text-[#1f2a44]">Hey, it feels so light!</h1>
+            <p className="mt-2 max-w-[290px] text-[14px] leading-6 text-slate-500">There is nothing in your bag. Let&apos;s add some items.</p>
+            <Button onClick={() => navigate('/wishlist')} variant="outline" className="mt-8 h-12 rounded-sm border-rose px-5 text-[12px] font-bold uppercase tracking-[0.08em] text-rose hover:bg-rose/5">
+              Add Items From Wishlist
+            </Button>
+          </div>
+
+          <div className="hidden w-full max-w-2xl flex-col items-center text-center md:flex">
+            <div className="relative flex h-52 w-52 items-center justify-center">
+              <div className="absolute left-3 top-24 h-1 w-6 rounded-full bg-slate-500/80" />
+              <div className="absolute left-6 top-20 h-1 w-12 rounded-full bg-slate-500/80" />
+              <div className="absolute left-12 top-16 h-1 w-6 rounded-full bg-slate-500/80" />
+              <div className="relative flex h-36 w-36 items-center justify-center rounded-[2rem] bg-rose text-white shadow-[0_16px_32px_rgba(255,66,120,0.25)]">
+                <Icon name="bag" className="h-16 w-16" />
+              </div>
+            </div>
+            <h1 className="mt-6 text-[28px] font-extrabold leading-tight text-charcoal">Hey, it feels so light!</h1>
+            <p className="mt-2 text-[17px] leading-7 text-slate-500">There is nothing in your bag. Let&apos;s add some items.</p>
+            <Button onClick={() => navigate('/wishlist')} variant="outline" className="mt-8 h-12 rounded-sm border-rose px-5 text-[15px] font-bold uppercase tracking-[0.08em] text-rose hover:bg-rose/5">
+              Add Items From Wishlist
+            </Button>
+          </div>
         </div>
       </section>
     );
@@ -229,12 +256,14 @@ export default function Cart({ navigate }) {
 
 function BagHeader({ navigate }) {
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:static md:rounded-b-2xl">
-      <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/products')} className="text-2xl leading-none" aria-label="Back">&lt;</button>
-        <h1 className="header-title uppercase tracking-wide text-slate-800">Shopping Bag</h1>
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white md:hidden">
+      <div className="flex h-16 items-center justify-between px-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/products')} className="text-3xl leading-none text-slate-600" aria-label="Back">←</button>
+          <h1 className="text-[16px] font-semibold uppercase tracking-[0.02em] text-[#4b5563]">Shopping Bag</h1>
+        </div>
+        <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-[#6b7280]">Step 1/3</span>
       </div>
-      <span className="label-text text-slate-700">STEP 1/3</span>
     </header>
   );
 }

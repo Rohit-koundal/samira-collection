@@ -1,5 +1,6 @@
 import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
+import { ShieldCheck } from 'lucide-react';
 import { Button, TextInput } from '../ui';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -21,6 +22,30 @@ export default function DesktopHeader({ navigate, route = '/' }) {
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+  const routePath = route.split('?')[0];
+
+  if (routePath === '/cart') {
+    return (
+      <header className="sticky top-0 z-50 hidden bg-white md:block">
+        <div className="flex h-[88px] items-center justify-between border-b border-slate-200 px-10 lg:px-12">
+          <button onClick={() => navigate('/')} className="shrink-0" aria-label="Samira Collection home">
+            <img src={logo} alt="Samira Collection" className="h-12 w-auto" />
+          </button>
+          <div className="flex items-center gap-4 lg:gap-5">
+            <span className="small-text font-bold uppercase tracking-[0.36em] text-emerald-500">Bag</span>
+            <span className="h-px w-12 border-t border-dashed border-slate-300" />
+            <span className="small-text uppercase tracking-[0.36em] text-slate-500">Address</span>
+            <span className="h-px w-12 border-t border-dashed border-slate-300" />
+            <span className="small-text uppercase tracking-[0.36em] text-slate-500">Payment</span>
+          </div>
+          <div className="flex items-center gap-3 text-slate-700">
+            <ShieldCheck className="h-6 w-6 text-emerald-500" />
+            <span className="label-text uppercase tracking-[0.28em]">100% Secure</span>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   const updateSearch = (value) => {
     const params = new URLSearchParams(route.split('?')[1] || '');
