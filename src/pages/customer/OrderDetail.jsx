@@ -1,14 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, CircleHelp, MapPin, Package2, PackageCheck, Phone, RefreshCcw, Sparkles, Star, UserRound } from 'lucide-react';
 import { Button, Card, CardContent } from '../../components/ui';
 import api from '../../services/api';
 import Receipt from '../../components/order/Receipt';
 import ReceiptActions from '../../components/order/ReceiptActions';
+import { downloadReceiptHtml } from '../../utils/printReceipt';
+import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 
-export default function OrderDetail({ route = '' }) {
+export default function OrderDetail({ route = '', navigate }) {
   const orderId = new URLSearchParams(route.split('?')[1] || '').get('id');
   const [order, setOrder] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
   const [error, setError] = useState('');
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const onChange = (event) => setIsMobile(event.matches);
+    media.addEventListener('change', onChange);
+    setIsMobile(media.matches);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     if (!orderId) return setError('Order not found.');
@@ -16,8 +29,48 @@ export default function OrderDetail({ route = '' }) {
     api.get(`/orders/${orderId}/receipt`).then(setReceipt).catch(() => {});
   }, [orderId]);
 
+  useEffect(() => {
+    if (!order) return;
+    const orderProductIds = new Set((order.orderItems || []).map((item) => String(item.product || '')));
+    api.get('/products?sort=rating')
+      .then((items) => normalizeProducts(items)
+        .filter((product) => !orderProductIds.has(String(product._id || product.id)))
+        .slice(0, 6))
+      .then(setRecommendations)
+      .catch(() => setRecommendations([]));
+  }, [order]);
+
+  const primaryItem = useMemo(() => order?.orderItems?.[0] || null, [order]);
+  const savings = useMemo(() => {
+    if (!order) return 0;
+    return Math.max(0, Number(order.totalMRP || 0) - Number(order.finalAmount || 0));
+  }, [order]);
+
   if (error) return <section className="container-page py-8"><Card><CardContent className="section-title p-8 text-center text-rose">{error}</CardContent></Card></section>;
   if (!order) return <section className="container-page py-8"><Card><CardContent className="section-title p-8 text-center">Loading order...</CardContent></Card></section>;
+
+  if (isMobile) {
+    return (
+      <section className="min-h-screen bg-[linear-gradient(180deg,#fffdf9_0%,#f8f4fb_46%,#f6f7fb_100%)] pb-24">
+        <div className="mx-auto w-full max-w-[470px]">
+          <MobileHero order={order} item={primaryItem} navigate={navigate} />
+
+          <div className="space-y-4 px-4 pb-6">
+            <MobileStatusCard order={order} />
+            <MobileRatingCard item={primaryItem} />
+            {recommendations.length > 0 && <MobileRecommendations items={recommendations} navigate={navigate} />}
+            <MobileDeliveryCard order={order} />
+            <MobileSavingsCard savings={savings} />
+            <MobilePaymentCard order={order} receipt={receipt} />
+            <MobileUpdatesCard order={order} />
+            <MobileMetaCard order={order} />
+          </div>
+
+          {receipt && <div className="hidden"><Receipt receipt={receipt} /></div>}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="container-page py-8">
@@ -29,15 +82,15 @@ export default function OrderDetail({ route = '' }) {
         </div>
         <Card as="aside">
           <CardContent className="p-4 md:p-5">
-          <h2 className="header-title">Invoice</h2>
-          <Row label="MRP" value={`Rs. ${order.totalMRP}`} />
-          <Row label="Product Discount" value={`- Rs. ${order.productDiscount || 0}`} />
-          <Row label="Coupon Discount" value={`- Rs. ${order.couponDiscount || 0}`} />
-          <Row label="Delivery" value={order.deliveryCharge ? `Rs. ${order.deliveryCharge}` : 'FREE'} />
-          <div className="mt-4 flex justify-between border-t border-slate-100 pt-4"><span className="label-text">Total</span><span className="price">Rs. {order.finalAmount}</span></div>
-          <h3 className="small-text mt-6 font-bold uppercase tracking-[0.18em] text-slate-500">Ship To</h3>
-          <p className="body-text mt-2 text-slate-600">{order.shippingAddress?.fullName}<br />{order.shippingAddress?.houseNo || order.shippingAddress?.houseNumber}, {order.shippingAddress?.area}<br />{order.shippingAddress?.city}, {order.shippingAddress?.state} - {order.shippingAddress?.pincode}</p>
-          <Button className="no-print mt-5 w-full" variant="outline">Request Return / Exchange</Button>
+            <h2 className="header-title">Invoice</h2>
+            <Row label="MRP" value={`Rs. ${order.totalMRP}`} />
+            <Row label="Product Discount" value={`- Rs. ${order.productDiscount || 0}`} />
+            <Row label="Coupon Discount" value={`- Rs. ${order.couponDiscount || 0}`} />
+            <Row label="Delivery" value={order.deliveryCharge ? `Rs. ${order.deliveryCharge}` : 'FREE'} />
+            <div className="mt-4 flex justify-between border-t border-slate-100 pt-4"><span className="label-text">Total</span><span className="price">Rs. {order.finalAmount}</span></div>
+            <h3 className="small-text mt-6 font-bold uppercase tracking-[0.18em] text-slate-500">Ship To</h3>
+            <p className="body-text mt-2 text-slate-600">{order.shippingAddress?.fullName}<br />{order.shippingAddress?.houseNo || order.shippingAddress?.houseNumber}, {order.shippingAddress?.area}<br />{order.shippingAddress?.city}, {order.shippingAddress?.state} - {order.shippingAddress?.pincode}</p>
+            <Button className="no-print mt-5 w-full" variant="outline">Request Return / Exchange</Button>
           </CardContent>
         </Card>
       </div>
@@ -46,6 +99,301 @@ export default function OrderDetail({ route = '' }) {
   );
 }
 
+function MobileHero({ order, item, navigate }) {
+  const image = item?.image ? normalizeImageUrl(item.image) : '';
+
+  return (
+    <div className="relative overflow-hidden border-b border-white/70 bg-[linear-gradient(180deg,#fff6d8_0%,#fffdf7_72%,transparent_100%)] px-4 pb-5 pt-5">
+      <div className="absolute inset-x-0 top-6 select-none overflow-hidden text-center text-[64px] font-black uppercase italic leading-[0.88] tracking-[-0.08em] text-white/70">
+        <div>samira</div>
+        <div>samira</div>
+      </div>
+      <div className="relative">
+        <div className="flex items-start justify-end">
+          <button
+            type="button"
+            onClick={() => navigate?.('/contact')}
+            className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/90 px-3 py-2 text-[12px] font-semibold text-[#1f2a44] shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
+          >
+            <CircleHelp className="h-4 w-4 text-[#7b8192]" />
+            Help
+          </button>
+        </div>
+
+        <div className="mx-auto mt-2 h-[170px] w-[140px] overflow-hidden rounded-[30px] bg-white shadow-[0_18px_34px_rgba(15,23,42,0.10)]">
+          {image ? <img src={image} alt={item?.name || 'Order item'} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-[#efe8dd]" />}
+        </div>
+
+        <div className="mt-5 text-center">
+          <p className="text-[18px] font-bold text-[#1f2a44]">{item?.name || 'Order item'}</p>
+          <p className="mt-1 text-[14px] leading-[1.4] text-slate-600">{buildMobileSubtitle(item)}</p>
+          <p className="mt-2 text-[14px] text-[#334155]">
+            Size: <span className="font-semibold">{item?.size || '-'}</span>
+            <span className="mx-1.5 text-slate-300">•</span>
+            Quantity: <span className="font-semibold">{item?.quantity || 1}</span>
+          </p>
+          <p className="mt-2 text-[13px] text-[#334155]">Order ID: <span className="font-medium"># {order._id}</span></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileStatusCard({ order }) {
+  const meta = getStatusMeta(order);
+  return (
+    <div className={`overflow-hidden rounded-[24px] ${meta.wrapperClass} shadow-[0_14px_28px_rgba(15,23,42,0.06)]`}>
+      <div className="flex items-center justify-between gap-4 px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-[18px] bg-white/18">
+            <meta.icon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="text-[17px] font-bold text-white">{meta.title}</p>
+            <p className="mt-1 text-[13px] text-white/85">{meta.dateText}</p>
+          </div>
+        </div>
+        <div className="rounded-full border-2 border-dashed border-white/80 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-white/90">
+          {meta.badge}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileRatingCard({ item }) {
+  if (!item) return null;
+  const image = item.image ? normalizeImageUrl(item.image) : '';
+
+  return (
+    <section className="rounded-[26px] border border-[#ede8e2] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center gap-4">
+        <div className="h-[68px] w-[52px] overflow-hidden rounded-[16px] bg-[#f4f1ec]">
+          {image ? <img src={image} alt={item.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-[#ece5da]" />}
+        </div>
+        <div>
+          <p className="text-[15px] font-bold text-[#1f2a44]">Rate this product</p>
+          <div className="mt-2 flex gap-1.5">
+            {Array.from({ length: 5 }).map((_, index) => <Star key={index} className="h-6 w-6 text-[#b7bcc9]" strokeWidth={1.7} />)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobileRecommendations({ items, navigate }) {
+  return (
+    <section className="overflow-hidden rounded-[26px] border border-[#ede8e2] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="px-4 pb-2 pt-4">
+        <p className="text-[15px] font-bold text-[#1f2a44]">Items that go well with this item</p>
+      </div>
+      <div className="flex gap-4 overflow-x-auto px-4 pb-4 pt-2">
+        {items.map((product) => (
+          <button
+            key={product.id || product._id}
+            type="button"
+            onClick={() => navigate?.(`/product?id=${product._id || product.id || product.slug}`)}
+            className="w-[124px] shrink-0 text-left"
+          >
+            <div className="h-[128px] overflow-hidden rounded-[18px] bg-[#f6f1eb]">
+              {product.primaryImageUrl ? <img src={product.primaryImageUrl} alt={product.name} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-[#ece3d7]" />}
+            </div>
+            <p className="mt-3 truncate text-[14px] font-bold text-[#1f2a44]">{product.brand || 'Samira'}</p>
+            <p className="mt-1 line-clamp-2 text-[13px] leading-[1.35] text-slate-500">{product.name}</p>
+            <p className="mt-1 text-[15px] font-bold text-[#1f2a44]">Rs {product.price}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MobileDeliveryCard({ order }) {
+  const address = order.shippingAddress || {};
+  return (
+    <section className="rounded-[26px] border border-[#ede8e2] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex items-start gap-3">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#efe7ff_0%,#ffe9ef_100%)]">
+          <UserRound className="h-7 w-7 text-[#8a63d2]" />
+        </div>
+        <div>
+          <p className="text-[15px] font-bold text-[#1f2a44]">Delivery To</p>
+          <p className="mt-1 text-[14px] text-slate-500">{address.fullName || 'Customer'}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-[#f0ece7] pt-4">
+        <div className="flex items-start gap-3">
+          <Phone className="mt-0.5 h-4 w-4 text-[#1f2a44]" />
+          <div>
+            <p className="text-[14px] font-bold text-[#1f2a44]">Contact Details</p>
+            <p className="mt-1 text-[14px] text-slate-600">{address.mobile || address.phone || '-'}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <MapPin className="mt-0.5 h-4 w-4 text-[#1f2a44]" />
+            <div>
+              <p className="text-[14px] font-bold text-[#1f2a44]">Delivery Address</p>
+              <p className="mt-1 max-w-[210px] text-[14px] leading-[1.5] text-slate-600">
+                {formatAddress(address)}
+              </p>
+            </div>
+          </div>
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#efe7ff_0%,#fff0e8_100%)]">
+            <MapPin className="h-7 w-7 text-[#8a63d2]" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobileSavingsCard({ savings }) {
+  return (
+    <section className="overflow-hidden rounded-[24px] border border-[#daf1e6] bg-[radial-gradient(circle_at_left,_rgba(24,181,136,0.12),_transparent_34%),linear-gradient(180deg,#fafffd_0%,#f4fffb_100%)] px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-3">
+        <div className="grid h-12 w-12 place-items-center rounded-[18px] bg-[#17b789] text-white shadow-[0_8px_18px_rgba(23,183,137,0.28)]">
+          <Sparkles className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-[14px] leading-[1.45] text-[#1f2a44]">On this item you saved a total of</p>
+          <p className="mt-1 text-[18px] font-bold text-[#0f9f74]">Rs. {savings}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobilePaymentCard({ order, receipt }) {
+  return (
+    <section className="rounded-[26px] border border-[#ede8e2] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-[15px] font-bold text-[#1f2a44]">Total Order Price</p>
+        <p className="text-[16px] font-bold text-[#1f2a44]">Rs {order.finalAmount}.00</p>
+      </div>
+
+      <div className="mt-4 rounded-[18px] bg-[#f8f8fb] px-4 py-4 text-[14px] text-[#1f2a44]">
+        Paid by {order.paymentMethod || 'COD'}
+      </div>
+
+      {receipt ? (
+        <button
+          type="button"
+          onClick={() => downloadReceiptHtml(receipt)}
+          className="mt-4 h-12 w-full rounded-[18px] border border-[#dfe3ea] text-[15px] font-bold text-[#1f2a44]"
+        >
+          Get Invoice
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function MobileUpdatesCard({ order }) {
+  return (
+    <section className="rounded-[26px] border border-[#ede8e2] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[#f6f4ff]">
+          <Bell className="h-4 w-4 text-[#1f2a44]" />
+        </div>
+        <p className="text-[15px] font-bold text-[#1f2a44]">Updates sent to</p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 text-[14px]">
+        <div>
+          <p className="text-[12px] text-slate-500">Call</p>
+          <p className="mt-1 text-[#1f2a44]">{order.shippingAddress?.mobile || order.shippingAddress?.phone || '-'}</p>
+        </div>
+        <div>
+          <p className="text-[12px] text-slate-500">Email</p>
+          <p className="mt-1 break-words text-[#1f2a44]">{order.user?.email || order.shippingAddress?.email || 'Not available'}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobileMetaCard({ order }) {
+  return (
+    <section className="rounded-[26px] border border-[#ede8e2] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[#f7f7fb]">
+          <Package2 className="h-4 w-4 text-[#1f2a44]" />
+        </div>
+        <p className="text-[15px] font-bold text-[#1f2a44]">Order details</p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 text-[14px]">
+        <div>
+          <p className="text-[12px] text-slate-500">Ordered On</p>
+          <p className="mt-1 text-[#1f2a44]">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+        </div>
+        <div>
+          <p className="text-[12px] text-slate-500">Order ID</p>
+          <p className="mt-1 break-all text-[#1f2a44]"># {order._id}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Row({ label, value }) {
   return <div className="body-text mt-3 flex justify-between text-slate-600"><span>{label}</span><span>{value}</span></div>;
+}
+
+function getStatusMeta(order) {
+  const timeline = Array.isArray(order.statusTimeline) ? order.statusTimeline : [];
+  const latest = timeline[timeline.length - 1];
+  const status = String(order.orderStatus || latest?.status || '').toLowerCase();
+  const dateSource = latest?.date || order.updatedAt || order.createdAt;
+  const dateText = dateSource
+    ? new Date(dateSource).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+    : 'Status updated recently';
+
+  if (status.includes('exchange') || status.includes('return') || status.includes('refund')) {
+    return {
+      title: order.orderStatus || 'Exchange in progress',
+      badge: 'Exchange',
+      dateText,
+      icon: RefreshCcw,
+      wrapperClass: 'bg-[linear-gradient(135deg,#1bb47d_0%,#14a56f_100%)]',
+    };
+  }
+
+  if (status.includes('deliver')) {
+    return {
+      title: 'Item Delivered',
+      badge: 'Delivered',
+      dateText,
+      icon: Package2,
+      wrapperClass: 'bg-[linear-gradient(135deg,#24b07a_0%,#169a67_100%)]',
+    };
+  }
+
+  return {
+    title: order.orderStatus || 'Order in progress',
+    badge: 'Order',
+    dateText,
+    icon: PackageCheck,
+    wrapperClass: 'bg-[linear-gradient(135deg,#8266d0_0%,#6d56bf_100%)]',
+  };
+}
+
+function buildMobileSubtitle(item) {
+  const details = [];
+  if (item?.color) details.push(item.color);
+  if (item?.name && item.name !== details[0]) details.push(item.name);
+  return details.length ? details.join(' • ') : 'Order details';
+}
+
+function formatAddress(address = {}) {
+  return [
+    address.houseNo || address.houseNumber,
+    address.area,
+    [address.city, address.state].filter(Boolean).join(', '),
+    address.pincode,
+  ].filter(Boolean).join(', ');
 }
