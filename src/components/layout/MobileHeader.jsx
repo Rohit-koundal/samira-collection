@@ -28,24 +28,24 @@ export default function MobileHeader({ navigate, route = '/' }) {
   return (
     <>
       <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
-        <div className="grid h-[52px] grid-cols-[40px_minmax(0,1fr)_76px] items-center gap-2 px-3 pt-1">
-          <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center text-slate-600" aria-label="Open menu">
-            <Icon name="menu" className="h-5 w-5" />
+        <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_84px] items-center gap-2 px-3 pt-1">
+          <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
+            <Icon name="menu" className="h-5.5 w-5.5" />
           </button>
           <button onClick={() => navigate('/')} className="header-title min-w-0 px-1">
-            <img src={logo} alt="Samira Collection" className="mx-auto h-9 w-auto max-w-full" />
+            <img src={logo} alt="Samira Collection" className="mx-auto h-10 w-auto max-w-full" />
           </button>
           <div className="flex shrink-0 justify-end gap-1">
-            <button onClick={() => navigate('/wishlist')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open wishlist">
-              <Icon name="heart" className="h-5 w-5" />
+            <button onClick={() => navigate('/wishlist')} className="relative grid h-11 w-11 place-items-center text-slate-700" aria-label="Open wishlist">
+              <Icon name="heart" className="h-5.5 w-5.5" />
               {wishlist.items.length > 0 && (
                 <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-rose px-1 text-[9px] font-black leading-none text-white">
                   {wishlist.items.length}
                 </span>
               )}
             </button>
-            <button onClick={() => navigate('/cart')} className="relative grid h-10 w-10 place-items-center text-slate-700" aria-label="Open cart">
-              <Icon name="bag" className="h-5 w-5" />
+            <button onClick={() => navigate('/cart')} className="relative grid h-11 w-11 place-items-center text-slate-700" aria-label="Open cart">
+              <Icon name="bag" className="h-5.5 w-5.5" />
               {cart.itemCount > 0 && (
                 <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-wine px-1 text-[9px] font-black leading-none text-white">
                   {cart.itemCount}
@@ -54,16 +54,16 @@ export default function MobileHeader({ navigate, route = '/' }) {
             </button>
           </div>
         </div>
-        <div className="px-3 pb-2">
-          <label className="label-text flex h-10 w-full max-w-full items-center gap-2 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-slate-500">
-            <Icon name="search" className="h-4 w-4" />
+        <div className="px-3 pb-3">
+          <label className="label-text flex h-12 w-full max-w-full items-center gap-3 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-slate-500">
+            <Icon name="search" className="h-4.5 w-4.5" />
             <input
               value={searchValue}
               onFocus={() => {
                 if (!route.startsWith('/search')) navigate('/search');
               }}
               onChange={(event) => updateSearch(event.target.value)}
-              className="body-text min-w-0 flex-1 bg-transparent text-charcoal outline-none placeholder:text-slate-500"
+              className="body-text min-w-0 flex-1 bg-transparent text-[14px] text-charcoal outline-none placeholder:text-slate-500"
               placeholder="Search sarees, suits, kurtis..."
               inputMode="search"
               enterKeyHint="search"
