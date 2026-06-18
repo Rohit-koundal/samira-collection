@@ -32,6 +32,7 @@ const AdminProducts = lazy(() => import('./pages/admin/Products'));
 const AddProduct = lazy(() => import('./pages/admin/AddProduct'));
 const EditProduct = lazy(() => import('./pages/admin/EditProduct'));
 const Categories = lazy(() => import('./pages/admin/Categories'));
+const EditCategory = lazy(() => import('./pages/admin/EditCategory'));
 const Orders = lazy(() => import('./pages/admin/Orders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'));
 const Customers = lazy(() => import('./pages/admin/Customers'));
@@ -74,6 +75,7 @@ const adminRoutes = {
   '/admin/products/add': AddProduct,
   '/admin/products/edit': EditProduct,
   '/admin/categories': Categories,
+  '/admin/categories/edit': EditCategory,
   '/admin/orders': Orders,
   '/admin/orders/detail': AdminOrderDetail,
   '/admin/customers': Customers,

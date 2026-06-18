@@ -30,7 +30,10 @@ export default function Categories() {
         '-',
         category.isActive ? 'Yes' : 'No',
         category.displayOrder,
-        <button onClick={() => remove(category)} className="font-black text-rose">Delete</button>,
+        <div className="flex items-center gap-3">
+          <a href={`#/admin/categories/edit?id=${category._id}`} className="font-black text-wine">Edit</a>
+          <button onClick={() => remove(category)} className="font-black text-rose">Delete</button>
+        </div>,
       ])} />
     </AdminPage>
   );

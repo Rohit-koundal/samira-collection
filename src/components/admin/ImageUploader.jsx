@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
+import { compressImageFile, isSupportedImageFile } from '../../services/imageCompression';
 
 const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
@@ -17,21 +18,28 @@ export default function ImageUploader({ value = [], onChange, multiple = false, 
     if (!incoming.length) return;
     if (files.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
 
-    const converted = [];
-    for (const file of incoming) {
-      if (!allowedTypes.includes(file.type)) return setError('Only JPG, PNG, and WEBP images are allowed.');
-      if (file.size > maxSizeMb * 1024 * 1024) return setError(`Each image must be under ${maxSizeMb}MB.`);
-      converted.push(file);
-    }
     setUploading(true);
     try {
+      const converted = [];
+      for (const file of incoming) {
+        if (!isSupportedImageFile(file) || !allowedTypes.includes(file.type)) {
+          throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
+        }
+        const compressedFile = await compressImageFile(file, {
+          maxOriginalSizeMb: maxSizeMb,
+          targetMinBytes: 300 * 1024,
+          targetMaxBytes: 500 * 1024,
+        });
+        converted.push(compressedFile);
+      }
+
       const data = await api.upload('/admin/uploads', converted);
       const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
       const uploaded = uploadedFiles.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));
       onChange(multiple ? [...files, ...uploaded] : uploaded.slice(0, 1));
     } catch (uploadError) {
-      setError(uploadError.message);
+      setError(uploadError.message || 'Image upload failed. Please try again.');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setUploading(false);
