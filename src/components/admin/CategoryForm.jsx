@@ -88,6 +88,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
         <ImageUploader
           label="Choose Category Image"
           helpText="This image will be used on category cards. Only the uploaded image URL is saved."
+          uploadContext="categories"
           value={form.image ? [{ url: form.image }] : []}
           onChange={(images) => update('image', images[0]?.url || '')}
           compressAboveMb={2}

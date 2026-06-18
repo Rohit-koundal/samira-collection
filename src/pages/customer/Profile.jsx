@@ -7,7 +7,7 @@ const accountLinks = [
   { title: 'Collections & Wishlist', subtitle: 'All your curated product collections', icon: Heart, action: '/wishlist' },
   { title: 'Addresses', subtitle: 'Save addresses for a hassle-free checkout', icon: MapPin, action: '/profile/addresses' },
   { title: 'Coupons', subtitle: 'Manage coupons for additional discounts', icon: ShieldCheck },
-  { title: 'Profile Details', subtitle: 'Change your profile details', icon: FileText },
+  { title: 'Profile Details', subtitle: 'Change your profile details', icon: FileText, action: '/profile/details' },
 ];
 
 const footerLinks = ['FAQs', 'ABOUT US', 'TERMS OF USE', 'CUSTOMER POLICIES', 'USEFUL LINKS'];

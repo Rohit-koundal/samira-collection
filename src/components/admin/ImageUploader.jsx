@@ -10,9 +10,10 @@ export default function ImageUploader({
   onChange,
   multiple = false,
   maxFiles = 1,
+  uploadContext = 'products',
   compressAboveMb = 2,
   maxUploadMb = 20,
-  targetSizeMb = 0.5,
+  targetSizeMb = 0.7,
   label = 'Choose Images',
   helpText = 'Drag and drop or click to upload.',
 }) {
@@ -21,6 +22,7 @@ export default function ImageUploader({
   const [uploading, setUploading] = useState(false);
   const [phase, setPhase] = useState('');
   const [progress, setProgress] = useState(0);
+  const [recentUploads, setRecentUploads] = useState([]);
 
   const files = (Array.isArray(value) ? value : value ? [value] : []).filter((file) => file?.url);
 
@@ -28,6 +30,7 @@ export default function ImageUploader({
     setError('');
     setPhase('');
     setProgress(0);
+    setRecentUploads([]);
     const incoming = Array.from(selected);
     if (!incoming.length) return;
     if (files.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
@@ -35,6 +38,7 @@ export default function ImageUploader({
     setUploading(true);
     try {
       const converted = [];
+      const uploadStats = [];
       for (const file of incoming) {
         if (!isSupportedImageFile(file) || !allowedTypes.includes(file.type)) {
           throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
@@ -46,14 +50,22 @@ export default function ImageUploader({
         const compressedFile = await compressImageFile(file, {
           maxOriginalSizeMb: compressAboveMb,
           targetMaxSizeMb: targetSizeMb,
+          maxWidthOrHeight: 1600,
           onProgress: (value) => setProgress(Math.max(0, Math.min(100, Math.round(value || 0)))),
         });
         converted.push(compressedFile);
+        uploadStats.push({
+          name: file.name,
+          originalSize: Number(file.size || 0),
+          compressedSize: Number(compressedFile.size || 0),
+          convertedToWebp: Boolean(compressedFile.__compressionMeta?.convertedToWebp),
+        });
       }
+      setRecentUploads(uploadStats);
 
       setPhase('uploading');
       setProgress(100);
-      const data = await api.upload('/admin/uploads', converted);
+      const data = await api.upload(`/admin/uploads?folder=${encodeURIComponent(uploadContext)}`, converted);
       const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
       const uploaded = uploadedFiles.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));
@@ -106,6 +118,20 @@ export default function ImageUploader({
       )}
       <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} onChange={(event) => addFiles(event.target.files)} className="hidden" />
       {error && <p className="text-sm font-bold text-rose">{error}</p>}
+      {recentUploads.length > 0 && (
+        <div className="space-y-2 rounded-xl bg-white p-3 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Compression Summary</p>
+          {recentUploads.map((item) => (
+            <div key={`${item.name}-${item.originalSize}`} className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-600">
+              <span className="min-w-0 truncate">{item.name}</span>
+              <span className="shrink-0 text-right">
+                {formatFileSize(item.originalSize)} → {formatFileSize(item.compressedSize)}
+                {item.convertedToWebp ? ' · WEBP' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {files.map((file, index) => (
           <div key={`${file.url}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -120,4 +146,10 @@ export default function ImageUploader({
       </div>
     </div>
   );
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }

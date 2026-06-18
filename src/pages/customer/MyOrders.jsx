@@ -1,18 +1,34 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, CircleX, PackageCheck, RefreshCcw, Sparkles, Truck } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui';
+import { useAuth } from '../../context/AuthContext';
 import { normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
 
 export default function MyOrders({ navigate }) {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
 
   useEffect(() => {
-    api.get('/orders/my-orders').then(setOrders).catch((err) => setError(err.message)).finally(() => setLoading(false));
-  }, []);
+    if (!user?._id && !user?.id) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    api.get('/orders/my-orders')
+      .then(setOrders)
+      .catch((err) => {
+        setOrders([]);
+        setError(err.message);
+      })
+      .finally(() => setLoading(false));
+  }, [user?._id, user?.id]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');

@@ -23,6 +23,7 @@ const Checkout = lazy(() => import('./pages/customer/Checkout'));
 const Login = lazy(() => import('./pages/customer/Login'));
 const Register = lazy(() => import('./pages/customer/Register'));
 const Profile = lazy(() => import('./pages/customer/Profile'));
+const ProfileDetails = lazy(() => import('./pages/customer/ProfileDetails'));
 const AddressManagement = lazy(() => import('./pages/customer/AddressManagement'));
 const MyOrders = lazy(() => import('./pages/customer/MyOrders'));
 const OrderDetail = lazy(() => import('./pages/customer/OrderDetail'));
@@ -59,6 +60,7 @@ const customerRoutes = {
   '/login': Login,
   '/register': Register,
   '/profile': Profile,
+  '/profile/details': ProfileDetails,
   '/profile/addresses': AddressManagement,
   '/profile/addresses/new': AddressManagement,
   '/profile/addresses/edit': AddressManagement,
@@ -127,9 +129,9 @@ function AppShell({ route, navigate }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const mobileLoaderActive = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
   const [showMobileLoader, setShowMobileLoader] = useState(false);
-  const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist'];
+  const protectedRoutes = ['/profile', '/profile/details', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
-  const hideMobileBottomNavRoutes = ['/checkout'];
+  const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user?._id, user?.id, user?.phone]);

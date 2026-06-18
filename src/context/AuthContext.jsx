@@ -96,6 +96,33 @@ export function AuthProvider({ children, navigate }) {
     }
   }, [navigate, persist, resetSessionCache]);
 
+  const updateProfile = useCallback(async (payload) => {
+    const profile = await api.put('/auth/profile', payload);
+    dispatch(setUserAction(profile));
+    resetSessionCache();
+    setToast('Profile updated successfully');
+    return profile;
+  }, [dispatch, resetSessionCache]);
+
+  const sendProfilePhoneChangeOtp = useCallback((phone) => api.post('/auth/profile/send-phone-change-otp', { phone }), []);
+  const verifyProfilePhoneChangeOtp = useCallback((payload) => api.post('/auth/profile/verify-phone-change-otp', payload), []);
+  const sendProfileEmailChangeOtp = useCallback((email) => api.post('/auth/profile/send-email-change-otp', { email }), []);
+  const verifyProfileEmailChangeOtp = useCallback((payload) => api.post('/auth/profile/verify-email-change-otp', payload), []);
+
+  const deleteProfile = useCallback(async () => {
+    const response = await api.delete('/auth/profile');
+    dispatch(logoutAction());
+    dispatch(samiraApi.util.resetApiState());
+    try {
+      localStorage.removeItem('samira_login_prompt_dismissed');
+    } catch {
+      // Ignore storage failures.
+    }
+    setToast(response?.message || 'Account deleted successfully');
+    navigate('/');
+    return response;
+  }, [dispatch, navigate]);
+
   const logout = useCallback(() => {
     dispatch(logoutAction());
     dispatch(samiraApi.util.resetApiState());
@@ -114,6 +141,12 @@ export function AuthProvider({ children, navigate }) {
     resendOtp,
     verifyOtp,
     switchMode,
+    updateProfile,
+    sendProfilePhoneChangeOtp,
+    verifyProfilePhoneChangeOtp,
+    sendProfileEmailChangeOtp,
+    verifyProfileEmailChangeOtp,
+    deleteProfile,
     refreshProfile,
     logout,
     toast,
@@ -122,7 +155,7 @@ export function AuthProvider({ children, navigate }) {
     isAdmin: user?.role === 'admin',
     activeMode: user?.activeMode || 'customer',
     availableModes: user?.availableModes || ['customer'],
-  }), [login, logout, refreshProfile, resendOtp, sendOtp, switchMode, toast, user, verifyOtp]);
+  }), [deleteProfile, login, logout, refreshProfile, resendOtp, sendOtp, sendProfileEmailChangeOtp, sendProfilePhoneChangeOtp, switchMode, toast, updateProfile, user, verifyOtp, verifyProfileEmailChangeOtp, verifyProfilePhoneChangeOtp]);
 
   return (
     <AuthContext.Provider value={value}>
