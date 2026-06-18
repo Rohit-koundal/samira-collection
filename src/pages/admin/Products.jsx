@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
+import { normalizeImageUrl } from '../../services/normalize';
 import ConfirmModal from '../../components/admin/ConfirmModal';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
@@ -110,7 +111,7 @@ export default function Products() {
           <tr key={product._id} className="border-t border-slate-100 align-top">
             <td className="px-4 py-4">
               <div className="flex items-center gap-3">
-                <img src={product.images?.[0]?.url || '/uploads/placeholder.jpg'} alt="" className="h-12 w-12 rounded-xl bg-[#f7f2eb] object-cover" />
+                <img src={normalizeImageUrl(product.images?.[0]?.url) || normalizeImageUrl('/uploads/placeholder.jpg')} alt="" className="h-12 w-12 rounded-xl bg-[#f7f2eb] object-cover" />
                 <div>
                   <p className="font-black text-charcoal">{product.name}</p>
                   <p className="text-xs font-semibold text-slate-500">{product.fabric || 'Fashion'} | {product.occasion || 'Collection'}</p>
