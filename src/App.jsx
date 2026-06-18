@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -9,7 +9,9 @@ import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
 import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
+import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
+import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
 import { createStoragePlan } from './utils/userStorage';
 
 const Home = lazy(() => import('./pages/customer/Home'));
@@ -123,8 +125,11 @@ function AppShell({ route, navigate }) {
   const { user } = useAuth();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const mobileLoaderActive = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
+  const [showMobileLoader, setShowMobileLoader] = useState(false);
   const protectedRoutes = ['/profile', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
+  const hideMobileBottomNavRoutes = ['/checkout'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user?._id, user?.id, user?.phone]);
@@ -184,6 +189,21 @@ function AppShell({ route, navigate }) {
     return () => media.removeEventListener('change', onChange);
   }, []);
 
+  useEffect(() => {
+    if (!isMobile) {
+      setShowMobileLoader(false);
+      return;
+    }
+
+    if (!mobileLoaderActive) {
+      const hideTimer = window.setTimeout(() => setShowMobileLoader(false), 120);
+      return () => window.clearTimeout(hideTimer);
+    }
+
+    const showTimer = window.setTimeout(() => setShowMobileLoader(true), 120);
+    return () => window.clearTimeout(showTimer);
+  }, [isMobile, mobileLoaderActive]);
+
   const closeLoginPrompt = () => {
     markLoginPromptDismissed();
     setShowLoginPrompt(false);
@@ -226,7 +246,7 @@ function AppShell({ route, navigate }) {
                 {mainContent}
               </main>
               {showShell && <Footer navigate={navigate} />}
-              {showShell && <MobileBottomNav active={routePath} navigate={navigate} />}
+              {showShell && !hideMobileBottomNavRoutes.includes(routePath) && <MobileBottomNav active={routePath} navigate={navigate} />}
               {showShell && (
                 <LoginPrompt
                   open={showLoginPrompt}
@@ -246,14 +266,18 @@ function AppShell({ route, navigate }) {
           )}
         </WishlistProvider>
       </CartProvider>
+      {showMobileLoader && <MobileOverlayLoader />}
     </div>
   );
 }
 
 function RouteFallback() {
   return (
-    <div className="grid min-h-[50vh] place-items-center px-4 text-sm font-black text-slate-500">
-      Loading...
-    </div>
+    <>
+      <MobileOverlayLoader />
+      <div className="hidden min-h-[50vh] place-items-center px-4 text-sm font-black text-slate-500 md:grid">
+        Loading...
+      </div>
+    </>
   );
 }

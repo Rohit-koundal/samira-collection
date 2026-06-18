@@ -1,15 +1,10 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { ChevronRight, FileText, Gift, Heart, IndianRupee, MapPin, Package, ReceiptText, ShieldCheck, WalletCards, WalletMinimal } from 'lucide-react';
+import { ChevronRight, FileText, Heart, MapPin, Package, ShieldCheck } from 'lucide-react';
 
 const accountLinks = [
   { title: 'Orders', subtitle: 'Check your order status', icon: Package, action: '/orders' },
   { title: 'Collections & Wishlist', subtitle: 'All your curated product collections', icon: Heart, action: '/wishlist' },
-  { title: 'Myntra Credit', subtitle: 'Manage all your refunds & gift cards', icon: WalletMinimal },
-  { title: 'MynCash', subtitle: 'Earn MynCash as you shop and use them in checkout', icon: Gift },
-  { title: 'Saved Cards', subtitle: 'Save your cards for faster checkout', icon: WalletCards },
-  { title: 'Saved UPI', subtitle: 'View your saved UPI', icon: ReceiptText },
-  { title: 'Wallets/BNPL', subtitle: 'View your saved Wallets and BNPL', icon: IndianRupee },
   { title: 'Addresses', subtitle: 'Save addresses for a hassle-free checkout', icon: MapPin, action: '/profile/addresses' },
   { title: 'Coupons', subtitle: 'Manage coupons for additional discounts', icon: ShieldCheck },
   { title: 'Profile Details', subtitle: 'Change your profile details', icon: FileText },

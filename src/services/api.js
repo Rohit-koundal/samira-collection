@@ -1,5 +1,6 @@
 import { samiraApi } from '../store/apiSlice';
 import { store } from '../store/store';
+import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 function customerSafeMessage(message, status, path = '', code = '') {
   if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
@@ -32,6 +33,7 @@ async function request(path, options = {}) {
     ? endpoint.initiate({ path })
     : endpoint.initiate({ path, method, body });
   const promise = store.dispatch(action);
+  startMobileLoader();
 
   try {
     const result = await promise.unwrap();
@@ -39,6 +41,7 @@ async function request(path, options = {}) {
   } catch (error) {
     throw toCustomerError(error, path);
   } finally {
+    stopMobileLoader();
     if (method === 'GET') promise.unsubscribe?.();
   }
 }
@@ -50,10 +53,13 @@ const api = {
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
   upload: async (path, files) => {
+    startMobileLoader();
     try {
       return await store.dispatch(samiraApi.endpoints.upload.initiate({ path, files })).unwrap();
     } catch (error) {
       throw toCustomerError(error, path, 'Upload failed');
+    } finally {
+      stopMobileLoader();
     }
   },
 };

@@ -26,6 +26,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
   const [addresses, setAddresses] = useState([]);
   const [form, setForm] = useState(emptyAddress);
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = () =>
     api
@@ -67,6 +68,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
   const save = async (event) => {
     event.preventDefault();
     setMessage('');
+    setSaving(true);
     try {
       if (routePath === '/profile/addresses/edit' && editorId) {
         await api.put(`/user/addresses/${editorId}`, form);
@@ -77,6 +79,8 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
       navigate?.('/profile/addresses');
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -112,6 +116,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
               message={message}
               editing={routePath === '/profile/addresses/edit'}
               onCancel={goBack}
+              saving={saving}
             />
           </div>
         ) : (
@@ -193,7 +198,7 @@ function AddressCard({ address, onEdit, onRemove }) {
   );
 }
 
-export function AddressForm({ form, setForm, onSubmit, message, editing, onCancel }) {
+export function AddressForm({ form, setForm, onSubmit, message, editing, onCancel, saving = false }) {
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   return (
@@ -202,6 +207,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
         <button
           type="button"
           onClick={onCancel}
+          disabled={saving}
           className="grid h-10 w-10 place-items-center rounded-full text-slate-600 hover:bg-slate-100"
           aria-label="Back"
         >
@@ -218,10 +224,10 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           <p className="text-[12px] font-bold uppercase tracking-[0.04em] text-slate-500">Contact Details</p>
           <div className="grid gap-3">
             <FieldRow icon={UserRound}>
-              <TextInput value={form.fullName || ''} onChange={(event) => update('fullName', event.target.value)} placeholder="Full Name *" />
+              <TextInput value={form.fullName || ''} onChange={(event) => update('fullName', event.target.value)} placeholder="Full Name *" disabled={saving} />
             </FieldRow>
             <FieldRow icon={Phone}>
-              <TextInput value={form.mobile || ''} onChange={(event) => update('mobile', event.target.value)} placeholder="Mobile Number *" inputMode="tel" />
+              <TextInput value={form.mobile || ''} onChange={(event) => update('mobile', event.target.value)} placeholder="Mobile Number *" inputMode="tel" disabled={saving} />
             </FieldRow>
           </div>
         </div>
@@ -230,10 +236,10 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           <p className="text-[12px] font-bold uppercase tracking-[0.04em] text-slate-500">Address Details</p>
           <div className="grid grid-cols-2 gap-3">
             <FieldRow icon={MapPinned}>
-              <TextInput value={form.pincode || ''} onChange={(event) => update('pincode', event.target.value)} placeholder="Pincode *" />
+              <TextInput value={form.pincode || ''} onChange={(event) => update('pincode', event.target.value)} placeholder="Pincode *" disabled={saving} />
             </FieldRow>
             <FieldRow icon={Building2}>
-              <Select value={form.state || ''} onChange={(event) => update('state', event.target.value)}>
+              <Select value={form.state || ''} onChange={(event) => update('state', event.target.value)} disabled={saving}>
                 <option value="">State *</option>
                 <option>Himachal Pradesh</option>
                 <option>Punjab</option>
@@ -244,16 +250,16 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
             </FieldRow>
           </div>
           <FieldRow icon={Home}>
-            <TextInput value={form.houseNo || ''} onChange={(event) => update('houseNo', event.target.value)} placeholder="House No. / Tower / Block *" />
+            <TextInput value={form.houseNo || ''} onChange={(event) => update('houseNo', event.target.value)} placeholder="House No. / Tower / Block *" disabled={saving} />
           </FieldRow>
           <FieldRow icon={MapPinned}>
-            <TextInput value={form.area || ''} onChange={(event) => update('area', event.target.value)} placeholder="Address (Building, Street, Area) *" />
+            <TextInput value={form.area || ''} onChange={(event) => update('area', event.target.value)} placeholder="Address (Building, Street, Area) *" disabled={saving} />
           </FieldRow>
           <FieldRow icon={BriefcaseBusiness}>
-            <TextInput value={form.landmark || ''} onChange={(event) => update('landmark', event.target.value)} placeholder="Locality / Town *" />
+            <TextInput value={form.landmark || ''} onChange={(event) => update('landmark', event.target.value)} placeholder="Locality / Town *" disabled={saving} />
           </FieldRow>
           <FieldRow icon={Building2}>
-            <TextInput value={form.city || ''} onChange={(event) => update('city', event.target.value)} placeholder="City / District *" />
+            <TextInput value={form.city || ''} onChange={(event) => update('city', event.target.value)} placeholder="City / District *" disabled={saving} />
           </FieldRow>
         </div>
 
@@ -271,6 +277,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
                   key={option.value}
                   type="button"
                   onClick={() => update('addressType', option.value)}
+                  disabled={saving}
                   className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
                     active ? 'border-[#ff5f86] bg-[#fff0f4]' : 'border-slate-200 bg-white'
                   }`}
@@ -287,7 +294,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
             })}
           </div>
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-[12px] text-slate-600">
-            <input type="checkbox" checked={form.isDefault} onChange={(event) => update('isDefault', event.target.checked)} className="accent-rose" />
+            <input type="checkbox" checked={form.isDefault} onChange={(event) => update('isDefault', event.target.checked)} className="accent-rose" disabled={saving} />
             Make this my default address
           </label>
         </div>
@@ -295,11 +302,11 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
         {message && <p className="error-text font-semibold text-rose">{message}</p>}
 
         <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-4">
-          <Button type="button" variant="secondary" onClick={onCancel} className="h-11 rounded-xl border border-slate-300 bg-white text-[#3f465c]">
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={saving} className="h-11 rounded-xl border border-slate-300 bg-white text-[#3f465c]">
             Cancel
           </Button>
-          <Button type="submit" className="h-11 rounded-xl bg-[#ff5f86] text-white hover:bg-[#ff4c7b]">
-            {editing ? 'Update Address' : 'Save Address'}
+          <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-[#ff5f86] text-white hover:bg-[#ff4c7b]">
+            {saving ? 'Saving...' : editing ? 'Update Address' : 'Save Address'}
           </Button>
         </div>
       </CardContent>
