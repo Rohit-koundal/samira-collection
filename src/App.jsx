@@ -236,7 +236,9 @@ function AppShell({ route, navigate }) {
                     setShowLoginPrompt(false);
                     const redirectQuery = `redirect=${encodeURIComponent(route)}`;
                     const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
-                    navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
+                    const autoSendQuery = phone ? 'autoSendOtp=1' : '';
+                    const consentQuery = phone ? 'consent=1' : '';
+                    navigate(`/login?${[redirectQuery, phoneQuery, autoSendQuery, consentQuery].filter(Boolean).join('&')}`);
                   }}
                 />
               )}

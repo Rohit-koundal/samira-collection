@@ -10,6 +10,7 @@ export default function Login({ route = '/login' }) {
   const searchParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const redirectTo = searchParams.get('redirect') || '/profile';
   const initialMode = searchParams.get('mode') || 'otp';
+  const autoSendOtp = searchParams.get('autoSendOtp') === '1';
   const savedOtpState = readOtpState();
   const { sendOtp, verifyOtp, resendOtp, login } = useAuth();
   const routePhone = searchParams.get('phone') || '';
@@ -19,11 +20,12 @@ export default function Login({ route = '/login' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [consent, setConsent] = useState(false);
+  const [consent, setConsent] = useState(searchParams.get('consent') === '1');
   const [cooldown, setCooldown] = useState(() => getRemainingCooldown(savedOtpState?.cooldownExpiresAt));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
+  const [autoRequested, setAutoRequested] = useState(false);
   const inputs = useRef([]);
   const normalizedPhone = normalizePhone(phone, countryCode);
   const isOtpComplete = otp.every(Boolean);
@@ -47,6 +49,13 @@ export default function Login({ route = '/login' }) {
       cooldownExpiresAt: Date.now() + cooldown * 1000,
     });
   }, [cooldown, countryCode, normalizedPhone, phone, step]);
+
+  useEffect(() => {
+    if (!autoSendOtp || autoRequested) return;
+    if (step !== 'phone' || !normalizedPhone || !consent || loading) return;
+    setAutoRequested(true);
+    requestOtp();
+  }, [autoRequested, autoSendOtp, consent, loading, normalizedPhone, step]);
 
   const requestOtp = async (event) => {
     event?.preventDefault();

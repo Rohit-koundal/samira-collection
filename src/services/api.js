@@ -1,7 +1,10 @@
 import { samiraApi } from '../store/apiSlice';
 import { store } from '../store/store';
 
-function customerSafeMessage(message, status, path = '') {
+function customerSafeMessage(message, status, path = '', code = '') {
+  if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
+    return 'Image storage is not configured for production uploads yet. Please connect Cloudinary or R2, then upload again.';
+  }
   const text = String(message || '').toLowerCase();
   if (status === 503 || text.includes('database unavailable') || text.includes('mongodb') || text.includes('mongo_uri') || text.includes('atlas')) {
     if (path.includes('/auth/')) return 'Login service is temporarily unavailable. Please try again in a few minutes.';
@@ -59,7 +62,7 @@ function toCustomerError(error, path, fallbackMessage) {
   const status = error?.status || error?.originalStatus || 500;
   const data = error?.data || {};
   const message = data.message || error?.message || fallbackMessage;
-  const customerError = new Error(customerSafeMessage(message, status, path));
+  const customerError = new Error(customerSafeMessage(message, status, path, data.code));
   customerError.status = status;
   customerError.code = data.code;
   customerError.details = message;
