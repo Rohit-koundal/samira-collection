@@ -8,7 +8,10 @@ export default function MobileOverlayLoader() {
     >
       <span className="relative block h-8 w-8">
         <span className="absolute inset-0 rounded-full border-[2.5px] border-[#f4b6c5]" />
-        <span className="absolute inset-0 animate-spin rounded-full border-[2.5px] border-transparent border-t-[#a7284c] border-r-[#a7284c]" />
+        <span
+          className="absolute inset-0 rounded-full border-[2.5px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
+          style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
+        />
       </span>
     </div>
   );

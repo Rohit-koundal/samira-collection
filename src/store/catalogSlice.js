@@ -1,7 +1,7 @@
 import { createSelector, createSlice } from '@reduxjs/toolkit';
 
 const sortOptions = ['newest', 'priceLowHigh', 'priceHighLow', 'discount', 'rating'];
-export const clearableCatalogFilterKeys = ['category', 'size', 'color', 'fabric', 'occasion', 'discount', 'rating', 'stock', 'minPrice', 'maxPrice'];
+export const clearableCatalogFilterKeys = ['category', 'size', 'color', 'fabric', 'occasion', 'discount', 'rating', 'stock', 'minPrice', 'maxPrice', 'featured', 'newArrival', 'bestSeller', 'trending'];
 
 const initialState = {
   search: '',
@@ -19,6 +19,7 @@ const initialState = {
   featured: '',
   newArrival: '',
   bestSeller: '',
+  trending: '',
 };
 
 const catalogSlice = createSlice({
@@ -66,6 +67,7 @@ export function normalizeCatalogQuery(query = {}) {
     featured: normalizeToggle(source.featured),
     newArrival: normalizeToggle(source.newArrival),
     bestSeller: normalizeToggle(source.bestSeller),
+    trending: normalizeToggle(source.trending),
   };
 }
 
@@ -111,6 +113,7 @@ function matchesFilters(product, filters, categories) {
   if (filters.featured === 'true' && !product.isFeatured) return false;
   if (filters.newArrival === 'true' && !product.isNewArrival) return false;
   if (filters.bestSeller === 'true' && !product.isBestSeller) return false;
+  if (filters.trending === 'true' && !product.showInTrending) return false;
   return true;
 }
 

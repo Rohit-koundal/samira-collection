@@ -99,6 +99,16 @@ img {
   font-family: var(--font-auth-app);
 }
 
+@keyframes samira-loader-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @layer components {
   .page-title,
   .section-title {

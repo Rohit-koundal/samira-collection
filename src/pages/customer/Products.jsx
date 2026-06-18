@@ -19,7 +19,6 @@ import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
   const [openFilters, setOpenFilters] = useState(false);
-  const [openSort, setOpenSort] = useState(false);
   const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
   const routeQuery = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const filters = useSelector(selectCatalogFilters);
@@ -31,6 +30,7 @@ export default function Products({ navigate, route = '/products' }) {
     return normalizeProducts(Array.isArray(productData) ? productData : []);
   }, [productData]);
   const visibleProducts = useSelector((state) => selectVisibleProducts(state, catalog, categories));
+  const collectionLabel = useMemo(() => getCollectionLabel(routeQuery, filters), [routeQuery, filters]);
 
   useLayoutEffect(() => {
     dispatch(replaceCatalogFilters(normalizeCatalogQuery(routeQuery)));
@@ -38,6 +38,8 @@ export default function Products({ navigate, route = '/products' }) {
 
   const syncCatalogRoute = (nextFilters) => {
     const nextParams = createCatalogSearchParams(nextFilters);
+    const collection = routeQuery.get('collection');
+    if (collection) nextParams.set('collection', collection);
     navigate(`${basePath}${nextParams.toString() ? `?${nextParams}` : ''}`);
   };
 
@@ -48,22 +50,25 @@ export default function Products({ navigate, route = '/products' }) {
   };
 
   const clearFilterParams = () => {
-    const nextFilters = clearCatalogFilters(filters);
+    const nextFilters = {
+      ...clearCatalogFilters(filters),
+      ...getPinnedCollectionFilters(routeQuery),
+    };
     dispatch(replaceCatalogFilters(nextFilters));
     syncCatalogRoute(nextFilters);
   };
 
   return (
-    <section className="container-page bg-white pb-36 pt-3 md:bg-transparent md:py-10">
-      <div className="mb-6">
+    <section className="container-page bg-white pb-10 pt-3 md:bg-transparent md:py-10">
+      <div className="mb-4 hidden md:block md:mb-6">
         {/* <p className="small-text font-bold uppercase tracking-[0.14em] text-slate-500 md:text-xs md:tracking-[0.2em]">Home / Products</p> */}
         <div className="mt-2 md:mt-3">
           <div className="flex items-start justify-between gap-3 md:flex-wrap md:items-end md:gap-4">
             <div className="min-w-0">
-              <h1 className="page-title sm:text-2xl md:max-w-none md:text-2xl">Products</h1>
-              <p className="body-text mt-2 text-slate-500">{loading ? 'Loading styles...' : `${visibleProducts.length} styles available`}</p>
+              <h1 className="page-title text-[21px] sm:text-2xl md:max-w-none md:text-2xl">{collectionLabel}</h1>
+              <p className="mt-1 text-[11px] text-slate-500">{loading ? '' : `${visibleProducts.length} styles available`}</p>
             </div>
-        <div className="shrink-0">
+        <div className="hidden shrink-0 md:block">
               <select value={filters.sort} onChange={(event) => updateParam('sort', event.target.value)} className="label-text h-10 min-w-[134px] rounded-xl border border-slate-200 bg-white px-3 md:h-11 md:px-4 md:text-sm">
                 <option value="newest">Newest</option>
                 <option value="">All</option>
@@ -76,53 +81,83 @@ export default function Products({ navigate, route = '/products' }) {
           </div>
         </div>
       </div>
+      <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
+        <div>
+          <p className="text-[13px] font-bold text-[#1f2a44]">{collectionLabel}</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">{loading ? '' : `${visibleProducts.length} styles available`}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex h-9 items-center gap-1 rounded-full border border-[#ebe7e2] bg-white px-3 text-[11px] font-medium text-slate-600 shadow-sm">
+            <span>Sort</span>
+            <select value={filters.sort} onChange={(event) => updateParam('sort', event.target.value)} className="appearance-none bg-transparent pr-1 text-[11px] font-semibold text-[#1f2a44] outline-none">
+              <option value="newest">Latest</option>
+              <option value="">All</option>
+              <option value="priceLowHigh">Low-High</option>
+              <option value="priceHighLow">High-Low</option>
+              <option value="discount">Discount</option>
+              <option value="rating">Rating</option>
+            </select>
+          </label>
+          <button onClick={() => setOpenFilters(true)} className="flex h-9 items-center gap-1 rounded-full border border-[#ebe7e2] bg-white px-3 text-[11px] font-semibold text-[#1f2a44] shadow-sm">
+            <Icon name="filter" className="h-3.5 w-3.5" /> Filter
+          </button>
+        </div>
+      </div>
       <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto md:hidden">
-        {categories.map((category) => <button key={category._id || category.id} onClick={() => updateParam('category', category._id || category.id || category.slug || category.name)} className="label-text min-w-max rounded-full bg-white px-3 py-2 shadow-sm">{category.name}</button>)}
+        <button
+          type="button"
+          onClick={() => {
+            const preservedFilters = { ...filters, category: '' };
+            dispatch(replaceCatalogFilters(preservedFilters));
+            syncCatalogRoute(preservedFilters);
+          }}
+          className={`min-w-max rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-sm ${!filters.category ? 'bg-wine text-white' : 'bg-white text-[#1f2a44]'}`}
+        >
+          All
+        </button>
+        {categories.map((category) => {
+          const categoryValue = category._id || category.id || category.slug || category.name;
+          const active = filters.category === categoryValue;
+          return (
+            <button
+              key={categoryValue}
+              onClick={() => updateParam('category', active ? '' : categoryValue)}
+              className={`min-w-max rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-sm ${active ? 'bg-wine text-white' : 'bg-white text-[#1f2a44]'}`}
+            >
+              {category.name}
+            </button>
+          );
+        })}
       </div>
       <div className="flex gap-6">
         <div className="hidden shrink-0 md:block">
           <ProductFilters categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
         </div>
         <div className="min-w-0 flex-1">
-          {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? <div className="rounded-2xl bg-white p-8 text-center font-bold">Loading products...</div> : <ProductGrid products={visibleProducts} navigate={navigate} />}
+          {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
         </div>
       </div>
-      <div className="fixed bottom-16 left-0 right-0 z-40 grid grid-cols-2 border-t border-slate-200 bg-white md:hidden">
-        <button onClick={() => setOpenSort(true)} className="h-12 border-r border-slate-200">Sort</button>
-        <button onClick={() => setOpenFilters(true)} className="flex h-12 items-center justify-center gap-2"><Icon name="filter" className="h-4 w-4" /> Filter</button>
-      </div>
-      {openSort && (
-        <div className="fixed inset-0 z-[70] bg-black/40 md:hidden">
-          <div className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="section-title text-lg">Sort By</h2>
-              <button onClick={() => setOpenSort(false)} className="rounded-full bg-slate-100 px-4 py-2">Close</button>
-            </div>
-            <div className="grid gap-2">
-              {[
-                ['newest', 'Newest'],
-                ['priceLowHigh', 'Price Low-High'],
-                ['priceHighLow', 'Price High-Low'],
-                ['discount', 'Discount'],
-                ['rating', 'Rating'],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => {
-                    updateParam('sort', value);
-                    setOpenSort(false);
-                  }}
-                  className={`rounded-xl px-4 py-3 text-left ${filters.sort === value ? 'bg-blush text-wine' : 'bg-slate-50 text-slate-700'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
       <MobileFilterSheet open={openFilters} onClose={() => setOpenFilters(false)} categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
     </section>
   );
+}
+
+function getCollectionLabel(routeQuery, filters) {
+  const collection = String(routeQuery.get('collection') || '').toLowerCase();
+  if (collection === 'best-sellers' || filters.bestSeller === 'true') return 'Best Sellers';
+  if (collection === 'new-arrivals' || filters.newArrival === 'true') return 'New Arrivals';
+  if (collection === 'trending-now' || filters.trending === 'true') return 'Trending Now';
+  if (collection === 'featured' || filters.featured === 'true') return 'Featured Products';
+  if (filters.search) return 'Search Results';
+  return 'Products';
+}
+
+function getPinnedCollectionFilters(routeQuery) {
+  const collection = String(routeQuery.get('collection') || '').toLowerCase();
+  return {
+    featured: collection === 'featured' ? 'true' : '',
+    newArrival: collection === 'new-arrivals' ? 'true' : '',
+    bestSeller: collection === 'best-sellers' ? 'true' : '',
+    trending: collection === 'trending-now' ? 'true' : '',
+  };
 }

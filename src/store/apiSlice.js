@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { getApiBaseUrl } from './apiBaseUrl';
 import { logout, setCredentials } from './authSlice';
+import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
@@ -12,32 +13,37 @@ const rawBaseQuery = fetchBaseQuery({
 });
 
 async function baseQueryWithRefresh(args, api, extraOptions) {
-  let result = await rawBaseQuery(args, api, extraOptions);
+  startMobileLoader();
+  try {
+    let result = await rawBaseQuery(args, api, extraOptions);
 
-  if (result.error?.status === 401) {
-    const refreshToken = api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token');
-    if (refreshToken) {
-      const refreshResult = await rawBaseQuery({
-        url: '/auth/refresh',
-        method: 'POST',
-        body: { refreshToken },
-      }, api, extraOptions);
+    if (result.error?.status === 401) {
+      const refreshToken = api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token');
+      if (refreshToken) {
+        const refreshResult = await rawBaseQuery({
+          url: '/auth/refresh',
+          method: 'POST',
+          body: { refreshToken },
+        }, api, extraOptions);
 
-      if (refreshResult.data?.token && refreshResult.data?.user) {
-        api.dispatch(setCredentials(refreshResult.data));
-        window.dispatchEvent(new CustomEvent('samira:session-refreshed', { detail: refreshResult.data.user }));
-        result = await rawBaseQuery(args, api, extraOptions);
+        if (refreshResult.data?.token && refreshResult.data?.user) {
+          api.dispatch(setCredentials(refreshResult.data));
+          window.dispatchEvent(new CustomEvent('samira:session-refreshed', { detail: refreshResult.data.user }));
+          result = await rawBaseQuery(args, api, extraOptions);
+        } else {
+          api.dispatch(logout());
+          window.dispatchEvent(new Event('samira:session-expired'));
+        }
       } else {
         api.dispatch(logout());
         window.dispatchEvent(new Event('samira:session-expired'));
       }
-    } else {
-      api.dispatch(logout());
-      window.dispatchEvent(new Event('samira:session-expired'));
     }
-  }
 
-  return result;
+    return result;
+  } finally {
+    stopMobileLoader();
+  }
 }
 
 function params(query) {

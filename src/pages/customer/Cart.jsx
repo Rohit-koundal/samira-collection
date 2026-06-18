@@ -7,6 +7,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import api from '../../services/api';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
+import { startMobileLoader, stopMobileLoader } from '../../utils/mobileLoader';
 
 export default function Cart({ navigate }) {
   const cart = useCart();
@@ -20,10 +21,36 @@ export default function Cart({ navigate }) {
   const [showOffers, setShowOffers] = useState(false);
 
   useEffect(() => {
-    api.get('/products?sort=rating')
-      .then((items) => setRecommended(normalizeProducts(items).slice(0, 8)))
-      .catch(() => setRecommended([]));
-    api.get('/coupons').then((items) => setCoupons(items || [])).catch(() => setCoupons([]));
+    let active = true;
+    startMobileLoader();
+
+    Promise.allSettled([
+      api.get('/products?sort=rating'),
+      api.get('/coupons'),
+    ])
+      .then(([productsResult, couponsResult]) => {
+        if (!active) return;
+
+        if (productsResult.status === 'fulfilled') {
+          setRecommended(normalizeProducts(productsResult.value).slice(0, 8));
+        } else {
+          setRecommended([]);
+        }
+
+        if (couponsResult.status === 'fulfilled') {
+          setCoupons(couponsResult.value || []);
+        } else {
+          setCoupons([]);
+        }
+      })
+      .finally(() => {
+        if (active) stopMobileLoader();
+      });
+
+    return () => {
+      active = false;
+      stopMobileLoader();
+    };
   }, []);
 
   const selectedCount = cart.itemCount;
@@ -38,6 +65,7 @@ export default function Cart({ navigate }) {
 
   const applyCoupon = async (couponCode = code) => {
     setMessage('');
+    startMobileLoader();
     try {
       const data = await api.post('/coupons/apply', { code: couponCode, cartTotal: cart.sellingTotal });
       cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: Number(data.discountAmount ?? data.discount ?? 0) });
@@ -45,6 +73,8 @@ export default function Cart({ navigate }) {
       setMessage(`${data.couponCode || data.coupon?.code || couponCode} applied`);
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      stopMobileLoader();
     }
   };
 
