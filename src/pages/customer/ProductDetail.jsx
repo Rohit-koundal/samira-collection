@@ -93,15 +93,15 @@ export default function ProductDetail({ navigate, route = '' }) {
 
   return (
     <section className="bg-[#f5f5f6] pb-36 md:bg-ivory md:pb-10 md:pt-8">
-      <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-slate-200 bg-white px-3 md:hidden">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <button type="button" onClick={() => navigate('/products')} className="grid h-8 w-7 place-items-center text-[20px] text-slate-700" aria-label="Back">&lt;</button>
-          <span className="truncate text-[10px] font-medium text-[#1f2a44]">{product.brand || 'Samira Collection'}</span>
+          <button type="button" onClick={() => navigate('/products')} className="grid h-9 w-8 place-items-center text-[22px] text-slate-700" aria-label="Back">&lt;</button>
+          <span className="truncate text-[12px] font-medium text-[#1f2a44]">{product.brand || 'Samira Collection'}</span>
         </div>
         <div className="flex items-center gap-2 text-slate-800">
-          <button type="button" onClick={() => navigate('/search')} className="grid h-8 w-8 place-items-center" aria-label="Search"><Icon name="search" className="h-4.5 w-4.5" /></button>
-          <button type="button" onClick={() => wishlist.toggleWishlist(product)} className={`grid h-8 w-8 place-items-center ${isWishlisted ? 'text-rose' : ''}`} aria-label="Wishlist"><Icon name="heart" className="h-4.5 w-4.5" /></button>
-          <button type="button" onClick={() => navigate('/cart')} className="grid h-8 w-8 place-items-center" aria-label="Cart"><Icon name="bag" className="h-4.5 w-4.5" /></button>
+          <button type="button" onClick={() => navigate('/search')} className="grid h-9 w-9 place-items-center" aria-label="Search"><Icon name="search" className="h-5 w-5" /></button>
+          <button type="button" onClick={() => wishlist.toggleWishlist(product)} className={`grid h-9 w-9 place-items-center ${isWishlisted ? 'text-rose' : ''}`} aria-label="Wishlist"><Icon name="heart" className="h-5 w-5" /></button>
+          <button type="button" onClick={() => navigate('/cart')} className="grid h-9 w-9 place-items-center" aria-label="Cart"><Icon name="bag" className="h-5 w-5" /></button>
         </div>
       </header>
       <div className="mx-auto max-w-6xl md:grid md:grid-cols-[0.95fr_1fr] md:gap-8 md:px-6">
@@ -113,7 +113,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           >
             {selectedImage ? (
               <button type="button" onClick={() => setOpenGallery(true)} className="block w-full bg-[#f6efe8]">
-                <img src={selectedImage} alt={product.name} className="h-[320px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px] md:object-cover" />
+                <img src={selectedImage} alt={product.name} className="h-[360px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px] md:object-cover" />
               </button>
             ) : (
               <ProductVisual product={product} showMeta={false} />
@@ -125,18 +125,18 @@ export default function ProductDetail({ navigate, route = '' }) {
             >
               View Similar
             </button>
-            <div className="absolute bottom-3 right-3 min-w-[96px] rounded-xl bg-white px-3 py-1.5 text-center text-[10px] font-black shadow md:bottom-4 md:right-4 md:min-w-[106px] md:text-xs">
+            <div className="absolute bottom-3 right-3 min-w-[108px] rounded-xl bg-white px-3 py-2 text-center text-[11px] font-black shadow md:bottom-4 md:right-4 md:min-w-[106px] md:text-xs">
               {Number(product.rating || 0).toFixed(1)} star <span className="mx-2 text-slate-300">|</span> {product.numReviews || reviews.length || 0}
             </div>
           </div>
           {images.length > 1 && (
-            <div className="mt-3 flex justify-center gap-2">
+            <div className="mt-3 flex justify-center gap-2.5">
               {images.slice(0, 8).map((image, index) => (
                 <button
                   key={image}
                   type="button"
                   onClick={() => goToImage(index)}
-                  className={`h-2 w-2 rounded-full ${activeImage === index ? 'bg-slate-700' : 'bg-slate-300'}`}
+                  className={`rounded-full ${activeImage === index ? 'h-2.5 w-2.5 bg-slate-700' : 'h-2.5 w-2.5 bg-slate-300'}`}
                   aria-label={`Show image ${index + 1}`}
                 />
               ))}
@@ -144,68 +144,68 @@ export default function ProductDetail({ navigate, route = '' }) {
           )}
         </div>
 
-        <div className="space-y-2 px-2.5 pt-2.5 md:space-y-7 md:px-0 md:pt-0">
-          <div className="rounded-[10px] bg-white px-3 py-2.5 md:rounded-none md:bg-transparent md:px-0 md:py-0">
+        <div className="space-y-3 px-3 pt-3 md:space-y-7 md:px-0 md:pt-0">
+          <div className="rounded-[14px] bg-white px-4 py-3.5 md:rounded-none md:bg-transparent md:px-0 md:py-0">
             <div className="relative pr-12">
-            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500 md:text-base md:tracking-[0.12em]">{product.brand || 'Samira Collection'}</p>
-            <h1 className="mt-1 text-[14px] font-semibold leading-[1.35] text-slate-900 md:text-[22px]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 md:text-base md:tracking-[0.12em]">{product.brand || 'Samira Collection'}</p>
+            <h1 className="mt-1.5 text-[16px] font-semibold leading-[1.35] text-slate-900 md:text-[22px]">
               {product.name}
             </h1>
             <button
               type="button"
               onClick={() => wishlist.toggleWishlist(product)}
-              className={`absolute right-0 top-0 grid h-7 w-7 place-items-center rounded-full border transition md:h-8 md:w-8 md:rounded-xl ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
+              className={`absolute right-0 top-0 grid h-8 w-8 place-items-center rounded-full border transition md:h-8 md:w-8 md:rounded-xl ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
               aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
               aria-pressed={isWishlisted}
             >
-              <Icon name="heart" className="h-4 w-4 md:h-5 md:w-5" />
+              <Icon name="heart" className="h-4.5 w-4.5 md:h-5 md:w-5" />
             </button>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[16px] font-bold text-charcoal md:text-2xl">Rs. {product.price}</span>
-              <span className="text-[11px] text-slate-400 line-through">Rs. {product.originalPrice}</span>
-              <span className="text-[11px] font-bold text-rose">({product.discountPercentage}% OFF)</span>
+              <span className="text-[18px] font-bold text-charcoal md:text-2xl">Rs. {product.price}</span>
+              <span className="text-[12px] text-slate-400 line-through">Rs. {product.originalPrice}</span>
+              <span className="text-[12px] font-bold text-rose">({product.discountPercentage}% OFF)</span>
             </div>
             <div className="mt-1.5 flex items-center gap-2">
-              <span className="rounded-full bg-[#fff0f4] px-2 py-1 text-[9px] font-bold text-rose">{Number(product.rating || 0).toFixed(1)}</span>
-              <span className="text-[9px] font-medium text-slate-500">{product.numReviews || reviews.length || 0} Ratings</span>
+              <span className="rounded-full bg-[#fff0f4] px-2.5 py-1 text-[10px] font-bold text-rose">{Number(product.rating || 0).toFixed(1)}</span>
+              <span className="text-[10px] font-medium text-slate-500">{product.numReviews || reviews.length || 0} Ratings</span>
             </div>
           </div>
 
-          <div className="rounded-[10px] bg-white p-3 md:rounded-2xl">
+          <div className="rounded-[14px] bg-white p-4 md:rounded-2xl">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-rose">Mega Deal</p>
-                <p className="mt-1 text-[15px] font-bold text-charcoal md:text-xl">Get at Rs. {dealPrice || product.price}</p>
-                <p className="mt-1 text-[9px] text-slate-500">With Coupon + Bank Offer</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-rose">Mega Deal</p>
+                <p className="mt-1 text-[18px] font-bold text-charcoal md:text-xl">Get at Rs. {dealPrice || product.price}</p>
+                <p className="mt-1 text-[10px] text-slate-500">With Coupon + Bank Offer</p>
               </div>
-              <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[9px] font-bold text-white md:text-sm">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
+              <span className="rounded-full bg-emerald-500 px-3 py-1.5 text-[10px] font-bold text-white md:text-sm">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
             </div>
-            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-[10px]">
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px]">
               <span className="text-slate-500">Bank offers &amp; extra savings</span>
               <button type="button" className="font-semibold text-rose">Details</button>
             </div>
           </div>
 
-          <section className="rounded-[10px] bg-white p-3 md:rounded-none md:bg-transparent md:p-0">
+          <section className="rounded-[14px] bg-white p-4 md:rounded-none md:bg-transparent md:p-0">
             <div className="flex items-center justify-between">
-              <h2 className="text-[11px] font-semibold text-charcoal md:text-xl">Size</h2>
-              <button type="button" onClick={() => setOpenSizeChart(true)} className="text-[10px] font-semibold text-rose">Size Chart</button>
+              <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">Size</h2>
+              <button type="button" onClick={() => setOpenSizeChart(true)} className="text-[11px] font-semibold text-rose">Size Chart</button>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
-                <button key={item} type="button" onClick={() => setSize(item)} className={`grid h-7 min-w-7 place-items-center rounded-full border px-2.5 text-[10px] font-semibold md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}>{item}</button>
+                <button key={item} type="button" onClick={() => setSize(item)} className={`grid h-9 min-w-9 place-items-center rounded-full border px-3 text-[11px] font-semibold md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}>{item}</button>
               ))}
             </div>
             {product.colors?.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold text-charcoal">Color: {color}</span>
+                <span className="text-[12px] font-semibold text-charcoal">Color: {color}</span>
                 {product.colors.map((item) => (
                   <button
                     key={item}
                     type="button"
                     onClick={() => setColor(item)}
-                    className={`h-5 w-5 rounded-full ring-1 ring-offset-1 ${color === item ? 'ring-[#7a1f36]' : 'ring-slate-200'}`}
+                    className={`h-6 w-6 rounded-full ring-1 ring-offset-1 ${color === item ? 'ring-[#7a1f36]' : 'ring-slate-200'}`}
                     style={{ backgroundColor: colorSwatches[item] || '#d8b4c0' }}
                     aria-label={`Select color ${item}`}
                     title={item}
@@ -222,11 +222,11 @@ export default function ProductDetail({ navigate, route = '' }) {
             <button disabled={isOutOfStock} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
           </div>
 
-          <section className="rounded-[10px] bg-white p-3 md:space-y-2 md:rounded-none md:bg-transparent md:p-0 md:pt-2">
-            <h2 className="text-[11px] font-semibold text-charcoal md:text-xl">Check Delivery</h2>
+          <section className="rounded-[14px] bg-white p-4 md:space-y-2 md:rounded-none md:bg-transparent md:p-0 md:pt-2">
+            <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">Check Delivery</h2>
             <div className="mt-2 flex gap-2">
-              <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-9 flex-1 rounded-[8px] border border-slate-300 px-3 text-[11px] outline-none focus:border-rose md:h-12 md:rounded-xl md:px-4 md:text-base" placeholder="Enter PIN Code" />
-              <button type="button" className="h-9 rounded-[8px] bg-[#7a1f36] px-4 text-[11px] font-bold text-white md:h-12 md:rounded-xl">Check</button>
+              <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-11 flex-1 rounded-[10px] border border-slate-300 px-3 text-[12px] outline-none focus:border-rose md:h-12 md:rounded-xl md:px-4 md:text-base" placeholder="Enter PIN Code" />
+              <button type="button" className="h-11 rounded-[10px] bg-[#7a1f36] px-5 text-[12px] font-bold text-white md:h-12 md:rounded-xl">Check</button>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <MiniFeature icon="box" title="Express delivery" />
@@ -265,13 +265,13 @@ export default function ProductDetail({ navigate, route = '' }) {
       <ReviewsSection product={product} reviews={reviews} />
 
       <div className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
-        <div className="rounded-[10px] border border-slate-200 bg-white p-4 md:rounded-3xl md:p-5">
+        <div className="rounded-[14px] border border-slate-200 bg-white p-4 md:rounded-3xl md:p-5">
           {[
             `More ${product.category} by ${product.brand || 'Samira Collection'}`,
             `More ${product.colors?.[0] || ''} ${product.category}`,
             `More ${product.category}`,
           ].map((label) => (
-            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 py-3 text-left text-[11px] font-semibold text-[#1f2a44] last:border-b-0 md:text-lg md:font-black">
+            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 py-3.5 text-left text-[12px] font-semibold text-[#1f2a44] last:border-b-0 md:text-lg md:font-black">
               {label.trim()}
               <ChevronRight className="h-4 w-4 text-rose" />
             </button>
@@ -280,13 +280,13 @@ export default function ProductDetail({ navigate, route = '' }) {
         <p className="small-text mt-8 text-slate-500">Product Code: {product.sku || productId}</p>
       </div>
 
-      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white px-2.5 py-2 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
         <div className="grid grid-cols-2 gap-2">
-          <button disabled={isOutOfStock} onClick={buyNow} className="h-10 rounded-[8px] border border-[#7a1f36] bg-white px-3 text-[12px] font-bold text-[#7a1f36] disabled:opacity-50">
+          <button disabled={isOutOfStock} onClick={buyNow} className="h-11 rounded-[10px] border border-[#7a1f36] bg-white px-3 text-[13px] font-bold text-[#7a1f36] disabled:opacity-50">
             Buy Now
           </button>
-          <button disabled={isOutOfStock} onClick={add} className={`flex h-10 items-center justify-center gap-2 rounded-[8px] px-3 text-[12px] font-bold text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
-            <Icon name="bag" className="h-3.5 w-3.5" />
+          <button disabled={isOutOfStock} onClick={add} className={`flex h-11 items-center justify-center gap-2 rounded-[10px] px-3 text-[13px] font-bold text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
+            <Icon name="bag" className="h-4 w-4" />
             {isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
           </button>
         </div>

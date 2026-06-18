@@ -143,9 +143,9 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'size' && (
-              <FilterSection title="Size">
+              <FilterSection>
                 <Accordion title="Size" open={expanded.size} onToggle={() => toggleExpanded('size', setExpanded)}>
-                  <CheckboxList
+                  <SelectionCardList
                     items={filterConfig.size.map((item) => ({ value: item, label: item }))}
                     value={draft.size}
                     onChange={(value) => setDraft((current) => ({ ...current, size: current.size === value ? '' : value }))}
@@ -155,7 +155,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'price' && (
-              <FilterSection title="Price">
+              <FilterSection>
                 <Accordion title="Price" open={expanded.price} onToggle={() => toggleExpanded('price', setExpanded)}>
                   <div className="grid grid-cols-2 gap-3">
                     <PriceInput label="Min Price" value={draft.minPrice} onChange={(value) => setDraft((current) => ({ ...current, minPrice: digitsOnly(value) }))} />
@@ -166,9 +166,9 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'color' && (
-              <FilterSection title="Color">
+              <FilterSection>
                 <Accordion title="Color" open={expanded.color} onToggle={() => toggleExpanded('color', setExpanded)}>
-                  <CheckboxList
+                  <ColorOptionList
                     items={filterConfig.color.map((item) => ({ value: item, label: item }))}
                     value={draft.color}
                     onChange={(value) => setDraft((current) => ({ ...current, color: current.color === value ? '' : value }))}
@@ -178,7 +178,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'fabric' && (
-              <FilterSection title="Fabric">
+              <FilterSection>
                 <Accordion title="Fabric" open={expanded.fabric} onToggle={() => toggleExpanded('fabric', setExpanded)}>
                   <CheckboxList
                     items={filterConfig.fabric.map((item) => ({ value: item, label: item }))}
@@ -190,7 +190,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'discount' && (
-              <FilterSection title="Discount">
+              <FilterSection>
                 <Accordion title="Discount" open={expanded.discount} onToggle={() => toggleExpanded('discount', setExpanded)}>
                   <CheckboxList
                     items={filterConfig.discount}
@@ -202,7 +202,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             )}
 
             {activeSection === 'sort' && (
-              <FilterSection title="Sort By">
+              <FilterSection>
                 <Accordion title="Sort By" open={expanded.sort} onToggle={() => toggleExpanded('sort', setExpanded)}>
                   <CheckboxList
                     items={filterConfig.sort}
@@ -231,7 +231,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
 function FilterSection({ title, children }) {
   return (
     <section>
-      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[#1f2a44]">{title}</h3>
+      {title ? <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[#1f2a44]">{title}</h3> : null}
       {children}
     </section>
   );
@@ -263,6 +263,58 @@ function CheckboxList({ items, value, onChange }) {
           >
             <span className="text-[13px] text-[#1f2a44]">{item.label}</span>
             <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#ff4f7d] bg-[#ff4f7d]' : 'border-slate-300 bg-white'}`}>
+              {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SelectionCardList({ items, value, onChange }) {
+  return (
+    <div className="space-y-2.5">
+      {items.map((item) => {
+        const selected = value === item.value;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#f0e7e2] bg-white px-4 py-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.03)]"
+          >
+            <span className="text-[13px] font-medium text-[#1f2a44]">{item.label}</span>
+            <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>
+              {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ColorOptionList({ items, value, onChange }) {
+  return (
+    <div className="space-y-2">
+      {items.map((item) => {
+        const selected = value === item.value;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-left"
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className={`h-4 w-4 rounded-full border border-white shadow-sm ring-1 ${selected ? 'ring-[#7a1f36]' : 'ring-slate-300'}`}
+                style={{ backgroundColor: filterColorSwatches[item.value] || '#e5e7eb' }}
+              />
+              <span className="text-[13px] text-[#1f2a44]">{item.label}</span>
+            </span>
+            <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>
               {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
             </span>
           </button>
@@ -307,3 +359,14 @@ function digitsOnly(value) {
 function toggleExpanded(key, setExpanded) {
   setExpanded((current) => ({ ...current, [key]: !current[key] }));
 }
+
+const filterColorSwatches = {
+  Wine: '#6d1f34',
+  Blush: '#ffb4c5',
+  Gold: '#b8914a',
+  Ivory: '#f5efe4',
+  Black: '#17161a',
+  Emerald: '#0f6b52',
+  Navy: '#172554',
+  Rose: '#ff5f86',
+};
