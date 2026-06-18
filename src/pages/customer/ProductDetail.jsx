@@ -5,7 +5,7 @@ import { ProductVisual } from '../../components/product/ProductCard';
 import Icon from '../../components/layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
+import { getPrimaryImageIndex, getPrimaryImageUrl, normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
 import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery } from '../../store/apiSlice';
 
 export default function ProductDetail({ navigate, route = '' }) {
@@ -35,7 +35,7 @@ export default function ProductDetail({ navigate, route = '' }) {
     const item = normalizeProduct(productData);
     setSize(item.sizes?.[0] || 'Free Size');
     setColor(item.colors?.[0] || 'Wine');
-    setActiveImage(0);
+    setActiveImage(getPrimaryImageIndex(item.images));
     setOpenGallery(false);
   }, [productData]);
 
@@ -380,7 +380,7 @@ function ProductRail({ title, subtitle, products, navigate }) {
 
 function RailProduct({ product, navigate }) {
   const cart = useCart();
-  const image = product.images?.[0]?.url;
+  const image = getPrimaryImageUrl(product.images);
   const cartItem = cart.getCartItem(product);
   return (
     <article className="w-40 shrink-0 md:w-52">

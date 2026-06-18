@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import Icon from '../layout/Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { isUsableImageUrl, normalizeImageUrl } from '../../services/normalize';
+import { getPrimaryImageUrl, isUsableImageUrl, normalizeImageUrl } from '../../services/normalize';
 
 const swatches = {
   Wine: '#6d1f34',
@@ -17,7 +17,7 @@ const swatches = {
 
 export function ProductVisual({ product, compact = false, showMeta = true }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const image = product.images?.find((item) => isUsableImageUrl(item?.url))?.url;
+  const image = getPrimaryImageUrl(product.images) || product.images?.find((item) => isUsableImageUrl(item?.url))?.url;
   const frameClass = compact ? 'aspect-[4/5] w-full' : 'h-56 w-full md:h-64';
   if (image && !imageFailed) {
     return (

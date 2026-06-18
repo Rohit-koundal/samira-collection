@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
+import { normalizeImageEntries } from '../../services/normalize';
+
+const DRAFT_PREFIX = 'samira-admin-product-draft';
 
 const emptyProduct = {
   name: '',
@@ -38,10 +41,11 @@ const emptyProduct = {
 
 export default function ProductForm({ mode = 'Add', productId, onSaved }) {
   const [categories, setCategories] = useState([]);
-  const [form, setForm] = useState(emptyProduct);
+  const [form, setForm] = useState(() => readDraft(productId) || emptyProduct);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState({});
+  const draftKey = getDraftKey(productId);
 
   useEffect(() => {
     api.get('/categories?admin=true').then(setCategories).catch(() => setCategories([]));
@@ -50,18 +54,36 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
   useEffect(() => {
     if (!productId) return;
     api.get(`/admin/products/${productId}`).then((product) => {
+      const savedDraft = readDraft(productId);
+      const images = normalizeImageEntries((savedDraft?.images?.length ? savedDraft.images : product.images) || []);
+      if (images.length && !images.some((image) => image.primary)) {
+        images[0] = { ...images[0], primary: true };
+      }
       setForm({
         ...emptyProduct,
         ...product,
-        category: product.category?._id || product.category || '',
-        sizes: (product.sizes || []).join(', '),
-        colors: (product.colors || []).join(', '),
-        tags: (product.tags || []).join(', '),
-        highlights: product.highlights?.length ? product.highlights : emptyProduct.highlights,
-        images: product.images || [],
+        ...(savedDraft || {}),
+        category: savedDraft?.category ?? (product.category?._id || product.category || ''),
+        sizes: savedDraft?.sizes || (product.sizes || []).join(', '),
+        colors: savedDraft?.colors || (product.colors || []).join(', '),
+        tags: savedDraft?.tags || (product.tags || []).join(', '),
+        highlights: savedDraft?.highlights?.length ? savedDraft.highlights : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
+        images,
       });
     }).catch((error) => setMessage(error.message));
   }, [productId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.localStorage) return undefined;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftKey, JSON.stringify(form));
+      } catch {
+        // ignore storage quota or privacy mode errors
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, form]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -77,6 +99,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
       const originalPrice = Number(form.originalPrice || form.price);
       const payload = {
         ...form,
+        images: prepareImages(form.images),
         price,
         originalPrice,
         stock: Number(form.stock),
@@ -90,6 +113,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
       if (productId) await api.put(`/admin/products/${productId}`, payload);
       else await api.post('/admin/products', payload);
       if (!productId) setForm(emptyProduct);
+      clearDraft(productId);
       setMessage('Product saved successfully.');
       onSaved?.();
     } catch (error) {
@@ -222,4 +246,40 @@ function validate(form) {
   if (!form.images.length) errors.images = 'Upload at least one product image.';
   if (form.description.trim().length < 20) errors.description = 'Description must be at least 20 characters.';
   return errors;
+}
+
+function prepareImages(images) {
+  const normalized = normalizeImageEntries(images);
+  if (!normalized.length) return [];
+  if (!normalized.some((image) => image.primary)) {
+    normalized[0] = { ...normalized[0], primary: true };
+  }
+  return normalized.map((image) => ({
+    url: image.url,
+    publicId: image.publicId,
+    primary: Boolean(image.primary),
+  }));
+}
+
+function getDraftKey(productId) {
+  return `${DRAFT_PREFIX}:${productId || 'new'}`;
+}
+
+function readDraft(productId) {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(getDraftKey(productId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(productId) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.removeItem(getDraftKey(productId));
+  } catch {
+    // ignore storage errors
+  }
 }

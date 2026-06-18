@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ConfirmModal from '../../components/admin/ConfirmModal';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
@@ -15,14 +16,19 @@ export default function Orders() {
   const [payment, setPayment] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
-    api.get('/admin/orders').then((items) => {
-      setOrders(items);
-      setMessage('');
-    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
+    api.get('/admin/orders')
+      .then((items) => {
+        setOrders(items);
+        setMessage('');
+      })
+      .catch((error) => setMessage(error.message))
+      .finally(() => setLoading(false));
   };
+
   useEffect(load, []);
 
   const filtered = useMemo(() => orders.filter((order) => {
@@ -38,10 +44,22 @@ export default function Orders() {
       setMessage(error.message);
     }
   };
+
   const updatePayment = async (order, paymentStatus) => {
     try {
       await api.put(`/admin/orders/${order._id}/payment-status`, { paymentStatus });
       load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  const deleteOrder = async () => {
+    if (!deleteTarget) return;
+    try {
+      await api.delete(`/admin/orders/${deleteTarget._id}`);
+      setOrders((current) => current.filter((order) => order._id !== deleteTarget._id));
+      setDeleteTarget(null);
     } catch (error) {
       setMessage(error.message);
     }
@@ -55,22 +73,54 @@ export default function Orders() {
         <Select value={status} onChange={setStatus} options={['', ...orderStatuses]} label="All order status" />
         <Select value={payment} onChange={setPayment} options={['', ...paymentStatuses]} label="All payments" />
       </SearchFilterBar>
-      <DataTable loading={loading} emptyTitle="No orders found" heads={['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Provider', 'Order Status', 'Actions']} rows={filtered.map((order) => (
-        <tr key={order._id} className="border-t border-slate-100">
-          <td className="px-4 py-4 font-black">{order._id.slice(-8).toUpperCase()}</td>
-          <td className="px-4 py-4"><p className="font-bold">{order.user?.name || order.shippingAddress?.fullName || 'Customer'}</p><p className="text-xs text-slate-500">{order.user?.email}</p></td>
-          <td className="px-4 py-4">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>
-          <td className="px-4 py-4 font-black">Rs. {order.finalAmount}</td>
-          <td className="px-4 py-4"><select value={order.paymentStatus} onChange={(event) => updatePayment(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">{paymentStatuses.map((item) => <option key={item}>{item}</option>)}</select></td>
-          <td className="px-4 py-4">{order.paymentProvider || order.paymentMethod}</td>
-          <td className="px-4 py-4"><StatusBadge value={order.orderStatus} /></td>
-          <td className="px-4 py-4"><div className="flex items-center gap-3"><select value={order.orderStatus} onChange={(event) => updateOrder(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">{orderStatuses.map((item) => <option key={item}>{item}</option>)}</select><a href={`#/admin/orders/detail?id=${order._id}`} className="font-black text-wine">View</a></div></td>
-        </tr>
-      ))} />
+      <DataTable
+        loading={loading}
+        emptyTitle="No orders found"
+        heads={['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Provider', 'Order Status', 'Actions']}
+        rows={filtered.map((order) => (
+          <tr key={order._id} className="border-t border-slate-100">
+            <td className="px-4 py-4 font-black">{order._id.slice(-8).toUpperCase()}</td>
+            <td className="px-4 py-4">
+              <p className="font-bold">{order.user?.name || order.shippingAddress?.fullName || 'Customer'}</p>
+              <p className="text-xs text-slate-500">{order.user?.email}</p>
+            </td>
+            <td className="px-4 py-4">{new Date(order.createdAt).toLocaleDateString('en-IN')}</td>
+            <td className="px-4 py-4 font-black">Rs. {order.finalAmount}</td>
+            <td className="px-4 py-4">
+              <select value={order.paymentStatus} onChange={(event) => updatePayment(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">
+                {paymentStatuses.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </td>
+            <td className="px-4 py-4">{order.paymentProvider || order.paymentMethod}</td>
+            <td className="px-4 py-4"><StatusBadge value={order.orderStatus} /></td>
+            <td className="px-4 py-4">
+              <div className="flex items-center gap-3">
+                <select value={order.orderStatus} onChange={(event) => updateOrder(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">
+                  {orderStatuses.map((item) => <option key={item}>{item}</option>)}
+                </select>
+                <a href={`#/admin/orders/detail?id=${order._id}`} className="font-black text-wine">View</a>
+                <button type="button" onClick={() => setDeleteTarget(order)} className="font-black text-rose">Delete</button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      />
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete order?"
+        message={`This will permanently delete order ${deleteTarget?._id?.slice(-8)?.toUpperCase() || ''}.`}
+        confirmLabel="Delete"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={deleteOrder}
+      />
     </section>
   );
 }
 
 function Select({ value, onChange, options, label }) {
-  return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold">{options.map((item) => <option key={item || label} value={item}>{item || label}</option>)}</select>;
+  return (
+    <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold">
+      {options.map((item) => <option key={item || label} value={item}>{item || label}</option>)}
+    </select>
+  );
 }

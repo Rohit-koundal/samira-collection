@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProductVisual } from './ProductCard';
-import { normalizeImageUrl } from '../../services/normalize';
+import { getPrimaryImageIndex, normalizeImageUrl } from '../../services/normalize';
 
 export default function ProductImageGallery({ product }) {
   const images = product.images?.filter((image) => image.url) || [];
+  const primaryIndex = getPrimaryImageIndex(images);
   const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    setActive(primaryIndex);
+  }, [primaryIndex]);
 
   if (!images.length) {
     return (

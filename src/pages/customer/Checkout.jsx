@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { AddressForm } from './AddressManagement';
+import { getPrimaryImageUrl } from '../../services/normalize';
 
 const emptyAddress = { fullName: '', mobile: '', pincode: '', state: 'Rajasthan', city: 'Jaipur', houseNo: '', area: '', landmark: '', addressType: 'Home', isDefault: false };
 
@@ -61,7 +62,7 @@ export default function Checkout({ navigate }) {
     orderItems: cart.items.map((item) => ({
       product: item.product._id || item.product.id,
       name: item.product.name,
-      image: item.product.images?.[0]?.url,
+      image: getPrimaryImageUrl(item.product.images),
       size: item.size,
       color: item.color,
       quantity: item.quantity,

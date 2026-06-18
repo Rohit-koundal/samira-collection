@@ -1,8 +1,8 @@
-import { normalizeImageUrl } from '../../services/normalize';
+import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 
 export default function CartItem({ item, updateQuantity, removeFromCart }) {
   const productId = item.product._id || item.product.id;
-  const image = item.product.images?.[0]?.url;
+  const image = getPrimaryImageUrl(item.product.images);
   return (
     <div className="flex gap-3 rounded-xl bg-white p-3 shadow-sm md:gap-4 md:rounded-3xl md:p-4">
       {image ? <img src={normalizeImageUrl(image)} alt="" className="h-24 w-20 shrink-0 rounded-xl object-cover md:h-28 md:w-24 md:rounded-2xl" /> : <div className="h-24 w-20 shrink-0 rounded-xl bg-gradient-to-br from-blush to-[#f8e5c6] md:h-28 md:w-24 md:rounded-2xl" />}

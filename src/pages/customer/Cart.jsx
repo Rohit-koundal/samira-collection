@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import api from '../../services/api';
-import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
+import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 
 export default function Cart({ navigate }) {
   const cart = useCart();
@@ -270,7 +270,7 @@ function BagHeader({ navigate }) {
 
 function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, removeFromCart, updateItemOptions, moveToWishlist }) {
   const product = item.product;
-  const image = product.images?.[0]?.url;
+  const image = getPrimaryImageUrl(product.images);
   const sizes = Array.isArray(product.sizes) && product.sizes.length ? product.sizes : [item.size || 'Free Size'];
   const originalTotal = Number(product.originalPrice || product.price || 0) * item.quantity;
   const sellingTotal = Number(product.price || 0) * item.quantity;
@@ -325,7 +325,7 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
       <h2 className="section-title flex items-center gap-3 text-base"><Icon name="bag" className="h-6 w-6" /> {title}</h2>
       <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
         {items.map((product) => {
-          const image = product.images?.[0]?.url;
+          const image = getPrimaryImageUrl(product.images);
           const cartItem = cart.getCartItem(product);
           return (
             <Card key={product.id} className="w-40 shrink-0 rounded-2xl">

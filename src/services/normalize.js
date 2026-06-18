@@ -1,7 +1,5 @@
 export function normalizeProduct(product) {
-  const images = (product.images || [])
-    .map((image) => ({ ...image, url: normalizeImageUrl(image.url) }))
-    .filter((image) => isUsableImageUrl(image.url));
+  const images = normalizeImageEntries(product.images);
   return {
     ...product,
     images,
@@ -13,6 +11,7 @@ export function normalizeProduct(product) {
     colors: product.colors?.length ? product.colors : ['Wine'],
     originalPrice: product.originalPrice || product.price,
     discountPercentage: product.discountPercentage || 0,
+    primaryImageUrl: getPrimaryImageUrl(images),
   };
 }
 
@@ -35,6 +34,32 @@ export function normalizeImageUrl(url) {
 
 export function isUsableImageUrl(url) {
   return Boolean(url && !isKnownMissingImage(url));
+}
+
+export function normalizeImageEntries(images = []) {
+  return (Array.isArray(images) ? images : [])
+    .map((image) => {
+      if (!image) return null;
+      const url = typeof image === 'string' ? image : image.url;
+      if (!url) return null;
+      return {
+        ...(typeof image === 'object' ? image : {}),
+        url: normalizeImageUrl(url),
+        primary: Boolean(typeof image === 'object' && image.primary),
+      };
+    })
+    .filter((image) => isUsableImageUrl(image?.url));
+}
+
+export function getPrimaryImageUrl(images = []) {
+  const normalized = normalizeImageEntries(images);
+  return normalized.find((image) => image.primary)?.url || normalized[0]?.url || '';
+}
+
+export function getPrimaryImageIndex(images = []) {
+  const normalized = normalizeImageEntries(images);
+  const primaryIndex = normalized.findIndex((image) => image.primary);
+  return primaryIndex >= 0 ? primaryIndex : (normalized.length ? 0 : -1);
 }
 
 function isKnownMissingImage(url) {
