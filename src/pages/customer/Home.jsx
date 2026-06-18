@@ -111,7 +111,7 @@ export default function Home({ navigate }) {
 
 function MobileHero({ banner, navigate }) {
   return (
-    <section className="px-3 pb-3 pt-2">
+    <section className="px-3 pb-4 pt-3">
       <button
         type="button"
         onClick={() => navigate(banner?.link || '/products')}
@@ -124,25 +124,25 @@ function MobileHero({ banner, navigate }) {
             className="absolute inset-0 h-full w-full object-cover opacity-25"
           />
         )}
-        <div className="relative grid min-h-[138px] grid-cols-[1.15fr_102px] items-center gap-2 px-3 py-3.5">
+        <div className="relative grid min-h-[164px] grid-cols-[1.2fr_118px] items-center gap-3 px-4 py-4">
           <div className="min-w-0">
-            <p className="text-[8px] font-bold uppercase tracking-[0.26em] text-[#9d3154]">New festive collection</p>
-            <h1 className="mt-1.5 text-[15px] font-semibold leading-[1.15] text-[#6d1f34]">
+            <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-[#9d3154]">New festive collection</p>
+            <h1 className="mt-2 text-[18px] font-semibold leading-[1.12] text-[#6d1f34]">
               {banner?.title || 'Celebrate in Style'}
             </h1>
-            <p className="mt-1 max-w-[150px] text-[9px] leading-[1.35] text-[#6a5761]">
+            <p className="mt-1.5 max-w-[180px] text-[11px] leading-[1.35] text-[#6a5761]">
               {banner?.subtitle || 'Elegant sarees, suits & kurtis for every occasion.'}
             </p>
-            <div className="mt-2 inline-flex items-center rounded-full bg-white/90 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6d1f34]">
+            <div className="mt-3 inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em] text-[#6d1f34]">
               Up to 50% off
             </div>
-            <div className="mt-2">
-              <span className="inline-flex h-6 items-center rounded-[6px] bg-[#7a1f36] px-3 text-[7px] font-bold uppercase tracking-[0.08em] text-white">
+            <div className="mt-3">
+              <span className="inline-flex h-8 items-center rounded-[8px] bg-[#7a1f36] px-4 text-[9px] font-bold uppercase tracking-[0.08em] text-white">
                 Shop Now
               </span>
             </div>
           </div>
-          <div className="relative flex h-[118px] items-end justify-center">
+          <div className="relative flex h-[138px] items-end justify-center">
             <div className="absolute inset-0 rounded-[18px] bg-white/60 blur-[2px]" />
             <div className="relative h-full w-full overflow-hidden rounded-[24px] bg-white/80">
               {banner?.image ? (
@@ -162,15 +162,15 @@ function MobileHero({ banner, navigate }) {
 
 function MobileServices() {
   return (
-    <section className="px-3 pb-3">
-      <div className="grid grid-cols-4 gap-1 rounded-[12px] bg-white px-1.5 py-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+    <section className="px-3 pb-4">
+      <div className="grid grid-cols-4 gap-2 rounded-[14px] bg-white px-2 py-3 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
         {serviceHighlights.map(({ icon: Icon, title, subtitle }) => (
           <div key={title} className="flex flex-col items-center text-center">
-            <div className="grid h-7 w-7 place-items-center rounded-full bg-[#fbf1ef] text-[#9d3154]">
-              <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-[#fbf1ef] text-[#9d3154]">
+              <Icon className="h-4 w-4" strokeWidth={1.9} />
             </div>
-            <p className="mt-1.5 text-[8px] font-semibold leading-3 text-[#1f2a44]">{title}</p>
-            <p className="mt-0.5 text-[7px] leading-3 text-slate-400">{subtitle}</p>
+            <p className="mt-2 text-[10px] font-semibold leading-3 text-[#1f2a44]">{title}</p>
+            <p className="mt-1 text-[8px] leading-3 text-slate-400">{subtitle}</p>
           </div>
         ))}
       </div>
@@ -182,17 +182,17 @@ function MobileCategoryScroller({ categories, navigate }) {
   const visibleCategories = (categories || []).slice(0, 8);
 
   return (
-    <section className="px-3 pb-3">
-      <div className="mb-2 flex items-center justify-between">
+    <section className="px-3 pb-4">
+      <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[#9d3154]">Shop by category</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#9d3154]">Shop by category</p>
         </div>
-        <button type="button" onClick={() => navigate('/category')} className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
+        <button type="button" onClick={() => navigate('/category')} className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
           View all
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="hide-scrollbar flex gap-2.5 overflow-x-auto pb-1">
+      <div className="hide-scrollbar flex gap-3.5 overflow-x-auto pb-1">
         {visibleCategories.map((category) => {
           const categoryId = category._id || category.id || category.slug || '';
           return (
@@ -200,16 +200,16 @@ function MobileCategoryScroller({ categories, navigate }) {
               key={categoryId || category.name}
               type="button"
               onClick={() => navigate(`/products?category=${categoryId}`)}
-              className="min-w-[50px] max-w-[50px] text-center"
+              className="min-w-[62px] max-w-[62px] text-center"
             >
-              <div className="mx-auto flex h-[44px] w-[44px] items-center justify-center overflow-hidden rounded-full bg-[#f6e8df] ring-1 ring-[#f0dfd3]">
+              <div className="mx-auto flex h-[54px] w-[54px] items-center justify-center overflow-hidden rounded-full bg-[#f6e8df] ring-1 ring-[#f0dfd3]">
                 {category.image ? (
                   <img src={normalizeImageUrl(category.image)} alt={category.name} className="h-full w-full object-cover" />
                 ) : (
-                  <span className="text-[8px] font-bold uppercase tracking-[0.04em] text-[#7a1f36]">{category.name?.slice(0, 2)}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.04em] text-[#7a1f36]">{category.name?.slice(0, 2)}</span>
                 )}
               </div>
-              <p className="mt-1.5 truncate text-[8px] font-medium text-[#1f2a44]">{category.name}</p>
+              <p className="mt-2 truncate text-[10px] font-medium text-[#1f2a44]">{category.name}</p>
             </button>
           );
         })}
@@ -220,22 +220,22 @@ function MobileCategoryScroller({ categories, navigate }) {
 
 function MobileOfferStrip({ navigate }) {
   return (
-    <section className="px-3 pb-3">
+    <section className="px-3 pb-4">
       <button
         type="button"
         onClick={() => navigate('/products?discount=20')}
-        className="flex w-full items-center justify-between rounded-[12px] bg-gradient-to-r from-[#fff0f4] via-[#fff8fb] to-[#fdf2e8] px-3 py-2.5 text-left shadow-[0_6px_18px_rgba(122,31,54,0.05)]"
+        className="flex w-full items-center justify-between rounded-[14px] bg-gradient-to-r from-[#fff0f4] via-[#fff8fb] to-[#fdf2e8] px-3.5 py-3 text-left shadow-[0_6px_18px_rgba(122,31,54,0.05)]"
       >
         <div className="flex items-center gap-3">
-          <div className="grid h-7 w-7 place-items-center rounded-full bg-white text-[#9d3154] shadow-sm">
-            <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-[#9d3154] shadow-sm">
+            <Sparkles className="h-4 w-4" strokeWidth={2} />
           </div>
           <div>
-            <p className="text-[9px] font-semibold text-[#1f2a44]">Festive sale is live</p>
-            <p className="mt-0.5 text-[8px] text-[#6b7280]">Get up to 50% off on your festive picks</p>
+            <p className="text-[11px] font-semibold text-[#1f2a44]">Festive sale is live</p>
+            <p className="mt-0.5 text-[9px] text-[#6b7280]">Get up to 50% off on your festive picks</p>
           </div>
         </div>
-        <span className="text-[8px] font-bold uppercase tracking-[0.08em] text-[#7a1f36]">Shop now</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#7a1f36]">Shop now</span>
       </button>
     </section>
   );
@@ -246,12 +246,12 @@ function MobileEditorialBanners({ banners, navigate }) {
   if (!cards.length) return null;
 
   return (
-    <section className="px-3 pb-3">
-      <div className="mb-2 flex items-center justify-between">
+    <section className="px-3 pb-4">
+      <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[#9d3154]">Featured collections</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#9d3154]">Featured collections</p>
         </div>
-        <button type="button" onClick={() => navigate('/products')} className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
+        <button type="button" onClick={() => navigate('/products')} className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
           View all
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -262,7 +262,7 @@ function MobileEditorialBanners({ banners, navigate }) {
             key={banner._id || banner.title || index}
             type="button"
             onClick={() => navigate(banner.link || '/products')}
-            className="relative overflow-hidden rounded-[10px] bg-[#f4e9e0] text-left shadow-[0_6px_16px_rgba(15,23,42,0.05)]"
+            className="relative overflow-hidden rounded-[12px] bg-[#f4e9e0] text-left shadow-[0_6px_16px_rgba(15,23,42,0.05)]"
           >
             <div className="aspect-[0.92]">
               {banner.image ? (
@@ -274,7 +274,7 @@ function MobileEditorialBanners({ banners, navigate }) {
               )}
             </div>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#3f2731]/85 via-[#3f2731]/25 to-transparent px-2.5 py-2">
-              <p className="line-clamp-2 text-[8px] font-semibold leading-3 text-white">{banner.title || 'Featured collection'}</p>
+              <p className="line-clamp-2 text-[10px] font-semibold leading-3 text-white">{banner.title || 'Featured collection'}</p>
             </div>
           </button>
         ))}
@@ -287,12 +287,12 @@ function MobileProductSection({ eyebrow, title, products, navigate, viewAllPath 
   if (!products?.length) return null;
 
   return (
-    <section className="px-3 pb-3.5">
-      <div className="mb-2 flex items-center justify-between">
+    <section className="px-3 pb-4">
+      <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[#9d3154]">{eyebrow}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#9d3154]">{eyebrow}</p>
         </div>
-        <button type="button" onClick={() => navigate(viewAllPath || '/products')} className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
+        <button type="button" onClick={() => navigate(viewAllPath || '/products')} className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6b7280]">
           View all
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -304,8 +304,8 @@ function MobileProductSection({ eyebrow, title, products, navigate, viewAllPath 
 
 function MobileCompactProductGrid({ products, navigate, title }) {
   return (
-    <div className="grid grid-cols-4 gap-1.5">
-      {products.slice(0, 4).map((product) => (
+    <div className="grid grid-cols-3 gap-2.5">
+      {products.slice(0, 3).map((product) => (
         <MobileCompactProductCard key={product.id} product={product} navigate={navigate} sectionTitle={title} />
       ))}
     </div>
@@ -342,18 +342,18 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
         }}
         className="block w-full cursor-pointer text-left"
       >
-        <div className="relative overflow-hidden rounded-[10px] bg-[#f6e8df] shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
-          <div className="aspect-[0.72]">
+        <div className="relative overflow-hidden rounded-[12px] bg-[#f6e8df] shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
+          <div className="aspect-[0.78]">
             {image ? (
               <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
             ) : (
-              <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f8e2d7] to-[#f5d0d5] text-[8px] font-semibold text-[#7a1f36]">
+              <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f8e2d7] to-[#f5d0d5] text-[10px] font-semibold text-[#7a1f36]">
                 Samira
               </div>
             )}
           </div>
           {badge && (
-            <span className={`absolute left-1.5 top-1.5 rounded-[4px] px-1 py-0.5 text-[6px] font-black uppercase tracking-[0.05em] ${badge.className}`}>
+            <span className={`absolute left-2 top-2 rounded-[4px] px-1.5 py-0.5 text-[7px] font-black uppercase tracking-[0.05em] ${badge.className}`}>
               {badge.label}
             </span>
           )}
@@ -363,33 +363,33 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
               event.stopPropagation();
               wishlist.toggleWishlist(product);
             }}
-            className={`absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-white/95 shadow-sm ${isWishlisted ? 'text-rose' : 'text-slate-500'}`}
+            className={`absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-white/95 shadow-sm ${isWishlisted ? 'text-rose' : 'text-slate-500'}`}
             aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
           >
-            <Icon name="heart" className="h-2.5 w-2.5" />
+            <Icon name="heart" className="h-3 w-3" />
           </button>
         </div>
       </div>
-      <div className="px-0.5 pt-1">
+      <div className="px-0.5 pt-1.5">
         <button type="button" onClick={() => navigate(`/product?id=${productId}`)} className="block w-full text-left">
-          <p className="truncate text-[7.5px] font-semibold leading-3 text-[#1f2a44]" title={product.name}>{product.name}</p>
-          <p className="mt-0.5 truncate text-[6.5px] text-slate-500" title={product.category}>{product.category}</p>
+          <p className="truncate text-[10px] font-semibold leading-[1.25] text-[#1f2a44]" title={product.name}>{product.name}</p>
+          <p className="mt-0.5 truncate text-[9px] text-slate-500" title={product.category}>{product.category}</p>
         </button>
-        <div className="mt-1 flex items-start justify-between gap-1">
+        <div className="mt-1.5 flex items-start justify-between gap-1.5">
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-[8px] font-bold text-charcoal">Rs. {product.price}</span>
-              <span className="truncate text-[6px] text-slate-400 line-through">Rs. {product.originalPrice}</span>
+              <span className="text-[11px] font-bold text-charcoal">Rs. {product.price}</span>
+              <span className="truncate text-[8px] text-slate-400 line-through">Rs. {product.originalPrice}</span>
             </div>
-            <p className="mt-0.5 text-[6px] font-bold text-rose">({product.discountPercentage}% OFF)</p>
+            <p className="mt-0.5 text-[8px] font-bold text-rose">({product.discountPercentage}% OFF)</p>
           </div>
           <button
             type="button"
             onClick={() => cart.addToCart(product)}
-            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border border-[#e7e5e4] ${cartItem ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-600'}`}
+            className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#e7e5e4] ${cartItem ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-600'}`}
             aria-label={cartItem ? 'Add more to cart' : 'Add to cart'}
           >
-            <Icon name="bag" className="h-2.5 w-2.5" />
+            <Icon name="bag" className="h-3 w-3" />
           </button>
         </div>
       </div>
