@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { normalizeImageUrl } from '../../services/normalize';
 import ImageUploader from './ImageUploader';
 
 const emptyProduct = {
@@ -58,7 +59,10 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
         colors: (product.colors || []).join(', '),
         tags: (product.tags || []).join(', '),
         highlights: product.highlights?.length ? product.highlights : emptyProduct.highlights,
-        images: product.images || [],
+        images: (product.images || []).map((image) => ({
+          ...image,
+          url: normalizeImageUrl(image.url),
+        })),
       });
     }).catch((error) => setMessage(error.message));
   }, [productId]);
