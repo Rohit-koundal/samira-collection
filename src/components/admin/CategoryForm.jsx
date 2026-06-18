@@ -14,6 +14,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
     if (!categoryId) {
       setForm(emptyCategory);
       setLoading(false);
+      if (mode === 'Update') setMessage('Category id is missing.');
       return;
     }
 
