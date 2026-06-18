@@ -56,32 +56,16 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
     if (!productId) return;
     api.get(`/admin/products/${productId}`).then((product) => {
       const savedDraft = readDraft(productId);
-      const images = normalizeImageEntries((savedDraft?.images?.length ? savedDraft.images : product.images) || []);
-      if (images.length && !images.some((image) => image.primary)) {
-        images[0] = { ...images[0], primary: true };
-      }
       setForm({
         ...emptyProduct,
         ...product,
-<<<<<<< HEAD
         ...(savedDraft || {}),
         category: savedDraft?.category ?? (product.category?._id || product.category || ''),
         sizes: savedDraft?.sizes || (product.sizes || []).join(', '),
         colors: savedDraft?.colors || (product.colors || []).join(', '),
         tags: savedDraft?.tags || (product.tags || []).join(', '),
         highlights: savedDraft?.highlights?.length ? savedDraft.highlights : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
-        images,
-=======
-        category: product.category?._id || product.category || '',
-        sizes: (product.sizes || []).join(', '),
-        colors: (product.colors || []).join(', '),
-        tags: (product.tags || []).join(', '),
-        highlights: product.highlights?.length ? product.highlights : emptyProduct.highlights,
-        images: (product.images || []).map((image) => ({
-          ...image,
-          url: normalizeImageUrl(image.url),
-        })),
->>>>>>> 86853241a8c75bdd3bc0a55ce8b7c360263a2abe
+        images: normalizeImageEntries((savedDraft?.images?.length ? savedDraft.images : product.images) || []),
       });
     }).catch((error) => setMessage(error.message));
   }, [productId]);
