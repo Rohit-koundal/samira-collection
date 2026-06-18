@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '../store/apiBaseUrl';
+
 export function normalizeProduct(product) {
   const images = normalizeImageEntries(product.images);
   return {
@@ -21,19 +23,40 @@ export function normalizeProducts(products = []) {
 
 export function normalizeImageUrl(url) {
   if (!url || isKnownMissingImage(url)) return '';
+
+  if (isInaccessibleImageUrl(url) && isRemoteClient()) {
+    const uploadsPath = extractUploadsPath(url);
+    return uploadsPath ? `${getApiRootUrl()}${uploadsPath}` : '';
+  }
+
   if (url.startsWith('http') || url.startsWith('data:')) return url;
-  const configuredUrl = process.env.REACT_APP_API_URL;
-  const isBrowser = typeof window !== 'undefined';
-  const isLocalPage = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  const apiUrl = isLocalPage
-    ? 'http://localhost:5000/api'
-    : configuredUrl || 'https://samira-collection-backend-1.onrender.com/api';
-  const apiRoot = apiUrl.replace(/\/api\/?$/, '');
+
+  const apiRoot = getApiRootUrl();
   return `${apiRoot}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
 export function isUsableImageUrl(url) {
-  return Boolean(url && !isKnownMissingImage(url));
+  if (!url || isKnownMissingImage(url)) return false;
+  if (isInaccessibleImageUrl(url) && isRemoteClient()) return false;
+  return true;
+}
+
+function getApiRootUrl() {
+  return getApiBaseUrl().replace(/\/api\/?$/, '');
+}
+
+function extractUploadsPath(url = '') {
+  const match = String(url).match(/\/uploads\/[^?#\s]+/i);
+  return match ? match[0] : '';
+}
+
+function isInaccessibleImageUrl(url) {
+  return /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(String(url || ''));
+}
+
+function isRemoteClient() {
+  if (typeof window === 'undefined') return false;
+  return !['localhost', '127.0.0.1'].includes(window.location.hostname);
 }
 
 export function normalizeImageEntries(images = []) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { normalizeImageUrl } from '../../services/normalize';
 import ImageUploader from './ImageUploader';
 import { normalizeImageEntries } from '../../services/normalize';
 
@@ -62,6 +63,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
       setForm({
         ...emptyProduct,
         ...product,
+<<<<<<< HEAD
         ...(savedDraft || {}),
         category: savedDraft?.category ?? (product.category?._id || product.category || ''),
         sizes: savedDraft?.sizes || (product.sizes || []).join(', '),
@@ -69,6 +71,17 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
         tags: savedDraft?.tags || (product.tags || []).join(', '),
         highlights: savedDraft?.highlights?.length ? savedDraft.highlights : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
         images,
+=======
+        category: product.category?._id || product.category || '',
+        sizes: (product.sizes || []).join(', '),
+        colors: (product.colors || []).join(', '),
+        tags: (product.tags || []).join(', '),
+        highlights: product.highlights?.length ? product.highlights : emptyProduct.highlights,
+        images: (product.images || []).map((image) => ({
+          ...image,
+          url: normalizeImageUrl(image.url),
+        })),
+>>>>>>> 86853241a8c75bdd3bc0a55ce8b7c360263a2abe
       });
     }).catch((error) => setMessage(error.message));
   }, [productId]);

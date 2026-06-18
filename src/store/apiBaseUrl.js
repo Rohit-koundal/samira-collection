@@ -3,7 +3,9 @@ export function getApiBaseUrl() {
   const isBrowser = typeof window !== 'undefined';
   const isLocalPage = isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-  if (isLocalPage) return 'http://localhost:5000/api';
-  if (configuredUrl) return configuredUrl;
-  return 'https://samira-collection-backend-1.onrender.com/api';
+  if (configuredUrl && !(isBrowser && configuredUrl.includes('localhost') && !isLocalPage)) {
+    return configuredUrl;
+  }
+
+  return isLocalPage ? 'http://localhost:5000/api' : 'https://samira-collection-backend-1.onrender.com/api';
 }
