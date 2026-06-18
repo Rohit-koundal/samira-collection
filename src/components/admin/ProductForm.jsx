@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-import { normalizeImageUrl } from '../../services/normalize';
 import ImageUploader from './ImageUploader';
 import { normalizeImageEntries } from '../../services/normalize';
 
