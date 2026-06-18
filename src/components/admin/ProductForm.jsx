@@ -55,16 +55,19 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
     if (!productId) return;
     api.get(`/admin/products/${productId}`).then((product) => {
       const savedDraft = readDraft(productId);
+      const mergedDraft = mergeDraftIntoProduct(product, savedDraft);
       setForm({
         ...emptyProduct,
         ...product,
-        ...(savedDraft || {}),
-        category: savedDraft?.category ?? (product.category?._id || product.category || ''),
-        sizes: savedDraft?.sizes || (product.sizes || []).join(', '),
-        colors: savedDraft?.colors || (product.colors || []).join(', '),
-        tags: savedDraft?.tags || (product.tags || []).join(', '),
-        highlights: savedDraft?.highlights?.length ? savedDraft.highlights : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
-        images: normalizeImageEntries((savedDraft?.images?.length ? savedDraft.images : product.images) || []),
+        ...mergedDraft,
+        category: mergedDraft.category ?? (product.category?._id || product.category || ''),
+        sizes: mergedDraft.sizes || (product.sizes || []).join(', '),
+        colors: mergedDraft.colors || (product.colors || []).join(', '),
+        tags: mergedDraft.tags || (product.tags || []).join(', '),
+        highlights: Array.isArray(mergedDraft.highlights) && mergedDraft.highlights.length
+          ? mergedDraft.highlights
+          : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
+        images: normalizeImageEntries((Array.isArray(mergedDraft.images) && mergedDraft.images.length ? mergedDraft.images : product.images) || []),
       });
     }).catch((error) => setMessage(error.message));
   }, [productId]);
@@ -280,4 +283,37 @@ function clearDraft(productId) {
   } catch {
     // ignore storage errors
   }
+}
+
+function mergeDraftIntoProduct(product, draft) {
+  if (!draft || typeof draft !== 'object') return {};
+
+  const merged = {};
+  for (const [key, value] of Object.entries(draft)) {
+    if (key === 'images') {
+      if (Array.isArray(value) && value.length) merged.images = value;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length) merged[key] = value;
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      if (value.trim()) merged[key] = value;
+      continue;
+    }
+
+    if (typeof value === 'boolean') {
+      merged[key] = value;
+      continue;
+    }
+
+    if (typeof value === 'number') {
+      if (!Number.isNaN(value)) merged[key] = value;
+    }
+  }
+
+  return merged;
 }
