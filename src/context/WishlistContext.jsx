@@ -1,13 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 
 const WishlistContext = createContext(null);
 
-export function WishlistProvider({ children }) {
-  const [items, setItems] = useState(() => JSON.parse(localStorage.getItem('samira_wishlist') || '[]'));
+export function WishlistProvider({ children, storageName: storageNameProp, legacyStorageNames = [] }) {
+  const defaultPlan = createStoragePlan('samira_wishlist', null);
+  const storageName = storageNameProp || defaultPlan.storageName;
+  const legacyNames = legacyStorageNames.length ? legacyStorageNames : defaultPlan.legacyStorageNames;
+  const [items, setItems] = useState(() => loadWishlist(storageName, legacyNames));
 
   useEffect(() => {
-    localStorage.setItem('samira_wishlist', JSON.stringify(items));
-  }, [items]);
+    localStorage.setItem(storageName, JSON.stringify(items));
+  }, [items, storageName]);
 
   const toggleWishlist = (product) => {
     const productId = product._id || product.id || product.slug;
@@ -23,3 +27,7 @@ export function WishlistProvider({ children }) {
 }
 
 export const useWishlist = () => useContext(WishlistContext);
+
+function loadWishlist(storageName, legacyStorageNames = []) {
+  return readScopedJson(storageName, legacyStorageNames, []);
+}

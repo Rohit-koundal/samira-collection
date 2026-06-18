@@ -89,7 +89,9 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
           helpText="This image will be used on category cards. Only the uploaded image URL is saved."
           value={form.image ? [{ url: form.image }] : []}
           onChange={(images) => update('image', images[0]?.url || '')}
-          maxSizeMb={2}
+          compressAboveMb={2}
+          maxUploadMb={20}
+          targetSizeMb={0.5}
         />
       </div>
       <label className="flex items-center gap-2 text-sm font-bold">

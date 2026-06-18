@@ -163,7 +163,9 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
             helpText="Uploaded images are saved on the backend and only image URLs are stored in MongoDB."
             multiple
             maxFiles={8}
-            maxSizeMb={2}
+            compressAboveMb={2}
+            maxUploadMb={20}
+            targetSizeMb={0.5}
             value={form.images}
             onChange={(images) => update('images', images)}
           />

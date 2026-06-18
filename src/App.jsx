@@ -10,6 +10,7 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
 import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
 import { useAuth } from './context/AuthContext';
+import { createStoragePlan } from './utils/userStorage';
 
 const Home = lazy(() => import('./pages/customer/Home'));
 const Products = lazy(() => import('./pages/customer/Products'));
@@ -111,11 +112,7 @@ export default function App() {
 
   return (
     <AuthProvider navigate={navigate}>
-      <CartProvider>
-        <WishlistProvider>
-          <AppShell route={route} navigate={navigate} />
-        </WishlistProvider>
-      </CartProvider>
+      <AppShell route={route} navigate={navigate} />
     </AuthProvider>
   );
 }
@@ -130,6 +127,8 @@ function AppShell({ route, navigate }) {
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
+  const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user?._id, user?.id, user?.phone]);
+  const wishlistStoragePlan = useMemo(() => createStoragePlan('samira_wishlist', user), [user?._id, user?.id, user?.phone]);
   const loginFallback = (
     <Suspense fallback={<RouteFallback />}>
       <Login route={`/login?redirect=${encodeURIComponent(route)}`} />
@@ -207,40 +206,44 @@ function AppShell({ route, navigate }) {
 
   return (
     <div className="min-h-screen bg-ivory text-charcoal">
-      {isAdmin ? (
-        routePath === '/admin/login' ? (
-          page
-        ) : (
-          <AdminRoute>
-            {page}
-          </AdminRoute>
-        )
-      ) : shouldShowStandaloneAuth ? (
-        authContent
-      ) : (
-        <>
-          {showShell && <DesktopHeader navigate={navigate} route={route} />}
-          {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
-          <main className={`${showShell ? 'pb-20 md:pb-0' : ''}`}>
-            {mainContent}
-          </main>
-          {showShell && <Footer navigate={navigate} />}
-          {showShell && <MobileBottomNav active={routePath} navigate={navigate} />}
-          {showShell && (
-            <LoginPrompt
-              open={showLoginPrompt}
-              onClose={closeLoginPrompt}
-              onContinue={(phone) => {
-                markLoginPromptDismissed();
-                setShowLoginPrompt(false);
-                const redirectQuery = `redirect=${encodeURIComponent(route)}`;
-                const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
-                navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
-              }}
-            />
+      <CartProvider key={cartStoragePlan.storageName} storageName={cartStoragePlan.storageName} legacyStorageNames={cartStoragePlan.legacyStorageNames}>
+        <WishlistProvider key={wishlistStoragePlan.storageName} storageName={wishlistStoragePlan.storageName} legacyStorageNames={wishlistStoragePlan.legacyStorageNames}>
+          {isAdmin ? (
+            routePath === '/admin/login' ? (
+              page
+            ) : (
+              <AdminRoute>
+                {page}
+              </AdminRoute>
+            )
+          ) : shouldShowStandaloneAuth ? (
+            authContent
+          ) : (
+            <>
+              {showShell && <DesktopHeader navigate={navigate} route={route} />}
+              {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
+              <main className={`${showShell ? 'pb-20 md:pb-0' : ''}`}>
+                {mainContent}
+              </main>
+              {showShell && <Footer navigate={navigate} />}
+              {showShell && <MobileBottomNav active={routePath} navigate={navigate} />}
+              {showShell && (
+                <LoginPrompt
+                  open={showLoginPrompt}
+                  onClose={closeLoginPrompt}
+                  onContinue={(phone) => {
+                    markLoginPromptDismissed();
+                    setShowLoginPrompt(false);
+                    const redirectQuery = `redirect=${encodeURIComponent(route)}`;
+                    const phoneQuery = phone ? `phone=${encodeURIComponent(phone)}` : '';
+                    navigate(`/login?${[redirectQuery, phoneQuery].filter(Boolean).join('&')}`);
+                  }}
+                />
+              )}
+            </>
           )}
-        </>
-      )}
+        </WishlistProvider>
+      </CartProvider>
     </div>
   );
 }

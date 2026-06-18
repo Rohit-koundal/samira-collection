@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import api from '../services/api';
+import { samiraApi } from '../store/apiSlice';
 import { logout as logoutAction, selectUser, setCredentials, setUser as setUserAction } from '../store/authSlice';
 
 const AuthContext = createContext(null);
@@ -12,6 +13,10 @@ export function AuthProvider({ children, navigate }) {
 
   const persist = useCallback((data) => {
     dispatch(setCredentials(data));
+  }, [dispatch]);
+
+  const resetSessionCache = useCallback(() => {
+    dispatch(samiraApi.util.resetApiState());
   }, [dispatch]);
 
   const refreshProfile = useCallback(async () => {
@@ -39,7 +44,10 @@ export function AuthProvider({ children, navigate }) {
 
   useEffect(() => {
     const onRefreshed = (event) => dispatch(setUserAction(event.detail));
-    const onExpired = () => dispatch(logoutAction());
+    const onExpired = () => {
+      dispatch(logoutAction());
+      dispatch(samiraApi.util.resetApiState());
+    };
     window.addEventListener('samira:session-refreshed', onRefreshed);
     window.addEventListener('samira:session-expired', onExpired);
     return () => {
@@ -54,28 +62,31 @@ export function AuthProvider({ children, navigate }) {
   const verifyOtp = useCallback(async ({ phone, otp, redirectTo = '/profile' }) => {
     const data = await api.post('/auth/verify-otp', { phone, otp });
     persist(data);
+    resetSessionCache();
     setToast(`Welcome ${data.user.name}`);
     navigate(redirectTo || '/profile');
     return data;
-  }, [navigate, persist]);
+  }, [navigate, persist, resetSessionCache]);
 
   const login = useCallback(async ({ email, password = '', redirectTo = '/profile' }) => {
     try {
       const path = email.includes('admin') ? '/admin/login' : '/auth/login';
       const data = await api.post(path, { email, password });
       persist(data);
+      resetSessionCache();
       navigate(redirectTo || (data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile'));
       return { ok: true };
     } catch (error) {
       setToast(error.message);
       return { ok: false, error: error.message };
     }
-  }, [navigate, persist]);
+  }, [navigate, persist, resetSessionCache]);
 
   const switchMode = useCallback(async (mode) => {
     try {
       const data = await api.post('/auth/switch-mode', { mode });
       persist(data);
+      resetSessionCache();
       setToast(mode === 'admin' ? 'Switched to Admin Mode' : 'Switched to Customer Mode');
       navigate(mode === 'admin' ? '/admin' : '/');
       return { ok: true };
@@ -83,10 +94,11 @@ export function AuthProvider({ children, navigate }) {
       setToast(error.message);
       return { ok: false, error: error.message };
     }
-  }, [navigate, persist]);
+  }, [navigate, persist, resetSessionCache]);
 
   const logout = useCallback(() => {
     dispatch(logoutAction());
+    dispatch(samiraApi.util.resetApiState());
     try {
       localStorage.removeItem('samira_login_prompt_dismissed');
     } catch {

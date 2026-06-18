@@ -1,15 +1,26 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 
 const CartContext = createContext(null);
 
-export function CartProvider({ children }) {
-  const [items, setItems] = useState(() => normalizeStoredItems(JSON.parse(localStorage.getItem('samira_cart') || '[]')));
-  const [coupon, setCoupon] = useState(null);
+export function CartProvider({ children, storageName: storageNameProp, legacyStorageNames = [] }) {
+  const defaultPlan = createStoragePlan('samira_cart', null);
+  const storageName = storageNameProp || defaultPlan.storageName;
+  const legacyNames = legacyStorageNames.length ? legacyStorageNames : defaultPlan.legacyStorageNames;
+  const [items, setItems] = useState(() => loadCart(storageName, legacyNames).items);
+  const [coupon, setCoupon] = useState(() => loadCart(storageName, legacyNames).coupon);
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('samira_cart', JSON.stringify(items));
-  }, [items]);
+    const cartState = { items, coupon };
+    localStorage.setItem(storageName, JSON.stringify(cartState));
+  }, [coupon, items, storageName]);
+
+  useEffect(() => {
+    const cartState = loadCart(storageName, legacyNames);
+    setItems(cartState.items);
+    setCoupon(cartState.coupon);
+  }, [legacyNames, storageName]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -108,6 +119,7 @@ export function CartProvider({ children }) {
   const clearCart = () => {
     setItems([]);
     setCoupon(null);
+    localStorage.removeItem(storageName);
   };
 
   const totalMRP = items.reduce((sum, item) => sum + Number(item.product.originalPrice || item.product.price || 0) * item.quantity, 0);
@@ -172,6 +184,14 @@ function normalizeStoredItems(storedItems) {
         quantity: Math.max(1, Number(item.quantity || 1)),
       };
     });
+}
+
+function loadCart(storageName, legacyStorageNames = []) {
+  const parsed = readScopedJson(storageName, legacyStorageNames, {});
+  return {
+    items: normalizeStoredItems(parsed.items || []),
+    coupon: parsed.coupon || null,
+  };
 }
 
 function getProductId(product = {}) {

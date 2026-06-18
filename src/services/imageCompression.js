@@ -31,6 +31,7 @@ export async function compressImageFile(file, options = {}) {
       initialQuality: 0.9,
       preserveExif: true,
       fileType: 'image/webp',
+      onProgress: typeof options.onProgress === 'function' ? options.onProgress : undefined,
     });
 
     const outputName = String(file.name || 'image').replace(/\.[^.]+$/, '.webp');
