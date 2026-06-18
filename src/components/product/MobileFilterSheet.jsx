@@ -30,7 +30,7 @@ const filterConfig = {
   ],
 };
 
-export default function MobileFilterSheet({ open, onClose, categories = [], params, updateParam, clearFilters }) {
+export default function MobileFilterSheet({ open, onClose, categories = [], params, updateParam, clearFilters, applyDraftFilters }) {
   const [activeSection, setActiveSection] = useState('category');
   const [draft, setDraft] = useState(() => buildDraft(params));
   const [expanded, setExpanded] = useState({
@@ -56,14 +56,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
   if (!open) return null;
 
   const applyFilters = () => {
-    updateParam?.('category', draft.category);
-    updateParam?.('size', draft.size);
-    updateParam?.('color', draft.color);
-    updateParam?.('fabric', draft.fabric);
-    updateParam?.('discount', draft.discount);
-    updateParam?.('sort', draft.sort);
-    updateParam?.('minPrice', draft.minPrice);
-    updateParam?.('maxPrice', draft.maxPrice);
+    applyDraftFilters?.(draft);
     onClose?.();
   };
 
@@ -94,7 +87,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
           </div>
         </div>
 
-        <div className="grid h-[calc(100%-132px)] grid-cols-[92px_minmax(0,1fr)]">
+        <div className="grid h-[calc(100%-148px-env(safe-area-inset-bottom))] grid-cols-[92px_minmax(0,1fr)]">
           <aside className="border-r border-slate-100 bg-[#fbfbfc] px-2 py-3">
             <div className="space-y-1.5">
               {navItems.map((item) => {
@@ -215,11 +208,11 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 py-3">
-          <button type="button" onClick={resetFilters} className="h-11 rounded-lg border border-slate-300 text-[14px] font-semibold text-[#1f2a44]">
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+          <button type="button" onClick={resetFilters} className="h-12 rounded-lg border border-slate-300 text-[14px] font-semibold text-[#1f2a44]">
             Reset
           </button>
-          <button type="button" onClick={applyFilters} className="h-11 rounded-lg bg-wine text-[14px] font-semibold text-white">
+          <button type="button" onClick={applyFilters} className="h-12 rounded-lg bg-wine text-[14px] font-semibold text-white">
             Apply Filters
           </button>
         </div>

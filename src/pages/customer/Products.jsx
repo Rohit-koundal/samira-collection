@@ -58,6 +58,16 @@ export default function Products({ navigate, route = '/products' }) {
     syncCatalogRoute(nextFilters);
   };
 
+  const applyDraftFilters = (draft) => {
+    const nextFilters = normalizeCatalogQuery({
+      ...filters,
+      ...draft,
+      ...getPinnedCollectionFilters(routeQuery),
+    });
+    dispatch(replaceCatalogFilters(nextFilters));
+    syncCatalogRoute(nextFilters);
+  };
+
   return (
     <section className="container-page bg-white pb-10 pt-3 md:bg-transparent md:py-10">
       <div className="mb-4 hidden md:block md:mb-6">
@@ -137,7 +147,15 @@ export default function Products({ navigate, route = '/products' }) {
           {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
         </div>
       </div>
-      <MobileFilterSheet open={openFilters} onClose={() => setOpenFilters(false)} categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
+      <MobileFilterSheet
+        open={openFilters}
+        onClose={() => setOpenFilters(false)}
+        categories={categories}
+        params={params}
+        updateParam={updateParam}
+        clearFilters={clearFilterParams}
+        applyDraftFilters={applyDraftFilters}
+      />
     </section>
   );
 }
