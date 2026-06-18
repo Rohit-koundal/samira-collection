@@ -71,7 +71,7 @@ export function normalizeImageEntries(images = []) {
         primary: Boolean(typeof image === 'object' && image.primary),
       };
     })
-    .filter((image) => isUsableImageUrl(image?.url));
+    .filter((image) => Boolean(image?.url));
 }
 
 export function getPrimaryImageUrl(images = []) {
