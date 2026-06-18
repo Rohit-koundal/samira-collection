@@ -41,10 +41,11 @@ const emptyProduct = {
 
 export default function ProductForm({ mode = 'Add', productId, onSaved }) {
   const [categories, setCategories] = useState([]);
-  const [form, setForm] = useState(() => readDraft(productId) || emptyProduct);
+  const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId) || emptyProduct)));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState({});
+  const [draftReady, setDraftReady] = useState(() => !productId);
   const draftKey = getDraftKey(productId);
 
   useEffect(() => {
@@ -52,10 +53,15 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
   }, []);
 
   useEffect(() => {
-    if (!productId) return;
+    if (!productId) {
+      setDraftReady(true);
+      return;
+    }
+
+    setDraftReady(false);
     api.get(`/admin/products/${productId}`).then((product) => {
       const savedDraft = readDraft(productId);
-      const mergedDraft = mergeDraftIntoProduct(product, savedDraft);
+      const mergedDraft = mergeDraftIntoProduct(savedDraft);
       setForm({
         ...emptyProduct,
         ...product,
@@ -69,10 +75,12 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
           : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
         images: normalizeImageEntries((Array.isArray(mergedDraft.images) && mergedDraft.images.length ? mergedDraft.images : product.images) || []),
       });
-    }).catch((error) => setMessage(error.message));
+    }).catch((error) => setMessage(error.message))
+      .finally(() => setDraftReady(true));
   }, [productId]);
 
   useEffect(() => {
+    if (!draftReady) return undefined;
     if (typeof window === 'undefined' || !window.localStorage) return undefined;
     const timer = window.setTimeout(() => {
       try {
@@ -82,7 +90,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved }) {
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [draftKey, form]);
+  }, [draftKey, draftReady, form]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -285,8 +293,9 @@ function clearDraft(productId) {
   }
 }
 
-function mergeDraftIntoProduct(product, draft) {
+function mergeDraftIntoProduct(draft) {
   if (!draft || typeof draft !== 'object') return {};
+  if (!isMeaningfulDraft(draft)) return {};
 
   const merged = {};
   for (const [key, value] of Object.entries(draft)) {
@@ -316,4 +325,32 @@ function mergeDraftIntoProduct(product, draft) {
   }
 
   return merged;
+}
+
+function isMeaningfulDraft(draft) {
+  return Object.entries(draft).some(([key, value]) => {
+    const defaultValue = emptyProduct[key];
+
+    if (Array.isArray(value)) {
+      if (key === 'highlights') {
+        return JSON.stringify(value) !== JSON.stringify(defaultValue);
+      }
+      return value.length > 0;
+    }
+
+    if (typeof value === 'string') {
+      if (key === 'brand') return value.trim() !== String(defaultValue || '').trim();
+      return value.trim().length > 0;
+    }
+
+    if (typeof value === 'boolean') {
+      return value !== defaultValue;
+    }
+
+    if (typeof value === 'number') {
+      return !Number.isNaN(value) && value !== defaultValue;
+    }
+
+    return false;
+  });
 }
