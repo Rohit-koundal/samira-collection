@@ -6,8 +6,50 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, TextInput } fr
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
+
+const PAYMENT_OPTIONS = [
+  ['UPI', 'Pay using UPI', 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps'],
+  ['CARD', 'Credit / Debit Card', 'Secure card payment through Razorpay checkout'],
+  ['NETBANKING', 'Net Banking', 'Bank selection through Razorpay checkout'],
+  ['WALLET', 'Wallet', 'Paytm Wallet and other wallets via Razorpay'],
+  ['COD', 'Cash on Delivery', 'Pay when the product is delivered — no online payment'],
+];
+
+function getPlaceOrderLabel(paymentMethod, placing) {
+  if (placing) return paymentMethod === 'COD' ? 'Placing order...' : 'Opening payment...';
+  return paymentMethod === 'COD' ? 'Place COD Order' : 'Pay Now';
+}
+
+function OnlinePaymentNote({ paymentMethod, paymentApp, setPaymentApp, upiId, setUpiId }) {
+  if (paymentMethod === 'UPI') {
+    return (
+      <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4">
+        <div className="flex flex-wrap gap-2">
+          {['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => (
+            <Button key={app} onClick={() => setPaymentApp(app)} variant={paymentApp === app ? 'primary' : 'secondary'} size="sm">{app}</Button>
+          ))}
+        </div>
+        <TextInput value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 w-full" placeholder="yourname@upi (optional)" />
+        <p className="body-text mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+          Click <strong>Pay Now</strong> to open the secure Razorpay payment window.
+        </p>
+      </div>
+    );
+  }
+
+  if (paymentMethod !== 'COD') {
+    return (
+      <p className="body-text mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+        Click <strong>Pay Now</strong> to open the secure Razorpay payment window.
+      </p>
+    );
+  }
+
+  return <p className="body-text mt-4 rounded-2xl bg-[#fbf8f4] p-4 text-slate-600">Please keep exact amount ready at delivery.</p>;
+}
 
 const emptyAddress = {
   fullName: '',
@@ -31,7 +73,7 @@ export default function Checkout({ navigate }) {
   const [editingAddressId, setEditingAddressId] = useState('');
   const [addressForm, setAddressForm] = useState({ ...emptyAddress, fullName: user?.name || '', mobile: user?.phone || '' });
   const [couponCode, setCouponCode] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('COD');
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [paymentApp, setPaymentApp] = useState('Google Pay');
   const [upiId, setUpiId] = useState('');
   const [error, setError] = useState('');
@@ -82,6 +124,7 @@ export default function Checkout({ navigate }) {
 
   const selectedAddress = addresses.find((item) => item._id === selectedAddressId);
   const deliveryWindow = useMemo(() => getDeliveryWindow(), []);
+  const placeOrderLabel = getPlaceOrderLabel(paymentMethod, placing);
 
   const resetAddressEditor = () => {
     setShowAddressForm(false);
@@ -141,18 +184,70 @@ export default function Checkout({ navigate }) {
     if (!cart.items.length) return setError('Your cart is empty.');
     if (!selectedAddress) return setError('Please select or add a delivery address.');
     setPlacing(true);
+
+    const payload = orderPayload();
+    let pendingPayment = null;
+
     try {
       if (paymentMethod === 'COD') {
-        const order = await api.post('/orders/cod', orderPayload());
+        const order = await api.post('/orders/cod', payload);
         cart.clearCart();
         setToast('COD order placed successfully');
         navigate(`/order-success?id=${order._id}`);
-      } else {
-        const payment = await api.post('/payments/create-order', orderPayload());
-        setError(`Razorpay-ready order created (${payment.razorpayOrderId}). Add Razorpay checkout script/keys to complete live payment.`);
+        return;
       }
+
+      pendingPayment = await api.post('/payments/create-order', payload);
+      const razorpayOrderId = pendingPayment.razorpayOrderId || pendingPayment.order_id;
+      const razorpayKey = pendingPayment.keyId || process.env.REACT_APP_RAZORPAY_KEY_ID;
+
+      if (!razorpayOrderId || !razorpayKey) {
+        throw new Error('Online payment could not be started. Please try again or choose Cash on Delivery.');
+      }
+
+      await openRazorpayCheckout({
+        key: razorpayKey,
+        amount: pendingPayment.amount,
+        currency: pendingPayment.currency,
+        orderId: razorpayOrderId,
+        name: selectedAddress?.fullName || user?.name,
+        email: user?.email,
+        contact: selectedAddress?.mobile || user?.phone,
+        onSuccess: async (response) => {
+          const result = await api.post('/payments/verify', {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            orderPayload: payload,
+          });
+          cart.clearCart();
+          setToast('Payment successful');
+          navigate(`/order-success?id=${result.order._id}`);
+        },
+        onDismiss: () => setError('Payment cancelled. You can retry or choose Cash on Delivery.'),
+      });
     } catch (err) {
-      setError(err.message);
+      if (paymentMethod !== 'COD') {
+        const reason = err.message === 'Payment cancelled'
+          ? 'Payment cancelled by customer'
+          : err.message;
+
+        try {
+          await api.post('/payments/failure', {
+            reason,
+            orderPayload: payload,
+            razorpayOrderId: pendingPayment?.razorpayOrderId,
+          });
+        } catch {
+          // ignore logging failure
+        }
+
+        if (err.message !== 'Payment cancelled') {
+          navigate('/payment-failed');
+          return;
+        }
+      }
+      setError(err.message === 'Payment cancelled' ? 'Payment cancelled. You can retry or choose Cash on Delivery.' : err.message);
     } finally {
       setPlacing(false);
     }
@@ -268,6 +363,7 @@ export default function Checkout({ navigate }) {
             setUpiId={setUpiId}
             placeOrder={placeOrder}
             placing={placing}
+            placeOrderLabel={placeOrderLabel}
             error={error}
             onBack={() => setMobileStep(2)}
           />
@@ -308,23 +404,21 @@ export default function Checkout({ navigate }) {
             <CardHeader><CardTitle className="text-xl">4. Payment Method</CardTitle></CardHeader>
             <CardContent>
               <div className="mt-4 grid gap-3">
-                {[
-                  ['UPI', 'Pay using UPI', 'Google Pay, PhonePe, Paytm and other UPI apps'],
-                  ['CARD', 'Credit / Debit Card', 'Secure card payment through Razorpay checkout'],
-                  ['NETBANKING', 'Net Banking', 'Bank selection through gateway'],
-                  ['WALLET', 'Wallet', 'Paytm Wallet and other wallets ready'],
-                  ['COD', 'Cash on Delivery', 'Pay when the product is delivered'],
-                ].map(([key, title, note]) => <button key={key} onClick={() => setPaymentMethod(key)} className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="label-text">{title}</p><p className="body-text mt-1 text-slate-500">{note}</p></button>)}
+                {PAYMENT_OPTIONS.map(([key, title, note]) => (
+                  <button key={key} type="button" onClick={() => setPaymentMethod(key)} className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200'}`}>
+                    <p className="label-text">{title}</p>
+                    <p className="body-text mt-1 text-slate-500">{note}</p>
+                  </button>
+                ))}
               </div>
-              {paymentMethod === 'UPI' && <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4"><div className="flex flex-wrap gap-2">{['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => <Button key={app} onClick={() => setPaymentApp(app)} variant={paymentApp === app ? 'primary' : 'secondary'} size="sm">{app}</Button>)}</div><TextInput value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 w-full" placeholder="yourname@upi" /><p className="body-text mt-3 rounded-xl border border-dashed border-slate-300 p-4 text-slate-500">UPI payment details will appear when gateway checkout is connected.</p></div>}
-              {paymentMethod === 'COD' && <p className="body-text mt-4 rounded-2xl bg-[#fbf8f4] p-4 text-slate-600">Please keep exact amount ready at delivery.</p>}
+              <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
             </CardContent>
           </Card>
           {error && <p className="body-text rounded-xl bg-rose/10 p-3 text-rose">{error}</p>}
         </div>
-        <PriceSummary cart={cart} cta={placing ? 'Placing...' : 'Place Order'} onAction={placeOrder} />
+        <PriceSummary cart={cart} cta={placeOrderLabel} onAction={placeOrder} />
       </div>
-      <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white p-3 md:hidden"><span className="price">Rs. {cart.finalAmount}</span><Button onClick={placeOrder} variant="accent">{placing ? 'Placing...' : 'Place Order'}</Button></div>
+      <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white p-3 md:hidden"><span className="price">Rs. {cart.finalAmount}</span><Button onClick={placeOrder} variant="accent">{placeOrderLabel}</Button></div>
     </section>
   );
 }
@@ -464,6 +558,7 @@ function MobilePaymentStep({
   setUpiId,
   placeOrder,
   placing,
+  placeOrderLabel,
   error,
   onBack,
 }) {
@@ -498,13 +593,7 @@ function MobilePaymentStep({
           <CardHeader><CardTitle className="text-[16px]">Payment Method</CardTitle></CardHeader>
           <CardContent>
             <div className="mt-4 grid gap-3">
-              {[
-                ['UPI', 'Pay using UPI', 'Google Pay, PhonePe, Paytm and other UPI apps'],
-                ['CARD', 'Credit / Debit Card', 'Secure card payment through Razorpay checkout'],
-                ['NETBANKING', 'Net Banking', 'Bank selection through gateway'],
-                ['WALLET', 'Wallet', 'Paytm Wallet and other wallets ready'],
-                ['COD', 'Cash on Delivery', 'Pay when the product is delivered'],
-              ].map(([key, title, note]) => (
+              {PAYMENT_OPTIONS.map(([key, title, note]) => (
                 <button
                   key={key}
                   type="button"
@@ -516,13 +605,12 @@ function MobilePaymentStep({
                 </button>
               ))}
             </div>
-            {paymentMethod === 'UPI' && <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4"><div className="flex flex-wrap gap-2">{['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => <Button key={app} onClick={() => setPaymentApp(app)} variant={paymentApp === app ? 'primary' : 'secondary'} size="sm">{app}</Button>)}</div><TextInput value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 w-full" placeholder="yourname@upi" /><p className="body-text mt-3 rounded-xl border border-dashed border-slate-300 p-4 text-slate-500">UPI payment details will appear when gateway checkout is connected.</p></div>}
-            {paymentMethod === 'COD' && <p className="body-text mt-4 rounded-2xl bg-[#fbf8f4] p-4 text-slate-600">Please keep exact amount ready at delivery.</p>}
+            <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
           </CardContent>
         </Card>
 
         <div className="px-4">
-          <PriceSummary cart={cart} cta={placing ? 'Placing...' : 'Place Order'} onAction={placeOrder} />
+          <PriceSummary cart={cart} cta={placeOrderLabel} onAction={placeOrder} />
         </div>
 
         {error && <p className="mx-4 rounded-xl bg-rose/10 p-3 text-[13px] text-rose">{error}</p>}
@@ -535,7 +623,7 @@ function MobilePaymentStep({
             <p className="text-[18px] font-bold text-[#1f2a44]">Rs. {cart.finalAmount}</p>
           </div>
           <Button onClick={placeOrder} variant="accent" className="h-14 min-w-[180px] rounded-[4px] text-[14px] font-bold uppercase tracking-[0.05em]">
-            {placing ? 'Placing...' : 'Place Order'}
+            {placeOrderLabel}
           </Button>
         </div>
       </div>

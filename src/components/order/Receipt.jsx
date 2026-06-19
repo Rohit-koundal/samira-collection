@@ -37,7 +37,7 @@ export default function Receipt({ receipt }) {
         <div className="flex justify-between border-t border-slate-100 pt-3 text-lg font-black"><span>Final Amount</span><span>Rs. {receipt.finalAmount || 0}</span></div>
       </div>
       <div className="mt-5 grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 text-sm md:grid-cols-3">
-        <Info title="Payment" lines={[receipt.paymentMethod, receipt.paymentProvider, receipt.paymentStatus]} />
+        <Info title="Payment" lines={[`${receipt.paymentMethod || 'Online'} via ${receipt.paymentProvider || 'Razorpay'}`, receipt.paymentStatus]} />
         <Info title="Order Status" lines={[receipt.orderStatus, 'Expected delivery: 5-7 days']} />
         <Info title="Policy" lines={[receipt.policies?.returnPolicy || 'Return/exchange as per policy.']} />
       </div>
@@ -47,7 +47,14 @@ export default function Receipt({ receipt }) {
 }
 
 function Info({ title, lines = [] }) {
-  return <div><h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>{lines.filter(Boolean).map((line) => <p key={line} className="mt-1 text-sm font-semibold text-slate-700">{line}</p>)}</div>;
+  return (
+    <div>
+      <h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>
+      {lines.filter(Boolean).map((line, index) => (
+        <p key={`${title}-${index}`} className="mt-1 text-sm font-semibold text-slate-700">{line}</p>
+      ))}
+    </div>
+  );
 }
 
 function Row({ label, value }) {
