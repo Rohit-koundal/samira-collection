@@ -47,7 +47,14 @@ export default function Receipt({ receipt }) {
 }
 
 function Info({ title, lines = [] }) {
-  return <div><h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>{lines.filter(Boolean).map((line) => <p key={line} className="mt-1 text-sm font-semibold text-slate-700">{line}</p>)}</div>;
+  return (
+    <div>
+      <h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>
+      {lines.filter(Boolean).map((line, index) => (
+        <p key={`${title}-${index}`} className="mt-1 text-sm font-semibold text-slate-700">{line}</p>
+      ))}
+    </div>
+  );
 }
 
 function Row({ label, value }) {
