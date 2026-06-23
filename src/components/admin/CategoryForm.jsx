@@ -43,7 +43,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, mode]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 

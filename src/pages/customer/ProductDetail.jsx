@@ -4,48 +4,65 @@ import { ChevronRight } from 'lucide-react';
 import SizeChartModal from '../../components/product/SizeChartModal';
 import { ProductVisual } from '../../components/product/ProductCard';
 import Icon from '../../components/layout/Icon';
+import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageIndex, getPrimaryImageUrl, normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
-import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery } from '../../store/apiSlice';
+import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery, useGetSettingsQuery, useGetVariantGroupQuery } from '../../store/apiSlice';
 
 export default function ProductDetail({ navigate, route = '' }) {
   const productKey = new URLSearchParams(route.split('?')[1] || '').get('id');
   const cart = useCart();
   const wishlist = useWishlist();
+  const { user } = useAuth();
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
+  const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [openGallery, setOpenGallery] = useState(false);
   const [openSizeChart, setOpenSizeChart] = useState(false);
   const [deliveryPin, setDeliveryPin] = useState('');
   const [touchStartX, setTouchStartX] = useState(0);
+  const [actionMessage, setActionMessage] = useState('');
   const { data: productData, isLoading, error } = useGetProductQuery(productKey || skipToken);
+  const { data: settingsData } = useGetSettingsQuery();
   const product = productData ? normalizeProduct(productData) : null;
   const productId = product?._id || product?.id || product?.slug;
   const relatedQuery = product?.categoryId ? { category: product.categoryId } : { sort: 'rating' };
   const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
   const { data: reviewsData = [] } = useGetReviewsQuery(productId || skipToken);
+  const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId || skipToken);
   const related = normalizeProducts(relatedData)
     .filter((entry) => (entry._id || entry.id || entry.slug) !== productId)
     .slice(0, 10);
   const reviews = Array.isArray(reviewsData) ? reviewsData : [];
+  const storeWhatsappNumber = formatWhatsappNumber(settingsData?.whatsappNumber || '');
 
   useEffect(() => {
     if (!productData) return;
     const item = normalizeProduct(productData);
     setSize(item.sizes?.[0] || 'Free Size');
     setColor(item.colors?.[0] || 'Wine');
-    setActiveImage(getPrimaryImageIndex(item.images));
+    setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
     setOpenGallery(false);
+    setActionMessage('');
+    setQuantity(1);
   }, [productData]);
 
   const isWishlisted = useMemo(
     () => Boolean(productId) && wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
     [wishlist.items, productId],
   );
-  const images = product?.images?.length ? product.images.map((image) => normalizeImageUrl(image.url)) : [];
-  const selectedImage = images[activeImage];
+  const mediaItems = useMemo(() => {
+    const imageItems = product?.images?.length
+      ? product.images.map((image) => ({ type: 'image', url: normalizeImageUrl(image.url), thumbnail: normalizeImageUrl(image.url) }))
+      : [];
+    const videoItems = product?.videos?.length
+      ? product.videos.map((video) => ({ type: 'video', url: normalizeImageUrl(video.url), thumbnail: normalizeImageUrl(video.thumbnail || video.url) }))
+      : [];
+    return [...imageItems, ...videoItems].filter((item) => item.url);
+  }, [product?.images, product?.videos]);
+  const selectedMedia = mediaItems[activeImage];
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
   const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
   const isOutOfStock = Number(product?.stock || 0) <= 0;
@@ -74,9 +91,46 @@ export default function ProductDetail({ navigate, route = '' }) {
     navigate('/checkout');
   };
 
+  const orderOnWhatsApp = () => {
+    if (!storeWhatsappNumber) {
+      setActionMessage('Store WhatsApp number is not configured.');
+      return;
+    }
+    if (product?.sizes?.length && !size) {
+      setActionMessage('Please select a size first.');
+      return;
+    }
+    if (product?.colors?.length && !color) {
+      setActionMessage('Please select a color first.');
+      return;
+    }
+    if (!Number(quantity) || Number(quantity) < 1) {
+      setActionMessage('Please choose a valid quantity.');
+      return;
+    }
+
+    const currentUrl = window.location.href;
+    const lines = [
+      'Hello Samira Collection,',
+      'I want to order this product:',
+      '',
+      `Product: ${product.name}`,
+      `Size: ${size || 'N/A'}`,
+      `Color: ${color || 'N/A'}`,
+      `Quantity: ${quantity}`,
+      `Price: ₹${product.price}`,
+      `Link: ${currentUrl}`,
+    ];
+    if (user?.name) lines.push(`Customer Name: ${user.name}`);
+    if (user?.phone) lines.push(`Customer Phone: ${user.phone}`);
+    const message = encodeURIComponent(lines.join('\n'));
+    window.open(`https://wa.me/91${storeWhatsappNumber}?text=${message}`, '_blank', 'noopener,noreferrer');
+    setActionMessage('');
+  };
+
   const goToImage = (index) => {
-    if (!images.length) return;
-    const total = images.length;
+    if (!mediaItems.length) return;
+    const total = mediaItems.length;
     setActiveImage((index + total) % total);
   };
 
@@ -108,12 +162,22 @@ export default function ProductDetail({ navigate, route = '' }) {
         <div className="md:sticky md:top-24 md:self-start">
           <div
             className="relative overflow-hidden bg-[#f6efe8] md:rounded-2xl"
-            onTouchStart={images.length > 1 ? handleTouchStart : undefined}
-            onTouchEnd={images.length > 1 ? handleTouchEnd : undefined}
+            onTouchStart={mediaItems.length > 1 ? handleTouchStart : undefined}
+            onTouchEnd={mediaItems.length > 1 ? handleTouchEnd : undefined}
           >
-            {selectedImage ? (
+            {selectedMedia ? (
               <button type="button" onClick={() => setOpenGallery(true)} className="block w-full bg-[#f6efe8]">
-                <img src={selectedImage} alt={product.name} className="h-[360px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px] md:object-cover" />
+                {selectedMedia.type === 'video' ? (
+                  <video
+                    src={selectedMedia.url}
+                    poster={selectedMedia.thumbnail}
+                    controls
+                    playsInline
+                    className="h-[360px] w-full bg-black object-cover sm:h-[430px] md:h-[620px]"
+                  />
+                ) : (
+                  <img src={selectedMedia.url} alt={product.name} className="h-[360px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px] md:object-cover" />
+                )}
               </button>
             ) : (
               <ProductVisual product={product} showMeta={false} />
@@ -129,15 +193,15 @@ export default function ProductDetail({ navigate, route = '' }) {
               {Number(product.rating || 0).toFixed(1)} star <span className="mx-2 text-slate-300">|</span> {product.numReviews || reviews.length || 0}
             </div>
           </div>
-          {images.length > 1 && (
+          {mediaItems.length > 1 && (
             <div className="mt-3 flex justify-center gap-2.5">
-              {images.slice(0, 8).map((image, index) => (
+              {mediaItems.slice(0, 8).map((item, index) => (
                 <button
-                  key={image}
+                  key={`${item.type}-${item.url}`}
                   type="button"
                   onClick={() => goToImage(index)}
                   className={`rounded-full ${activeImage === index ? 'h-2.5 w-2.5 bg-slate-700' : 'h-2.5 w-2.5 bg-slate-300'}`}
-                  aria-label={`Show image ${index + 1}`}
+                  aria-label={`Show media ${index + 1}`}
                 />
               ))}
             </div>
@@ -213,14 +277,49 @@ export default function ProductDetail({ navigate, route = '' }) {
                 ))}
               </div>
             )}
+            <div className="mt-3 flex items-center gap-3">
+              <span className="text-[12px] font-semibold text-charcoal">Qty</span>
+              <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white">
+                <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="h-9 w-9 text-lg font-black text-slate-600">-</button>
+                <span className="min-w-10 px-3 text-center text-[12px] font-black text-charcoal">{quantity}</span>
+                <button type="button" onClick={() => setQuantity((value) => value + 1)} className="h-9 w-9 text-lg font-black text-slate-600">+</button>
+              </div>
+            </div>
           </section>
+
+          {variantGroupData?.data?.products?.length ? (
+            <section className="rounded-[14px] bg-white p-4 md:rounded-2xl">
+              <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">More variants</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(variantGroupData.data.products || []).map((variantProduct) => {
+                  const variantId = variantProduct._id || variantProduct.id;
+                  const isCurrent = String(variantId) === String(productId);
+                  return (
+                    <button
+                      key={variantId}
+                      type="button"
+                      onClick={() => navigate(`/product?id=${variantId}`)}
+                      className={`rounded-full border px-3 py-2 text-[11px] font-semibold ${isCurrent ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}
+                    >
+                      {variantProduct.variantColor || variantProduct.variantName || variantProduct.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <div className="hidden gap-3 md:flex">
             <button disabled={isOutOfStock} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
               {cartItem ? 'Add More' : 'Add to Cart'}
             </button>
             <button disabled={isOutOfStock} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
+            <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-14 flex-1 rounded-xl border border-emerald-600 px-5 py-4 text-sm font-black text-emerald-700 disabled:opacity-50">
+              Order on WhatsApp
+            </button>
           </div>
+
+          {actionMessage && <p className="rounded-[14px] bg-[#fff4f7] px-4 py-3 text-sm font-semibold text-rose md:rounded-2xl">{actionMessage}</p>}
 
           <section className="rounded-[14px] bg-white p-4 md:space-y-2 md:rounded-none md:bg-transparent md:p-0 md:pt-2">
             <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">Check Delivery</h2>
@@ -281,7 +380,7 @@ export default function ProductDetail({ navigate, route = '' }) {
       </div>
 
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-white px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button disabled={isOutOfStock} onClick={buyNow} className="h-11 rounded-[10px] border border-[#7a1f36] bg-white px-3 text-[13px] font-bold text-[#7a1f36] disabled:opacity-50">
             Buy Now
           </button>
@@ -289,33 +388,51 @@ export default function ProductDetail({ navigate, route = '' }) {
             <Icon name="bag" className="h-4 w-4" />
             {isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
           </button>
+          <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-11 rounded-[10px] border border-emerald-600 px-3 text-[13px] font-bold text-emerald-700 disabled:opacity-50">
+            WhatsApp
+          </button>
         </div>
       </div>
 
       <SizeChartModal open={openSizeChart} onClose={() => setOpenSizeChart(false)} />
-      {openGallery && images.length > 0 && (
+      {openGallery && mediaItems.length > 0 && (
         <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between px-4 pb-3 pt-6 text-white">
               <button type="button" onClick={() => setOpenGallery(false)} className="grid h-10 w-10 place-items-center text-3xl leading-none" aria-label="Close gallery">
                 &times;
               </button>
-              <p className="text-sm font-black">{activeImage + 1} / {images.length}</p>
+              <p className="text-sm font-black">{activeImage + 1} / {mediaItems.length}</p>
             </div>
             <div className="flex min-h-0 flex-1 items-center justify-center px-3">
-              <img src={images[activeImage]} alt={`${product.name} ${activeImage + 1}`} className="max-h-full w-full object-contain" />
+              {mediaItems[activeImage]?.type === 'video' ? (
+                <video
+                  src={mediaItems[activeImage]?.url}
+                  poster={mediaItems[activeImage]?.thumbnail}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-h-full w-full object-contain"
+                />
+              ) : (
+                <img src={mediaItems[activeImage]?.url} alt={`${product.name} ${activeImage + 1}`} className="max-h-full w-full object-contain" />
+              )}
             </div>
-            {images.length > 1 && (
+            {mediaItems.length > 1 && (
               <div className="pb-[max(20px,env(safe-area-inset-bottom))] pt-4">
                 <div className="hide-scrollbar flex gap-3 overflow-x-auto px-4">
-                  {images.map((image, index) => (
+                  {mediaItems.map((item, index) => (
                     <button
-                      key={`${image}-${index}`}
+                      key={`${item.type}-${item.url}-${index}`}
                       type="button"
                       onClick={() => goToImage(index)}
                       className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 ${activeImage === index ? 'border-rose' : 'border-white/20'}`}
                     >
-                      <img src={image} alt={`${product.name} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+                      {item.type === 'video' ? (
+                        <video src={item.thumbnail || item.url} className="h-full w-full object-cover" muted />
+                      ) : (
+                        <img src={item.url} alt={`${product.name} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+                      )}
                     </button>
                   ))}
                 </div>
@@ -475,3 +592,9 @@ const colorSwatches = {
   Blue: '#9ec5ff',
   Pink: '#f3a4be',
 };
+
+function formatWhatsappNumber(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('91') && digits.length >= 12) return digits.slice(-10);
+  return digits.slice(-10);
+}

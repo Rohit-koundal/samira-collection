@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button, TextInput } from '../../components/ui';
 import { ArrowLeft, HelpCircle, Smartphone } from 'lucide-react';
+import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 
 const OTP_STORAGE_KEY = 'samira_login_otp_state';
 const OTP_COOLDOWN_SECONDS = 60;
@@ -13,9 +14,10 @@ export default function Login({ route = '/login' }) {
   const autoSendOtp = searchParams.get('autoSendOtp') === '1';
   const savedOtpState = readOtpState();
   const { sendOtp, verifyOtp, resendOtp, login } = useAuth();
+  const { notify } = useDesktopFeedback();
   const routePhone = searchParams.get('phone') || '';
   const [step, setStep] = useState(savedOtpState?.step || (initialMode === 'password' ? 'password' : 'phone'));
-  const [countryCode, setCountryCode] = useState(savedOtpState?.countryCode || '+91');
+  const [countryCode] = useState(savedOtpState?.countryCode || '+91');
   const [phone, setPhone] = useState(savedOtpState?.phone || routePhone || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +32,15 @@ export default function Login({ route = '/login' }) {
   const normalizedPhone = normalizePhone(phone, countryCode);
   const isOtpComplete = otp.every(Boolean);
   const canSubmitPhone = consent && Boolean(normalizedPhone);
+  const showFeedback = (text, type = 'info') => {
+    if (!text) return;
+    if (!notify(text, type, 'Login')) {
+      setMessageType(type);
+      setMessage(text);
+    } else {
+      setMessage('');
+    }
+  };
 
   useEffect(() => {
     if (!cooldown) return undefined;
@@ -50,45 +61,40 @@ export default function Login({ route = '/login' }) {
     });
   }, [cooldown, countryCode, normalizedPhone, phone, step]);
 
-  useEffect(() => {
-    if (!autoSendOtp || autoRequested) return;
-    if (step !== 'phone' || !normalizedPhone || !consent || loading) return;
-    setAutoRequested(true);
-    requestOtp();
-  }, [autoRequested, autoSendOtp, consent, loading, normalizedPhone, step]);
-
-  const requestOtp = async (event) => {
+  const requestOtp = useCallback(async (event) => {
     event?.preventDefault();
     setMessage('');
     setMessageType('info');
     if (!consent) {
-      setMessageType('error');
-      return setMessage('Please accept the terms to continue.');
+      return showFeedback('Please accept the terms to continue.', 'error');
     }
     if (!normalizedPhone) {
-      setMessageType('error');
-      return setMessage('Enter a valid mobile number for the selected country code.');
+      return showFeedback('Enter a valid mobile number for the selected country code.', 'error');
     }
     setLoading(true);
     try {
       const data = await sendOtp(normalizedPhone);
       if (data.token && data.user) {
-        setMessageType('success');
         clearOtpState();
-        return setMessage('Logged in successfully.');
+        return showFeedback('Logged in successfully.', 'success');
       }
       setStep('otp');
       setCooldown(OTP_COOLDOWN_SECONDS);
-      setMessageType('success');
-      setMessage(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP sent successfully.');
+      showFeedback(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP sent successfully.', 'success');
       setTimeout(() => inputs.current[0]?.focus(), 50);
     } catch (error) {
-      setMessageType('error');
-      setMessage(error.message);
+      showFeedback(error.message, 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [consent, normalizedPhone, sendOtp, showFeedback]);
+
+  useEffect(() => {
+    if (!autoSendOtp || autoRequested) return;
+    if (step !== 'phone' || !normalizedPhone || !consent || loading) return;
+    setAutoRequested(true);
+    requestOtp();
+  }, [autoRequested, autoSendOtp, consent, loading, normalizedPhone, requestOtp, step]);
 
   const submitOtp = async (event) => {
     event.preventDefault();
@@ -96,16 +102,14 @@ export default function Login({ route = '/login' }) {
     setMessageType('info');
     const code = otp.join('');
     if (code.length !== 6) {
-      setMessageType('error');
-      return setMessage('Enter the 6-digit OTP.');
+      return showFeedback('Enter the 6-digit OTP.', 'error');
     }
     setLoading(true);
     try {
       await verifyOtp({ phone: normalizedPhone, otp: code, redirectTo });
       clearOtpState();
     } catch (error) {
-      setMessageType('error');
-      setMessage(error.message);
+      showFeedback(error.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -132,11 +136,9 @@ export default function Login({ route = '/login' }) {
     try {
       const data = await resendOtp(normalizedPhone);
       setCooldown(OTP_COOLDOWN_SECONDS);
-      setMessageType('success');
-      setMessage(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP resent successfully.');
+      showFeedback(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP resent successfully.', 'success');
     } catch (error) {
-      setMessageType('error');
-      setMessage(error.message);
+      showFeedback(error.message, 'error');
     }
   };
 
@@ -145,8 +147,7 @@ export default function Login({ route = '/login' }) {
     setMessage('');
     setMessageType('info');
     if (!email.trim() || !password.trim()) {
-      setMessageType('error');
-      return setMessage('Enter email and password to continue.');
+      return showFeedback('Enter email and password to continue.', 'error');
     }
     setLoading(true);
     try {
@@ -154,11 +155,9 @@ export default function Login({ route = '/login' }) {
       if (result?.ok) {
         return;
       }
-      setMessageType('error');
-      setMessage(result?.error || 'Unable to login.');
+      showFeedback(result?.error || 'Unable to login.', 'error');
     } catch (error) {
-      setMessageType('error');
-      setMessage(error.message);
+      showFeedback(error.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -246,7 +245,7 @@ export default function Login({ route = '/login' }) {
                   Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
                 </button>
               </div>
-              {message && messageType === 'error' && <StatusMessage type={messageType} message={message} onRetry={doResend} loading={loading || !!cooldown} />}
+              {message && messageType === 'error' && <StatusMessage type={messageType} message={message} onRetry={doResend} loading={loading || !!cooldown} className="md:hidden" />}
             </form>
           ) : step === 'password' ? (
             <form onSubmit={submitPassword} className="space-y-4">
@@ -269,7 +268,7 @@ export default function Login({ route = '/login' }) {
               <button type="button" onClick={() => setStep('phone')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
                 Log in using <span className="text-[#ff5f86]">OTP</span>
               </button>
-              {message && <StatusMessage type={messageType} message={message} onRetry={() => {}} loading={loading} />}
+              {message && <StatusMessage type={messageType} message={message} onRetry={() => {}} loading={loading} className="md:hidden" />}
             </form>
           ) : (
             <form onSubmit={requestOtp} className="space-y-4">
@@ -315,7 +314,7 @@ export default function Login({ route = '/login' }) {
               <button type="button" className="flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
                 Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
               </button>
-              {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} />}
+              {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} className="md:hidden" />}
             </form>
           )}
         </div>
@@ -324,11 +323,11 @@ export default function Login({ route = '/login' }) {
   );
 }
 
-function StatusMessage({ type, message, onRetry, loading }) {
+function StatusMessage({ type, message, onRetry, loading, className = '' }) {
   const isError = type === 'error';
   const isSuccess = type === 'success';
   return (
-    <div className={`body-text mt-4 rounded-2xl p-4 ${isError ? 'bg-rose/10 text-wine' : isSuccess ? 'bg-emerald-50 text-emerald-800' : 'bg-blush text-wine'}`}>
+    <div className={`body-text mt-4 rounded-2xl p-4 ${className} ${isError ? 'bg-rose/10 text-wine' : isSuccess ? 'bg-emerald-50 text-emerald-800' : 'bg-blush text-wine'}`}>
       <p className="text-[12px] font-semibold">{isError ? 'We could not continue right now' : isSuccess ? 'All set' : 'Note'}</p>
       <p className="mt-1 text-[12px] leading-[1.4]">{message}</p>
       {isError && (
@@ -341,14 +340,6 @@ function StatusMessage({ type, message, onRetry, loading }) {
     </div>
   );
 }
-
-const countryCodes = [
-  { value: '+91', label: 'IN +91' },
-  { value: '+1', label: 'US +1' },
-  { value: '+44', label: 'UK +44' },
-  { value: '+971', label: 'AE +971' },
-  { value: '+61', label: 'AU +61' },
-];
 
 function normalizePhone(value, countryCode) {
   const digits = String(value).replace(/\D/g, '');

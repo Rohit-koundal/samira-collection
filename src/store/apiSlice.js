@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { getApiBaseUrl } from './apiBaseUrl';
+import { compressImageFile, isSupportedImageFile } from '../services/imageCompression';
 import { logout, setCredentials } from './authSlice';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
@@ -53,7 +54,7 @@ function params(query) {
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings'],
+  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
@@ -65,9 +66,9 @@ export const samiraApi = createApi({
       invalidatesTags: (_result, _error, arg) => tagsForPath(arg.path, true),
     }),
     upload: builder.mutation({
-      query: ({ path, files }) => {
+      query: ({ path, files, fieldName = 'images' }) => {
         const formData = new FormData();
-        Array.from(files || []).forEach((file) => formData.append('images', file));
+        Array.from(files || []).forEach((file) => formData.append(fieldName, file));
         return { url: path, method: 'POST', body: formData };
       },
       invalidatesTags: ['AdminProducts', 'Products'],
@@ -94,6 +95,68 @@ export const samiraApi = createApi({
     getAdminOrders: builder.query({ query: () => '/admin/orders', providesTags: ['AdminOrders'] }),
     getAdminCustomers: builder.query({ query: () => '/admin/customers', providesTags: ['AdminCustomers'] }),
     getAdminSettings: builder.query({ query: () => '/admin/settings', providesTags: ['AdminSettings'] }),
+    getAdminLowStock: builder.query({ query: () => '/admin/dashboard/low-stock', providesTags: ['Inventory'] }),
+    getProductDrafts: builder.query({ query: () => '/admin/product-drafts', providesTags: ['ProductDrafts'] }),
+    getVariantGroups: builder.query({ query: () => '/variant-groups', providesTags: ['VariantGroups'] }),
+    getVariantGroup: builder.query({ query: (id) => `/variant-groups/${id}`, providesTags: ['VariantGroups'] }),
+    bulkUploadProductDrafts: builder.mutation({
+      async queryFn({ files }, api, extraOptions, baseQuery) {
+        const preparedFiles = [];
+        for (const file of Array.from(files || [])) {
+          if (!file) continue;
+          if (file.__compressionMeta) {
+            preparedFiles.push(file);
+            continue;
+          }
+          if (!isSupportedImageFile(file)) {
+            return { error: { status: 400, data: { message: 'Only JPG, JPEG, PNG, and WEBP images are allowed.' } } };
+          }
+          preparedFiles.push(await compressImageFile(file, {
+            maxOriginalSizeMb: 2,
+            targetMaxSizeMb: 0.7,
+            maxWidthOrHeight: 1600,
+          }));
+        }
+        const formData = new FormData();
+        preparedFiles.forEach((file) => formData.append('images', file));
+        const result = await baseQuery({ url: '/admin/product-drafts/bulk-upload', method: 'POST', body: formData }, api, extraOptions);
+        if (result.error) return { error: result.error };
+        return { data: result.data };
+      },
+      invalidatesTags: ['ProductDrafts'],
+    }),
+    updateProductDraft: builder.mutation({
+      query: ({ id, body }) => ({ url: `/admin/product-drafts/${id}`, method: 'PUT', body }),
+      invalidatesTags: ['ProductDrafts'],
+    }),
+    deleteProductDraft: builder.mutation({
+      query: (id) => ({ url: `/admin/product-drafts/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['ProductDrafts'],
+    }),
+    publishSelectedDrafts: builder.mutation({
+      query: (body) => ({ url: '/admin/product-drafts/publish-selected', method: 'POST', body }),
+      invalidatesTags: ['ProductDrafts', 'Products', 'AdminProducts', 'AdminDashboard', 'Inventory'],
+    }),
+    createVariantGroup: builder.mutation({
+      query: (body) => ({ url: '/admin/variant-groups', method: 'POST', body }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    updateVariantGroup: builder.mutation({
+      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}`, method: 'PUT', body }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    deleteVariantGroup: builder.mutation({
+      query: (id) => ({ url: `/admin/variant-groups/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    addVariantGroupProducts: builder.mutation({
+      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}/add-products`, method: 'POST', body }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    removeVariantGroupProducts: builder.mutation({
+      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}/remove-products`, method: 'POST', body }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
   }),
 });
 
@@ -105,6 +168,9 @@ function tagsForPath(path = '', mutation = false) {
   if (path.includes('/admin/orders')) return mutation ? ['AdminOrders', 'Orders', 'AdminDashboard'] : ['AdminOrders'];
   if (path.includes('/admin/customers') || path.includes('/admin/users')) return ['AdminCustomers'];
   if (path.includes('/admin/settings')) return mutation ? ['AdminSettings', 'Settings'] : ['AdminSettings'];
+  if (path.includes('/admin/product-drafts')) return mutation ? ['ProductDrafts', 'Products', 'AdminProducts', 'AdminDashboard'] : ['ProductDrafts'];
+  if (path.includes('/admin/variant-groups') || path.includes('/variant-groups')) return mutation ? ['VariantGroups', 'Products', 'AdminProducts'] : ['VariantGroups'];
+  if (path.includes('/admin/dashboard/low-stock') || path.includes('/admin/inventory/low-stock')) return ['Inventory', 'AdminDashboard'];
   if (path.includes('/products')) return ['Products'];
   if (path.includes('/categories')) return ['Categories'];
   if (path.includes('/banners')) return ['Banners'];
@@ -126,6 +192,7 @@ export const {
   useGetAdminOrdersQuery,
   useGetAdminProductsQuery,
   useGetAdminSettingsQuery,
+  useGetAdminLowStockQuery,
   useGetAdminStatsQuery,
   useGetBannersQuery,
   useGetCartQuery,
@@ -134,12 +201,24 @@ export const {
   useGetCurrentUserQuery,
   useGetOrdersQuery,
   useGetProductQuery,
+  useGetProductDraftsQuery,
   useGetProductsQuery,
+  useGetVariantGroupQuery,
+  useGetVariantGroupsQuery,
   useGetReviewsQuery,
   useGetSettingsQuery,
   useGetWishlistQuery,
+  useBulkUploadProductDraftsMutation,
+  useCreateVariantGroupMutation,
+  useDeleteProductDraftMutation,
+  useDeleteVariantGroupMutation,
+  usePublishSelectedDraftsMutation,
   useResendOtpMutation,
   useSendOtpMutation,
+  useAddVariantGroupProductsMutation,
   useSwitchModeMutation,
+  useRemoveVariantGroupProductsMutation,
+  useUpdateProductDraftMutation,
+  useUpdateVariantGroupMutation,
   useVerifyOtpMutation,
 } = samiraApi;

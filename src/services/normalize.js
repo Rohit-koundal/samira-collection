@@ -2,9 +2,11 @@ import { getApiBaseUrl } from '../store/apiBaseUrl';
 
 export function normalizeProduct(product) {
   const images = normalizeImageEntries(product.images);
+  const videos = normalizeVideoEntries(product.videos);
   return {
     ...product,
     images,
+    videos,
     id: product._id || product.id,
     category: product.category?.name || product.category || 'Collection',
     categoryId: product.category?._id || product.category,
@@ -14,6 +16,10 @@ export function normalizeProduct(product) {
     originalPrice: product.originalPrice || product.price,
     discountPercentage: product.discountPercentage || 0,
     primaryImageUrl: getPrimaryImageUrl(images),
+    variantGroupId: product.variantGroupId || product.variantGroup?.id || product.variantGroup,
+    variantName: product.variantName || '',
+    variantColor: product.variantColor || '',
+    variantSize: product.variantSize || '',
   };
 }
 
@@ -72,6 +78,20 @@ export function normalizeImageEntries(images = []) {
       };
     })
     .filter((image) => Boolean(image?.url));
+}
+
+export function normalizeVideoEntries(videos = []) {
+  return (Array.isArray(videos) ? videos : [])
+    .map((video) => {
+      if (!video) return null;
+      const url = typeof video === 'string' ? video : video.url;
+      if (!url) return null;
+      return {
+        ...(typeof video === 'object' ? video : {}), 
+        url: normalizeImageUrl(url),
+      };
+    })
+    .filter((video) => Boolean(video?.url));
 }
 
 export function getPrimaryImageUrl(images = []) {

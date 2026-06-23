@@ -1,3 +1,4 @@
+import { Children } from 'react';
 import { cn } from '../../lib/utils';
 
 export function Dialog({ open, className = '', children }) {
@@ -14,7 +15,10 @@ export function DialogHeader({ className = '', ...props }) {
 }
 
 export function DialogTitle({ className = '', ...props }) {
-  return <h2 className={cn('section-title text-xl', className)} {...props} />;
+  const { children, ...rest } = props;
+  const content = Children.toArray(children);
+  if (!content.length) return null;
+  return <h2 className={cn('section-title text-xl', className)} {...rest}>{content}</h2>;
 }
 
 export function DialogBody({ className = '', ...props }) {

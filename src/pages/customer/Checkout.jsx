@@ -9,6 +9,7 @@ import api from '../../services/api';
 import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
+import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 
 const PAYMENT_OPTIONS = [
   ['UPI', 'Pay using UPI', 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps'],
@@ -67,6 +68,7 @@ const emptyAddress = {
 export default function Checkout({ navigate }) {
   const cart = useCart();
   const { setToast, user } = useAuth();
+  const { isDesktop, notify } = useDesktopFeedback();
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -82,6 +84,12 @@ export default function Checkout({ navigate }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [mobileStep, setMobileStep] = useState(2);
   const [showMobileAddressSelector, setShowMobileAddressSelector] = useState(false);
+  const showFeedback = (text, type = 'error') => {
+    if (!text) return;
+    if (!notify(text, type, 'Checkout')) {
+      setError(text);
+    }
+  };
 
   const loadAddresses = async (preferredAddressId) => {
     try {
@@ -143,7 +151,7 @@ export default function Checkout({ navigate }) {
       resetAddressEditor();
       await loadAddresses(savedAddress?._id || editingAddressId);
     } catch (err) {
-      setError(err.message);
+      showFeedback(err.message, 'error');
     } finally {
       setSavingAddress(false);
     }
@@ -156,7 +164,7 @@ export default function Checkout({ navigate }) {
       cart.setCoupon({ code: data.couponCode, discount: data.discountAmount });
       setToast(data.message);
     } catch (err) {
-      setError(err.message);
+      showFeedback(err.message, 'error');
     }
   };
 
@@ -180,9 +188,9 @@ export default function Checkout({ navigate }) {
   const placeOrder = async () => {
     setError('');
     if (!user) return navigate('/login');
-    if (!user.isPhoneVerified) return setError('Please verify your mobile number to continue checkout.');
-    if (!cart.items.length) return setError('Your cart is empty.');
-    if (!selectedAddress) return setError('Please select or add a delivery address.');
+    if (!user.isPhoneVerified) return showFeedback('Please verify your mobile number to continue checkout.', 'warning');
+    if (!cart.items.length) return showFeedback('Your cart is empty.', 'warning');
+    if (!selectedAddress) return showFeedback('Please select or add a delivery address.', 'warning');
     setPlacing(true);
 
     const payload = orderPayload();
@@ -201,9 +209,9 @@ export default function Checkout({ navigate }) {
       const razorpayOrderId = pendingPayment.razorpayOrderId || pendingPayment.order_id;
       const razorpayKey = pendingPayment.keyId || process.env.REACT_APP_RAZORPAY_KEY_ID;
 
-      if (!razorpayOrderId || !razorpayKey) {
-        throw new Error('Online payment could not be started. Please try again or choose Cash on Delivery.');
-      }
+        if (!razorpayOrderId || !razorpayKey) {
+          throw new Error('Online payment is not configured. Please use Cash on Delivery.');
+        }
 
       await openRazorpayCheckout({
         key: razorpayKey,
@@ -247,7 +255,11 @@ export default function Checkout({ navigate }) {
           return;
         }
       }
-      setError(err.message === 'Payment cancelled' ? 'Payment cancelled. You can retry or choose Cash on Delivery.' : err.message);
+        showFeedback(err.message === 'Payment cancelled'
+          ? 'Payment cancelled. You can retry or choose Cash on Delivery.'
+          : err.message === 'Razorpay is not configured. Use COD or add payment keys in .env.'
+            ? 'Online payment is not configured. Please use Cash on Delivery.'
+            : err.message, 'error');
     } finally {
       setPlacing(false);
     }
@@ -280,14 +292,14 @@ export default function Checkout({ navigate }) {
       if (editingAddressId === addressId) resetAddressEditor();
       await loadAddresses();
     } catch (err) {
-      setError(err.message);
+      showFeedback(err.message, 'error');
     }
   };
 
   const continueToPayment = () => {
     setError('');
     if (!selectedAddress) {
-      setError('Please select or add a delivery address.');
+      showFeedback('Please select or add a delivery address.', 'warning');
       return;
     }
     setShowMobileAddressSelector(false);
@@ -300,7 +312,7 @@ export default function Checkout({ navigate }) {
   const confirmSelectedAddress = () => {
     setError('');
     if (!selectedAddress) {
-      setError('Please select a delivery address.');
+      showFeedback('Please select a delivery address.', 'warning');
       return;
     }
     setShowMobileAddressSelector(false);
@@ -389,7 +401,7 @@ export default function Checkout({ navigate }) {
                 {addresses.map((address) => <button key={address._id} onClick={() => setSelectedAddressId(address._id)} className={`rounded-2xl border p-4 text-left ${selectedAddressId === address._id ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="label-text">{address.fullName} {address.isDefault && <span className="badge-text rounded-full bg-wine px-2 py-1 text-white">Default</span>}</p><p className="body-text mt-1 text-slate-600">{address.mobile || address.phone}</p><p className="body-text mt-2 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p></button>)}
                 {!addresses.length && <p className="body-text rounded-2xl bg-[#fbf8f4] p-4 text-slate-500">No saved addresses. Add one below.</p>}
               </div>
-              {showAddressForm || !addresses.length ? <div className="mt-4"><AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={error} onCancel={() => setShowAddressForm(false)} saving={savingAddress} /></div> : null}
+              {showAddressForm || !addresses.length ? <div className="mt-4"><AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={isDesktop ? '' : error} onCancel={() => setShowAddressForm(false)} saving={savingAddress} /></div> : null}
             </CardContent>
           </Card>
           <section><OrderSummary items={cart.items} /></section>
@@ -414,7 +426,7 @@ export default function Checkout({ navigate }) {
               <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
             </CardContent>
           </Card>
-          {error && <p className="body-text rounded-xl bg-rose/10 p-3 text-rose">{error}</p>}
+          {error && <p className="body-text rounded-xl bg-rose/10 p-3 text-rose md:hidden">{error}</p>}
         </div>
         <PriceSummary cart={cart} cta={placeOrderLabel} onAction={placeOrder} />
       </div>
@@ -457,7 +469,7 @@ function MobileAddressSummary({ navigate, selectedAddress, cartItems, deliveryWi
           ))}
         </div>
 
-        {error && <p className="mx-5 mt-4 rounded-xl bg-rose/10 px-4 py-3 text-[13px] font-medium text-rose">{error}</p>}
+        {error && <p className="mx-5 mt-4 rounded-xl bg-rose/10 px-4 py-3 text-[13px] font-medium text-rose md:hidden">{error}</p>}
       </div>
 
       <MobileBottomAction label="Continue" onClick={onContinue} />
@@ -534,7 +546,7 @@ function MobileAddressSelector({
               )}
             </div>
 
-            {error && <p className="px-5 py-4 text-[13px] font-medium text-rose">{error}</p>}
+            {error && <p className="px-5 py-4 text-[13px] font-medium text-rose md:hidden">{error}</p>}
           </div>
 
           <MobileBottomAction label="Confirm" onClick={onConfirm} />

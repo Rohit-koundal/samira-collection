@@ -9,7 +9,29 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children, navigate }) {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
-  const [toast, setToast] = useState('');
+  const [toast, setToastState] = useState(null);
+
+  const setToast = useCallback((value) => {
+    if (!value) {
+      setToastState(null);
+      return;
+    }
+
+    if (typeof value === 'string') {
+      setToastState({ message: value, type: 'info' });
+      return;
+    }
+
+    setToastState({
+      message: value.message || '',
+      type: value.type || 'info',
+      title: value.title || '',
+    });
+  }, []);
+
+  const notify = useCallback((message, type = 'info', title = '') => {
+    setToast({ message, type, title });
+  }, [setToast]);
 
   const persist = useCallback((data) => {
     dispatch(setCredentials(data));
@@ -38,7 +60,7 @@ export function AuthProvider({ children, navigate }) {
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(''), 3500);
+    const timer = window.setTimeout(() => setToastState(null), 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -151,19 +173,35 @@ export function AuthProvider({ children, navigate }) {
     logout,
     toast,
     setToast,
+    notify,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     activeMode: user?.activeMode || 'customer',
     availableModes: user?.availableModes || ['customer'],
-  }), [deleteProfile, login, logout, refreshProfile, resendOtp, sendOtp, sendProfileEmailChangeOtp, sendProfilePhoneChangeOtp, switchMode, toast, updateProfile, user, verifyOtp, verifyProfileEmailChangeOtp, verifyProfilePhoneChangeOtp]);
+  }), [deleteProfile, login, logout, notify, refreshProfile, resendOtp, sendOtp, sendProfileEmailChangeOtp, sendProfilePhoneChangeOtp, setToast, switchMode, toast, updateProfile, user, verifyOtp, verifyProfileEmailChangeOtp, verifyProfilePhoneChangeOtp]);
 
   return (
     <AuthContext.Provider value={value}>
       {children}
       {toast && (
-        <button type="button" onClick={() => setToast('')} className="fixed right-4 top-4 z-[80] rounded-xl bg-charcoal px-4 py-3 text-sm font-bold text-white shadow-2xl">
-          {toast}
-        </button>
+        <div className="pointer-events-none fixed right-4 top-4 z-[80] hidden w-[min(22rem,calc(100vw-2rem))] md:block">
+          <button
+            type="button"
+            onClick={() => setToast('')}
+            className={`pointer-events-auto w-full rounded-2xl border px-4 py-3 text-left shadow-2xl transition ${
+              toast.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : toast.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-900'
+                  : toast.type === 'warning'
+                    ? 'border-amber-200 bg-amber-50 text-amber-900'
+                    : 'border-slate-200 bg-white text-charcoal'
+            }`}
+          >
+            {toast.title ? <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-70">{toast.title}</p> : null}
+            <p className="mt-1 text-sm font-semibold leading-5">{toast.message}</p>
+          </button>
+        </div>
       )}
     </AuthContext.Provider>
   );

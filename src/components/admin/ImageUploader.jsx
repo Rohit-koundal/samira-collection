@@ -65,7 +65,7 @@ export default function ImageUploader({
 
       setPhase('uploading');
       setProgress(100);
-      const data = await api.upload(`/admin/uploads?folder=${encodeURIComponent(uploadContext)}`, converted);
+      const data = await api.upload(`/admin/uploads?folder=${encodeURIComponent(uploadContext)}`, converted, { fieldName: 'images' });
       const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
       const uploaded = uploadedFiles.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));

@@ -1,3 +1,4 @@
+import { Children } from 'react';
 import { cn } from '../../lib/utils';
 
 export function Sheet({ open, className = '', children }) {
@@ -17,5 +18,7 @@ export function SheetHeader({ className = '', ...props }) {
 }
 
 export function SheetTitle({ className = '', ...props }) {
-  return <h2 className={cn('section-title text-xl', className)} {...props} />;
+  const { children, ...rest } = props;
+  if (!Children.toArray(children).length) return null;
+  return <h2 className={cn('section-title text-xl', className)} {...rest}>{children}</h2>;
 }

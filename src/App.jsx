@@ -33,10 +33,12 @@ const Contact = lazy(() => import('./pages/customer/Contact'));
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminProducts = lazy(() => import('./pages/admin/Products'));
+const ProductDrafts = lazy(() => import('./pages/admin/ProductDrafts'));
 const AddProduct = lazy(() => import('./pages/admin/AddProduct'));
 const EditProduct = lazy(() => import('./pages/admin/EditProduct'));
 const Categories = lazy(() => import('./pages/admin/Categories'));
 const EditCategory = lazy(() => import('./pages/admin/EditCategory'));
+const VariantGroups = lazy(() => import('./pages/admin/VariantGroups'));
 const Orders = lazy(() => import('./pages/admin/Orders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'));
 const Customers = lazy(() => import('./pages/admin/Customers'));
@@ -77,10 +79,12 @@ const customerRoutes = {
 const adminRoutes = {
   '/admin': Dashboard,
   '/admin/products': AdminProducts,
+  '/admin/product-drafts': ProductDrafts,
   '/admin/products/add': AddProduct,
   '/admin/products/edit': EditProduct,
   '/admin/categories': Categories,
   '/admin/categories/edit': EditCategory,
+  '/admin/variant-groups': VariantGroups,
   '/admin/orders': Orders,
   '/admin/orders/detail': AdminOrderDetail,
   '/admin/customers': Customers,
@@ -134,8 +138,8 @@ function AppShell({ route, navigate }) {
   const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
-  const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user?._id, user?.id, user?.phone]);
-  const wishlistStoragePlan = useMemo(() => createStoragePlan('samira_wishlist', user), [user?._id, user?.id, user?.phone]);
+  const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user]);
+  const wishlistStoragePlan = useMemo(() => createStoragePlan('samira_wishlist', user), [user]);
   const loginFallback = (
     <Suspense fallback={<RouteFallback />}>
       <Login route={`/login?redirect=${encodeURIComponent(route)}`} />
@@ -277,8 +281,17 @@ function RouteFallback() {
   return (
     <>
       <MobileOverlayLoader />
-      <div className="hidden min-h-[50vh] place-items-center px-4 text-sm font-black text-slate-500 md:grid">
-        Loading...
+      <div className="hidden min-h-[50vh] place-items-center px-4 md:grid">
+        <div className="flex flex-col items-center gap-3 rounded-3xl border border-[#eadfd5] bg-white px-8 py-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+          <span className="relative block h-12 w-12" aria-hidden="true">
+            <span className="absolute inset-0 rounded-full border-[3px] border-[#f3d3da]" />
+            <span
+              className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
+              style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
+            />
+          </span>
+          <p className="text-sm font-black text-slate-500">Loading...</p>
+        </div>
       </div>
     </>
   );

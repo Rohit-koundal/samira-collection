@@ -1,3 +1,4 @@
+import { Children } from 'react';
 import { cn } from '../../lib/utils';
 
 export function Card({ className = '', ...props }) {
@@ -10,7 +11,9 @@ export function CardHeader({ className = '', ...props }) {
 }
 
 export function CardTitle({ className = '', ...props }) {
-  return <h3 className={cn('section-title text-xl text-charcoal', className)} {...props} />;
+  const children = Children.toArray(props.children);
+  if (!children.length) return null;
+  return <h3 className={cn('section-title text-xl text-charcoal', className)} {...props}>{children}</h3>;
 }
 
 export function CardDescription({ className = '', ...props }) {
