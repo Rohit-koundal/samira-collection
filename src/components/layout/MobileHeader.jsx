@@ -27,7 +27,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
         <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_84px] items-center gap-2 px-3 pt-1">
           <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5.5 w-5.5" />
@@ -72,7 +72,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
         </div>
       </header>
       {open && (
-        <div className="fixed inset-0 z-[75] md:hidden">
+        <div className="fixed inset-0 z-[75] lg:hidden">
           <button type="button" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/45" aria-label="Close menu" />
           <aside className="absolute inset-y-0 left-0 w-80 max-w-[86vw] overflow-y-auto bg-white shadow-2xl">
             <div className="bg-[#3e3648] px-4 py-4 text-white">

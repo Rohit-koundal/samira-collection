@@ -60,7 +60,7 @@ export default function ProductImageCarousel({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-t-lg bg-[#f6efe8] md:rounded-t-2xl ${className}`}
+      className={`relative overflow-hidden rounded-[18px] bg-[#f6efe8] ${className}`}
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}

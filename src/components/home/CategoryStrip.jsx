@@ -1,44 +1,54 @@
-import { Button, Card, CardContent } from '../ui';
 import { normalizeImageUrl } from '../../services/normalize';
 
 export default function CategoryStrip({ navigate, categories = [] }) {
-  const visibleCategories = categories || [];
+  const visibleCategories = (categories || []).slice(0, 8);
 
   return (
-    <section className="container-page bg-white py-5 md:bg-transparent md:py-12">
-      <div className="mb-4 flex items-end justify-between gap-3 md:mb-5">
+    <section className="grid gap-3 xl:grid-cols-[150px_1fr_120px] xl:items-stretch">
+      <div className="flex items-center justify-center rounded-[16px] border border-[#f0e1d7] bg-[#fffaf6] px-4 py-4 text-center shadow-[0_6px_16px_rgba(23,22,26,0.03)]">
         <div>
-          <p className="small-text font-bold uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.2em]">Shop by category</p>
-          <h2 className="section-title mt-1 md:mt-2 md:text-3xl">Curated fashion edits</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-wine xl:text-[11px]">Shop by</p>
+          <h2 className="mt-2 text-[23px] font-semibold leading-[1] text-charcoal xl:text-[27px]">Category</h2>
+          <div className="mx-auto mt-3 h-px w-16 bg-[#d8b8c0]" />
         </div>
-        <Button onClick={() => navigate('/category')} variant="ghost" className="hidden text-rose md:inline-flex">View all</Button>
       </div>
-      <div className="hide-scrollbar flex gap-3 overflow-x-auto md:grid md:grid-cols-4 lg:grid-cols-8">
-        {visibleCategories.map((category, index) => {
+
+      <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
+        {visibleCategories.map((category) => {
           const categoryId = category._id || category.id || category.slug || '';
-          const subtitle = category.count ? `${category.count} styles` : category.description || (index % 2 ? 'Under Rs. 999' : 'Fresh styles');
-          const canRenderImage = isRealImagePath(category.image);
           return (
-            <Card
-              as="button"
+            <button
               key={categoryId || category.name}
+              type="button"
               onClick={() => navigate(`/products?category=${categoryId}`)}
-              className="min-w-[104px] text-left transition hover:-translate-y-1 hover:shadow-xl md:min-w-[132px]"
+              className="group min-w-[94px] max-w-[94px] flex-1 text-left xl:min-w-[102px] xl:max-w-[102px]"
             >
-              <CardContent className="p-3 md:p-4">
-                {canRenderImage ? <img src={normalizeImageUrl(category.image)} alt="" className="h-16 w-full rounded-lg object-cover md:h-20 md:rounded-xl" /> : <div className="grid h-16 place-items-center rounded-lg bg-gradient-to-br from-blush to-[#f7e4c7] text-xl font-bold text-wine md:h-20 md:rounded-xl md:text-2xl">SC</div>}
-                <h3 className="label-text mt-3 truncate text-charcoal md:mt-4">{category.name}</h3>
-                <p className="small-text mt-1 text-slate-500 md:text-xs">{subtitle}</p>
-              </CardContent>
-            </Card>
+              <div className="overflow-hidden rounded-[12px] border border-[#f0e1d7] bg-[#faf4ee] shadow-[0_6px_14px_rgba(23,22,26,0.03)]">
+                <div className="aspect-[0.95]">
+                  {category.image ? (
+                    <img src={normalizeImageUrl(category.image)} alt={category.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f6e6d7] to-[#edd2c1] text-[11px] font-bold uppercase tracking-[0.08em] text-wine xl:text-[12px]">
+                      {String(category.name || 'SC').slice(0, 2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="mt-2 truncate text-center text-[10px] font-semibold text-charcoal xl:text-[12px]">{category.name}</p>
+            </button>
           );
         })}
       </div>
+
+      <button
+        type="button"
+        onClick={() => navigate('/products?discount=50')}
+        className="overflow-hidden rounded-[16px] border border-[#eadfd5] bg-wine px-4 py-4 text-left text-white shadow-[0_10px_20px_rgba(122,31,54,0.14)]"
+      >
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/65 xl:text-[11px]">Sale</p>
+        <h3 className="mt-2 text-[22px] font-semibold leading-[1.02] xl:text-[26px]">Up to 50% off</h3>
+        <p className="mt-2 text-[11px] leading-4 text-white/82 xl:text-[12px]">View all categories & festive offers</p>
+      </button>
     </section>
   );
-}
-
-function isRealImagePath(value) {
-  if (!value) return false;
-  return value.startsWith('http') || value.startsWith('data:') || value.startsWith('/uploads/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(value);
 }

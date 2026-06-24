@@ -10,7 +10,16 @@ export default function Wishlist({ navigate }) {
         <h1 className="page-title md:text-3xl">Wishlist</h1>
         <p className="body-text mt-2 text-slate-500">Saved pieces for your next pick.</p>
       </div>
-      {wishlist.items.length ? (
+      {wishlist.loading ? (
+        <Card>
+          <CardContent className="grid min-h-40 place-items-center p-6 md:p-10">
+            <div className="text-center">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
+              <p className="mt-3 text-sm font-semibold text-slate-500">Loading wishlist...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : wishlist.items.length ? (
         <ProductGrid products={wishlist.items} navigate={navigate} />
       ) : (
         <Card>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { MantineProvider, createTheme } from '@mantine/core';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -97,6 +98,19 @@ const adminRoutes = {
   '/admin/settings': Settings,
 };
 
+const samiraTheme = createTheme({
+  primaryColor: 'maroon',
+  primaryShade: 8,
+  defaultRadius: 'md',
+  fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
+  headings: {
+    fontFamily: '"Playfair Display", Georgia, serif',
+  },
+  colors: {
+    maroon: ['#f9ecef', '#f2d8de', '#e8bcc8', '#db93a6', '#cc6d87', '#ba4668', '#a92d4f', '#951c3e', '#7b1834', '#5f1128'],
+  },
+});
+
 function useHashRoute() {
   const [route, setRoute] = useState(() => window.location.hash.replace('#', '') || '/');
 
@@ -119,9 +133,11 @@ export default function App() {
   const [route, navigate] = useHashRoute();
 
   return (
-    <AuthProvider navigate={navigate}>
-      <AppShell route={route} navigate={navigate} />
-    </AuthProvider>
+    <MantineProvider theme={samiraTheme}>
+      <AuthProvider navigate={navigate}>
+        <AppShell route={route} navigate={navigate} />
+      </AuthProvider>
+    </MantineProvider>
   );
 }
 
@@ -246,12 +262,12 @@ function AppShell({ route, navigate }) {
             authContent
           ) : (
             <>
-              {showShell && <DesktopHeader navigate={navigate} route={route} />}
+              {showShell && routePath !== '/' && <DesktopHeader navigate={navigate} route={route} />}
               {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
-              <main className={`${showShell ? 'pb-20 md:pb-0' : ''}`}>
+              <main className={`${showShell ? 'pb-20 lg:pb-0' : ''}`}>
                 {mainContent}
               </main>
-              {showShell && <Footer navigate={navigate} />}
+              {showShell && routePath !== '/' && <Footer navigate={navigate} />}
               {showShell && !hideMobileBottomNavRoutes.includes(routePath) && <MobileBottomNav active={routePath} navigate={navigate} />}
               {showShell && (
                 <LoginPrompt

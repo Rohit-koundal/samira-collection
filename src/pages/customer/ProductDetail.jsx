@@ -24,6 +24,7 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [deliveryPin, setDeliveryPin] = useState('');
   const [touchStartX, setTouchStartX] = useState(0);
   const [actionMessage, setActionMessage] = useState('');
+  const [wishlistBusy, setWishlistBusy] = useState(false);
   const { data: productData, isLoading, error } = useGetProductQuery(productKey || skipToken);
   const { data: settingsData } = useGetSettingsQuery();
   const product = productData ? normalizeProduct(productData) : null;
@@ -84,6 +85,16 @@ export default function ProductDetail({ navigate, route = '' }) {
 
   const add = () => {
     cart.addToCart(product, size, color);
+  };
+
+  const handleWishlist = async () => {
+    if (!product || wishlist.loading || wishlistBusy) return;
+    setWishlistBusy(true);
+    try {
+      await wishlist.toggleWishlist(product);
+    } finally {
+      setWishlistBusy(false);
+    }
   };
 
   const buyNow = () => {
@@ -154,7 +165,7 @@ export default function ProductDetail({ navigate, route = '' }) {
         </div>
         <div className="flex items-center gap-2 text-slate-800">
           <button type="button" onClick={() => navigate('/search')} className="grid h-9 w-9 place-items-center" aria-label="Search"><Icon name="search" className="h-5 w-5" /></button>
-          <button type="button" onClick={() => wishlist.toggleWishlist(product)} className={`grid h-9 w-9 place-items-center ${isWishlisted ? 'text-rose' : ''}`} aria-label="Wishlist"><Icon name="heart" className="h-5 w-5" /></button>
+          <button type="button" onClick={handleWishlist} disabled={wishlist.loading || wishlistBusy} className={`grid h-9 w-9 place-items-center disabled:opacity-60 ${isWishlisted ? 'text-rose' : ''}`} aria-label="Wishlist"><Icon name="heart" className="h-5 w-5" /></button>
           <button type="button" onClick={() => navigate('/cart')} className="grid h-9 w-9 place-items-center" aria-label="Cart"><Icon name="bag" className="h-5 w-5" /></button>
         </div>
       </header>
@@ -217,8 +228,9 @@ export default function ProductDetail({ navigate, route = '' }) {
             </h1>
             <button
               type="button"
-              onClick={() => wishlist.toggleWishlist(product)}
-              className={`absolute right-0 top-0 grid h-8 w-8 place-items-center rounded-full border transition md:h-8 md:w-8 md:rounded-xl ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
+              onClick={handleWishlist}
+              disabled={wishlist.loading || wishlistBusy}
+              className={`absolute right-0 top-0 grid h-8 w-8 place-items-center rounded-full border transition disabled:opacity-60 md:h-8 md:w-8 md:rounded-xl ${isWishlisted ? 'border-rose bg-rose/10 text-rose' : 'border-slate-200 text-slate-700'}`}
               aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
               aria-pressed={isWishlisted}
             >

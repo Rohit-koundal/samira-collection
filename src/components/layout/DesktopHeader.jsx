@@ -1,17 +1,16 @@
+import { ActionIcon, Badge, Box, Button, Container, Group, Text, TextInput } from '@mantine/core';
+import { IconHeart, IconSearch, IconShoppingBag, IconUser, IconShieldCheck } from '@tabler/icons-react';
 import logo from '../../assets/samira-collection-logo.png';
-import Icon from './Icon';
-import { ShieldCheck } from 'lucide-react';
-import { Button, TextInput } from '../ui';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 
 const links = [
-  ['Home', '/'],
   ['New Arrivals', '/products?newArrival=true'],
   ['Sarees', '/products?search=Saree'],
   ['Suits', '/products?search=Suit'],
   ['Kurtis', '/products?search=Kurti'],
+  ['Lehengas', '/products?search=Lehenga'],
   ['Dresses', '/products?search=Dress'],
   ['Sale', '/products?discount=20'],
   ['Contact', '/contact'],
@@ -26,24 +25,34 @@ export default function DesktopHeader({ navigate, route = '/' }) {
 
   if (routePath === '/cart') {
     return (
-      <header className="sticky top-0 z-50 hidden bg-white md:block">
-        <div className="flex h-[88px] items-center justify-between border-b border-slate-200 px-10 lg:px-12">
-          <button onClick={() => navigate('/')} className="shrink-0" aria-label="Samira Collection home">
-            <img src={logo} alt="Samira Collection" className="h-12 w-auto" />
-          </button>
-          <div className="flex items-center gap-4 lg:gap-5">
-            <span className="small-text font-bold uppercase tracking-[0.36em] text-emerald-500">Bag</span>
-            <span className="h-px w-12 border-t border-dashed border-slate-300" />
-            <span className="small-text uppercase tracking-[0.36em] text-slate-500">Address</span>
-            <span className="h-px w-12 border-t border-dashed border-slate-300" />
-            <span className="small-text uppercase tracking-[0.36em] text-slate-500">Payment</span>
-          </div>
-          <div className="flex items-center gap-3 text-slate-700">
-            <ShieldCheck className="h-6 w-6 text-emerald-500" />
-            <span className="label-text uppercase tracking-[0.28em]">100% Secure</span>
-          </div>
-        </div>
-      </header>
+      <Box component="header" className="hidden lg:block" bg="white" pos="sticky" top={0} style={{ zIndex: 50 }}>
+        <Container size={1440} px={16} py={14}>
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Button variant="subtle" onClick={() => navigate('/')} p={0} h="auto">
+              <img src={logo} alt="Samira Collection" style={{ height: 48, width: 'auto' }} />
+            </Button>
+            <Group gap={14} className="hidden lg:flex">
+              <Text size="xs" fw={800} tt="uppercase" c="#22c55e" style={{ letterSpacing: 2.4 }}>
+                Bag
+              </Text>
+              <DividerDot />
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: 2.4 }}>
+                Address
+              </Text>
+              <DividerDot />
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: 2.4 }}>
+                Payment
+              </Text>
+            </Group>
+            <Group gap={10}>
+              <IconShieldCheck size={22} color="#16a34a" />
+              <Text size="xs" fw={800} tt="uppercase" style={{ letterSpacing: 2.2 }}>
+                100% Secure
+              </Text>
+            </Group>
+          </Group>
+        </Container>
+      </Box>
     );
   }
 
@@ -55,52 +64,105 @@ export default function DesktopHeader({ navigate, route = '/' }) {
   };
 
   return (
-    <header className="sticky top-0 z-50 hidden bg-white/95 shadow-sm backdrop-blur md:block">
-      <div className="small-text bg-wine px-4 py-2 text-center font-bold uppercase tracking-[0.24em] text-white">
-        Free Shipping on Orders Above Rs. 999 | New Festive Collection Live Now
-      </div>
-      <div className="container-page flex h-[72px] items-center gap-4 lg:h-20 lg:gap-5">
-        <button onClick={() => navigate('/')} className="shrink-0" aria-label="Samira Collection home">
-          <img src={logo} alt="Samira Collection" className="h-14 w-auto" />
-        </button>
-        <nav className="hidden flex-1 items-center justify-center gap-4 label-text text-charcoal lg:flex xl:gap-5">
-          {links.map(([label, path]) => (
-            <button key={label} onClick={() => navigate(path)} className="transition hover:text-wine">
-              {label}
-            </button>
-          ))}
-        </nav>
-        <label className="flex min-w-[220px] max-w-[320px] flex-1 items-center gap-3 rounded-full bg-[#f5f1eb] px-4 text-slate-500">
-          <Icon name="search" className="h-4 w-4" />
-          <TextInput
-            value={searchValue}
-            onFocus={() => {
-              if (!route.startsWith('/search')) navigate('/search');
-            }}
-            onChange={(event) => updateSearch(event.target.value)}
-            className="h-11 min-w-0 flex-1 border-0 bg-transparent px-0 text-charcoal shadow-none ring-0 placeholder:text-slate-500 focus:border-0 focus:ring-0"
-            placeholder="Search sarees, suits, kurtis..."
-            inputMode="search"
-            enterKeyHint="search"
-          />
-        </label>
-        <div className="flex items-center gap-3">
-          {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-            <Button onClick={() => switchMode('admin')} className="h-11 rounded-full px-4 text-xs uppercase">
-              Admin Mode
+    <Box component="header" className="hidden lg:block" pos="sticky" top={0} style={{ zIndex: 50 }}>
+      <Box bg="#4b071b" h={32} style={{ display: 'flex', alignItems: 'center' }}>
+        <Container size={1440} px={14} style={{ width: '100%' }}>
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Text size="xs" fw={700} tt="uppercase" c="white" ta="center" style={{ letterSpacing: 1.8, flex: 1 }}>
+              FREE SHIPPING ON ORDERS ABOVE RS. 999 | NEW FESTIVE COLLECTION LIVE NOW
+            </Text>
+            <Group gap={10} className="hidden lg:flex">
+              <Button variant="subtle" c="rgba(255,255,255,0.8)" color="gray" size="xs" p={0} onClick={() => navigate('/orders')}>
+                Track Order
+              </Button>
+              <Text size="xs" c="rgba(255,255,255,0.42)">
+                |
+              </Text>
+              <Button variant="subtle" c="rgba(255,255,255,0.8)" color="gray" size="xs" p={0} onClick={() => navigate('/contact')}>
+                Help & Support
+              </Button>
+            </Group>
+          </Group>
+        </Container>
+      </Box>
+
+      <Box bg="white" style={{ borderBottom: '1px solid rgba(123, 24, 52, 0.12)' }}>
+        <Container size={1440} px={14} h={80}>
+          <Group justify="space-between" align="center" wrap="nowrap" h={80}>
+            <Button variant="subtle" onClick={() => navigate('/')} p={0} h="auto">
+              <img src={logo} alt="Samira Collection" style={{ height: 46, width: 'auto' }} />
             </Button>
-          )}
-          <Button onClick={() => navigate('/profile')} variant="outline" size="icon" className="rounded-full"><Icon name="user" /></Button>
-          <Button onClick={() => navigate('/wishlist')} variant="outline" size="icon" className="relative rounded-full">
-            <Icon name="heart" />
-            <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{wishlist.items.length}</span>
-          </Button>
-          <Button onClick={() => navigate('/cart')} variant="secondary" size="icon" className="relative rounded-full bg-charcoal text-white hover:bg-charcoal/90">
-            <Icon name="bag" />
-            <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose text-[10px] font-black text-white">{cart.itemCount}</span>
-          </Button>
-        </div>
-      </div>
-    </header>
+
+            <Group gap={18} className="hidden lg:flex" wrap="nowrap">
+              {links.map(([label, path]) => (
+                <Button
+                  key={label}
+                  variant="subtle"
+                  c="#171717"
+                  size="xs"
+                  fw={800}
+                  tt="uppercase"
+                  style={{ letterSpacing: 1.1 }}
+                  onClick={() => navigate(path)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </Group>
+
+            <Group gap={10} wrap="nowrap">
+              <TextInput
+                value={searchValue}
+                onFocus={() => {
+                  if (!route.startsWith('/search')) navigate('/search');
+                }}
+                onChange={(event) => updateSearch(event.currentTarget.value)}
+                placeholder="Search sarees, suits, kurtis..."
+                leftSection={<IconSearch size={16} />}
+                radius="xl"
+                size="sm"
+                w={320}
+                styles={{
+                  input: {
+                    height: 42,
+                    background: '#fbf6f1',
+                    borderColor: 'rgba(123, 24, 52, 0.14)',
+                    color: '#171717',
+                  },
+                }}
+              />
+
+              {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+                <Button radius="xl" size="sm" onClick={() => switchMode('admin')} style={{ background: '#7b1834' }}>
+                  Admin Mode
+                </Button>
+              )}
+
+              <ActionIcon variant="light" radius="xl" size={42} onClick={() => navigate('/profile')}>
+                <IconUser size={18} />
+              </ActionIcon>
+
+              <ActionIcon variant="light" radius="xl" size={42} onClick={() => navigate('/wishlist')} style={{ position: 'relative' }}>
+                <IconHeart size={18} />
+                <Badge size="xs" radius="xl" color="red" style={{ position: 'absolute', top: -6, right: -6 }}>
+                  {wishlist.items.length}
+                </Badge>
+              </ActionIcon>
+
+              <ActionIcon variant="filled" radius="xl" size={42} onClick={() => navigate('/cart')} style={{ background: '#171717' }}>
+                <IconShoppingBag size={18} />
+                <Badge size="xs" radius="xl" color="red" style={{ position: 'absolute', top: -6, right: -6 }}>
+                  {cart.itemCount}
+                </Badge>
+              </ActionIcon>
+            </Group>
+          </Group>
+        </Container>
+      </Box>
+    </Box>
   );
+}
+
+function DividerDot() {
+  return <Box w={1} h={14} bg="rgba(255,255,255,0.28)" />;
 }
