@@ -2,8 +2,8 @@ import { useLayoutEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import ProductGrid from '../../components/product/ProductGrid';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
-import ProductFilters from '../../components/product/ProductFilters';
 import Icon from '../../components/layout/Icon';
+import DesktopNewArrivalsLayout from './DesktopNewArrivalsLayout';
 import { normalizeProducts } from '../../services/normalize';
 import {
   clearCatalogFilters,
@@ -19,6 +19,7 @@ import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
   const [openFilters, setOpenFilters] = useState(false);
+  const routePath = route.split('?')[0];
   const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
   const routeQuery = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const filters = useSelector(selectCatalogFilters);
@@ -69,28 +70,23 @@ export default function Products({ navigate, route = '/products' }) {
   };
 
   return (
-    <section className="container-page bg-white pb-10 pt-3 md:bg-transparent md:py-10">
-      <div className="mb-4 hidden md:block md:mb-6">
-        {/* <p className="small-text font-bold uppercase tracking-[0.14em] text-slate-500 md:text-xs md:tracking-[0.2em]">Home / Products</p> */}
-        <div className="mt-2 md:mt-3">
-          <div className="flex items-start justify-between gap-3 md:flex-wrap md:items-end md:gap-4">
-            <div className="min-w-0">
-              <h1 className="page-title text-[21px] sm:text-2xl md:max-w-none md:text-2xl">{collectionLabel}</h1>
-              <p className="mt-1 text-[11px] text-slate-500">{loading ? '' : `${visibleProducts.length} styles available`}</p>
-            </div>
-        <div className="hidden shrink-0 md:block">
-              <select value={filters.sort} onChange={(event) => updateParam('sort', event.target.value)} className="label-text h-10 min-w-[134px] rounded-xl border border-slate-200 bg-white px-3 md:h-11 md:px-4 md:text-sm">
-                <option value="newest">Newest</option>
-                <option value="">All</option>
-                <option value="priceLowHigh">Price Low-High</option>
-                <option value="priceHighLow">Price High-Low</option>
-                <option value="discount">Discount</option>
-                <option value="rating">Rating</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
+    <section className=" bg-white">
+      {routePath === '/products' || routePath === '/search' || routePath === '/category' ? (
+        <DesktopNewArrivalsLayout
+          navigate={navigate}
+          route={route}
+          routeQuery={routeQuery}
+          collectionLabel={collectionLabel}
+          loading={loading}
+          visibleProducts={visibleProducts}
+          categories={categories}
+          filters={filters}
+          params={params}
+          updateParam={updateParam}
+          clearFilterParams={clearFilterParams}
+          allProducts={catalog}
+        />
+      ) : null}
       <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
         <div>
           <p className="text-[13px] font-bold text-[#1f2a44]">{collectionLabel}</p>
@@ -139,13 +135,8 @@ export default function Products({ navigate, route = '/products' }) {
           );
         })}
       </div>
-      <div className="flex gap-6">
-        <div className="hidden shrink-0 md:block">
-          <ProductFilters categories={categories} params={params} updateParam={updateParam} clearFilters={clearFilterParams} />
-        </div>
-        <div className="min-w-0 flex-1">
-          {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
-        </div>
+      <div className="md:hidden">
+        {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
       </div>
       <MobileFilterSheet
         open={openFilters}

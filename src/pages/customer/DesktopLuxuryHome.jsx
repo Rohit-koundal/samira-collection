@@ -109,51 +109,6 @@ export default function DesktopLuxuryHome({
 
   return (
     <div className={styles.desktopLuxuryHome}>
-      <header>
-        <div className={styles.announcementBar}>
-          <p className={styles.announcementText}>FREE SHIPPING ON ORDERS ABOVE RS. 999 | FESTIVE COLLECTION LIVE NOW</p>
-          <div className={styles.announcementLinks}>
-            <button type="button" onClick={() => navigate('/orders')}>Track Order</button>
-            <span>|</span>
-            <button type="button" onClick={() => navigate('/contact')}>Help &amp; Support</button>
-          </div>
-        </div>
-
-        <div className={styles.navbar}>
-          <div className={styles.navbarInner}>
-            <button type="button" className={styles.logoButton} onClick={() => navigate('/')} aria-label="Samira Collection home">
-              <img src={logo} alt="Samira Collection" />
-            </button>
-
-            <nav className={styles.menu} aria-label="Main navigation">
-              {navigationLinks.map(([label, path]) => (
-                <button key={label} type="button" className={styles.menuLink} onClick={() => navigate(path)}>{label}</button>
-              ))}
-            </nav>
-
-            <div className={styles.navActions}>
-              <form className={styles.searchBox} onSubmit={submitSearch}>
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search sarees, suits, kurtis..."
-                  aria-label="Search products"
-                />
-                <button type="submit" aria-label="Submit search"><IconSearch size={17} /></button>
-              </form>
-
-              {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-                <button type="button" className={styles.adminButton} onClick={() => switchMode('admin')}>Admin Mode</button>
-              )}
-
-              <HeaderAction label="Account" onClick={() => navigate('/profile')} icon={IconUser} />
-              <HeaderAction label="Wishlist" count={wishlist.items.length} onClick={() => navigate('/wishlist')} icon={IconHeart} />
-              <HeaderAction label="Cart" count={cart.itemCount} onClick={() => navigate('/cart')} icon={IconShoppingBag} />
-            </div>
-          </div>
-        </div>
-      </header>
-
       <section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>

@@ -1,0 +1,132 @@
+.sc-plp {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .sc-plp {
+    display: block;
+    background: #fff8f2;
+    padding: 1px 0 0px;
+  }
+
+  .sc-plp__shell {
+    /* width: min(1600px, calc(100% - 48px)); */
+    margin: 0 auto;
+  }
+
+  .sc-plp__panel {
+    padding: 28px 48px 40px;
+    border: 1px solid #ead8cb;
+    /* border-radius: 18px; */
+    background: linear-gradient(180deg, #fffaf5 0%, #fff8f2 100%);
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.08);
+  }
+
+  .sc-plp__breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: #8a7a70;
+  }
+
+  .sc-plp__breadcrumb button {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+
+  .sc-plp__breadcrumb .is-active {
+    color: #111111;
+    font-weight: 600;
+  }
+
+  .sc-plp__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .sc-plp__title {
+    margin: 0;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1.1;
+    color: #111111;
+  }
+
+  .sc-plp__subtitle {
+    margin-top: 6px;
+    font-size: 15px;
+    color: #6f625c;
+  }
+
+  .sc-plp__sort {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+  }
+
+  .sc-plp__sort label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #7f7268;
+  }
+
+  .sc-plp__sort select {
+    height: 44px;
+    min-width: 180px;
+    border: 1px solid #ead8cb;
+    border-radius: 10px;
+    background: #fffdfb;
+    padding: 0 14px;
+    font-size: 14px;
+    color: #17161a;
+    outline: none;
+  }
+
+  .sc-plp__divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 18px 0 26px;
+  }
+
+  .sc-plp__divider-line {
+    width: 100%;
+    height: 1px;
+    background: #ead8cb;
+  }
+
+  .sc-plp__divider-mark {
+    flex: 0 0 auto;
+    color: #b88945;
+    font-size: 14px;
+  }
+
+  .sc-plp__content {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 28px;
+    align-items: flex-start;
+  }
+
+  .sc-plp__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .sc-plp__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}

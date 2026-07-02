@@ -5,14 +5,14 @@ import { ProductVisual } from './ProductCard';
 
 export default function ProductImageCarousel({
   product,
-  className = 'aspect-[4/5] w-full',
+  className = 'aspect-[4/5] w-full rounded-[18px]',
   onOpen,
   children,
 }) {
   const images = useMemo(() => normalizeImageEntries(product?.images || []), [product?.images]);
   const hasMultiple = images.length > 1;
   const [index, setIndex] = useState(0);
-  const touchState = useRef({ startX: 0, startY: 0, deltaX: 0, deltaY: 0, swiping: false });
+  const pointerState = useRef({ startX: 0, startY: 0, deltaX: 0, deltaY: 0, swiping: false, pointerId: null });
 
   const goTo = (nextIndex) => {
     if (!images.length) return;
@@ -22,37 +22,75 @@ export default function ProductImageCarousel({
 
   const handleTouchStart = (event) => {
     const touch = event.touches[0];
-    touchState.current = {
+    pointerState.current = {
       startX: touch.clientX,
       startY: touch.clientY,
       deltaX: 0,
       deltaY: 0,
       swiping: false,
+      pointerId: null,
     };
   };
 
   const handleTouchMove = (event) => {
     const touch = event.touches[0];
-    const deltaX = touch.clientX - touchState.current.startX;
-    const deltaY = touch.clientY - touchState.current.startY;
-    touchState.current.deltaX = deltaX;
-    touchState.current.deltaY = deltaY;
+    const deltaX = touch.clientX - pointerState.current.startX;
+    const deltaY = touch.clientY - pointerState.current.startY;
+    pointerState.current.deltaX = deltaX;
+    pointerState.current.deltaY = deltaY;
     if (Math.abs(deltaX) > Math.abs(deltaY) + 8) {
-      touchState.current.swiping = true;
+      pointerState.current.swiping = true;
     }
   };
 
   const handleTouchEnd = () => {
     if (!hasMultiple) return;
-    const { deltaX, swiping } = touchState.current;
+    const { deltaX, swiping } = pointerState.current;
     if (!swiping || Math.abs(deltaX) < 40) return;
     if (deltaX < 0) goTo(index + 1);
     else goTo(index - 1);
   };
 
+  const handlePointerDown = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    pointerState.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      deltaX: 0,
+      deltaY: 0,
+      swiping: false,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerMove = (event) => {
+    if (pointerState.current.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pointerState.current.startX;
+    const deltaY = event.clientY - pointerState.current.startY;
+    pointerState.current.deltaX = deltaX;
+    pointerState.current.deltaY = deltaY;
+    if (Math.abs(deltaX) > Math.abs(deltaY) + 8) {
+      pointerState.current.swiping = true;
+    }
+  };
+
+  const handlePointerUp = (event) => {
+    if (pointerState.current.pointerId !== event.pointerId) return;
+    if (!hasMultiple) {
+      pointerState.current.pointerId = null;
+      return;
+    }
+    const { deltaX, swiping } = pointerState.current;
+    if (swiping && Math.abs(deltaX) >= 40) {
+      goTo(deltaX < 0 ? index + 1 : index - 1);
+    }
+    pointerState.current.pointerId = null;
+  };
+
   const handleClick = () => {
-    if (touchState.current.swiping && Math.abs(touchState.current.deltaX) > 8) {
-      touchState.current.swiping = false;
+    if (pointerState.current.swiping && Math.abs(pointerState.current.deltaX) > 8) {
+      pointerState.current.swiping = false;
       return;
     }
     onOpen?.();
@@ -60,11 +98,18 @@ export default function ProductImageCarousel({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[18px] bg-[#f6efe8] ${className}`}
+      className={`relative overflow-hidden bg-[#f6efe8] ${className}`}
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => {
+        pointerState.current.pointerId = null;
+        pointerState.current.swiping = false;
+      }}
       style={{ touchAction: 'pan-y' }}
       role="button"
       tabIndex={0}

@@ -3,7 +3,7 @@ import { MantineProvider, createTheme } from '@mantine/core';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
-import DesktopHeader from './components/layout/DesktopHeader';
+import Navbar from './components/layout/Navbar';
 import MobileHeader from './components/layout/MobileHeader';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import Footer from './components/layout/Footer';
@@ -262,7 +262,7 @@ function AppShell({ route, navigate }) {
             authContent
           ) : (
             <>
-              {showShell && routePath !== '/' && <DesktopHeader navigate={navigate} route={route} />}
+              {showShell && <Navbar navigate={navigate} route={route} />}
               {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
               <main className={`${showShell ? 'pb-20 lg:pb-0' : ''}`}>
                 {mainContent}
