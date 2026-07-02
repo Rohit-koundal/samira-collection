@@ -15,7 +15,7 @@
   .sc-info__brand {
     margin: 0;
     color: #6f7892;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -23,7 +23,7 @@
 
   .sc-info__title {
     margin: 6px 0 0;
-    font-size: clamp(22px, 1.7vw, 30px);
+    font-size: clamp(18px, 1.4vw, 24px);
     font-weight: 800;
     color: #111;
     line-height: 1.15;
@@ -37,7 +37,7 @@
     align-items: center;
     gap: 8px;
     margin-top: 10px;
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
   }
 
@@ -60,7 +60,7 @@
   }
 
   .sc-info__price {
-    font-size: 30px;
+    font-size: 24px;
     font-weight: 800;
     color: #111;
   }
@@ -68,18 +68,18 @@
   .sc-info__original {
     color: #9a8b81;
     text-decoration: line-through;
-    font-size: 15px;
+    font-size: 12px;
   }
 
   .sc-info__discount {
     color: #d7193f;
     font-weight: 800;
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .sc-info__tax {
     margin: 6px 0 0;
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
   }
 
@@ -97,7 +97,7 @@
   .sc-info__offer-copy p {
     margin: 0;
     color: #8a0f36;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.08em;
   }
@@ -105,7 +105,7 @@
   .sc-info__offer-copy strong {
     display: block;
     margin-top: 4px;
-    font-size: 18px;
+    font-size: 14px;
     color: #111;
   }
 
@@ -114,7 +114,7 @@
     display: block;
     margin-top: 4px;
     color: #666;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .sc-info__offer-side {
@@ -129,7 +129,7 @@
     border-radius: 999px;
     background: #8a0f36;
     color: #fff;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
   }
 
@@ -156,7 +156,7 @@
 
   .sc-info__section-head h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 800;
     color: #111;
   }
@@ -165,7 +165,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .sc-info__sizes {
@@ -182,7 +182,7 @@
     border-radius: 999px;
     background: #fff;
     color: #111;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
   }
 
@@ -223,7 +223,7 @@
     border-radius: 999px;
     background: #fff;
     color: #111;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
   }
 
@@ -255,7 +255,7 @@
   .sc-info__qty span {
     min-width: 30px;
     text-align: center;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
     color: #111;
   }
@@ -276,7 +276,7 @@
     border-radius: 8px;
     border: 1px solid transparent;
     min-width: 0;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
   }
 
@@ -303,7 +303,7 @@
   .sc-info__message {
     margin: 12px 0 0;
     color: #d7193f;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
   }
 
@@ -323,7 +323,7 @@
     border: 1px solid #ead8cb;
     border-radius: 8px;
     background: #fff;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .sc-info__delivery-row button {
@@ -346,7 +346,7 @@
     border-radius: 999px;
     border: 1px solid #ead8cb;
     background: #fff;
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
   }
 
@@ -360,6 +360,6 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: 11px;
   }
 }

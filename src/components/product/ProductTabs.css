@@ -20,7 +20,7 @@
     border: 0;
     background: transparent;
     color: #666;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     text-align: center;
   }
@@ -33,7 +33,7 @@
   .sc-tabs__panel {
     padding: 18px 18px 20px;
     color: #444;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.7;
   }
 
@@ -50,7 +50,7 @@
     border: 1px solid #ead8cb;
     background: #fff8f2;
     color: #8a0f36;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
   }
 
@@ -69,14 +69,14 @@
   }
 
   .sc-tabs__details dt {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: #8a7a70;
   }
 
   .sc-tabs__details dd {
     margin: 4px 0 0;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: #111;
   }

@@ -53,17 +53,6 @@ export default function ProductDetailPage({
   return (
     <section className="sc-pdp">
       <div className="sc-pdp__container">
-        <nav className="sc-pdp__breadcrumb" aria-label="Breadcrumb">
-          {breadcrumb.map((item, index) => {
-            const isLast = index === breadcrumb.length - 1;
-            return (
-              <span key={item} className={`sc-pdp__breadcrumb-item${isLast ? ' sc-pdp__breadcrumb-item--active' : ''}`}>
-                {item}
-                {!isLast ? <ChevronRight className="sc-pdp__breadcrumb-sep" aria-hidden="true" /> : null}
-              </span>
-            );
-          })}
-        </nav>
 
         <div className="sc-pdp__main">
           <ProductGallery

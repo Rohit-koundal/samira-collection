@@ -32,7 +32,7 @@
   .sc-product-card__badge {
     position: absolute;
     left: 10px;
-    top: 10px;
+    top: 7px;
     z-index: 20;
     display: inline-flex;
     align-items: center;
@@ -41,25 +41,24 @@
     border-radius: 6px;
     background: #8a0f36;
     color: #fff;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.08em;
   }
 
   .sc-product-card__wishlist {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 20;
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.95);
-    box-shadow: 0 8px 20px rgba(70, 35, 20, 0.12);
-    color: #8a0f36;
+        position: absolute;
+        right: 10px;
+        top: 8px;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 19px;
+        border: 0;
+        border-radius: 50%;
+        box-shadow: 0 8px 20px rgba(70, 35, 20, 0.12);
+        color: #8a0f36;
   }
 
   .sc-product-card__wishlist.is-active {
