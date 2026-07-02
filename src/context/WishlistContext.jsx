@@ -68,12 +68,10 @@ export function WishlistProvider({ children }) {
   }, [items, user]);
 
   const updateWishlist = async (nextItems) => {
-    if (user) {
-      setItems(nextItems);
-      return;
-    }
     setItems(nextItems);
-    persistGuestWishlist(nextItems);
+    if (!user) {
+      persistGuestWishlist(nextItems);
+    }
   };
 
   const toggleWishlist = async (product) => {
@@ -91,13 +89,19 @@ export function WishlistProvider({ children }) {
       return;
     }
 
+    const exists = items.some((item) => getWishlistItemId(item) === productId);
+    const nextItems = exists
+      ? items.filter((item) => getWishlistItemId(item) !== productId)
+      : [...items, normalizedProduct];
+    const previousItems = items;
+    setItems(nextItems);
+
     try {
-      const exists = items.some((item) => getWishlistItemId(item) === productId);
       const response = exists ? await api.delete(`/wishlist/${productId}`) : await api.post(`/wishlist/${productId}`);
       const nextItems = Array.isArray(response) ? response.map(normalizeWishlistProduct).filter(Boolean) : [];
-      await updateWishlist(nextItems);
+      setItems(nextItems);
     } catch {
-      // Keep the UI stable if the backend request fails.
+      setItems(previousItems);
     }
   };
 
@@ -113,13 +117,17 @@ export function WishlistProvider({ children }) {
       return;
     }
 
+    if (items.some((item) => getWishlistItemId(item) === productId)) return;
+    const previousItems = items;
+    const nextItems = [...items, normalizedProduct];
+    setItems(nextItems);
+
     try {
-      if (items.some((item) => getWishlistItemId(item) === productId)) return;
       const response = await api.post(`/wishlist/${productId}`);
-      const nextItems = Array.isArray(response) ? response.map(normalizeWishlistProduct).filter(Boolean) : [];
-      await updateWishlist(nextItems);
+      const syncedItems = Array.isArray(response) ? response.map(normalizeWishlistProduct).filter(Boolean) : [];
+      setItems(syncedItems);
     } catch {
-      // Keep the UI stable if the backend request fails.
+      setItems(previousItems);
     }
   };
 
@@ -132,12 +140,16 @@ export function WishlistProvider({ children }) {
       return;
     }
 
+    const previousItems = items;
+    const nextItems = items.filter((item) => getWishlistItemId(item) !== productId);
+    setItems(nextItems);
+
     try {
       const response = await api.delete(`/wishlist/${productId}`);
-      const nextItems = Array.isArray(response) ? response.map(normalizeWishlistProduct).filter(Boolean) : [];
-      await updateWishlist(nextItems);
+      const syncedItems = Array.isArray(response) ? response.map(normalizeWishlistProduct).filter(Boolean) : [];
+      setItems(syncedItems);
     } catch {
-      // Keep the UI stable if the backend request fails.
+      setItems(previousItems);
     }
   };
 

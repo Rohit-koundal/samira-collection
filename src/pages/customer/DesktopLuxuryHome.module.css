@@ -746,7 +746,7 @@
   --product-gap: 28px;
   display: grid;
   margin-top: 20px;
-  grid-auto-columns: calc((100% - (var(--product-gap) * 3)) / 4);
+  grid-auto-columns: calc((100% - (var(--product-gap) * 3)) / 3);
   grid-auto-flow: column;
   grid-template-rows: 1fr;
   gap: var(--product-gap);
