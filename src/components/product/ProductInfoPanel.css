@@ -1,0 +1,365 @@
+@media (min-width: 1024px) {
+  .sc-info {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sc-info__panel {
+    padding: 20px 22px;
+    border: 1px solid #ead8cb;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(70, 35, 20, 0.06);
+  }
+
+  .sc-info__brand {
+    margin: 0;
+    color: #6f7892;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .sc-info__title {
+    margin: 6px 0 0;
+    font-size: clamp(22px, 1.7vw, 30px);
+    font-weight: 800;
+    color: #111;
+    line-height: 1.15;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .sc-info__rating-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .sc-info__stars {
+    display: inline-flex;
+    gap: 2px;
+    color: #b88945;
+  }
+
+  .sc-info__divider {
+    color: #cbb6a6;
+  }
+
+  .sc-info__price-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .sc-info__price {
+    font-size: 30px;
+    font-weight: 800;
+    color: #111;
+  }
+
+  .sc-info__original {
+    color: #9a8b81;
+    text-decoration: line-through;
+    font-size: 15px;
+  }
+
+  .sc-info__discount {
+    color: #d7193f;
+    font-weight: 800;
+    font-size: 14px;
+  }
+
+  .sc-info__tax {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .sc-info__offer {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid #ead8cb;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #fff7f3 0%, #fff 100%);
+  }
+
+  .sc-info__offer-copy p {
+    margin: 0;
+    color: #8a0f36;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  .sc-info__offer-copy strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 18px;
+    color: #111;
+  }
+
+  .sc-info__offer-copy span,
+  .sc-info__offer-copy small {
+    display: block;
+    margin-top: 4px;
+    color: #666;
+    font-size: 12px;
+  }
+
+  .sc-info__offer-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .sc-info__offer-badge {
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: #8a0f36;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .sc-info__offer-link,
+  .sc-info__link,
+  .sc-info__utility button {
+    border: 0;
+    background: transparent;
+    color: #8a0f36;
+    font-weight: 700;
+  }
+
+  .sc-info__section {
+    margin-top: 16px;
+  }
+
+  .sc-info__section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .sc-info__section-head h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: #111;
+  }
+
+  .sc-info__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .sc-info__sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sc-info__size {
+    min-width: 76px;
+    height: 38px;
+    padding: 0 16px;
+    border: 1px solid #ead8cb;
+    border-radius: 999px;
+    background: #fff;
+    color: #111;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .sc-info__size--active {
+    background: #8a0f36;
+    border-color: #8a0f36;
+    color: #fff;
+  }
+
+  .sc-info__colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sc-info__swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    box-shadow: 0 0 0 1px #ead8cb;
+  }
+
+  .sc-info__swatch--active {
+    box-shadow: 0 0 0 2px #8a0f36;
+  }
+
+  .sc-info__variants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sc-info__variant {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid #ead8cb;
+    border-radius: 999px;
+    background: #fff;
+    color: #111;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .sc-info__variant--active {
+    background: #8a0f36;
+    border-color: #8a0f36;
+    color: #fff;
+  }
+
+  .sc-info__qty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 120px;
+    height: 36px;
+    border: 1px solid #ead8cb;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .sc-info__qty button {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    background: transparent;
+    color: #8a0f36;
+  }
+
+  .sc-info__qty span {
+    min-width: 30px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #111;
+  }
+
+  .sc-info__actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .sc-info__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 48px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .sc-info__action--primary {
+    background: #8a0f36;
+    color: #fff;
+  }
+
+  .sc-info__action--active {
+    background: #0f6b52;
+  }
+
+  .sc-info__action--dark {
+    background: #111;
+    color: #fff;
+  }
+
+  .sc-info__action--whatsapp {
+    background: #fff;
+    border-color: #128c7e;
+    color: #128c7e;
+  }
+
+  .sc-info__message {
+    margin: 12px 0 0;
+    color: #d7193f;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .sc-info__delivery {
+    margin-top: 18px;
+  }
+
+  .sc-info__delivery-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px;
+    gap: 10px;
+  }
+
+  .sc-info__delivery-row input {
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid #ead8cb;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+  }
+
+  .sc-info__delivery-row button {
+    border: 0;
+    border-radius: 8px;
+    background: #8a0f36;
+    color: #fff;
+    font-weight: 800;
+  }
+
+  .sc-info__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .sc-info__chips span {
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid #ead8cb;
+    background: #fff;
+    font-size: 11px;
+    color: #666;
+  }
+
+  .sc-info__utility {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .sc-info__utility button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+}

@@ -27,7 +27,7 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    min-height: 42px;
+    min-height: 24px;
     padding: 0 22px;
     color: #fff;
     background:
@@ -116,20 +116,22 @@
 
   .sc-navbar__main {
     display: grid;
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) auto;
+    grid-template-columns: max-content minmax(0, 1fr) auto;
     align-items: center;
-    gap: 18px;
-    min-height: 94px;
-    padding: 0 34px 0 28px;
+    gap: 0;
+    min-height: 54px;
+    padding: 0 16px 0 12px;
     background: linear-gradient(180deg, rgba(255, 250, 244, 0.98) 0%, #fffaf2 100%);
   }
 
   .sc-navbar__brand {
     display: flex;
     align-items: center;
-    gap: 18px;
+    justify-self: start;
+    width: fit-content;
+    gap: 0;
     min-width: 0;
-    padding-right: 20px;
+    padding-right: 4px;
     border-right: 1px solid rgba(137, 15, 54, 0.14);
   }
 
@@ -142,21 +144,23 @@
   }
 
   .sc-navbar__logo {
-    height: 72px;
+    display: block;
+    height: 62px;
     width: auto;
-    max-width: 210px;
+    max-width: 170px;
     object-fit: contain;
   }
 
   .sc-navbar__links {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 24px;
+    justify-content: flex-start;
+    gap: 12px;
     min-width: 0;
-    padding: 0 4px;
+    padding: 0 0 0 2px;
+    margin-left: -6px;
     white-space: nowrap;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .sc-navbar__link {
@@ -168,7 +172,7 @@
     border: 0;
     background: transparent;
     color: #1a1718;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     letter-spacing: 0.01em;
     transition: color 180ms ease, transform 180ms ease;
@@ -212,13 +216,13 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 38px;
-    padding: 0 14px;
+    height: 32px;
+    padding: 0 10px;
     border-radius: 999px;
     border: 1px solid rgba(139, 14, 53, 0.14);
     background: rgba(139, 14, 53, 0.04);
     color: #8b0e35;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.01em;
     transition: background 180ms ease, transform 180ms ease;
@@ -231,9 +235,9 @@
 
   .sc-navbar__search {
     position: relative;
-    width: clamp(250px, 20vw, 334px);
+    width: clamp(190px, 15vw, 244px);
     flex: 0 0 auto;
-    margin-left: 8px;
+    margin-left: 0;
   }
 
   .sc-navbar__search-input {
@@ -278,8 +282,8 @@
   .sc-navbar__actions {
     display: flex;
     align-items: stretch;
-    gap: 18px;
-    padding-left: 10px;
+    gap: 8px;
+    padding-left: 0;
   }
 
   .sc-navbar__action {

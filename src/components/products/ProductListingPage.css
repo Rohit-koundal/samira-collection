@@ -15,7 +15,7 @@
   }
 
   .sc-plp__panel {
-    padding: 28px 48px 40px;
+    padding: 2px 48px 40px;
     border: 1px solid #ead8cb;
     /* border-radius: 18px; */
     background: linear-gradient(180deg, #fffaf5 0%, #fff8f2 100%);
@@ -54,7 +54,7 @@
   .sc-plp__title {
     margin: 0;
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 38px;
+    font-size: 18px;
     font-weight: 500;
     line-height: 1.1;
     color: #111111;
@@ -62,7 +62,7 @@
 
   .sc-plp__subtitle {
     margin-top: 6px;
-    font-size: 15px;
+    font-size: 12px;
     color: #6f625c;
   }
 
@@ -96,7 +96,6 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin: 18px 0 26px;
   }
 
   .sc-plp__divider-line {

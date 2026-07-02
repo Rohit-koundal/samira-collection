@@ -1,0 +1,74 @@
+import { useMemo, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Heart, ShoppingBag } from 'lucide-react';
+import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
+import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
+import './RelatedProductCarousel.css';
+
+export default function RelatedProductCarousel({ products = [], navigate }) {
+  const railRef = useRef(null);
+  const cart = useCart();
+  const wishlist = useWishlist();
+  const sortedProducts = useMemo(() => products.slice(0, 12), [products]);
+
+  const slide = (direction) => {
+    railRef.current?.scrollBy({ left: direction * 680, behavior: 'smooth' });
+  };
+
+  if (!sortedProducts.length) return null;
+
+  return (
+    <section className="sc-related">
+      <div className="sc-related__head">
+        <div>
+          <h2>You may also like</h2>
+          <p>Curated styles that pair beautifully with this look</p>
+        </div>
+        <div className="sc-related__nav">
+          <button type="button" onClick={() => slide(-1)} aria-label="Previous products">
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" onClick={() => slide(1)} aria-label="Next products">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div ref={railRef} className="sc-related__rail">
+        {sortedProducts.map((product) => {
+          const productId = product._id || product.id || product.slug;
+          const image = getPrimaryImageUrl(product.images);
+          const price = Number(product.price || 0).toLocaleString('en-IN');
+          const original = Number(product.originalPrice || product.price || 0).toLocaleString('en-IN');
+          const discount = Number(product.discountPercentage || 0);
+          const isWishlisted = wishlist.items.some((item) => (item._id || item.id || item.slug) === productId);
+          const cartItem = cart.getCartItem(product);
+
+          return (
+            <article key={productId} className="sc-related__card">
+              <button type="button" className="sc-related__image" onClick={() => navigate(`/product?id=${productId}`)}>
+                {image ? <img src={normalizeImageUrl(image)} alt={product.name} /> : <div className="sc-related__fallback" />}
+                <span className="sc-related__badge">NEW</span>
+                <span className="sc-related__heart" aria-label={isWishlisted ? 'Wishlisted' : 'Wishlist'}>
+                  <Heart size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+                </span>
+              </button>
+              <div className="sc-related__body">
+                <h3 title={product.name}>{product.name}</h3>
+                <div className="sc-related__meta">
+                  <span className="sc-related__price">Rs. {price}</span>
+                  <span className="sc-related__original">Rs. {original}</span>
+                </div>
+                <p className="sc-related__discount">({discount}% OFF)</p>
+                <button type="button" className={`sc-related__cart${cartItem ? ' sc-related__cart--active' : ''}`} onClick={() => cart.addToCart(product)}>
+                  <ShoppingBag size={15} />
+                  {cartItem ? 'Add More' : 'Add to Cart'}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

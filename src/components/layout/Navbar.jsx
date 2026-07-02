@@ -7,6 +7,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import './Navbar.css';
 
 const desktopLinks = [
+  { label: 'Home', path: '/' },
   { label: 'New In', path: '/products?newArrival=true' },
   { label: 'Shop', path: '/products', hasCaret: true },
   { label: 'Occasions', path: '/products?occasion=Wedding' },
@@ -69,7 +70,7 @@ export default function Navbar({
         <div className="sc-navbar__top">
           <div className="sc-navbar__announcement">
             <Truck className="h-4.5 w-4.5 text-[#b88945]" strokeWidth={1.9} aria-hidden="true" />
-            <span className="text-[12px] font-medium tracking-[0.01em]">Free Shipping Above ₹999</span>
+            <span className="text-[13px] font-medium tracking-[0.01em]">Free Shipping Above ₹999</span>
           </div>
 
           <div className="sc-navbar__center-mark" aria-hidden="true">
@@ -99,7 +100,9 @@ export default function Navbar({
 
           <nav className="sc-navbar__links" aria-label="Primary">
             {desktopLinks.map((link) => {
-              const isActive = routePath === '/products' && link.path === '/products' && searchValue === '';
+              const isActive =
+                (routePath === '/' && link.path === '/') ||
+                (routePath === '/products' && link.path === '/products' && searchValue === '');
               return (
                 <button
                   key={link.label}

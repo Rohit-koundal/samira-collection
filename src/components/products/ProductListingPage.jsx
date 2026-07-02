@@ -22,7 +22,7 @@ export default function ProductListingPage({
     <section className="sc-plp">
       <div className="sc-plp__shell">
         <div className="sc-plp__panel">
-          <div className="sc-plp__breadcrumb">
+          {/* <div className="sc-plp__breadcrumb">
             {breadcrumbs.map((item, index) => (
               <span key={item.label} className="flex items-center gap-2">
                 <button type="button" className={item.active ? 'is-active' : ''} onClick={() => navigate(item.path)}>
@@ -31,7 +31,7 @@ export default function ProductListingPage({
                 {index < breadcrumbs.length - 1 ? <span className="text-[#cdb7a5]">/</span> : null}
               </span>
             ))}
-          </div>
+          </div> */}
 
           <div className="sc-plp__header">
             <div className="min-w-0">

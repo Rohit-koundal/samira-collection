@@ -3,6 +3,7 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { ChevronRight } from 'lucide-react';
 import SizeChartModal from '../../components/product/SizeChartModal';
 import { ProductVisual } from '../../components/product/ProductCard';
+import ProductDetailPage from '../../components/product/ProductDetailPage';
 import Icon from '../../components/layout/Icon';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -31,11 +32,26 @@ export default function ProductDetail({ navigate, route = '' }) {
   const productId = product?._id || product?.id || product?.slug;
   const relatedQuery = product?.categoryId ? { category: product.categoryId } : { sort: 'rating' };
   const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
+  const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating' } : skipToken);
   const { data: reviewsData = [] } = useGetReviewsQuery(productId || skipToken);
   const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId || skipToken);
-  const related = normalizeProducts(relatedData)
-    .filter((entry) => (entry._id || entry.id || entry.slug) !== productId)
-    .slice(0, 10);
+  const variantProducts = useMemo(
+    () => (Array.isArray(variantGroupData?.data?.products) ? variantGroupData.data.products : []),
+    [variantGroupData?.data?.products],
+  );
+  const related = useMemo(() => {
+    const byId = new Map();
+    const pushProduct = (entry) => {
+      if (!entry) return;
+      const normalized = normalizeProduct(entry);
+      const key = normalized._id || normalized.id || normalized.slug;
+      if (!key || key === productId || byId.has(key)) return;
+      byId.set(key, normalized);
+    };
+
+    [...normalizeProducts(relatedData), ...normalizeProducts(fallbackRelatedData), ...normalizeProducts(variantProducts)].forEach(pushProduct);
+    return Array.from(byId.values()).slice(0, 12);
+  }, [fallbackRelatedData, productId, relatedData, variantProducts]);
   const reviews = Array.isArray(reviewsData) ? reviewsData : [];
   const storeWhatsappNumber = formatWhatsappNumber(settingsData?.whatsappNumber || '');
 
@@ -74,6 +90,13 @@ export default function ProductDetail({ navigate, route = '' }) {
     : product?.category
       ? `/products?search=${encodeURIComponent(product.category)}`
       : '/products';
+  const handleCheckDelivery = () => {
+    if (!deliveryPin || deliveryPin.length < 6) {
+      setActionMessage('Please enter a valid 6-digit PIN code.');
+      return;
+    }
+    setActionMessage(`Delivery check requested for ${deliveryPin}.`);
+  };
 
   if (!productKey || error) {
     return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Product not found.</div></section>;
@@ -157,7 +180,46 @@ export default function ProductDetail({ navigate, route = '' }) {
   };
 
   return (
-    <section className="bg-[#f5f5f6] pb-36 md:bg-ivory md:pb-10 md:pt-8">
+    <>
+      <div className="hidden lg:block">
+        <ProductDetailPage
+          product={product}
+          navigate={navigate}
+          route={route}
+          mediaItems={mediaItems}
+          activeMediaIndex={activeImage}
+          onSelectMedia={setActiveImage}
+          onPrevMedia={() => goToImage(activeImage - 1)}
+          onNextMedia={() => goToImage(activeImage + 1)}
+          onOpenFullscreen={() => setOpenGallery(true)}
+          onToggleWishlist={handleWishlist}
+          isWishlisted={isWishlisted}
+          wishlistBusy={wishlistBusy}
+          size={size}
+          setSize={setSize}
+          color={color}
+          setColor={setColor}
+          quantity={quantity}
+          setQuantity={setQuantity}
+          deliveryPin={deliveryPin}
+          setDeliveryPin={setDeliveryPin}
+          actionMessage={actionMessage}
+          dealPrice={dealPrice}
+          cartItem={cartItem}
+          isOutOfStock={isOutOfStock}
+          onAddToCart={add}
+          onBuyNow={buyNow}
+          onOrderWhatsApp={orderOnWhatsApp}
+          onCheckDelivery={handleCheckDelivery}
+          relatedProducts={related}
+          reviews={reviews}
+          variantProducts={variantProducts}
+          selectedMedia={selectedMedia}
+          storeWhatsappNumber={storeWhatsappNumber}
+        />
+      </div>
+      <div className="lg:hidden">
+        <section className="bg-[#f5f5f6] pb-36 md:bg-ivory md:pb-10 md:pt-8">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <button type="button" onClick={() => navigate('/products')} className="grid h-9 w-8 place-items-center text-[22px] text-slate-700" aria-label="Back">&lt;</button>
@@ -406,6 +468,9 @@ export default function ProductDetail({ navigate, route = '' }) {
         </div>
       </div>
 
+        </section>
+      </div>
+
       <SizeChartModal open={openSizeChart} onClose={() => setOpenSizeChart(false)} />
       {openGallery && mediaItems.length > 0 && (
         <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -453,7 +518,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           </div>
         </div>
       )}
-    </section>
+    </>
   );
 }
 
