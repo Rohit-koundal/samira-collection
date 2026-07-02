@@ -107,7 +107,11 @@ export default function Navbar({
                 <button
                   key={link.label}
                   type="button"
-                  className={`sc-navbar__link${link.isSale ? ' sc-navbar__link--sale' : ''}${isActive ? ' sc-navbar__link--active' : ''}`}
+                  className={`sc-navbar__link${
+                    link.label === 'Bestsellers' ? ' sc-navbar__link--hide-1400' : ''
+                  }${link.label === 'Accessories' ? ' sc-navbar__link--hide-1280' : ''}${
+                    link.isSale ? ' sc-navbar__link--sale sc-navbar__link--hide-1280' : ''
+                  }${isActive ? ' sc-navbar__link--active' : ''}`}
                   onClick={() => go(link.path)}
                 >
                   <span>{link.label}</span>
@@ -117,7 +121,7 @@ export default function Navbar({
             })}
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="sc-navbar__controls">
             {showAdminPill ? (
               <button type="button" className="sc-navbar__admin-pill" onClick={() => switchMode('admin')}>
                 <Shield className="h-3.5 w-3.5" strokeWidth={2.1} aria-hidden="true" />
