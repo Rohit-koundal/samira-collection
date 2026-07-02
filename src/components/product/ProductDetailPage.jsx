@@ -41,6 +41,11 @@ export default function ProductDetailPage({
   variantProducts = [],
   selectedMedia,
   storeWhatsappNumber,
+  onOpenSizeGuide,
+  onViewOffers,
+  onSelectVariant,
+  onShare,
+  onWriteReview,
 }) {
   const breadcrumb = useMemo(
     () => ['Home', product?.category || 'Kurtis', product?.name || 'Product'],
@@ -49,10 +54,26 @@ export default function ProductDetailPage({
 
   const rating = Number(product?.rating || 0).toFixed(1);
   const reviewCount = product?.numReviews || reviews.length || 0;
+  const similarTarget = product?.categoryId
+    ? `/products?category=${encodeURIComponent(product.categoryId)}`
+    : product?.category
+      ? `/products?search=${encodeURIComponent(product.category)}`
+      : '/products';
 
   return (
     <section className="sc-pdp">
       <div className="sc-pdp__container">
+        <nav className="sc-pdp__breadcrumb" aria-label="Breadcrumb">
+          {breadcrumb.map((item, index) => (
+            <span
+              key={`${item}-${index}`}
+              className={`sc-pdp__breadcrumb-item${index === breadcrumb.length - 1 ? ' sc-pdp__breadcrumb-item--active' : ''}`}
+            >
+              {item}
+              {index < breadcrumb.length - 1 ? <ChevronRight className="sc-pdp__breadcrumb-sep" aria-hidden="true" /> : null}
+            </span>
+          ))}
+        </nav>
 
         <div className="sc-pdp__main">
           <ProductGallery
@@ -66,34 +87,40 @@ export default function ProductDetailPage({
             onToggleWishlist={onToggleWishlist}
             isWishlisted={isWishlisted}
             wishlistBusy={wishlistBusy}
-            onViewSimilar={() => navigate(`/products?category=${encodeURIComponent(product?.categoryId || '')}`)}
+            onViewSimilar={() => navigate(similarTarget)}
             selectedMedia={selectedMedia}
             ratingLabel={`${rating} • ${reviewCount}`}
           />
 
-          <ProductInfoPanel
-            product={product}
-            size={size}
-            setSize={setSize}
-            color={color}
-            setColor={setColor}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            deliveryPin={deliveryPin}
-            setDeliveryPin={setDeliveryPin}
-            actionMessage={actionMessage}
-            dealPrice={dealPrice}
-            cartItem={cartItem}
-            isOutOfStock={isOutOfStock}
-            onAddToCart={onAddToCart}
-            onBuyNow={onBuyNow}
-            onOrderWhatsApp={onOrderWhatsApp}
-            onCheckDelivery={onCheckDelivery}
-            variantProducts={variantProducts}
-            storeWhatsappNumber={storeWhatsappNumber}
-          />
+          <div className="sc-pdp__info-stack">
+            <ProductInfoPanel
+              product={product}
+              size={size}
+              setSize={setSize}
+              color={color}
+              setColor={setColor}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              deliveryPin={deliveryPin}
+              setDeliveryPin={setDeliveryPin}
+              actionMessage={actionMessage}
+              dealPrice={dealPrice}
+              cartItem={cartItem}
+              isOutOfStock={isOutOfStock}
+              onAddToCart={onAddToCart}
+              onBuyNow={onBuyNow}
+              onOrderWhatsApp={onOrderWhatsApp}
+              onCheckDelivery={onCheckDelivery}
+              variantProducts={variantProducts}
+              storeWhatsappNumber={storeWhatsappNumber}
+              onOpenSizeGuide={onOpenSizeGuide}
+              onViewOffers={onViewOffers}
+              onSelectVariant={onSelectVariant}
+              onShare={onShare}
+            />
 
-          <ProductTrustPanel />
+            <ProductTrustPanel />
+          </div>
         </div>
 
         <div className="sc-pdp__below">
@@ -146,7 +173,7 @@ export default function ProductDetailPage({
                 ))}
               </div>
             </div>
-            <button type="button" className="sc-pdp__review-btn">Write a Review</button>
+            <button type="button" className="sc-pdp__review-btn" onClick={onWriteReview}>Write a Review</button>
             {reviews.length > 0 ? (
               <div className="sc-pdp__review-list">
                 {reviews.slice(0, 2).map((review) => (

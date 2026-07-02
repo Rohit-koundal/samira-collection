@@ -1,4 +1,4 @@
-import { ChevronUp, Filter, Plus } from 'lucide-react';
+import { ChevronUp, Filter, X } from 'lucide-react';
 import './ProductFilterSidebar.css';
 
 const sizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'];
@@ -100,8 +100,8 @@ export default function ProductFilterSidebar({
                 <input type="checkbox" checked={activeColor === swatch.value} onChange={(event) => update('color', event.target.checked ? swatch.value : '')} />
               </label>
             ))}
-            <button type="button" className="sc-filter__swatch" aria-label="More colors" title="More colors" style={{ background: '#fff' }}>
-              <Plus className="m-auto h-3.5 w-3.5 text-[#8a0f36]" />
+            <button type="button" className="sc-filter__swatch" aria-label="Clear color filter" title="Clear color filter" onClick={() => update('color', '')} style={{ background: '#fff' }}>
+              <X className="m-auto h-3.5 w-3.5 text-[#8a0f36]" />
             </button>
           </div>
         </div>

@@ -267,7 +267,7 @@ function AppShell({ route, navigate }) {
               <main className={`${showShell ? 'pb-20 lg:pb-0' : ''}`}>
                 {mainContent}
               </main>
-              {showShell && routePath !== '/' && <Footer navigate={navigate} />}
+              {showShell && <Footer navigate={navigate} />}
               {showShell && !hideMobileBottomNavRoutes.includes(routePath) && <MobileBottomNav active={routePath} navigate={navigate} />}
               {showShell && (
                 <LoginPrompt

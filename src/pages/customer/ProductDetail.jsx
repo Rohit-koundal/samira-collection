@@ -82,7 +82,7 @@ export default function ProductDetail({ navigate, route = '' }) {
   const selectedMedia = mediaItems[activeImage];
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
   const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
-  const isOutOfStock = Number(product?.stock || 0) <= 0;
+  const isOutOfStock = hasExplicitStock(product) && Number(product.stock) <= 0;
 
   const cartItem = product ? cart.getCartItem(product, { size, color }) : null;
   const similarPath = product?.categoryId
@@ -107,7 +107,29 @@ export default function ProductDetail({ navigate, route = '' }) {
   }
 
   const add = () => {
-    cart.addToCart(product, size, color);
+    if (product?.sizes?.length && !size) {
+      setActionMessage('Please select a size first.');
+      return { ok: false, reason: 'missing-size' };
+    }
+    if (product?.colors?.length && !color) {
+      setActionMessage('Please select a color first.');
+      return { ok: false, reason: 'missing-color' };
+    }
+    if (!Number(quantity) || Number(quantity) < 1) {
+      setActionMessage('Please choose a valid quantity.');
+      return { ok: false, reason: 'invalid-quantity' };
+    }
+    const result = cart.addToCart(product, size, color, product.variantId || product.selectedVariantId || '', quantity);
+    if (result?.ok) {
+      setActionMessage(`${quantity} item${Number(quantity) === 1 ? '' : 's'} added to cart.`);
+    } else if (result?.reason === 'out-of-stock') {
+      setActionMessage('This product is out of stock.');
+    } else if (result?.reason === 'stock-limit') {
+      setActionMessage(`Only ${result.quantity || 0} item${Number(result.quantity) === 1 ? '' : 's'} already available in your cart.`);
+    } else {
+      setActionMessage('Unable to add this product right now.');
+    }
+    return result;
   };
 
   const handleWishlist = async () => {
@@ -121,8 +143,8 @@ export default function ProductDetail({ navigate, route = '' }) {
   };
 
   const buyNow = () => {
-    add();
-    navigate('/checkout');
+    const result = add();
+    if (result?.ok) navigate('/checkout');
   };
 
   const orderOnWhatsApp = () => {
@@ -160,6 +182,28 @@ export default function ProductDetail({ navigate, route = '' }) {
     const message = encodeURIComponent(lines.join('\n'));
     window.open(`https://wa.me/91${storeWhatsappNumber}?text=${message}`, '_blank', 'noopener,noreferrer');
     setActionMessage('');
+  };
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: product.name,
+      text: `Check out ${product.name} at Samaira Collection`,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        setActionMessage('Product link copied.');
+      } else {
+        setActionMessage('Sharing is not available in this browser.');
+      }
+    } catch {
+      setActionMessage('Unable to share right now.');
+    }
   };
 
   const goToImage = (index) => {
@@ -216,6 +260,14 @@ export default function ProductDetail({ navigate, route = '' }) {
           variantProducts={variantProducts}
           selectedMedia={selectedMedia}
           storeWhatsappNumber={storeWhatsappNumber}
+          onOpenSizeGuide={() => setOpenSizeChart(true)}
+          onViewOffers={() => navigate('/products?discount=20')}
+          onSelectVariant={(variant) => {
+            const variantId = variant?._id || variant?.id || variant?.slug;
+            if (variantId) navigate(`/product?id=${variantId}`);
+          }}
+          onShare={handleShare}
+          onWriteReview={() => navigate(user ? '/orders' : '/login')}
         />
       </div>
       <div className="lg:hidden">
@@ -674,4 +726,8 @@ function formatWhatsappNumber(value = '') {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.startsWith('91') && digits.length >= 12) return digits.slice(-10);
   return digits.slice(-10);
+}
+
+function hasExplicitStock(product) {
+  return Boolean(product) && product.stock !== undefined && product.stock !== null && product.stock !== '';
 }

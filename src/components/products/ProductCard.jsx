@@ -85,12 +85,14 @@ export default function ProductCard({
       </div>
 
       <div className="sc-product-card__body">
-        <h3 className="sc-product-card__title" title={product?.name}>
-          {product?.name}
-        </h3>
-        <p className="sc-product-card__subtitle" title={subtitle}>
-          {subtitle}
-        </p>
+        <button type="button" className="sc-product-card__details" onClick={openProduct}>
+          <h3 className="sc-product-card__title" title={product?.name}>
+            {product?.name}
+          </h3>
+          <p className="sc-product-card__subtitle" title={subtitle}>
+            {subtitle}
+          </p>
+        </button>
 
         <div className="sc-product-card__price-row">
           <div className="sc-product-card__price-copy">

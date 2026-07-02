@@ -72,6 +72,17 @@
     padding: 3px 8px 6px;
   }
 
+  .sc-product-card__details {
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
   .sc-product-card__title {
     display: -webkit-box;
     -webkit-box-orient: vertical;

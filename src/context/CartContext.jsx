@@ -82,9 +82,10 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const addToCart = (product, size = product.sizes?.[0] || 'M', color = product.colors?.[0] || 'Wine', variantId = product.variantId || product.selectedVariantId || '') => {
+  const addToCart = (product, size = product.sizes?.[0] || 'M', color = product.colors?.[0] || 'Wine', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
     const normalizedProduct = normalizeCartProduct(product);
     const productId = getProductId(normalizedProduct);
+    const addQuantity = Math.max(1, Number(quantity || 1));
     if (!productId) {
       setNotice('Could not add this product to cart.');
       return { ok: false, reason: 'invalid-product' };
@@ -98,7 +99,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     }
 
     const existing = items.find((item) => getItemKey(item) === cartKey);
-    const nextQuantity = Number(existing?.quantity || 0) + 1;
+    const nextQuantity = Number(existing?.quantity || 0) + addQuantity;
     if (stock !== null && nextQuantity > stock) {
       setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
       return { ok: false, reason: 'stock-limit', quantity: existing?.quantity || 0 };
@@ -107,14 +108,14 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const previousItems = items;
     const nextItems = existing
       ? items.map((item) => (getItemKey(item) === cartKey ? { ...item, quantity: nextQuantity, product: { ...item.product, ...normalizedProduct }, cartKey } : item))
-      : [...items, { product: normalizedProduct, productId, size, color, variantId, cartKey, quantity: 1 }];
+      : [...items, { product: normalizedProduct, productId, size, color, variantId, cartKey, quantity: addQuantity }];
 
     setItems(nextItems);
 
     if (isAuthenticated) {
       void (async () => {
         try {
-          const response = await api.post('/cart', buildCartPayload(normalizedProduct, 1, size, color, variantId));
+          const response = await api.post('/cart', buildCartPayload(normalizedProduct, addQuantity, size, color, variantId));
           setItems(normalizeCartResponse(response));
         } catch (error) {
           setItems(previousItems);
@@ -123,7 +124,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
       })();
     }
 
-    return { ok: true, quantity: nextQuantity || 1 };
+    return { ok: true, quantity: nextQuantity || addQuantity };
   };
 
   const updateQuantity = (productOrKey, quantity, options = {}) => {
@@ -167,8 +168,10 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
       try {
         let response;
         if (nextQuantity <= 0) {
+          if (!itemId) return;
           response = await api.delete(`/cart/${itemId}`);
         } else {
+          if (!itemId) return;
           response = await api.put(`/cart/${itemId}`, { quantity: nextQuantity });
         }
         setItems(normalizeCartResponse(response));
@@ -202,6 +205,11 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const itemId = getBackendCartItemId(target);
     const previousItems = items;
     setItems((current) => current.filter((item) => !matchesItem(item, key, options)));
+
+    if (!itemId) {
+      setNotice('Item removed from checkout.');
+      return;
+    }
 
     void (async () => {
       try {

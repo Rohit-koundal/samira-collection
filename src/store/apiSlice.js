@@ -194,6 +194,7 @@ export const {
   useGetAdminSettingsQuery,
   useGetAdminLowStockQuery,
   useGetAdminStatsQuery,
+  useGetAddressesQuery,
   useGetBannersQuery,
   useGetCartQuery,
   useGetCategoriesQuery,

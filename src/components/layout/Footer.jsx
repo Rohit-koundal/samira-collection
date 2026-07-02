@@ -1,140 +1,351 @@
-import { ActionIcon, Anchor, Badge, Box, Button, Container, Grid, Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { useState } from 'react';
 import {
+  ArrowRight,
+  BadgePercent,
+  Bell,
+  BookOpen,
+  Briefcase,
+  FileText,
+  Gift,
+  Headphones,
+  HelpCircle,
+  Leaf,
+  LockKeyhole,
+  MapPin,
+  MessageCircle,
+  Newspaper,
+  Package,
+  RefreshCcw,
+  ShieldCheck,
+  Shirt,
+  ShoppingBag,
+  Sparkles,
+  Star,
+  Store,
+  Tag,
+  Truck,
+  XCircle,
+} from 'lucide-react';
+import {
+  IconBrandApple,
   IconBrandFacebook,
+  IconBrandGooglePlay,
   IconBrandInstagram,
   IconBrandPinterest,
   IconBrandYoutube,
-  IconBrandAndroid,
-  IconBrandApple,
 } from '@tabler/icons-react';
 import logo from '../../assets/samira-collection-logo.png';
 import { useGetSettingsQuery } from '../../store/apiSlice';
+import './Footer.css';
+
+const shoppingLinks = [
+  ['New Arrivals', '/products?newArrival=true'],
+  ['Sarees', '/products?search=Saree'],
+  ['Suits', '/products?search=Suit'],
+  ['Kurtis', '/products?search=Kurti'],
+  ['Lehengas', '/products?search=Lehenga'],
+  ['Dresses', '/products?search=Dress'],
+  ['Tops', '/products?search=Top'],
+  ['Co-ords & Sets', '/products?search=Co-ords'],
+  ['Accessories', '/products?search=Accessory'],
+  ['Sale', '/products?discount=20'],
+];
+
+const policyLinks = [
+  ['Track Your Order', '/orders'],
+  ['Returns & Refunds', '/return-policy'],
+  ['Shipping Policy', '/contact'],
+  ['Cancellation Policy', '/contact'],
+  ['Size Guide', '/contact'],
+  ['FAQs', '/contact'],
+  ['Gift Cards', '/contact'],
+  ['Store Locator', '/contact'],
+  ['Contact Us', '/contact'],
+];
+
+const aboutLinks = [
+  ['Our Story', '/contact'],
+  ['Why Samaira', '/contact'],
+  ['Reviews', '/products?bestSeller=true'],
+  ['Careers', '/contact'],
+  ['Press', '/contact'],
+  ['Sustainability', '/contact'],
+  ['Blog', '/contact'],
+  ['Affiliate Program', '/contact'],
+];
+
+const socialLinks = [
+  ['Facebook', IconBrandFacebook],
+  ['Instagram', IconBrandInstagram],
+  ['Pinterest', IconBrandPinterest],
+  ['YouTube', IconBrandYoutube],
+];
+
+const serviceItems = [
+  ['100% Authentic', 'Genuine products, always', ShieldCheck],
+  ['Free Shipping', 'On orders above ₹999', Truck],
+  ['Easy Returns', 'Hassle-free returns', RefreshCcw],
+  ['Secure Payments', '100% safe & secure', LockKeyhole],
+  ['Customer Support', "We're here to help", Headphones],
+];
+
+const appPerks = [
+  ['Exclusive Deals', Tag],
+  ['Order Alerts', Bell],
+  ['Easy Returns', BadgePercent],
+];
+
+const payments = ['visa', 'mastercard', 'rupay', 'upi', 'paytm', 'gpay', 'phonepe', 'paypal'];
+
+const footerLinkIcons = {
+  'New Arrivals': Sparkles,
+  Sarees: Shirt,
+  Suits: Shirt,
+  Kurtis: Shirt,
+  Lehengas: Sparkles,
+  Dresses: Shirt,
+  Tops: Shirt,
+  'Co-ords & Sets': ShoppingBag,
+  Accessories: Tag,
+  Sale: BadgePercent,
+  'Track Your Order': Package,
+  'Returns & Refunds': RefreshCcw,
+  'Shipping Policy': Truck,
+  'Cancellation Policy': XCircle,
+  'Size Guide': Shirt,
+  FAQs: HelpCircle,
+  'Gift Cards': Gift,
+  'Store Locator': MapPin,
+  'Contact Us': MessageCircle,
+  'Our Story': BookOpen,
+  'Why Samaira': Star,
+  Reviews: Star,
+  Careers: Briefcase,
+  Press: Newspaper,
+  Sustainability: Leaf,
+  Blog: FileText,
+  'Affiliate Program': Store,
+};
+
+const legalLinks = [
+  ['Terms & Conditions', '/terms', FileText],
+  ['Privacy Policy', '/privacy-policy', ShieldCheck],
+  ['Return Policy', '/return-policy', RefreshCcw],
+  ['Sitemap', '/products', MapPin],
+];
 
 export default function Footer({ navigate }) {
   const { data: settings = {} } = useGetSettingsQuery();
+  const [email, setEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState('');
 
-  return (
-    <Box component="footer" className="hidden lg:block" bg="linear-gradient(180deg, #550a23 0%, #4b071b 55%, #3b0618 100%)" c="white">
-      <Container size={1440} px={12} py={26}>
-        <Paper withBorder radius={28} p={24} style={{ borderColor: 'rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', boxShadow: '0 20px 50px rgba(23, 22, 26, 0.18)' }}>
-          <Grid gutter={24}>
-            <Grid.Col span={{ base: 12, md: 3 }}>
-              <Stack gap={14}>
-                <img src={logo} alt="Samira Collection" style={{ height: 62, width: 'auto' }} />
-                <Text size="sm" c="rgba(255,255,255,0.78)" lh={1.7}>
-                  {settings.footerText || 'Crafted with elegance, designed for you. Premium ethnic wear for every celebration.'}
-                </Text>
-                <Group gap={10}>
-                  <SocialAction icon={IconBrandFacebook} />
-                  <SocialAction icon={IconBrandInstagram} />
-                  <SocialAction icon={IconBrandPinterest} />
-                  <SocialAction icon={IconBrandYoutube} />
-                </Group>
-              </Stack>
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 2 }}>
-              <FooterLinks title="Shop" items={['New Arrivals', 'Sarees', 'Suits', 'Kurtis', 'Lehengas', 'Dresses', 'Tops', 'Sale']} navigate={navigate} />
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 2 }}>
-              <FooterLinks title="Help & Support" items={['Track Your Order', 'Returns & Refunds', 'Shipping Policy', 'Size Guide', 'FAQs', 'Contact Us']} navigate={navigate} />
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 2 }}>
-              <FooterLinks title="Company" items={['About Us', 'Our Story', 'Privacy Policy', 'Terms & Conditions', 'Careers', 'Press']} navigate={navigate} />
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Stack gap={16}>
-                <Box>
-                  <Text size={11} fw={800} tt="uppercase" c="rgba(255,255,255,0.58)" style={{ letterSpacing: 2.4 }}>
-                    We Accept
-                  </Text>
-                  <Group gap={8} mt={12}>
-                    {['VISA', 'MC', 'UPI', 'Paytm', 'PayPal'].map((item) => (
-                      <Badge key={item} variant="filled" radius="sm" color="gray" size="sm" styles={{ root: { background: '#fff', color: '#5b0d27' } }}>
-                        {item}
-                      </Badge>
-                    ))}
-                  </Group>
-                </Box>
-
-                <Box>
-                  <Text size={11} fw={800} tt="uppercase" c="rgba(255,255,255,0.58)" style={{ letterSpacing: 2.4 }}>
-                    Download our app
-                  </Text>
-                  <Stack gap={8} mt={12}>
-                    <Button leftSection={<IconBrandAndroid size={16} />} radius="lg" variant="light" color="gray" styles={{ root: { background: 'rgba(255,255,255,0.08)', color: 'white' } }}>
-                      Get it on Google Play
-                    </Button>
-                    <Button leftSection={<IconBrandApple size={16} />} radius="lg" variant="light" color="gray" styles={{ root: { background: 'rgba(255,255,255,0.08)', color: 'white' } }}>
-                      Download on the App Store
-                    </Button>
-                  </Stack>
-                </Box>
-              </Stack>
-            </Grid.Col>
-          </Grid>
-
-          <Group justify="space-between" mt={20} pt={16} style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            <Text size="sm" c="rgba(255,255,255,0.72)">
-              © 2025 Samira Stylists. All Rights Reserved.
-            </Text>
-            <Text size="sm" c="rgba(255,255,255,0.72)">
-              Made with ❤ for fashion lovers
-            </Text>
-          </Group>
-        </Paper>
-      </Container>
-    </Box>
-  );
-}
-
-function FooterLinks({ title, items, navigate }) {
-  const supportRoutes = {
-    'Track Your Order': '/orders',
-    'Returns & Refunds': '/return-policy',
-    'Shipping Policy': '/contact',
-    'Size Guide': '/contact',
-    FAQs: '/contact',
-    'Contact Us': '/contact',
-    'About Us': '/contact',
-    'Our Story': '/contact',
-    'Privacy Policy': '/privacy-policy',
-    'Terms & Conditions': '/terms',
-    Careers: '/contact',
-    Press: '/contact',
-    'New Arrivals': '/products?newArrival=true',
-    Sarees: '/products?search=Saree',
-    Suits: '/products?search=Suit',
-    Kurtis: '/products?search=Kurti',
-    Lehengas: '/products?search=Lehenga',
-    Dresses: '/products?search=Dress',
-    Tops: '/products?search=Top',
-    Sale: '/products?discount=20',
+  const go = (path) => {
+    if (navigate) navigate(path);
+  };
+  const socialUrls = settings.socialLinks || {};
+  const appLinks = settings.appLinks || {};
+  const supportEmail = settings.contactEmail || '';
+  const openExternal = (url, fallbackPath = '/contact') => {
+    if (!url) {
+      go(fallbackPath);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  const subscribe = (event) => {
+    event.preventDefault();
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setNewsletterStatus('Please enter your email.');
+      return;
+    }
+    if (supportEmail) {
+      window.location.href = `mailto:${supportEmail}?subject=${encodeURIComponent('Newsletter subscription')}&body=${encodeURIComponent(`Please add ${trimmedEmail} to the Samaira Collection newsletter.`)}`;
+    }
+    setNewsletterStatus('Thank you for subscribing.');
+    setEmail('');
   };
 
   return (
-    <Stack gap={12}>
-      <Title order={5} fw={800} c="rgba(255,255,255,0.78)" tt="uppercase" style={{ letterSpacing: 2 }}>
-        {title}
-      </Title>
-      <Stack gap={4}>
-        {items.map((item) => (
-          <Anchor key={item} component="button" onClick={() => navigate(supportRoutes[item] || `/products?category=${item.toLowerCase()}`)} c="rgba(255,255,255,0.82)" size="sm" style={{ textAlign: 'left' }}>
-            {item}
-          </Anchor>
+    <footer className="sc-footer" aria-label="Samaira Collection footer">
+      <div className="sc-footer__top">
+        <section className="sc-footer__brand">
+          <button type="button" className="sc-footer__logo-link" onClick={() => go('/')}>
+            <img src={logo} alt="Samaira Collection" className="sc-footer__logo" />
+          </button>
+          <p>{settings.footerText || 'Crafted with elegance, designed for you. Premium ethnic wear for every celebration.'}</p>
+          <SocialRow socialUrls={socialUrls} onOpen={openExternal} />
+        </section>
+
+        <FooterColumn title="Online Shopping" links={shoppingLinks} navigate={go} />
+        <FooterColumn title="Customer Policies" links={policyLinks} navigate={go} />
+        <FooterColumn title="About" links={aboutLinks} navigate={go} />
+
+        <section className="sc-footer__app">
+          <h2>Experience Samaira App</h2>
+          <p>Shop on the go &amp; get exclusive app-only offers.</p>
+          <div className="sc-footer__stores" aria-label="Download app">
+            <button type="button" className="sc-footer__store" onClick={() => openExternal(appLinks.googlePlay || appLinks.playStore)}>
+              <IconBrandGooglePlay size={24} aria-hidden="true" />
+              <span>
+                <small>Get it on</small>
+                Google Play
+              </span>
+            </button>
+            <button type="button" className="sc-footer__store" onClick={() => openExternal(appLinks.appStore || appLinks.appleStore)}>
+              <IconBrandApple size={26} aria-hidden="true" />
+              <span>
+                <small>Download on the</small>
+                App Store
+              </span>
+            </button>
+          </div>
+          <div className="sc-footer__perks">
+            {appPerks.map(([label, Icon]) => (
+              <div key={label} className="sc-footer__perk">
+                <Icon size={22} aria-hidden="true" />
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="sc-footer__connect">
+          <h2>Keep In Touch</h2>
+          <p>Be the first to know about new arrivals, offers &amp; style inspiration.</p>
+          <form className="sc-footer__email" onSubmit={subscribe}>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              aria-label="Email address"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.currentTarget.value);
+                if (newsletterStatus) setNewsletterStatus('');
+              }}
+            />
+            <button type="submit" aria-label="Subscribe">
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </form>
+          {newsletterStatus ? <p className="sc-footer__form-status">{newsletterStatus}</p> : null}
+          <div className="sc-footer__or">
+            <span />
+            OR
+            <span />
+          </div>
+          <p className="sc-footer__social-title">Connect with us on</p>
+          <SocialRow socialUrls={socialUrls} onOpen={openExternal} />
+        </section>
+      </div>
+
+      <div className="sc-footer__service-strip">
+        {serviceItems.map(([title, subtitle, Icon]) => (
+          <div key={title} className="sc-footer__service">
+            <Icon size={32} aria-hidden="true" />
+            <span>
+              <strong>{title}</strong>
+              <small>{subtitle}</small>
+            </span>
+          </div>
         ))}
-      </Stack>
-    </Stack>
+      </div>
+
+      <div className="sc-footer__payment-row">
+        <div className="sc-footer__payments">
+          <strong>We Accept</strong>
+          {payments.map((item) => (
+            <PaymentIcon key={item} type={item} />
+          ))}
+        </div>
+        <nav className="sc-footer__legal" aria-label="Footer legal links">
+          {legalLinks.map(([label, path, Icon]) => (
+            <button key={label} type="button" onClick={() => go(path)}>
+              <Icon size={14} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <div className="sc-footer__bottom">
+        <p>© 2025 Samaira Collection. All Rights Reserved.</p>
+        <p>Made with <span aria-hidden="true">♥</span> for fashion lovers</p>
+      </div>
+    </footer>
   );
 }
 
-function SocialAction({ icon: IconComp }) {
+function FooterColumn({ title, links, navigate }) {
   return (
-    <ActionIcon variant="light" radius="xl" size={40} style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}>
-      <IconComp size={18} />
-    </ActionIcon>
+    <nav className="sc-footer__column" aria-label={title}>
+      <h2>{title}</h2>
+      {links.map(([label, path]) => {
+        const Icon = footerLinkIcons[label] || ArrowRight;
+        return (
+          <button key={label} type="button" onClick={() => navigate(path)} className={label === 'Sale' ? 'sc-footer__sale' : ''}>
+            <Icon className="sc-footer__link-icon" size={13} aria-hidden="true" />
+            {label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SocialRow({ socialUrls = {}, onOpen }) {
+  return (
+    <div className="sc-footer__social">
+      {socialLinks.map(([label, Icon]) => (
+        <button key={label} type="button" aria-label={label} onClick={() => onOpen?.(socialUrls[label.toLowerCase()] || socialUrls[label])}>
+          <Icon size={16} aria-hidden="true" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PaymentIcon({ type }) {
+  const labels = {
+    visa: 'Visa',
+    mastercard: 'Mastercard',
+    rupay: 'RuPay',
+    upi: 'UPI',
+    paytm: 'Paytm',
+    gpay: 'Google Pay',
+    phonepe: 'PhonePe',
+    paypal: 'PayPal',
+  };
+
+  if (type === 'mastercard') {
+    return (
+      <span className="sc-footer__pay-icon sc-footer__pay-icon--mastercard" aria-label={labels[type]} title={labels[type]}>
+        <i />
+        <i />
+      </span>
+    );
+  }
+
+  if (type === 'gpay') {
+    return (
+      <span className="sc-footer__pay-icon sc-footer__pay-icon--gpay" aria-label={labels[type]} title={labels[type]}>
+        <b>G</b>
+        <span>Pay</span>
+      </span>
+    );
+  }
+
+  if (type === 'phonepe') {
+    return (
+      <span className="sc-footer__pay-icon sc-footer__pay-icon--phonepe" aria-label={labels[type]} title={labels[type]}>
+        <b>पे</b>
+      </span>
+    );
+  }
+
+  return (
+    <span className={`sc-footer__pay-icon sc-footer__pay-icon--${type}`} aria-label={labels[type]} title={labels[type]}>
+      <span>{labels[type]}</span>
+    </span>
   );
 }

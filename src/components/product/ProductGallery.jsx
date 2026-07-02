@@ -49,7 +49,12 @@ export default function ProductGallery({
           </button>
         ))}
         {images.length > 5 ? (
-          <button type="button" className="sc-gallery__thumb sc-gallery__thumb--more" aria-label="More images">
+          <button
+            type="button"
+            className="sc-gallery__thumb sc-gallery__thumb--more"
+            onClick={() => onSelect?.((currentIndex + 1) % images.length)}
+            aria-label="Show next image"
+          >
             <ChevronDown className="sc-gallery__thumb-more" />
           </button>
         ) : null}

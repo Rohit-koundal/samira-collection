@@ -46,13 +46,21 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
 
           return (
             <article key={productId} className="sc-related__card">
-              <button type="button" className="sc-related__image" onClick={() => navigate(`/product?id=${productId}`)}>
-                {image ? <img src={normalizeImageUrl(image)} alt={product.name} /> : <div className="sc-related__fallback" />}
-                <span className="sc-related__badge">NEW</span>
-                <span className="sc-related__heart" aria-label={isWishlisted ? 'Wishlisted' : 'Wishlist'}>
+              <div className="sc-related__image">
+                <button type="button" className="sc-related__image-open" onClick={() => navigate(`/product?id=${productId}`)}>
+                  {image ? <img src={normalizeImageUrl(image)} alt={product.name} /> : <div className="sc-related__fallback" />}
+                  <span className="sc-related__badge">NEW</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sc-related__heart${isWishlisted ? ' sc-related__heart--active' : ''}`}
+                  onClick={() => wishlist.toggleWishlist(product)}
+                  aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+                  aria-pressed={isWishlisted}
+                >
                   <Heart size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
-                </span>
-              </button>
+                </button>
+              </div>
               <div className="sc-related__body">
                 <h3 title={product.name}>{product.name}</h3>
                 <div className="sc-related__meta">

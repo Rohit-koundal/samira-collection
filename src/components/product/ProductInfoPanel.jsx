@@ -29,6 +29,10 @@ export default function ProductInfoPanel({
   onOrderWhatsApp,
   onCheckDelivery,
   variantProducts = [],
+  onOpenSizeGuide,
+  onViewOffers,
+  onSelectVariant,
+  onShare,
 }) {
   const sizes = product?.sizes?.length ? product.sizes : ['S', 'M', 'L', 'XL'];
   const colors = product?.colors?.length ? product.colors : ['Wine', 'Pink', 'Gold'];
@@ -72,14 +76,14 @@ export default function ProductInfoPanel({
           </div>
           <div className="sc-info__offer-side">
             <span className="sc-info__offer-badge">Extra ₹200 OFF</span>
-            <button type="button" className="sc-info__offer-link">View all offers</button>
+            <button type="button" className="sc-info__offer-link" onClick={onViewOffers}>View all offers</button>
           </div>
         </div>
 
         <div className="sc-info__section">
           <div className="sc-info__section-head">
             <h2>Size</h2>
-            <button type="button" className="sc-info__link">
+            <button type="button" className="sc-info__link" onClick={onOpenSizeGuide}>
               <Ruler size={14} />
               Size Guide
             </button>
@@ -98,22 +102,39 @@ export default function ProductInfoPanel({
           </div>
         </div>
 
-        <div className="sc-info__section">
-          <div className="sc-info__section-head">
-            <h2>Color: {color || colors[0]}</h2>
+        <div className="sc-info__choice-grid">
+          <div className="sc-info__section">
+            <div className="sc-info__section-head">
+              <h2>Color: {color || colors[0]}</h2>
+            </div>
+            <div className="sc-info__colors">
+              {colors.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setColor?.(item)}
+                  className={`sc-info__swatch${color === item ? ' sc-info__swatch--active' : ''}`}
+                  style={{ backgroundColor: defaultSwatches[item] || defaultSwatches.Wine }}
+                  aria-label={`Select color ${item}`}
+                  title={item}
+                />
+              ))}
+            </div>
           </div>
-          <div className="sc-info__colors">
-            {colors.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setColor?.(item)}
-                className={`sc-info__swatch${color === item ? ' sc-info__swatch--active' : ''}`}
-                style={{ backgroundColor: defaultSwatches[item] || defaultSwatches.Wine }}
-                aria-label={`Select color ${item}`}
-                title={item}
-              />
-            ))}
+
+          <div className="sc-info__section sc-info__section--qty">
+            <div className="sc-info__section-head">
+              <h2>Qty</h2>
+            </div>
+            <div className="sc-info__qty">
+              <button type="button" onClick={() => setQuantity?.((value) => Math.max(1, value - 1))} aria-label="Decrease quantity">
+                <Minus size={14} />
+              </button>
+              <span>{quantity}</span>
+              <button type="button" onClick={() => setQuantity?.((value) => value + 1)} aria-label="Increase quantity">
+                <Plus size={14} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -130,6 +151,7 @@ export default function ProductInfoPanel({
                   <button
                     key={variantId}
                     type="button"
+                    onClick={() => onSelectVariant?.(variant)}
                     className={`sc-info__variant${isActive ? ' sc-info__variant--active' : ''}`}
                   >
                     {variant.variantColor || variant.variantName || variant.name}
@@ -140,35 +162,21 @@ export default function ProductInfoPanel({
           </div>
         ) : null}
 
-        <div className="sc-info__section">
-          <div className="sc-info__section-head">
-            <h2>Qty</h2>
-          </div>
-          <div className="sc-info__qty">
-            <button type="button" onClick={() => setQuantity?.((value) => Math.max(1, value - 1))} aria-label="Decrease quantity">
-              <Minus size={14} />
-            </button>
-            <span>{quantity}</span>
-            <button type="button" onClick={() => setQuantity?.((value) => value + 1)} aria-label="Increase quantity">
-              <Plus size={14} />
-            </button>
-          </div>
-        </div>
-
         <div className="sc-info__actions">
           <button type="button" disabled={isOutOfStock} onClick={onAddToCart} className={`sc-info__action sc-info__action--primary${cartItem ? ' sc-info__action--active' : ''}`}>
             <ShoppingBag size={16} />
-            {cartItem ? 'Add More' : 'Add to Cart'}
+            {isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
           </button>
           <button type="button" disabled={isOutOfStock} onClick={onBuyNow} className="sc-info__action sc-info__action--dark">
-            Buy Now
+            {isOutOfStock ? 'Unavailable' : 'Buy Now'}
           </button>
           <button type="button" disabled={isOutOfStock} onClick={onOrderWhatsApp} className="sc-info__action sc-info__action--whatsapp">
             <Store size={16} />
-            Order on WhatsApp
+            {isOutOfStock ? 'Out of Stock' : 'Order on WhatsApp'}
           </button>
         </div>
 
+        {isOutOfStock ? <p className="sc-info__stock-message">This style is currently out of stock.</p> : null}
         {actionMessage ? <p className="sc-info__message">{actionMessage}</p> : null}
 
         <div className="sc-info__delivery">
@@ -195,7 +203,7 @@ export default function ProductInfoPanel({
       </div>
 
       <div className="sc-info__utility">
-        <button type="button">
+        <button type="button" onClick={onShare}>
           <Share2 size={15} />
           Share
         </button>

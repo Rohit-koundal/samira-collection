@@ -1,8 +1,8 @@
 @media (min-width: 1024px) {
   .sc-gallery {
     display: grid;
-    grid-template-columns: 76px minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
     align-items: stretch;
     height: 100%;
     min-width: 0;
@@ -11,7 +11,7 @@
   .sc-gallery__thumbs {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 9px;
     height: 100%;
     max-height: none;
     overflow: auto;
@@ -24,10 +24,10 @@
   }
 
   .sc-gallery__thumb {
-    width: 74px;
-    height: 88px;
+    width: 60px;
+    height: 72px;
     padding: 0;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid #ead8cb;
     background: #fff;
     overflow: hidden;
@@ -59,9 +59,9 @@
 
   .sc-gallery__stage {
     position: relative;
-    min-height: 460px;
-    height: clamp(460px, 36vw, 540px);
-    border-radius: 14px;
+    min-height: 420px;
+    height: 420px;
+    border-radius: 8px;
     overflow: hidden;
     background: #f8eee7;
     box-shadow: 0 12px 28px rgba(70, 35, 20, 0.08);
@@ -86,10 +86,10 @@
   }
 
   .sc-gallery__wish {
-    right: 14px;
-    top: 14px;
-    width: 38px;
-    height: 38px;
+    right: 12px;
+    top: 12px;
+    width: 34px;
+    height: 34px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.96);
     color: #8a0f36;
@@ -107,8 +107,8 @@
 
   .sc-gallery__nav {
     top: 50%;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.94);
     color: #8a0f36;
@@ -117,18 +117,18 @@
   }
 
   .sc-gallery__nav--left {
-    left: 14px;
+    left: 12px;
   }
 
   .sc-gallery__nav--right {
-    right: 14px;
+    right: 12px;
   }
 
   .sc-gallery__footer {
     position: absolute;
-    left: 14px;
-    right: 14px;
-    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
     display: flex;
     justify-content: space-between;
     gap: 10px;
@@ -136,11 +136,11 @@
   }
 
   .sc-gallery__pill {
-    gap: 8px;
-    min-height: 34px;
-    padding: 0 12px;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     pointer-events: auto;
     box-shadow: 0 10px 20px rgba(70, 35, 20, 0.12);
@@ -163,16 +163,16 @@
 
   .sc-gallery__rating {
     position: absolute;
-    right: 14px;
-    bottom: 54px;
+    right: 12px;
+    bottom: 46px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px;
+    padding: 6px 9px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.96);
     color: #8a0f36;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     box-shadow: 0 8px 18px rgba(70, 35, 20, 0.12);
   }
@@ -186,6 +186,6 @@
 
 @media (min-width: 1400px) {
   .sc-gallery__stage {
-    height: clamp(500px, 34vw, 540px);
+    height: 440px;
   }
 }

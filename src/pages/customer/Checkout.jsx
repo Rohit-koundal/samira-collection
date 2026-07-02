@@ -1,6 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import OrderSummary from '../../components/checkout/OrderSummary';
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Banknote,
+  ChevronDown,
+  CreditCard,
+  Headphones,
+  Landmark,
+  LockKeyhole,
+  MapPin,
+  Minus,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  ShieldCheck,
+  ShoppingBag,
+  Tag,
+  Truck,
+  Trash2,
+  Wallet,
+} from 'lucide-react';
 import PriceSummary from '../../components/cart/PriceSummary';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, TextInput } from '../../components/ui';
 import { useCart } from '../../context/CartContext';
@@ -10,6 +29,7 @@ import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
+import './Checkout.css';
 
 const PAYMENT_OPTIONS = [
   ['UPI', 'Pay using UPI', 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps'],
@@ -385,54 +405,375 @@ export default function Checkout({ navigate }) {
   }
 
   return (
-    <section className="container-page pb-24 pt-6 md:py-8">
-      <div className="mb-5 flex items-center justify-between gap-4 md:mb-6">
-        <div><p className="small-text font-bold uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.2em]">Bag / Address / Payment</p><h1 className="page-title mt-1 md:text-3xl">Checkout</h1></div>
-        <Button onClick={() => navigate('/profile/addresses')} variant="outline" className="hidden md:inline-flex">Manage Addresses</Button>
-      </div>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
-        <div className="space-y-5">
-          {!user && <Card as="section"><CardHeader><CardTitle className="text-xl">Login Required</CardTitle></CardHeader><CardContent><Button onClick={() => navigate('/login')}>Login to continue</Button></CardContent></Card>}
-          {user && !user.isPhoneVerified && <Card as="section"><CardHeader><CardTitle className="text-xl">Mobile verification required</CardTitle></CardHeader><CardContent className="space-y-4"><p className="body-text text-slate-600">Please verify your mobile number to continue checkout.</p><Button onClick={() => navigate('/login')}>Verify Mobile</Button></CardContent></Card>}
-          <Card as="section">
-            <CardHeader className="flex-row items-center justify-between"><CardTitle className="text-xl">1. Delivery Address</CardTitle><Button onClick={() => setShowAddressForm((value) => !value)} variant="ghost" size="sm" className="text-wine">Add New</Button></CardHeader>
-            <CardContent>
-              <div className="mt-4 grid gap-3">
-                {addresses.map((address) => <button key={address._id} onClick={() => setSelectedAddressId(address._id)} className={`rounded-2xl border p-4 text-left ${selectedAddressId === address._id ? 'border-wine bg-blush' : 'border-slate-200'}`}><p className="label-text">{address.fullName} {address.isDefault && <span className="badge-text rounded-full bg-wine px-2 py-1 text-white">Default</span>}</p><p className="body-text mt-1 text-slate-600">{address.mobile || address.phone}</p><p className="body-text mt-2 text-slate-600">{address.houseNo || address.houseNumber}, {address.area}, {address.city}, {address.state} - {address.pincode}</p></button>)}
-                {!addresses.length && <p className="body-text rounded-2xl bg-[#fbf8f4] p-4 text-slate-500">No saved addresses. Add one below.</p>}
-              </div>
-              {showAddressForm || !addresses.length ? <div className="mt-4"><AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={isDesktop ? '' : error} onCancel={() => setShowAddressForm(false)} saving={savingAddress} /></div> : null}
-            </CardContent>
-          </Card>
-          <section><OrderSummary items={cart.items} /></section>
-          <Card as="section">
-            <CardHeader><CardTitle className="text-xl">3. Apply Coupon</CardTitle></CardHeader>
-            <CardContent>
-              <div className="mt-4 flex gap-2"><TextInput value={couponCode} onChange={(event) => setCouponCode(event.target.value)} className="flex-1" placeholder="Coupon code" /><Button onClick={applyCoupon}>Apply</Button></div>
-              {cart.coupon && <p className="label-text mt-2 text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
-            </CardContent>
-          </Card>
-          <Card as="section">
-            <CardHeader><CardTitle className="text-xl">4. Payment Method</CardTitle></CardHeader>
-            <CardContent>
-              <div className="mt-4 grid gap-3">
-                {PAYMENT_OPTIONS.map(([key, title, note]) => (
-                  <button key={key} type="button" onClick={() => setPaymentMethod(key)} className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200'}`}>
-                    <p className="label-text">{title}</p>
-                    <p className="body-text mt-1 text-slate-500">{note}</p>
-                  </button>
-                ))}
-              </div>
-              <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
-            </CardContent>
-          </Card>
-          {error && <p className="body-text rounded-xl bg-rose/10 p-3 text-rose md:hidden">{error}</p>}
+    <DesktopCheckout
+      navigate={navigate}
+      user={user}
+      cart={cart}
+      addresses={addresses}
+      selectedAddressId={selectedAddressId}
+      setSelectedAddressId={setSelectedAddressId}
+      showAddressForm={showAddressForm}
+      setShowAddressForm={setShowAddressForm}
+      addressForm={addressForm}
+      setAddressForm={setAddressForm}
+      saveAddress={saveAddress}
+      savingAddress={savingAddress}
+      editing={Boolean(editingAddressId)}
+      openNewAddressForm={openNewAddressForm}
+      openEditAddressForm={openEditAddressForm}
+      removeAddress={removeAddress}
+      resetAddressEditor={resetAddressEditor}
+      couponCode={couponCode}
+      setCouponCode={setCouponCode}
+      applyCoupon={applyCoupon}
+      paymentMethod={paymentMethod}
+      setPaymentMethod={setPaymentMethod}
+      paymentApp={paymentApp}
+      setPaymentApp={setPaymentApp}
+      upiId={upiId}
+      setUpiId={setUpiId}
+      placeOrder={placeOrder}
+      placing={placing}
+      placeOrderLabel={placeOrderLabel}
+      error={isDesktop ? error : ''}
+    />
+  );
+}
+
+function DesktopCheckout({
+  navigate,
+  user,
+  cart,
+  addresses,
+  selectedAddressId,
+  setSelectedAddressId,
+  showAddressForm,
+  setShowAddressForm,
+  addressForm,
+  setAddressForm,
+  saveAddress,
+  savingAddress,
+  editing,
+  openNewAddressForm,
+  openEditAddressForm,
+  removeAddress,
+  resetAddressEditor,
+  couponCode,
+  setCouponCode,
+  applyCoupon,
+  paymentMethod,
+  setPaymentMethod,
+  paymentApp,
+  setPaymentApp,
+  upiId,
+  setUpiId,
+  placeOrder,
+  placing,
+  placeOrderLabel,
+  error,
+}) {
+  const needsLogin = !user;
+  const needsVerification = Boolean(user && !user.isPhoneVerified);
+
+  return (
+    <section className="sc-checkout">
+      <div className="sc-checkout__shell">
+        <div className="sc-checkout__top">
+          <h1>Checkout</h1>
+          <CheckoutSteps />
+          <button type="button" className="sc-checkout__support" onClick={() => navigate('/contact')}>
+            <Headphones size={15} aria-hidden="true" />
+            Need help? Contact Support
+          </button>
         </div>
-        <PriceSummary cart={cart} cta={placeOrderLabel} onAction={placeOrder} />
+
+        {needsLogin || needsVerification ? (
+          <div className="sc-checkout__notice">
+            <ShieldCheck size={18} aria-hidden="true" />
+            <span>{needsLogin ? 'Please login to continue checkout.' : 'Please verify your mobile number to continue checkout.'}</span>
+            <button type="button" onClick={() => navigate('/login')}>{needsLogin ? 'Login' : 'Verify Mobile'}</button>
+          </div>
+        ) : null}
+
+        <div className="sc-checkout__layout">
+          <main className="sc-checkout__main">
+            <section className="sc-checkout__card">
+              <SectionTitle number="1" icon={MapPin} title="Delivery Address">
+                <button type="button" className="sc-checkout__outline-btn" onClick={openNewAddressForm}>
+                  <Plus size={14} aria-hidden="true" />
+                  Add New Address
+                </button>
+              </SectionTitle>
+
+              {showAddressForm || !addresses.length ? (
+                <div className="sc-checkout__address-form">
+                  <AddressForm
+                    form={addressForm}
+                    setForm={setAddressForm}
+                    onSubmit={saveAddress}
+                    message={error}
+                    editing={editing}
+                    onCancel={() => {
+                      resetAddressEditor();
+                      if (addresses.length) setShowAddressForm(false);
+                    }}
+                    saving={savingAddress}
+                  />
+                </div>
+              ) : (
+                <div className="sc-checkout__address-grid">
+                  {addresses.slice(0, 4).map((address) => (
+                    <DesktopAddressCard
+                      key={address._id}
+                      address={address}
+                      selected={selectedAddressId === address._id}
+                      onSelect={() => setSelectedAddressId(address._id)}
+                      onEdit={() => openEditAddressForm(address)}
+                      onRemove={() => removeAddress(address._id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="sc-checkout__card">
+              <SectionTitle number="2" icon={ShoppingBag} title="Order Summary" />
+              {cart.items.length ? (
+                <div className="sc-checkout__items">
+                  {cart.items.map((item) => (
+                    <DesktopOrderItem
+                      key={item.cartKey || `${item.product._id || item.product.id}-${item.size}-${item.color}`}
+                      item={item}
+                      onIncrease={() => cart.increaseQuantity(item.cartKey || item.product, { cartKey: item.cartKey })}
+                      onDecrease={() => cart.decreaseQuantity(item.cartKey || item.product, { cartKey: item.cartKey })}
+                      onRemove={() => cart.removeFromCart(item.cartKey || item.product, { cartKey: item.cartKey })}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="sc-checkout__empty">
+                  <p>Your bag is empty.</p>
+                  <button type="button" onClick={() => navigate('/products')}>Continue Shopping</button>
+                </div>
+              )}
+            </section>
+
+            <section className="sc-checkout__card sc-checkout__coupon">
+              <SectionTitle number="3" icon={Tag} title="Coupon / Offers" />
+              <div className="sc-checkout__coupon-row">
+                <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="Enter coupon code" />
+                <button type="button" onClick={applyCoupon}>Apply Coupon</button>
+                <button type="button" className="sc-checkout__offer-link" onClick={() => navigate('/products?discount=20')}>
+                  View Available Offers
+                  <ChevronDown size={13} aria-hidden="true" />
+                </button>
+              </div>
+              {cart.coupon ? <p className="sc-checkout__coupon-success">{cart.coupon.code} applied: ₹{formatAmount(cart.coupon.discount)}</p> : null}
+            </section>
+
+            <section className="sc-checkout__card">
+              <SectionTitle number="4" icon={CreditCard} title="Payment Method" />
+              <div className="sc-checkout__payment">
+                <div className="sc-checkout__payment-tabs">
+                  {PAYMENT_OPTIONS.map(([key, title]) => {
+                    const Icon = paymentIconFor(key);
+                    return (
+                      <button key={key} type="button" className={paymentMethod === key ? 'is-active' : ''} onClick={() => setPaymentMethod(key)}>
+                        <Icon size={14} aria-hidden="true" />
+                        {title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="sc-checkout__payment-panel">
+                  {paymentMethod === 'UPI' ? (
+                    <>
+                      <div className="sc-checkout__app-row">
+                        {['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => (
+                          <button key={app} type="button" className={paymentApp === app ? 'is-active' : ''} onClick={() => setPaymentApp(app)}>{app}</button>
+                        ))}
+                      </div>
+                      <input value={upiId} onChange={(event) => setUpiId(event.target.value)} placeholder="Enter your UPI ID (e.g. name@upi)" />
+                    </>
+                  ) : (
+                    <p className="sc-checkout__payment-copy">{paymentCopyFor(paymentMethod)}</p>
+                  )}
+                  <p className="sc-checkout__secure-note">
+                    <ShieldCheck size={14} aria-hidden="true" />
+                    {paymentMethod === 'COD' ? 'Please keep exact amount ready at delivery.' : 'You will be redirected to a secure payment page to complete the transaction.'}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </main>
+
+          <aside className="sc-checkout__side">
+            <DesktopPriceSummary cart={cart} cta={placeOrderLabel} placing={placing} onAction={placeOrder} />
+            <DesktopAssurance />
+          </aside>
+        </div>
+
+        {error ? <p className="sc-checkout__error">{error}</p> : null}
       </div>
-      <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white p-3 md:hidden"><span className="price">Rs. {cart.finalAmount}</span><Button onClick={placeOrder} variant="accent">{placeOrderLabel}</Button></div>
     </section>
   );
+}
+
+function CheckoutSteps() {
+  return (
+    <div className="sc-checkout__steps" aria-label="Checkout steps">
+      {[
+        ['1', 'Bag', true],
+        ['2', 'Address', true],
+        ['3', 'Payment', false],
+      ].map(([number, label, active]) => (
+        <div key={label} className={active ? 'is-active' : ''}>
+          <span>{number}</span>
+          <strong>{label}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SectionTitle({ number, icon: Icon, title, children }) {
+  return (
+    <div className="sc-checkout__section-head">
+      <h2>
+        <Icon size={16} aria-hidden="true" />
+        {number}. {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function DesktopAddressCard({ address, selected, onSelect, onEdit, onRemove }) {
+  const lines = buildAddressLines(address);
+  return (
+    <article className={`sc-checkout__address${selected ? ' is-selected' : ''}`}>
+      <button type="button" className="sc-checkout__radio" onClick={onSelect} aria-label={`Deliver to ${address.fullName}`}>
+        <span />
+      </button>
+      <div className="sc-checkout__address-copy">
+        <div className="sc-checkout__address-name">
+          <strong>{address.fullName || 'Samaira Customer'}</strong>
+          <span>{address.addressType || 'Home'}{address.isDefault ? ' (Default)' : ''}</span>
+        </div>
+        <p>{address.mobile || address.phone || '-'}</p>
+        {lines.map((line) => <p key={line}>{line}</p>)}
+        <div className="sc-checkout__address-actions">
+          <button type="button" onClick={onEdit}><Pencil size={13} aria-hidden="true" /> Edit Address</button>
+          <button type="button" onClick={onSelect}>Deliver Here</button>
+          <button type="button" onClick={onRemove} className="sc-checkout__remove-address">Remove</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DesktopOrderItem({ item, onIncrease, onDecrease, onRemove }) {
+  const image = getPrimaryImageUrl(item.product.images);
+  return (
+    <article className="sc-checkout__item">
+      <div className="sc-checkout__item-image">
+        {image ? <img src={normalizeImageUrl(image)} alt={item.product.name} /> : <ShoppingBag size={22} aria-hidden="true" />}
+      </div>
+      <div>
+        <h3>{item.product.name}</h3>
+        <p>Size: {item.size || '-'} <span>•</span> Qty: {item.quantity}</p>
+        <strong>₹{formatAmount(Number(item.product.price || 0) * Number(item.quantity || 1))}</strong>
+        <div className="sc-checkout__item-actions">
+          <div className="sc-checkout__qty-control" aria-label={`Quantity for ${item.product.name}`}>
+            <button type="button" onClick={onDecrease} aria-label="Decrease quantity">
+              <Minus size={12} aria-hidden="true" />
+            </button>
+            <span>{item.quantity}</span>
+            <button type="button" onClick={onIncrease} aria-label="Increase quantity">
+              <Plus size={12} aria-hidden="true" />
+            </button>
+          </div>
+          <button type="button" className="sc-checkout__remove-item" onClick={onRemove} aria-label={`Remove ${item.product.name}`}>
+            <Trash2 size={13} aria-hidden="true" />
+            Remove
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DesktopPriceSummary({ cart, cta, placing, onAction }) {
+  return (
+    <section className="sc-checkout__summary">
+      <h2><ShoppingBag size={17} aria-hidden="true" /> Price Summary</h2>
+      <SummaryRow label="Total MRP" value={`₹${formatAmount(cart.totalMRP)}`} />
+      <SummaryRow label="Discount on MRP" value={`- ₹${formatAmount(cart.discount)}`} success />
+      <SummaryRow label="Coupon Discount" value={`- ₹${formatAmount(cart.couponDiscount)}`} success />
+      <SummaryRow label="Delivery Charges" value={cart.deliveryCharge ? `₹${formatAmount(cart.deliveryCharge)}` : 'FREE'} success={!cart.deliveryCharge} />
+      <div className="sc-checkout__grand">
+        <span>
+          <strong>Grand Total</strong>
+          <small>Inclusive of all taxes</small>
+        </span>
+        <b>₹{formatAmount(cart.finalAmount)}</b>
+      </div>
+      <button type="button" onClick={onAction} disabled={placing || !cart.items.length}>
+        <LockKeyhole size={15} aria-hidden="true" />
+        {cta}
+      </button>
+      <p><ShieldCheck size={14} aria-hidden="true" /> Safe and secure payments. Easy returns.</p>
+    </section>
+  );
+}
+
+function SummaryRow({ label, value, success }) {
+  return (
+    <div className="sc-checkout__summary-row">
+      <span>{label}</span>
+      <strong className={success ? 'is-success' : ''}>{value}</strong>
+    </div>
+  );
+}
+
+function DesktopAssurance() {
+  const items = [
+    [ShieldCheck, '100% Secure Checkout', 'Your payments are safe with us'],
+    [RefreshCcw, 'Easy Returns', 'Hassle-free returns within 7 days'],
+    [Truck, 'Free Shipping Above ₹999', 'Enjoy free delivery on orders above ₹999'],
+  ];
+  return (
+    <section className="sc-checkout__assurance">
+      {items.map(([Icon, title, text]) => (
+        <div key={title}>
+          <span><Icon size={20} aria-hidden="true" /></span>
+          <strong>{title}</strong>
+          <p>{text}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function paymentIconFor(key) {
+  if (key === 'UPI') return BadgeCheck;
+  if (key === 'CARD') return CreditCard;
+  if (key === 'NETBANKING') return Landmark;
+  if (key === 'WALLET') return Wallet;
+  if (key === 'COD') return Banknote;
+  return CreditCard;
+}
+
+function paymentCopyFor(key) {
+  if (key === 'CARD') return 'Your card details will be entered securely in the Razorpay payment window.';
+  if (key === 'NETBANKING') return 'Select your bank securely after continuing to payment.';
+  if (key === 'WALLET') return 'Pay with supported wallets through secure Razorpay checkout.';
+  if (key === 'COD') return 'Pay when your order is delivered to your selected address.';
+  return 'Continue to complete your payment securely.';
+}
+
+function formatAmount(value) {
+  return Number(value || 0).toLocaleString('en-IN');
 }
 
 function MobileAddressSummary({ navigate, selectedAddress, cartItems, deliveryWindow, onChange, onContinue, error }) {

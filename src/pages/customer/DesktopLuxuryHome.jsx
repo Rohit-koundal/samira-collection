@@ -1,39 +1,20 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  IconBrandFacebook,
-  IconBrandInstagram,
-  IconBrandPinterest,
-  IconBrandYoutube,
   IconChevronLeft,
   IconChevronRight,
   IconCreditCard,
   IconHeart,
   IconPackage,
   IconRefresh,
-  IconSearch,
   IconShieldCheck,
   IconShoppingBag,
   IconStarFilled,
   IconTruckDelivery,
-  IconUser,
 } from '@tabler/icons-react';
-import logo from '../../assets/samira-collection-logo.png';
-import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { useGetSettingsQuery } from '../../store/apiSlice';
 import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import styles from './DesktopLuxuryHome.module.css';
-
-const navigationLinks = [
-  ['New Arrivals', '/products?newArrival=true'],
-  ['Sarees', '/products?search=Saree'],
-  ['Suits', '/products?search=Suit'],
-  ['Kurtis', '/products?search=Kurti'],
-  ['Lehengas', '/products?search=Lehenga'],
-  ['Dresses', '/products?search=Dress'],
-  ['Sale', '/products?discount=20'],
-];
 
 const services = [
   { title: 'Secure Payments', text: '100% secure & trusted', icon: IconCreditCard },
@@ -58,11 +39,6 @@ export default function DesktopLuxuryHome({
   newArrivalProducts = [],
 }) {
   const [heroIndex, setHeroIndex] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const cart = useCart();
-  const wishlist = useWishlist();
-  const { user, switchMode } = useAuth();
-  const { data: settings = {} } = useGetSettingsQuery();
 
   const productsWithImages = useMemo(
     () => uniqueProducts([...featuredProducts, ...trendingProducts, ...newArrivalProducts, ...catalog])
@@ -99,12 +75,6 @@ export default function DesktopLuxuryHome({
 
   const moveHero = (direction) => {
     setHeroIndex((current) => (current + direction + heroSlides.length) % heroSlides.length);
-  };
-
-  const submitSearch = (event) => {
-    event.preventDefault();
-    const value = searchTerm.trim();
-    navigate(value ? `/search?search=${encodeURIComponent(value)}` : '/search');
   };
 
   return (
@@ -200,20 +170,7 @@ export default function DesktopLuxuryHome({
 
       <TestimonialSection />
       <NewsletterSection />
-      <LuxuryFooter settings={settings} navigate={navigate} />
     </div>
-  );
-}
-
-function HeaderAction({ label, count = 0, onClick, icon: IconComponent }) {
-  return (
-    <button type="button" className={styles.headerAction} onClick={onClick} aria-label={label}>
-      <span className={styles.headerIconWrap}>
-        <IconComponent size={21} stroke={1.7} />
-        {count > 0 && <span className={styles.headerBadge}>{count > 99 ? '99+' : count}</span>}
-      </span>
-      <span className={styles.iconLabel}>{label}</span>
-    </button>
   );
 }
 
@@ -447,44 +404,37 @@ function TestimonialSection() {
 
 function NewsletterSection() {
   const [email, setEmail] = useState('');
+  const [status, setStatus] = useState('');
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!email.trim()) {
+      setStatus('Please enter your email.');
+      return;
+    }
+    setStatus('Thank you for subscribing.');
+    setEmail('');
+  };
+
   return (
     <section className={`${styles.luxuryContainer} ${styles.newsletterSection}`}>
       <div><span>Stay in style</span><h2>Join Samira Circle</h2><p>Get early access to new drops, offers, and styling updates.</p></div>
-      <form onSubmit={(event) => event.preventDefault()}>
-        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email address" aria-label="Email address" />
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (status) setStatus('');
+          }}
+          placeholder="Enter your email address"
+          aria-label="Email address"
+        />
         <button type="submit">Subscribe</button>
+        {status ? <small>{status}</small> : null}
       </form>
     </section>
   );
-}
-
-function LuxuryFooter({ settings, navigate }) {
-  return (
-    <footer className={styles.footer}>
-      <div className={`${styles.luxuryContainer} ${styles.footerGrid}`}>
-        <div className={styles.footerBrand}>
-          <img src={logo} alt="Samira Collection" />
-          <p>{settings.footerText || 'Premium ethnic fashion designed for celebrations, everyday elegance, and the moments that become memories.'}</p>
-          <div className={styles.socialLinks}><IconBrandFacebook /><IconBrandInstagram /><IconBrandPinterest /><IconBrandYoutube /></div>
-        </div>
-        <FooterColumn title="Shop" items={navigationLinks.slice(0, 6)} navigate={navigate} />
-        <FooterColumn title="Help & Support" items={[["Track Your Order", '/orders'], ["Returns & Refunds", '/return-policy'], ["Shipping Policy", '/contact'], ["Size Guide", '/contact'], ["Contact Us", '/contact']]} navigate={navigate} />
-        <FooterColumn title="Company" items={[["About Us", '/contact'], ["Our Story", '/contact'], ["Privacy Policy", '/privacy-policy'], ["Terms & Conditions", '/terms'], ["Careers", '/contact']]} navigate={navigate} />
-        <div className={styles.footerContact}>
-          <h3>Contact</h3>
-          <p>{settings.contactEmail || 'hello@samiracollection.com'}</p>
-          <p>{settings.contactPhone || '+91 98765 43210'}</p>
-          <div className={styles.paymentBadges}><span>VISA</span><span>MC</span><span>UPI</span><span>Paytm</span></div>
-          <div className={styles.appButtons}><button type="button">Google Play</button><button type="button">App Store</button></div>
-        </div>
-      </div>
-      <div className={`${styles.luxuryContainer} ${styles.footerBottom}`}><span>© 2025 Samira Stylists. All Rights Reserved.</span><span>Made with love in India.</span></div>
-    </footer>
-  );
-}
-
-function FooterColumn({ title, items, navigate }) {
-  return <div className={styles.footerColumn}><h3>{title}</h3>{items.map(([label, path]) => <button key={label} type="button" onClick={() => navigate(path)}>{label}</button>)}</div>;
 }
 
 function uniqueProducts(products) {
