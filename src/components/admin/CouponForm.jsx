@@ -40,7 +40,7 @@ export default function CouponForm({ onSaved }) {
     <form onSubmit={submit} className="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-3">
       <Input placeholder="Coupon Code" value={form.code} onChange={(value) => update('code', value)} />
       <select value={form.type} onChange={(event) => update('type', event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 text-sm font-semibold"><option>Percentage</option><option>Flat</option></select>
-      <Input type="number" placeholder="Discount Value" value={form.discountValue} onChange={(value) => update('discountValue', value)} />
+      <Input type="number" placeholder="Discount Value %" value={form.discountValue} onChange={(value) => update('discountValue', value)} />
       <Input type="number" placeholder="Minimum Order Amount" value={form.minOrderAmount} onChange={(value) => update('minOrderAmount', value)} />
       <Input type="number" placeholder="Maximum Discount" value={form.maxDiscountAmount} onChange={(value) => update('maxDiscountAmount', value)} />
       <Input type="date" placeholder="Expiry Date" value={form.expiryDate} onChange={(value) => update('expiryDate', value)} />
