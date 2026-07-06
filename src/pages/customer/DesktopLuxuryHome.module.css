@@ -741,7 +741,6 @@
   font-weight: 800;
   text-transform: uppercase;
 }
-
 .productGrid {
   --product-gap: 28px;
   display: grid;
