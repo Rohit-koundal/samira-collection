@@ -11,6 +11,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: ENABLE_REEL_PRODUCT_IMPORT
+        value: "true"
       - key: REQUIRE_DATABASE
         value: "false"
       - key: MONGO_URI
@@ -57,6 +59,18 @@ services:
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: samira-products
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: R2_FOLDER
+        value: products
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

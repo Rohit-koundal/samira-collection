@@ -5,7 +5,9 @@ import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 function customerSafeMessage(message, status, path = '', code = '') {
   if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
-    return 'Image storage is not configured for production uploads yet. Please connect Cloudinary or R2, then upload again.';
+    return path.includes('/videos')
+      ? 'Video storage is not configured for uploads yet. Please connect R2, then upload again.'
+      : 'Image storage is not configured for production uploads yet. Please connect Cloudinary or R2, then upload again.';
   }
   const text = String(message || '').toLowerCase();
   if (status === 503 || text.includes('database unavailable') || text.includes('mongodb') || text.includes('mongo_uri') || text.includes('atlas')) {
@@ -76,11 +78,13 @@ const api = {
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
-  upload: async (path, files, { fieldName = 'images' } = {}) => {
+  upload: async (path, files, { fieldName = 'images', onRequest } = {}) => {
     startMobileLoader();
     try {
       const preparedFiles = await prepareUploadFiles(files, fieldName);
-      return await store.dispatch(samiraApi.endpoints.upload.initiate({ path, files: preparedFiles, fieldName })).unwrap();
+      const request = store.dispatch(samiraApi.endpoints.upload.initiate({ path, files: preparedFiles, fieldName }));
+      onRequest?.({ cancel: () => request.abort() });
+      return await request.unwrap();
     } catch (error) {
       throw toCustomerError(error, path, 'Upload failed');
     } finally {

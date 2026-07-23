@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import api from '../services/api';
 import { samiraApi } from '../store/apiSlice';
 import { logout as logoutAction, selectUser, setCredentials, setUser as setUserAction } from '../store/authSlice';
@@ -184,23 +185,34 @@ export function AuthProvider({ children, navigate }) {
     <AuthContext.Provider value={value}>
       {children}
       {toast && (
-        <div className="pointer-events-none fixed right-4 top-4 z-[80] hidden w-[min(22rem,calc(100vw-2rem))] md:block">
-          <button
-            type="button"
-            onClick={() => setToast('')}
-            className={`pointer-events-auto w-full rounded-2xl border px-4 py-3 text-left shadow-2xl transition ${
+        <div className="pointer-events-none fixed right-3 top-3 z-[100] w-[min(22rem,calc(100vw-1.5rem))] md:right-4 md:top-4">
+          <div
+            role="status"
+            aria-live="polite"
+            className={`pointer-events-auto flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left shadow-2xl transition ${
               toast.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                ? 'border-emerald-700 bg-emerald-600 text-white'
                 : toast.type === 'error'
-                  ? 'border-rose-200 bg-rose-50 text-rose-900'
+                  ? 'border-red-700 bg-red-600 text-white'
                   : toast.type === 'warning'
-                    ? 'border-amber-200 bg-amber-50 text-amber-900'
-                    : 'border-slate-200 bg-white text-charcoal'
+                    ? 'border-amber-500 bg-amber-400 text-amber-950'
+                    : 'border-slate-700 bg-slate-800 text-white'
             }`}
           >
-            {toast.title ? <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-70">{toast.title}</p> : null}
-            <p className="mt-1 text-sm font-semibold leading-5">{toast.message}</p>
-          </button>
+            <span className="mt-0.5 shrink-0" aria-hidden="true">
+              {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5" />
+                : toast.type === 'error' ? <XCircle className="h-5 w-5" />
+                  : toast.type === 'warning' ? <AlertTriangle className="h-5 w-5" />
+                    : <Info className="h-5 w-5" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              {toast.title ? <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-80">{toast.title}</p> : null}
+              <p className={`${toast.title ? 'mt-1' : ''} text-sm font-semibold leading-5`}>{toast.message}</p>
+            </div>
+            <button type="button" onClick={() => setToast('')} className="shrink-0 rounded-lg p-1 hover:bg-black/10" aria-label="Dismiss notification">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
     </AuthContext.Provider>

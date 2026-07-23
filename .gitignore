@@ -34,12 +34,33 @@ bower_components
 # node-waf configuration
 .lock-wscript
 backend/
-backend
+!backend/
+backend/*
+!backend/.env.example
+!backend/config/
+backend/config/*
+!backend/config/reelImport.js
+!backend/models/
+backend/models/*
+!backend/models/ProductDraft.js
+!backend/models/ReelCandidate.js
+!backend/models/ReelImport.js
+!backend/modules/
+!backend/modules/**
+!backend/queues/
+!backend/queues/**
+!backend/services/
+backend/services/*
+!backend/services/cloudinaryUpload.js
+!backend/services/mediaStorage.service.js
+!backend/services/r2Upload.js
+!backend/services/videoMetadata.service.js
+!backend/workers/
+!backend/workers/**
 build/
 build
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
-backend
 # Dependency directories
 node_modules/
 jspm_packages/

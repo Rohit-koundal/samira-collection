@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch } from 'lucide-react';
+import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video } from 'lucide-react';
 
+const reelImportEnabled = process.env.REACT_APP_ENABLE_REEL_PRODUCT_IMPORT === 'true';
 const links = [
   ['Dashboard', '/admin'],
   ['Products', '/admin/products'],
   ['Add Product', '/admin/products/add'],
   ['Product Drafts', '/admin/product-drafts'],
+  ...(reelImportEnabled ? [['Reel Product Import', '/admin/reel-import']] : []),
   ['Categories', '/admin/categories'],
   ['Variant Groups', '/admin/variant-groups'],
   ['Orders', '/admin/orders'],
@@ -105,6 +107,7 @@ function iconForLabel(label) {
     Products: <Package className="h-4 w-4" />,
     'Add Product': <PlusCircle className="h-4 w-4" />,
     'Product Drafts': <FilePlus2 className="h-4 w-4" />,
+    'Reel Product Import': <Video className="h-4 w-4" />,
     Categories: <Tags className="h-4 w-4" />,
     'Variant Groups': <GitBranch className="h-4 w-4" />,
     Orders: <ShoppingBag className="h-4 w-4" />,

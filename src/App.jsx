@@ -50,6 +50,8 @@ const Returns = lazy(() => import('./pages/admin/Returns'));
 const Inventory = lazy(() => import('./pages/admin/Inventory'));
 const Reports = lazy(() => import('./pages/admin/Reports'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
+const ReelProductImport = lazy(() => import('./pages/admin/ReelProductImport'));
+const reelImportEnabled = process.env.REACT_APP_ENABLE_REEL_PRODUCT_IMPORT === 'true';
 
 const customerRoutes = {
   '/': Home,
@@ -96,6 +98,7 @@ const adminRoutes = {
   '/admin/inventory': Inventory,
   '/admin/reports': Reports,
   '/admin/settings': Settings,
+  ...(reelImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
 };
 
 const samiraTheme = createTheme({

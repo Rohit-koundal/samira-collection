@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
+import { useAuth } from '../../context/AuthContext';
 
 const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 
@@ -13,39 +14,44 @@ export default function VideoUploader({
   label = 'Choose Videos',
   helpText = 'Upload optional product videos in MP4, WEBM, or MOV format.',
 }) {
+  const { notify } = useAuth();
   const inputRef = useRef(null);
-  const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
   const videos = (Array.isArray(value) ? value : value ? [value] : []).filter((item) => item?.url);
 
   const addFiles = async (selected) => {
-    setError('');
     setProgress(0);
     const incoming = Array.from(selected || []);
     if (!incoming.length) return;
-    if (videos.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} videos allowed.`);
+    if (videos.length + incoming.length > maxFiles) {
+      notify(`Maximum ${maxFiles} videos allowed.`, 'warning', 'Product video');
+      return;
+    }
 
     for (const file of incoming) {
       if (!allowedTypes.includes(file.type)) {
-        return setError('Only MP4, WEBM, and MOV videos are allowed.');
+        notify('Only MP4, WEBM, and MOV videos are allowed.', 'error', 'Product video');
+        return;
       }
       if (file.size > 20 * 1024 * 1024) {
-        return setError('Each video must be under 20MB.');
+        notify('Each video must be under 20MB.', 'error', 'Product video');
+        return;
       }
     }
 
     setUploading(true);
     try {
       setProgress(35);
-      const data = await api.upload(`/admin/upload/videos?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
+      const data = await api.upload(`/admin/uploads/videos?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
       setProgress(100);
       const uploaded = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploaded.length) throw new Error('No video was uploaded. Please try again.');
       onChange(multiple ? [...videos, ...uploaded].slice(0, maxFiles) : uploaded.slice(0, 1));
+      notify(`${uploaded.length} product video${uploaded.length > 1 ? 's' : ''} uploaded successfully.`, 'success', 'Product video');
     } catch (uploadError) {
-      setError(uploadError.message || 'Video upload failed. Please try again.');
+      notify(uploadError.message || 'Video upload failed. Please try again.', 'error', 'Product video');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setUploading(false);
@@ -93,7 +99,6 @@ export default function VideoUploader({
         onChange={(event) => addFiles(event.target.files)}
         className="hidden"
       />
-      {error && <p className="text-sm font-bold text-rose">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {videos.map((video, index) => (
           <div key={`${video.url}-${index}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
