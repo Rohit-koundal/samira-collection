@@ -1,4 +1,11 @@
 services:
+  - type: keyvalue
+    name: samira-reel-queue
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
   - type: web
     name: samira-collection-backend
     runtime: node
@@ -13,6 +20,11 @@ services:
         value: production
       - key: ENABLE_REEL_PRODUCT_IMPORT
         value: "true"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: samira-reel-queue
+          property: connectionString
       - key: REQUIRE_DATABASE
         value: "false"
       - key: MONGO_URI
@@ -79,3 +91,76 @@ services:
         sync: false
       - key: CLOUDINARY_FOLDER
         value: samira-products
+
+  - type: pserv
+    name: samira-reel-ai-worker
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./ai-video-worker/Dockerfile
+    envVars:
+      - key: AI_VIDEO_WORKER_SERVICE_TOKEN
+        generateValue: true
+      - key: MODEL_DEVICE
+        value: cpu
+      - key: MAX_PROCESSING_SECONDS
+        value: "1200"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: R2_SECRET_ACCESS_KEY
+      - key: R2_BUCKET_NAME
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: R2_BUCKET_NAME
+      - key: R2_PUBLIC_URL
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: R2_PUBLIC_URL
+
+  - type: worker
+    name: samira-reel-queue-worker
+    runtime: node
+    rootDir: backend
+    plan: starter
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm run worker:reels
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_REEL_PRODUCT_IMPORT
+        value: "true"
+      - key: MONGO_URI
+        fromService:
+          type: web
+          name: samira-collection-backend
+          envVarKey: MONGO_URI
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: samira-reel-queue
+          property: connectionString
+      - key: AI_VIDEO_WORKER_URL
+        fromService:
+          type: pserv
+          name: samira-reel-ai-worker
+          property: hostport
+      - key: AI_VIDEO_WORKER_SERVICE_TOKEN
+        fromService:
+          type: pserv
+          name: samira-reel-ai-worker
+          envVarKey: AI_VIDEO_WORKER_SERVICE_TOKEN
