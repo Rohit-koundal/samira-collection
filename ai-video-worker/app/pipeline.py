@@ -78,10 +78,11 @@ def process_reel(job_id: str, video_source: dict, processing_config: dict | None
         for group_number, group in enumerate(groups, start=1):
             ensure_time_limit(started)
             recommended = select_diverse_frames(group, 4)
+            recommended_ids = {id(frame) for frame in recommended}
             extra = [
                 frame
                 for frame in sorted(group, key=lambda item: item["quality"]["qualityScore"], reverse=True)
-                if frame not in recommended
+                if id(frame) not in recommended_ids
             ][:4]
             persisted = []
             for frame in recommended + extra:
@@ -98,7 +99,7 @@ def process_reel(job_id: str, video_source: dict, processing_config: dict | None
                     "sharpnessScore": frame["quality"]["sharpnessScore"],
                     "exposureScore": frame["quality"]["exposureScore"],
                     "visibilityScore": frame["quality"]["visibilityScore"],
-                    "selected": frame in recommended,
+                    "selected": id(frame) in recommended_ids,
                 })
             suggestions, confidence = suggest_attributes(group, group_number)
             candidates.append({
