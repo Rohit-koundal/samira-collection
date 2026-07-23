@@ -101,7 +101,7 @@ export default function Dashboard() {
         {statCards.map((card) => <StatCard key={card.label} {...card} loading={loading} />)}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <Panel title="Sales Overview" subtitle="Current month revenue trend" actionLabel="This Month">
           <SalesChart series={chartSeries} loading={loading} />
         </Panel>
@@ -146,7 +146,7 @@ function StatCard({ label, value, delta, note, icon: Icon, tint, iconColor, load
 
 function Panel({ title, subtitle, actionLabel, children }) {
   return (
-    <div className="rounded-[26px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_32px_rgba(111,74,52,0.06)] lg:p-5">
+    <div className="min-w-0 overflow-hidden rounded-[26px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_32px_rgba(111,74,52,0.06)] lg:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[18px] font-black text-charcoal">{title}</h2>
@@ -228,14 +228,14 @@ function OrdersDonut({ series, loading }) {
   let offset = 0;
 
   return (
-    <div className="rounded-[24px] bg-[#fffaf7] p-4">
+    <div className="min-w-0 overflow-hidden rounded-[24px] bg-[#fffaf7] p-3 sm:p-4">
       {loading ? (
         <div className="grid h-[320px] place-items-center rounded-[22px] border border-dashed border-[#eadfd5] bg-white/70">
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-          <div className="relative mx-auto h-[220px] w-[220px]">
+        <div className="grid min-w-0 gap-4 min-[1180px]:grid-cols-[minmax(160px,180px)_minmax(0,1fr)] min-[1180px]:items-center">
+          <div className="relative mx-auto h-[200px] w-[200px] max-w-full min-[1180px]:h-[180px] min-[1180px]:w-[180px]">
             <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90">
               <circle cx="80" cy="80" r="56" fill="none" stroke="#efe6de" strokeWidth="18" />
               {series.map((item, index) => {
@@ -265,14 +265,14 @@ function OrdersDonut({ series, loading }) {
               </div>
             </div>
           </div>
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-2">
             {series.map((item, index) => (
-              <div key={item.label} className="flex items-center justify-between rounded-[18px] bg-white px-4 py-3 shadow-[0_8px_18px_rgba(111,74,52,0.04)]">
-                <div className="flex items-center gap-3">
-                  <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: statusPalette[index % statusPalette.length].color }} />
-                  <p className="text-sm font-bold text-charcoal">{item.label}</p>
+              <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 rounded-[16px] bg-white px-3 py-2.5 shadow-[0_8px_18px_rgba(111,74,52,0.04)]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: statusPalette[index % statusPalette.length].color }} />
+                  <p className="truncate text-xs font-bold text-charcoal 2xl:text-sm">{item.label}</p>
                 </div>
-                <p className="text-sm font-black text-slate-500">{formatCompact(item.value)} <span className="font-semibold text-slate-400">({total ? Math.round((Number(item.value || 0) / total) * 100) : 0}%)</span></p>
+                <p className="shrink-0 whitespace-nowrap text-right text-xs font-black text-slate-500 2xl:text-sm">{formatCompact(item.value)} <span className="font-semibold text-slate-400">({total ? Math.round((Number(item.value || 0) / total) * 100) : 0}%)</span></p>
               </div>
             ))}
           </div>
