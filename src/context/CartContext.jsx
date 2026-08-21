@@ -3,6 +3,8 @@ import api from '../services/api';
 import { normalizeProduct } from '../services/normalize';
 import { useAuth } from './AuthContext';
 import { createStoragePlan, readScopedJson } from '../utils/userStorage';
+import { findProductVariant, hasManagedVariants, variantStock } from '../utils/variants';
+import { trackEvent } from '../utils/analytics';
 
 const CartContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_cart', null);
@@ -24,22 +26,14 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const requestId = ++requestIdRef.current;
 
     async function hydrate() {
-      if (!isAuthenticated) {
-        const guestCart = loadGuestCart(guestStorageName, guestLegacyStorageNames);
-        if (!alive || requestId !== requestIdRef.current) return;
-        setItems(guestCart.items);
-        setCoupon(guestCart.coupon);
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       const guestCart = loadGuestCart(guestStorageName, guestLegacyStorageNames);
       const legacyCart = storageNameProp && storageNameProp !== guestStorageName
         ? loadGuestCart(storageNameProp, legacyStorageNames)
         : { items: [], coupon: null };
+      const localItems = [...guestCart.items, ...legacyCart.items];
+
       try {
-        const localItems = [...guestCart.items, ...legacyCart.items];
         let remoteCart = await api.get('/cart');
         let remoteItems = normalizeCartResponse(remoteCart);
 
@@ -52,11 +46,11 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
         }
 
         if (!alive || requestId !== requestIdRef.current) return;
-        setItems(remoteItems);
-        setCoupon(null);
+        setItems(remoteItems.length ? remoteItems : localItems);
+        setCoupon(remoteItems.length ? null : (guestCart.coupon || legacyCart.coupon || null));
       } catch {
         if (!alive || requestId !== requestIdRef.current) return;
-        setItems([...guestCart.items, ...legacyCart.items]);
+        setItems(localItems);
         setCoupon(guestCart.coupon || legacyCart.coupon || null);
       } finally {
         if (alive && requestId === requestIdRef.current) {
@@ -91,8 +85,9 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
       return { ok: false, reason: 'invalid-product' };
     }
 
-    const cartKey = getCartKey(productId, size, color, variantId);
-    const stock = getAvailableStock(normalizedProduct);
+    const resolvedVariantId = variantId || findProductVariant(normalizedProduct, { size, color })?._id || '';
+    const cartKey = getCartKey(productId, size, color, resolvedVariantId);
+    const stock = getAvailableStock(normalizedProduct, { size, color, variantId: resolvedVariantId });
     if (stock === 0) {
       setNotice('This product is out of stock.');
       return { ok: false, reason: 'out-of-stock' };
@@ -108,21 +103,22 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const previousItems = items;
     const nextItems = existing
       ? items.map((item) => (getItemKey(item) === cartKey ? { ...item, quantity: nextQuantity, product: { ...item.product, ...normalizedProduct }, cartKey } : item))
-      : [...items, { product: normalizedProduct, productId, size, color, variantId, cartKey, quantity: addQuantity }];
+      : [...items, { product: normalizedProduct, productId, size, color, variantId: resolvedVariantId, cartKey, quantity: addQuantity }];
 
     setItems(nextItems);
+    trackEvent('ADD_TO_CART', { productId });
 
-    if (isAuthenticated) {
-      void (async () => {
-        try {
-          const response = await api.post('/cart', buildCartPayload(normalizedProduct, addQuantity, size, color, variantId));
-          setItems(normalizeCartResponse(response));
-        } catch (error) {
+    void (async () => {
+      try {
+        const response = await api.post('/cart', buildCartPayload(normalizedProduct, addQuantity, size, color, resolvedVariantId));
+        setItems(normalizeCartResponse(response));
+      } catch (error) {
+        if (isAuthenticated) {
           setItems(previousItems);
           setNotice(error?.message || 'Unable to update cart.');
         }
-      })();
-    }
+      }
+    })();
 
     return { ok: true, quantity: nextQuantity || addQuantity };
   };
@@ -133,27 +129,13 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const target = findCartItem(items, productOrKey, options);
     if (!target) return;
 
-    if (!isAuthenticated) {
-      setItems((current) => current.flatMap((item) => {
-        if (!matchesItem(item, key, options)) return [item];
-        if (nextQuantity <= 0) return [];
-        const stock = getAvailableStock(item.product);
-        if (stock !== null && nextQuantity > stock) {
-          setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
-          return [{ ...item, quantity: stock }];
-        }
-        return [{ ...item, quantity: nextQuantity }];
-      }));
-      return;
-    }
-
     const itemId = getBackendCartItemId(target);
     const previousItems = items;
     const nextItems = nextQuantity <= 0
       ? items.filter((item) => !matchesItem(item, key, options))
       : items.map((item) => {
         if (!matchesItem(item, key, options)) return item;
-        const stock = getAvailableStock(item.product);
+        const stock = getAvailableStock(item.product, { size: item.size, color: item.color, variantId: item.variantId });
         if (stock !== null && nextQuantity > stock) {
           setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
           nextQuantity = stock;
@@ -177,7 +159,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
         setItems(normalizeCartResponse(response));
       } catch (error) {
         setItems(previousItems);
-        setNotice(error?.message || 'Unable to update cart.');
+        if (isAuthenticated) setNotice(error?.message || 'Unable to update cart.');
       }
     })();
   };
@@ -196,11 +178,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const key = resolveKey(productOrKey, options);
     const target = findCartItem(items, productOrKey, options);
     if (!target) return;
-
-    if (!isAuthenticated) {
-      setItems((current) => current.filter((item) => !matchesItem(item, key, options)));
-      return;
-    }
+    trackEvent('REMOVE_FROM_CART', { productId: getProductId(target.product) });
 
     const itemId = getBackendCartItemId(target);
     const previousItems = items;
@@ -293,11 +271,6 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     setItems([]);
     setCoupon(null);
 
-    if (!isAuthenticated) {
-      clearGuestCart(guestStorageName, guestLegacyStorageNames);
-      return;
-    }
-
     void (async () => {
       try {
         await api.delete('/cart');
@@ -306,9 +279,13 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
           clearGuestCart(storageNameProp, legacyStorageNames);
         }
       } catch (error) {
-        setItems(previousItems);
-        setCoupon(previousCoupon);
-        setNotice(error?.message || 'Unable to update cart.');
+        if (isAuthenticated) {
+          setItems(previousItems);
+          setCoupon(previousCoupon);
+          setNotice(error?.message || 'Unable to update cart.');
+        } else {
+          clearGuestCart(guestStorageName, guestLegacyStorageNames);
+        }
       }
     })();
   };
@@ -490,7 +467,10 @@ function getProductId(product = {}) {
   return product._id || product.id || product.slug || '';
 }
 
-function getAvailableStock(product = {}) {
+function getAvailableStock(product = {}, selection = {}) {
+  if (hasManagedVariants(product)) {
+    return variantStock(product, selection);
+  }
   if (product.stock === undefined || product.stock === null || product.stock === '') return null;
   const stock = Number(product.stock);
   return Number.isFinite(stock) ? Math.max(0, stock) : null;

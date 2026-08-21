@@ -13,10 +13,19 @@ export default function OrderDetail({ route = '' }) {
   const [order, setOrder] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState('');
+  const [shipmentForm, setShipmentForm] = useState({ courierName: '', trackingNumber: '', trackingUrl: '', awb: '' });
 
   const load = useCallback(() => {
     if (!orderId) return;
-    api.get(`/admin/orders/${orderId}`).then(setOrder).catch((error) => setMessage(error.message));
+    api.get(`/admin/orders/${orderId}`).then((data) => {
+      setOrder(data);
+      setShipmentForm({
+        courierName: data.shipment?.courierName || '',
+        trackingNumber: data.shipment?.trackingNumber || '',
+        trackingUrl: data.shipment?.trackingUrl || '',
+        awb: data.shipment?.awb || '',
+      });
+    }).catch((error) => setMessage(error.message));
     api.get(`/admin/orders/${orderId}/receipt`).then(setReceipt).catch(() => {});
   }, [orderId]);
   useEffect(() => { load(); }, [load]);
@@ -24,6 +33,16 @@ export default function OrderDetail({ route = '' }) {
   const updateStatus = async (orderStatus) => {
     try {
       await api.put(`/admin/orders/${orderId}/status`, { orderStatus, note: 'Updated by admin' });
+      load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  const saveShipment = async (event) => {
+    event.preventDefault();
+    try {
+      await api.put(`/admin/orders/${orderId}/shipment`, shipmentForm);
       load();
     } catch (error) {
       setMessage(error.message);
@@ -48,18 +67,18 @@ export default function OrderDetail({ route = '' }) {
       {receipt && <ReceiptActions receipt={receipt} />}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black">Ordered Items</h2>
+          <div className="admin-card p-5">
+            <h2>Ordered items</h2>
             <div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex justify-between gap-3 rounded-xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="text-xs text-slate-500">{item.size} | {item.color} x {item.quantity}</span></span><b>Rs. {item.price * item.quantity}</b></div>)}</div>
           </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black">Timeline</h2>
+          <div className="admin-card p-5">
+            <h2>Timeline</h2>
             <div className="mt-4 grid gap-3">{order.statusTimeline?.map((item, index) => <div key={`${item.status}-${index}`} className="flex gap-3"><span className="mt-1 h-3 w-3 rounded-full bg-wine" /><span><b>{item.status}</b><br /><span className="text-xs text-slate-500">{item.date ? new Date(item.date).toLocaleString('en-IN') : ''} {item.note}</span></span></div>)}</div>
           </div>
         </div>
         <aside className="space-y-5">
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black">Payment</h2>
+          <div className="admin-card p-5">
+            <h2>Payment</h2>
             <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
               <Row label="Method" value={order.paymentMethod} />
               <Row label="Provider" value={order.paymentProvider || '-'} />
@@ -71,10 +90,17 @@ export default function OrderDetail({ route = '' }) {
             </div>
             <select value={order.paymentStatus} onChange={(event) => updatePayment(event.target.value)} className="mt-4 h-11 w-full rounded-xl border border-slate-200 px-3 font-bold">{paymentStatuses.map((item) => <option key={item}>{item}</option>)}</select>
           </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black">Order Status</h2>
+          <div className="admin-card p-5">
+            <h2>Order status</h2>
             <select value={order.orderStatus} onChange={(event) => updateStatus(event.target.value)} className="mt-4 h-11 w-full rounded-xl border border-slate-200 px-3 font-bold">{orderStatuses.map((item) => <option key={item}>{item}</option>)}</select>
           </div>
+          <form onSubmit={saveShipment} className="admin-card p-5">
+            <h2>Shipment</h2>
+            <input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="Courier name" value={shipmentForm.courierName} onChange={(event) => setShipmentForm((current) => ({ ...current, courierName: event.target.value }))} />
+            <input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="AWB / tracking number" value={shipmentForm.trackingNumber} onChange={(event) => setShipmentForm((current) => ({ ...current, trackingNumber: event.target.value, awb: event.target.value }))} />
+            <input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="Tracking URL (optional)" value={shipmentForm.trackingUrl} onChange={(event) => setShipmentForm((current) => ({ ...current, trackingUrl: event.target.value }))} />
+            <button type="submit" className="admin-btn mt-3 w-full">Save shipment</button>
+          </form>
         </aside>
       </div>
       {receipt && <Receipt receipt={receipt} />}

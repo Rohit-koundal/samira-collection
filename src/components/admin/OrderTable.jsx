@@ -1,21 +1,21 @@
 export default function OrderTable({ orders }) {
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm md:rounded-3xl">
+    <div className="admin-table">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px] text-left text-sm md:min-w-[760px]">
-          <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.12em] text-slate-500 md:tracking-[0.16em]">
-            <tr>{['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Status', 'Actions'].map((head) => <th key={head} className="px-4 py-4">{head}</th>)}</tr>
+        <table className="min-w-[700px] md:min-w-[760px]">
+          <thead>
+            <tr>{['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Status', 'Actions'].map((head) => <th key={head}>{head}</th>)}</tr>
           </thead>
           <tbody>
             {orders.map((order) => (
-              <tr key={order._id || order.id} className="border-t border-slate-100">
-                <td className="px-4 py-4 font-black">{shortId(order._id || order.id)}</td>
-                <td className="px-4 py-4">{order.user?.name || order.customer || order.shippingAddress?.fullName || 'Customer'}</td>
-                <td className="px-4 py-4">{formatDate(order.createdAt || order.date)}</td>
-                <td className="px-4 py-4 font-black">Rs. {order.finalAmount || order.amount}</td>
-                <td className="px-4 py-4">{order.paymentMethod} / {order.paymentStatus}</td>
-                <td className="px-4 py-4"><span className="rounded-full bg-blush px-3 py-1 text-xs font-black text-wine">{order.orderStatus}</span></td>
-                <td className="px-4 py-4"><a href="#/admin/orders/detail" className="font-black text-rose">View</a></td>
+              <tr key={order._id || order.id}>
+                <td className="font-semibold">{shortId(order._id || order.id)}</td>
+                <td>{order.user?.name || order.customer || order.shippingAddress?.fullName || 'Customer'}</td>
+                <td>{formatDate(order.createdAt || order.date)}</td>
+                <td className="font-semibold">Rs. {order.finalAmount || order.amount}</td>
+                <td>{order.paymentMethod} / {order.paymentStatus}</td>
+                <td><span className="rounded-full bg-blush px-3 py-1 text-xs font-semibold text-wine">{order.orderStatus}</span></td>
+                <td><a href="/admin/orders/detail" className="font-semibold text-wine">View</a></td>
               </tr>
             ))}
           </tbody>

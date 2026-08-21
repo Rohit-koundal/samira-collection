@@ -3,12 +3,25 @@ import { getApiBaseUrl } from './apiBaseUrl';
 import { compressImageFile, isSupportedImageFile } from '../services/imageCompression';
 import { logout, setCredentials } from './authSlice';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
+import { getOrCreateSessionId } from '../utils/attribution';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
   prepareHeaders: (headers, { getState }) => {
     const token = getState().auth.token || localStorage.getItem('samira_token');
     if (token) headers.set('authorization', `Bearer ${token}`);
+    try {
+      const sessionId = getOrCreateSessionId();
+      if (sessionId) headers.set('x-session-id', sessionId);
+    } catch {
+      // ignore
+    }
+    try {
+      const storeSlug = sessionStorage.getItem('samira_store_slug');
+      if (storeSlug) headers.set('x-store-slug', storeSlug);
+    } catch {
+      // ignore
+    }
     return headers;
   },
 });
@@ -54,7 +67,7 @@ function params(query) {
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory'],
+  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
@@ -163,6 +176,7 @@ export const samiraApi = createApi({
 function tagsForPath(path = '', mutation = false) {
   if (path.includes('/auth/')) return ['Auth'];
   if (path.includes('/admin/dashboard')) return ['AdminDashboard'];
+  if (path.includes('/quick-analyze')) return [];
   if (path.includes('/admin/products')) return mutation ? ['AdminProducts', 'Products', 'AdminDashboard'] : ['AdminProducts'];
   if (path.includes('/admin/categories')) return mutation ? ['AdminCategories', 'Categories'] : ['AdminCategories'];
   if (path.includes('/admin/orders')) return mutation ? ['AdminOrders', 'Orders', 'AdminDashboard'] : ['AdminOrders'];
@@ -183,6 +197,9 @@ function tagsForPath(path = '', mutation = false) {
   if (path.includes('/payments')) return ['Payments', 'Orders'];
   if (path.includes('/reviews')) return ['Reviews'];
   if (path.includes('/returns')) return ['Returns'];
+  if (path.includes('/contact')) return mutation ? ['Contact'] : ['Contact'];
+  if (path.includes('/newsletter')) return mutation ? ['Newsletter'] : ['Newsletter'];
+  if (path.includes('/notifications')) return ['Notifications'];
   return [];
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { CircleCheck, FileText, Hash, ImagePlus, IndianRupee, Tag, Type, X } from 'lucide-react';
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
 import VideoUploader from './VideoUploader';
@@ -8,6 +8,8 @@ import {
   applyAssistantSuggestions,
   buildAssistantSuggestions,
 } from '../../utils/productAssistant';
+import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
+import { buildVariantMatrix, hasManagedVariants } from '../../utils/variants';
 
 const DRAFT_PREFIX = 'samira-admin-product-draft';
 
@@ -44,10 +46,21 @@ const emptyProduct = {
   showInTrending: false,
   showInFestive: false,
   isActive: true,
+  trackVariants: false,
+  variants: [],
 };
 
-export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel }) {
+export default function ProductForm({
+  mode = 'Add',
+  productId,
+  onSaved,
+  onCancel,
+  apiPrefix = '/admin',
+  uploadPrefix = '/admin/uploads',
+  cancelPath = '/admin/products',
+}) {
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId) || emptyProduct)));
   const [assistant, setAssistant] = useState({
     category: '',
@@ -95,8 +108,20 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
   const draftKey = getDraftKey(productId);
 
   useEffect(() => {
-    api.get('/categories?admin=true').then(setCategories).catch(() => setCategories([]));
-  }, []);
+    let alive = true;
+    fetchCategories(api, apiPrefix).then((items) => {
+      if (alive) setCategories(items);
+    });
+    return () => { alive = false; };
+  }, [apiPrefix]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSubcategories(api, form.category, apiPrefix).then((items) => {
+      if (alive) setSubcategories(items);
+    });
+    return () => { alive = false; };
+  }, [apiPrefix, form.category]);
 
   useEffect(() => {
     if (!productId) {
@@ -105,7 +130,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
     }
 
     setDraftReady(false);
-    api.get(`/admin/products/${productId}`).then((product) => {
+    api.get(`${apiPrefix}/products/${productId}`).then((product) => {
       const savedDraft = readDraft(productId);
       const mergedDraft = mergeDraftIntoProduct(savedDraft);
       setForm({
@@ -121,6 +146,10 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
           : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
         images: normalizeImageEntries((Array.isArray(mergedDraft.images) && mergedDraft.images.length ? mergedDraft.images : product.images) || []),
         videos: normalizeVideoEntries((Array.isArray(mergedDraft.videos) && mergedDraft.videos.length ? mergedDraft.videos : product.videos) || []),
+        trackVariants: hasManagedVariants(product) || Boolean(mergedDraft.trackVariants),
+        variants: Array.isArray(mergedDraft.variants) && mergedDraft.variants.length
+          ? mergedDraft.variants
+          : (product.variants || []),
       });
       setAssistant({
         category: product.category?.name || product.category || '',
@@ -133,7 +162,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
       });
     }).catch((error) => setMessage(error.message))
       .finally(() => setDraftReady(true));
-  }, [productId]);
+  }, [apiPrefix, productId]);
 
   useEffect(() => {
     if (!draftReady) return undefined;
@@ -148,7 +177,33 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
     return () => window.clearTimeout(timer);
   }, [draftKey, draftReady, form]);
 
-  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const update = (field, value) => setForm((current) => {
+    const next = { ...current, [field]: value };
+    if ((field === 'sizes' || field === 'colors') && current.trackVariants) {
+      next.variants = buildVariantMatrix(splitList(field === 'sizes' ? value : current.sizes), splitList(field === 'colors' ? value : current.colors), current.variants);
+      next.stock = next.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0);
+    }
+    return next;
+  });
+
+  const updateVariantStock = (index, stock) => {
+    setForm((current) => {
+      const variants = current.variants.map((variant, variantIndex) => (
+        variantIndex === index ? { ...variant, stock: Math.max(0, Number(stock || 0)) } : variant
+      ));
+      return { ...current, variants, stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) };
+    });
+  };
+
+  const toggleTrackVariants = (enabled) => {
+    setForm((current) => ({
+      ...current,
+      trackVariants: enabled,
+      variants: enabled
+        ? buildVariantMatrix(splitList(current.sizes), splitList(current.colors), current.variants)
+        : [],
+    }));
+  };
 
   const updateAssistant = (field, value) => setAssistant((current) => ({ ...current, [field]: value }));
 
@@ -205,16 +260,19 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
         videos: prepareVideos(form.videos),
         price,
         originalPrice,
-        stock: Number(form.stock),
         lowStockAlert: Number(form.lowStockAlert),
         sizes: splitList(form.sizes),
         colors: splitList(form.colors),
         tags: splitList(form.tags),
+        variants: form.trackVariants ? form.variants : [],
+        stock: form.trackVariants
+          ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0)
+          : Number(form.stock),
         discountPercentage: originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0,
       };
       if (!payload.category) delete payload.category;
-      if (productId) await api.put(`/admin/products/${productId}`, payload);
-      else await api.post('/admin/products', payload);
+      if (productId) await api.put(`${apiPrefix}/products/${productId}`, payload);
+      else await api.post(`${apiPrefix}/products`, payload);
       if (!productId) setForm(emptyProduct);
       clearDraft(productId);
       setMessage('Product saved successfully.');
@@ -226,44 +284,130 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
     }
   };
 
+  const previewImage = (form.images || []).find((image) => image?.primary)?.url || form.images?.[0]?.url || '';
+  const checklist = [
+    { id: 'photo', label: 'Photo', done: Boolean(previewImage), target: 'product-media', icon: ImagePlus },
+    { id: 'name', label: 'Name', done: String(form.name || '').trim().length >= 3, target: 'product-basics', icon: Type },
+    { id: 'sku', label: 'SKU', done: Boolean(String(form.sku || '').trim()), target: 'product-basics', icon: Hash },
+    { id: 'category', label: 'Category', done: Boolean(form.category), target: 'product-pricing', icon: Tag },
+    { id: 'price', label: 'Price', done: Number(form.price) > 0, target: 'product-pricing', icon: IndianRupee },
+    { id: 'details', label: 'Details', done: String(form.description || '').trim().length >= 20, target: 'product-basics', icon: FileText },
+  ];
+  const readyCount = checklist.filter((item) => item.done).length;
+
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <Section title="Basic Information">
+    <form onSubmit={submit} className="admin-product-form">
+      <div className="admin-form-guide" role="status">
+        <div className="admin-form-guide__progress">
+          <span className={`admin-form-guide__count${readyCount === checklist.length ? ' is-ready' : ''}`}>
+            {readyCount === checklist.length ? <CircleCheck className="h-4 w-4" /> : `${readyCount}/${checklist.length}`}
+          </span>
+          <span>{readyCount === checklist.length ? 'Ready to save' : 'Still needed'}</span>
+        </div>
+        <div className="admin-form-guide__chips">
+          {checklist.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`admin-form-chip${item.done ? ' is-done' : ''}`}
+                title={item.done ? `${item.label} added` : `Jump to ${item.label.toLowerCase()}`}
+                aria-label={item.done ? `${item.label} added` : `${item.label} still needed`}
+                onClick={() => document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                <span className="admin-form-chip__icon">
+                  {item.id === 'photo' && previewImage ? <img src={previewImage} alt="" /> : <Icon className="h-3.5 w-3.5" />}
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Section id="product-basics" step="01" title="Basic Information" note="Name, SKU and the story customers will read.">
         <Input label="Product name" value={form.name} onChange={(value) => update('name', value)} error={errors.name} placeholder="Royal Zari Silk Saree" required />
         <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="leave blank for auto slug" />
         <Input label="SKU" value={form.sku} onChange={(value) => update('sku', value)} error={errors.sku} placeholder="SC-0101" />
         <Input label="Brand" value={form.brand} onChange={(value) => update('brand', value)} />
         <Input label="Short Description" value={form.shortDescription} onChange={(value) => update('shortDescription', value)} placeholder="Premium festive wear" />
-        <label className="grid gap-2 text-sm font-black lg:col-span-2">Full Description
-          <textarea value={form.description} onChange={(event) => update('description', event.target.value)} className="min-h-28 rounded-xl border border-slate-200 p-4 font-semibold" placeholder="Write fabric, fit, finish and occasion details" />
-          {errors.description && <span className="text-xs font-bold text-rose">{errors.description}</span>}
+        <label className="admin-field lg:col-span-2">
+          <span>Full Description</span>
+          <textarea
+            value={form.description}
+            onChange={(event) => update('description', event.target.value)}
+            className={`admin-field__control${errors.description ? ' is-error' : ''}`}
+            placeholder="Write fabric, fit, finish and occasion details"
+          />
+          {errors.description && <span className="admin-field__error">{errors.description}</span>}
         </label>
       </Section>
 
-      <Section title="Category, Pricing and Inventory">
-        <label className="grid gap-2 text-sm font-black">Category
-          <select value={form.category} onChange={(event) => update('category', event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 font-semibold">
+      <Section id="product-pricing" step="02" title="Category, Pricing and Inventory" note="Where it sits in the catalog and how it is sold.">
+        <label className="admin-field">
+          <span>Category<em>*</em></span>
+          <select
+            value={form.category}
+            onChange={(event) => update('category', event.target.value)}
+            className={`admin-field__control${errors.category ? ' is-error' : ''}`}
+          >
             <option value="">Select category</option>
             {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
           </select>
-          {errors.category && <span className="text-xs font-bold text-rose">{errors.category}</span>}
+          {errors.category && <span className="admin-field__error">{errors.category}</span>}
         </label>
-        <Input label="Subcategory" value={form.subCategory} onChange={(value) => update('subCategory', value)} placeholder="Festive Wear" />
+        <label className="admin-field">
+          <span>Subcategory</span>
+          <input
+            list="product-subcategories"
+            value={form.subCategory}
+            onChange={(event) => update('subCategory', event.target.value)}
+            className="admin-field__control"
+            placeholder={subcategories.length ? 'Select or type a subcategory' : 'Festive Wear'}
+          />
+          <datalist id="product-subcategories">
+            {subcategories.map((item) => <option key={item} value={item} />)}
+          </datalist>
+        </label>
         <Input label="Occasion" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding" />
         <Input label="Fabric" value={form.fabric} onChange={(value) => update('fabric', value)} placeholder="Silk" />
         <Input label="Original price" type="number" value={form.originalPrice} onChange={(value) => update('originalPrice', value)} error={errors.originalPrice} placeholder="2499" />
         <Input label="Selling price" type="number" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
         <Input label="Stock quantity" type="number" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" />
         <Input label="Low stock alert" type="number" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} placeholder="5" />
+        <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
+          <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
+          Track stock by size and colour
+        </label>
+        {form.trackVariants ? (
+          <div className="lg:col-span-2 overflow-x-auto rounded-2xl border border-[#eadfd5]">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead className="bg-[#fffaf4] text-xs uppercase tracking-[0.12em] text-slate-500">
+                <tr><th className="p-3">Size</th><th className="p-3">Colour</th><th className="p-3">Stock</th></tr>
+              </thead>
+              <tbody>
+                {(form.variants || []).map((variant, index) => (
+                  <tr key={`${variant.size}-${variant.color}-${index}`} className="border-t border-[#f3ebe3]">
+                    <td className="p-3 font-bold">{variant.size}</td>
+                    <td className="p-3">{variant.color}</td>
+                    <td className="p-3">
+                      <input type="number" min="0" value={variant.stock} onChange={(event) => updateVariantStock(index, event.target.value)} className="admin-field__control h-10 w-24 min-h-10 px-3" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-3 py-2 text-xs font-semibold text-slate-500">Total units: {form.stock || 0}. Leave a combination at 0 to hide it from checkout.</p>
+          </div>
+        ) : null}
       </Section>
 
-      <Section title="Product Images, Sizes and Colors">
+      <Section id="product-media" step="03" title="Product Images, Sizes and Colors" note="Photos first, then the options customers pick.">
         <div className="lg:col-span-2">
-          <div className="mb-3 rounded-xl bg-[#fbf8f4] p-4">
-            <h3 className="text-sm font-black text-charcoal">Product Images Required</h3>
-            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              Click the upload box or drag images here. Upload 1 to 8 clear product photos. Allowed: JPG, JPEG, PNG, WEBP. Max 2MB each.
-            </p>
+          <div className="admin-form-hint mb-3">
+            <h3>Product images</h3>
+            <p>Click the upload box or drag images here. Upload 1 to 8 clear photos. JPG, JPEG, PNG or WEBP. Max 2MB each.</p>
           </div>
           <ImageUploader
             label="Choose Product Images"
@@ -271,21 +415,20 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
             multiple
             maxFiles={8}
             uploadContext="products"
+            uploadPath={uploadPrefix}
             compressAboveMb={2}
             maxUploadMb={20}
             targetSizeMb={0.7}
             value={form.images}
             onChange={(images) => update('images', images)}
           />
-          <p className="mt-2 text-xs font-bold text-slate-500">{form.images.length}/8 images uploaded. Mark one image as Main for product listing.</p>
-          {errors.images && <p className="mt-2 text-xs font-bold text-rose">{errors.images}</p>}
+          <p className="mt-2 text-xs font-semibold text-slate-500">{form.images.length}/8 images uploaded. Mark one image as Main for product listing.</p>
+          {errors.images && <p className="admin-field__error mt-2">{errors.images}</p>}
         </div>
         <div className="lg:col-span-2">
-          <div className="mb-3 rounded-xl bg-[#fbf8f4] p-4">
-            <h3 className="text-sm font-black text-charcoal">Product Videos Optional</h3>
-            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              Upload up to 2 short product videos. Allowed: MP4, WEBM, MOV. Max 20MB each.
-            </p>
+          <div className="admin-form-hint mb-3">
+            <h3>Product videos</h3>
+            <p>Optional. Upload up to 2 short videos. MP4, WEBM or MOV. Max 20MB each.</p>
           </div>
           <VideoUploader
             label="Choose Product Videos"
@@ -293,10 +436,11 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
             multiple
             maxFiles={2}
             uploadContext="product-videos"
+            uploadPath={`${uploadPrefix}/videos`}
             value={form.videos}
             onChange={(videos) => update('videos', videos)}
           />
-          <p className="mt-2 text-xs font-bold text-slate-500">{form.videos.length}/2 videos uploaded.</p>
+          <p className="mt-2 text-xs font-semibold text-slate-500">{form.videos.length}/2 videos uploaded.</p>
         </div>
         <Input label="Sizes" value={form.sizes} onChange={(value) => update('sizes', value)} placeholder="XS, S, M, L, XL, Free Size" />
         <Input label="Colors" value={form.colors} onChange={(value) => update('colors', value)} placeholder="Pink, Maroon, Gold" />
@@ -304,13 +448,37 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
         <Input label="Care Instructions" value={form.careInstructions} onChange={(value) => update('careInstructions', value)} placeholder="Dry clean preferred" />
       </Section>
 
-      <Section title="Smart Product Assistant">
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-[#fcfaf7] p-4">
-          <p className="text-sm font-black text-charcoal">Generate product title, description, tags, SEO and caption from basic product details.</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Use any details you know. The assistant will keep existing manual values unless you choose to replace them.</p>
+      <Section step="04" title="Smart Product Assistant" note="Optional. Fill empty fields from a few basic details.">
+        <div className="admin-form-hint lg:col-span-2">
+          <h3>Generate title, description, tags and SEO</h3>
+          <p>Use any details you know. Existing manual values stay unless you choose to replace them.</p>
         </div>
-        <Input label="Category" value={assistant.category} onChange={(value) => updateAssistant('category', value)} placeholder="Suit, Saree, Kurti" />
-        <Input label="Subcategory" value={assistant.subCategory} onChange={(value) => updateAssistant('subCategory', value)} placeholder="Anarkali Suit, Palazzo Suit" />
+        <label className="admin-field">
+          <span>Category</span>
+          <select
+            value={assistant.category}
+            onChange={(event) => updateAssistant('category', event.target.value)}
+            className="admin-field__control"
+          >
+            <option value="">Select category</option>
+            {categories.map((category) => (
+              <option key={category._id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-field">
+          <span>Subcategory</span>
+          <input
+            list="assistant-subcategories"
+            value={assistant.subCategory}
+            onChange={(event) => updateAssistant('subCategory', event.target.value)}
+            className="admin-field__control"
+            placeholder={subcategories.length ? 'Select or type a subcategory' : 'Optional'}
+          />
+          <datalist id="assistant-subcategories">
+            {subcategories.map((item) => <option key={`assistant-${item}`} value={item} />)}
+          </datalist>
+        </label>
         <Input label="Main color" value={assistant.color} onChange={(value) => updateAssistant('color', value)} placeholder="Pink, Wine, Blue" />
         <Input label="Secondary colors" value={assistant.secondaryColors} onChange={(value) => updateAssistant('secondaryColors', value)} placeholder="Gold, Cream" />
         <Input label="Fabric" value={assistant.fabric} onChange={(value) => updateAssistant('fabric', value)} placeholder="Georgette, Silk, Cotton" />
@@ -386,29 +554,30 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
           <button
             type="button"
             onClick={generateAssistant}
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1f2a44] px-5 text-sm font-black text-white"
+            className="admin-btn"
           >
             Generate Smart Details
           </button>
           <button
             type="button"
             onClick={generateAssistant}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-black text-slate-700"
+            className="admin-btn-ghost"
           >
             Preview Suggestions
           </button>
         </div>
       </Section>
 
-      <Section title="Highlights, Policy and SEO">
+      <Section step="05" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
         <Input label="Return Policy" value={form.returnPolicy} onChange={(value) => update('returnPolicy', value)} placeholder="7 days return/exchange" />
         <Input label="Meta Title" value={form.metaTitle} onChange={(value) => update('metaTitle', value)} />
         <Input label="Meta Keywords" value={form.metaKeywords} onChange={(value) => update('metaKeywords', value)} />
-        <label className="grid gap-2 text-sm font-black lg:col-span-2">Meta Description
-          <textarea value={form.metaDescription} onChange={(event) => update('metaDescription', event.target.value)} className="min-h-20 rounded-xl border border-slate-200 p-4 font-semibold" />
+        <label className="admin-field lg:col-span-2">
+          <span>Meta Description</span>
+          <textarea value={form.metaDescription} onChange={(event) => update('metaDescription', event.target.value)} className="admin-field__control" />
         </label>
-        <div className="flex flex-wrap gap-4 lg:col-span-2">
+        <div className="flex flex-wrap gap-2 lg:col-span-2">
           {[
             ['isFeatured', 'Featured'],
             ['isNewArrival', 'New Arrival'],
@@ -418,7 +587,7 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
             ['showInFestive', 'Festive'],
             ['isActive', 'Active'],
           ].map(([field, label]) => (
-            <label key={field} className="flex items-center gap-2 text-sm font-bold">
+            <label key={field} className={`admin-flag${form[field] ? ' is-on' : ''}`}>
               <input type="checkbox" checked={form[field]} onChange={(event) => update(field, event.target.checked)} className="accent-rose" /> {label}
             </label>
           ))}
@@ -436,18 +605,18 @@ export default function ProductForm({ mode = 'Add', productId, onSaved, onCancel
         />
       )}
 
-      {message && <p className="rounded-xl bg-white p-3 text-sm font-bold text-wine shadow-sm">{message}</p>}
-      <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm sm:flex-row sm:justify-end">
+      {message && <p className="rounded-2xl border border-[#eadfd5] bg-white px-4 py-3 text-sm font-semibold text-wine">{message}</p>}
+      <div className="admin-form-actions">
         {onCancel ? (
-          <button type="button" onClick={onCancel} className="grid h-12 place-items-center rounded-xl border border-slate-200 px-5 text-sm font-black">
+          <button type="button" onClick={onCancel} className="admin-btn-ghost">
             Cancel
           </button>
         ) : (
-          <a href="#/admin/products" className="grid h-12 place-items-center rounded-xl border border-slate-200 px-5 text-sm font-black">Cancel</a>
+          <a href={cancelPath} className="admin-btn-ghost">Cancel</a>
         )}
-        <button type="button" onClick={() => setForm(emptyProduct)} className="h-12 rounded-xl border border-slate-200 px-5 text-sm font-black">Reset</button>
-        <button type="button" onClick={() => { update('isActive', false); setTimeout(() => document.querySelector('form')?.requestSubmit(), 0); }} className="h-12 rounded-xl bg-charcoal px-5 text-sm font-black text-white">Save Draft</button>
-        <button disabled={saving} className="h-12 rounded-xl bg-wine px-5 text-sm font-black text-white disabled:opacity-60">{saving ? 'Saving...' : `${mode} Product`}</button>
+        <button type="button" onClick={() => setForm(emptyProduct)} className="admin-btn-ghost">Reset</button>
+        <button type="button" onClick={() => { update('isActive', false); setTimeout(() => document.querySelector('form')?.requestSubmit(), 0); }} className="admin-btn-ghost">Save Draft</button>
+        <button disabled={saving} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : `${mode} Product`}</button>
       </div>
     </form>
   );
@@ -540,16 +709,34 @@ function formatFlagSummary(flags = {}) {
   ].join('\n');
 }
 
-function Section({ title, children }) {
-  return <section className="rounded-2xl bg-white p-5 shadow-sm"><h2 className="mb-4 text-lg font-black text-charcoal">{title}</h2><div className="grid gap-4 lg:grid-cols-2">{children}</div></section>;
+function Section({ id, title, note, step, children }) {
+  return (
+    <section id={id} className="admin-form-card">
+      <header className="admin-form-card__head">
+        {step ? <span className="admin-form-card__step">{step}</span> : null}
+        <div>
+          <h2>{title}</h2>
+          {note ? <p className="admin-form-card__note">{note}</p> : null}
+        </div>
+      </header>
+      <div className="admin-form-grid">{children}</div>
+    </section>
+  );
 }
 
 function Input({ label, value, onChange, placeholder, type = 'text', required = false, error }) {
   return (
-    <label className="grid gap-2 text-sm font-black">
-      {label}
-      <input required={required} type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 font-semibold" placeholder={placeholder} />
-      {error && <span className="text-xs font-bold text-rose">{error}</span>}
+    <label className="admin-field">
+      <span>{label}{required ? <em>*</em> : null}</span>
+      <input
+        required={required}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`admin-field__control${error ? ' is-error' : ''}`}
+        placeholder={placeholder}
+      />
+      {error && <span className="admin-field__error">{error}</span>}
     </label>
   );
 }

@@ -4,6 +4,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import ProductImageCarousel from '../product/ProductImageCarousel';
+import { useStorefront } from '../../context/StorefrontContext';
+import { productHref } from '../../utils/routing';
 import './ProductCard.css';
 
 export default function ProductCard({
@@ -16,6 +18,7 @@ export default function ProductCard({
 }) {
   const cart = useCart();
   const wishlist = useWishlist();
+  const { storeSlug } = useStorefront();
   const [busy, setBusy] = useState(false);
   const productId = product?._id || product?.id || product?.slug || '';
   const cartItem = cart.getCartItem(product);
@@ -31,7 +34,7 @@ export default function ProductCard({
   const subtitle = [product?.category, product?.fabric].filter(Boolean).join(' | ') || 'Premium ethnic wear';
   const badge = badgeLabel || (product?.isNewArrival ? 'NEW' : '');
 
-  const openProduct = () => navigate?.(`/product?id=${encodeURIComponent(productId)}`);
+  const openProduct = () => navigate?.(productHref(product, storeSlug));
 
   const toggleWishlist = async (event) => {
     event.stopPropagation();

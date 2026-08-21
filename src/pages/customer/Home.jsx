@@ -8,6 +8,7 @@ import DesktopLuxuryHome from './DesktopLuxuryHome';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { Button } from '../../components/ui';
+import PageState from '../../components/ui/PageState';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 import ProductCard from '../../components/product/ProductCard';
 import { useGetBannersQuery, useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
@@ -21,7 +22,7 @@ const serviceHighlights = [
 
 export default function Home({ navigate }) {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
-  const { data: productData = [] } = useGetProductsQuery();
+  const { data: productData = [], isLoading, isError, refetch } = useGetProductsQuery();
   const { data: categories = [] } = useGetCategoriesQuery();
   const { data: banners = [] } = useGetBannersQuery();
   const catalog = normalizeProducts(productData || []);
@@ -32,6 +33,14 @@ export default function Home({ navigate }) {
   const trendingProducts = catalog.filter((product) => product.showInTrending).slice(0, 12);
   const newArrivalProducts = catalog.filter((product) => product.isNewArrival).slice(0, 12);
   const instagramProducts = catalog.filter((product) => getPrimaryImageUrl(product.images)).slice(0, 12);
+
+  if (isLoading && !catalog.length) {
+    return <section className="container-page py-10"><PageState loading loadingLabel="Loading the collection..." /></section>;
+  }
+
+  if (isError && !catalog.length) {
+    return <section className="container-page py-10"><PageState error="Unable to load the store right now." onRetry={refetch} /></section>;
+  }
 
   return (
     <>

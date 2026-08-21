@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, CardContent, TextInput } from '../../components/ui';
+import PageState from '../../components/ui/PageState';
 import api from '../../services/api';
 
 const pageCopy = {
@@ -18,16 +19,58 @@ const pageCopy = {
     key: 'termsConditions',
     fallback: 'By using Samira Collection, you agree to provide accurate account and order information, follow checkout terms, and use the website only for lawful shopping activity.',
   },
+  '/shipping-policy': {
+    title: 'Shipping Policy',
+    key: 'shippingPolicy',
+    fallback: 'Orders are packed and handed to the courier after confirmation. Delivery timelines depend on your pincode and usually take 5-7 working days after dispatch. You will receive tracking details once the shipment is created.',
+  },
+  '/cancellation-policy': {
+    title: 'Cancellation Policy',
+    key: 'cancellationPolicy',
+    fallback: 'Orders can be cancelled before they are shipped. Once packed or dispatched, cancellation is no longer available and a return can be requested after delivery.',
+  },
+  '/size-guide': {
+    title: 'Size Guide',
+    key: 'sizeGuide',
+    fallback: 'Measure bust, waist and hip, then choose the closest size on the product page. If you are between sizes, we recommend the larger size for ethnic wear with lining or heavy work.',
+  },
+  '/faqs': {
+    title: 'FAQs',
+    key: 'faqs',
+    fallback: 'Orders, shipping, returns and payments are handled from your account. Contact us if an order is delayed or a product arrives damaged. COD and online payments follow the methods enabled in store settings.',
+  },
+  '/our-story': {
+    title: 'Our Story',
+    key: 'ourStory',
+    fallback: 'Samira Collection offers festive and everyday ethnic wear chosen for fabric, finish and occasion-ready styling.',
+  },
 };
 
 export default function Contact({ route = '/contact' }) {
   const [settings, setSettings] = useState({});
-  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
+
   useEffect(() => {
-    api.get('/settings').then(setSettings).catch(() => {});
+    api.get('/settings')
+      .then(setSettings)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
+
   const routePath = route.split('?')[0];
   const policy = pageCopy[routePath];
+
+  if (loading) {
+    return (
+      <section className="container-page py-6 md:py-10">
+        <PageState loading loadingLabel="Loading page..." />
+      </section>
+    );
+  }
 
   if (policy) {
     return (
@@ -45,9 +88,20 @@ export default function Contact({ route = '/contact' }) {
     );
   }
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    setSent(true);
+    setSent('');
+    setError('');
+    setSubmitting(true);
+    try {
+      const data = await api.post('/contact', form);
+      setSent(data.message || 'Message received. We will contact you shortly.');
+      setForm({ name: '', email: '', phone: '', subject: '', message: '' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -62,11 +116,14 @@ export default function Contact({ route = '/contact' }) {
         </Card>
         <Card as="form" onSubmit={submit}>
           <CardContent className="p-5 md:p-7">
-            <TextInput placeholder="Name" />
-            <TextInput className="mt-3" placeholder="Email" />
-            <textarea className="body-text mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4 outline-none transition focus:border-wine focus:ring-2 focus:ring-wine/10" placeholder="Message" />
-            <Button className="mt-3 w-full">Send Message</Button>
-            {sent && <p className="label-text mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-emerald-700">Message sent. We will contact you shortly.</p>}
+            <TextInput placeholder="Name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+            <TextInput className="mt-3" type="email" placeholder="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required />
+            <TextInput className="mt-3" placeholder="Phone (optional)" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+            <TextInput className="mt-3" placeholder="Subject" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} />
+            <textarea className="body-text mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4 outline-none transition focus:border-wine focus:ring-2 focus:ring-wine/10" placeholder="Message" value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} required />
+            <Button className="mt-3 w-full" disabled={submitting}>{submitting ? 'Sending...' : 'Send Message'}</Button>
+            {sent && <p className="label-text mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-emerald-700">{sent}</p>}
+            {error && <p className="label-text mt-3 rounded-xl bg-rose/10 px-4 py-3 text-rose">{error}</p>}
           </CardContent>
         </Card>
       </div>

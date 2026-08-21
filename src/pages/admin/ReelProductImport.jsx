@@ -10,17 +10,18 @@ import StatusBadge from '../../components/admin/StatusBadge';
 import { Select, TextInput } from '../../components/ui/Field';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 
 const TERMINAL = new Set(['review_required', 'completed', 'failed', 'cancelled']);
 const ACCEPTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 const STATUS_OPTIONS = ['', 'queued', 'processing', 'review_required', 'completed', 'failed', 'cancelled'];
 
-export default function ReelProductImport({ route = '' }) {
+export default function ReelProductImport({ route = '', navigate }) {
   const jobId = useMemo(() => new URLSearchParams(route.split('?')[1] || '').get('jobId'), [route]);
-  return jobId ? <ReviewWorkspace jobId={jobId} /> : <ImportWorkspace />;
+  return jobId ? <ReviewWorkspace jobId={jobId} /> : <ImportWorkspace navigate={navigate} />;
 }
 
-function ImportWorkspace() {
+function ImportWorkspace({ navigate }) {
   const { notify } = useAuth();
   const inputRef = useRef(null);
   const uploadRef = useRef(null);
@@ -41,9 +42,11 @@ function ImportWorkspace() {
       if (search.trim()) query.set('search', search.trim());
       if (status) query.set('status', status);
       const response = await api.get(`/admin/reel-imports?${query}`);
-      setItems(response.data || []);
-      setPagination((current) => ({ ...current, ...(response.pagination || {}) }));
+      const nextItems = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : []);
+      setItems(nextItems);
+      setPagination((current) => ({ ...current, ...(response?.pagination || {}) }));
     } catch (error) {
+      setItems([]);
       notify(error.message, 'error', 'Reel Product Import');
     } finally {
       if (!quiet) setLoading(false);
@@ -92,14 +95,15 @@ function ImportWorkspace() {
         },
       );
       const storedVideo = uploadResponse.files?.[0];
-      if (!storedVideo?.publicId || !storedVideo?.url) {
-        throw new Error('The video upload completed without a valid R2 reference.');
+      const provider = storedVideo?.provider || uploadResponse.provider;
+      if (!storedVideo?.publicId || !storedVideo?.url || !provider || provider === 'local') {
+        throw new Error('Video upload did not return a valid storage reference. Please try again.');
       }
       setUploadProgress(80);
       uploadRef.current = null;
       const response = await api.post('/admin/reel-imports', {
         sourceVideo: {
-          provider: 'r2',
+          provider,
           storageKey: storedVideo.publicId,
           url: storedVideo.url,
           originalFilename: file.name,
@@ -110,13 +114,13 @@ function ImportWorkspace() {
       setUploadProgress(100);
       const job = response.data || response;
       if (response.warning || job.status === 'failed') {
-        notify(response.warning || job.error?.safeMessage || 'Reel uploaded to R2, but processing is not available yet.', 'warning', 'Upload Product Reel');
+        notify(response.warning || job.error?.safeMessage || 'Reel uploaded, but background processing is not available yet.', 'warning', 'Upload Product Reel');
       } else {
         notify('Reel uploaded. Background processing has started.', 'success', 'Upload Product Reel');
       }
       setFile(null);
       await load(true);
-      if (job?._id || job?.id) window.location.hash = `/admin/reel-import?jobId=${job._id || job.id}`;
+      if (job?._id || job?.id) navigate?.(`/admin/reel-import?jobId=${job._id || job.id}`);
     } catch (error) {
       if (error.name !== 'AbortError') notify(error.message, 'error', 'Upload Product Reel');
     } finally {
@@ -168,7 +172,7 @@ function ImportWorkspace() {
       <PageHeader title="Reel Product Import" note="Turn a product reel into review-ready Product Drafts. Nothing is published automatically." />
 
       <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] md:p-6">
+        <div className="admin-card p-4 md:p-6">
           <h2 className="text-lg font-black text-charcoal">Upload Product Reel</h2>
           <button
             type="button"
@@ -203,14 +207,14 @@ function ImportWorkspace() {
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" disabled={!file || uploading} onClick={upload} className="inline-flex h-11 items-center gap-2 rounded-xl bg-wine px-5 text-sm font-black text-white disabled:opacity-50">
+            <button type="button" disabled={!file || uploading} onClick={upload} className="admin-btn disabled:opacity-50">
               <Upload className="h-4 w-4" />{uploading ? 'Uploading…' : 'Upload and process'}
             </button>
             {uploading && <button type="button" onClick={cancelUpload} className="h-11 rounded-xl border border-rose-200 px-5 text-sm font-black text-rose">Cancel upload</button>}
           </div>
         </div>
 
-        <aside className="rounded-[24px] border border-[#eadfd5] bg-[#fffdfa] p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <aside className="admin-card p-5">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-wine">For better results</p>
           <ul className="mt-4 space-y-3 text-sm font-semibold leading-5 text-slate-600">
             {['Keep each dress visible for 2–4 seconds.', 'Show a clear front view in good lighting.', 'Keep the complete outfit inside the frame.', 'Pause briefly before the next dress.', 'Avoid very fast transitions or multiple dresses together.'].map((tip) => (
@@ -221,7 +225,7 @@ function ImportWorkspace() {
         </aside>
       </div>
 
-      <div className="rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="admin-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-lg font-black text-charcoal">Import history</h2><p className="text-xs font-semibold text-slate-500">{pagination.total || items.length} imports</p></div>
           <div className="flex flex-1 flex-wrap justify-end gap-2">
@@ -251,13 +255,18 @@ function HistoryRow({ job, onCancel, onRetry, onDelete }) {
       <div className="min-w-0">
         <p className="truncate text-sm font-black text-charcoal">{job.sourceVideo?.originalFilename || 'Product reel'}</p>
         <p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(job.createdAt)} · {formatDuration(job.sourceVideo?.durationSeconds)} · {job.statistics?.detectedProducts || 0} products</p>
+        {job.status === 'failed' && job.error?.safeMessage ? (
+          <p className="mt-1 text-xs font-semibold text-rose-700">{job.error.safeMessage}</p>
+        ) : job.progress?.message && !TERMINAL.has(job.status) ? (
+          <p className="mt-1 text-xs font-semibold text-slate-500">{job.progress.message}</p>
+        ) : null}
       </div>
       <div>
         <div className="flex items-center justify-between gap-2"><StatusBadge value={labelStatus(job.status)} /><span className="text-xs font-black text-slate-500">{progress}%</span></div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-wine" style={{ width: `${progress}%` }} /></div>
       </div>
       <div className="flex flex-wrap gap-2 md:justify-end">
-        <a href={`#/admin/reel-import?jobId=${id}`} className="rounded-xl bg-wine px-3 py-2 text-xs font-black text-white">{job.status === 'review_required' || job.status === 'completed' ? 'Open results' : 'View progress'}</a>
+        <a href={`/admin/reel-import?jobId=${id}`} className="rounded-xl bg-wine px-3 py-2 text-xs font-black text-white">{job.status === 'review_required' || job.status === 'completed' ? 'Open results' : 'View progress'}</a>
         {job.status === 'failed' && <button type="button" onClick={() => onRetry(job)} className="rounded-xl border border-slate-200 p-2" aria-label="Retry"><RefreshCcw className="h-4 w-4" /></button>}
         {['queued', 'processing'].includes(job.status) && <button type="button" onClick={() => onCancel(job)} className="rounded-xl border border-slate-200 p-2" aria-label="Cancel"><X className="h-4 w-4" /></button>}
         {!['processing', 'creating_drafts'].includes(job.status) && <button type="button" onClick={() => onDelete(job)} className="rounded-xl border border-rose-100 p-2 text-rose" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>}
@@ -306,7 +315,7 @@ function ReviewWorkspace({ jobId }) {
 
   useEffect(() => {
     load();
-    api.get('/admin/categories?admin=true').then((response) => setCategories(Array.isArray(response) ? response : response.data || [])).catch(() => setCategories([]));
+    fetchCategories(api).then(setCategories).catch(() => setCategories([]));
   }, [load]);
 
   useEffect(() => {
@@ -323,7 +332,7 @@ function ReviewWorkspace({ jobId }) {
     const response = await api.patch(`/admin/reel-imports/${jobId}/candidates/${id}`, {
       status: form.status,
       adminOverrides: {
-        name: form.name, category: form.category, primaryColor: form.primaryColor,
+        name: form.name, category: form.category, subCategory: form.subCategory, primaryColor: form.primaryColor,
         pattern: form.pattern, tags: form.tags, price: form.price,
         sizes: form.sizes, stock: form.stock,
       },
@@ -416,7 +425,7 @@ function ReviewWorkspace({ jobId }) {
   return (
     <section className="space-y-5">
       <PageHeader title="Review Reel Products" note={job.sourceVideo?.originalFilename || 'Product reel'}>
-        <a href="#/admin/reel-import" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-charcoal"><ArrowLeft className="h-4 w-4" />Import history</a>
+        <a href="/admin/reel-import" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-charcoal"><ArrowLeft className="h-4 w-4" />Import history</a>
       </PageHeader>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="Status" value={labelStatus(job.status)} />
@@ -427,7 +436,7 @@ function ReviewWorkspace({ jobId }) {
       </div>
 
       {!TERMINAL.has(job.status) && (
-        <div className="rounded-[24px] border border-[#eadfd5] bg-white p-5">
+        <div className="admin-card p-5">
           <div className="flex justify-between text-sm font-black"><span>{job.progress?.currentStep || 'Processing reel'}</span><span>{job.progress?.percentage || 0}%</span></div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-wine transition-all" style={{ width: `${job.progress?.percentage || 0}%` }} /></div>
           <p className="mt-3 text-xs font-semibold text-slate-500">{job.progress?.message}</p>
@@ -475,8 +484,13 @@ function ReviewWorkspace({ jobId }) {
 function CandidateCard({ candidate, candidates, categories, form, mergeSelected, draftSelected, onMergeSelect, onDraftSelect, onUpdate, onSave, onSplit, onMove }) {
   const id = candidate._id || candidate.id;
   const confidence = Math.round(Number(candidate.confidence?.overall || 0) * 100);
+  const [subcategories, setSubcategories] = useState([]);
+
+  useEffect(() => {
+    fetchSubcategories(api, form.category).then(setSubcategories);
+  }, [form.category]);
   return (
-    <article className="rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <article className="admin-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2"><h2 className="text-base font-black text-charcoal">Candidate {candidate.groupNumber}</h2><StatusBadge value={labelStatus(candidate.status)} /></div>
@@ -504,6 +518,12 @@ function CandidateCard({ candidate, candidates, categories, form, mergeSelected,
         <Labeled label="Category">
           <Select value={form.category} onChange={(event) => onUpdate('category', event.target.value)} className="w-full">
             <option value="">Please confirm</option>{categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
+          </Select>
+        </Labeled>
+        <Labeled label="Subcategory">
+          <Select value={form.subCategory || ''} onChange={(event) => onUpdate('subCategory', event.target.value)} className="w-full">
+            <option value="">{subcategories.length ? 'Select subcategory' : 'No subcategories yet'}</option>
+            {subcategories.map((item) => <option key={item} value={item}>{item}</option>)}
           </Select>
         </Labeled>
         <Labeled label="Primary colour"><TextInput value={form.primaryColor} onChange={(event) => onUpdate('primaryColor', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
@@ -549,6 +569,7 @@ function candidateForm(candidate) {
   return {
     name: overrides.name || suggestions.name || '',
     category: overrides.category || '',
+    subCategory: overrides.subCategory || suggestions.subcategory || suggestions.subCategory || '',
     primaryColor: overrides.primaryColor || suggestions.primaryColor || '',
     pattern: overrides.pattern || suggestions.pattern || '',
     tags: Array.isArray(overrides.tags || suggestions.tags) ? (overrides.tags || suggestions.tags).join(', ') : overrides.tags || '',

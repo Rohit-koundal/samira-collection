@@ -3,6 +3,7 @@ import api from '../services/api';
 import { normalizeProduct } from '../services/normalize';
 import { useAuth } from './AuthContext';
 import { createStoragePlan, readScopedJson } from '../utils/userStorage';
+import { trackEvent } from '../utils/analytics';
 
 const WishlistContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_wishlist', null);
@@ -86,6 +87,7 @@ export function WishlistProvider({ children }) {
         ? items.filter((item) => getWishlistItemId(item) !== productId)
         : [...items, normalizedProduct];
       await updateWishlist(nextItems);
+      if (!exists) trackEvent('WISHLIST_ADD', { productId });
       return;
     }
 
@@ -95,6 +97,7 @@ export function WishlistProvider({ children }) {
       : [...items, normalizedProduct];
     const previousItems = items;
     setItems(nextItems);
+    if (!exists) trackEvent('WISHLIST_ADD', { productId });
 
     try {
       const response = exists ? await api.delete(`/wishlist/${productId}`) : await api.post(`/wishlist/${productId}`);
@@ -114,6 +117,7 @@ export function WishlistProvider({ children }) {
     if (!user) {
       if (items.some((item) => getWishlistItemId(item) === productId)) return;
       await updateWishlist([...items, normalizedProduct]);
+      trackEvent('WISHLIST_ADD', { productId });
       return;
     }
 
@@ -121,6 +125,7 @@ export function WishlistProvider({ children }) {
     const previousItems = items;
     const nextItems = [...items, normalizedProduct];
     setItems(nextItems);
+    trackEvent('WISHLIST_ADD', { productId });
 
     try {
       const response = await api.post(`/wishlist/${productId}`);

@@ -11,6 +11,7 @@ export default function VideoUploader({
   multiple = true,
   maxFiles = 2,
   uploadContext = 'product-videos',
+  uploadPath = '/admin/uploads/videos',
   label = 'Choose Videos',
   helpText = 'Upload optional product videos in MP4, WEBM, or MOV format.',
 }) {
@@ -44,7 +45,7 @@ export default function VideoUploader({
     setUploading(true);
     try {
       setProgress(35);
-      const data = await api.upload(`/admin/uploads/videos?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
+      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
       setProgress(100);
       const uploaded = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploaded.length) throw new Error('No video was uploaded. Please try again.');

@@ -116,7 +116,7 @@ export default function Banners() {
         title="Manage Banners"
         note="Create, update, and manage website banners."
       >
-        <button type="button" onClick={openCreateForm} className="inline-flex items-center gap-2 rounded-xl bg-wine px-4 py-2.5 text-sm font-black text-white md:px-5 md:py-3">
+        <button type="button" onClick={openCreateForm} className="admin-btn">
           <Plus className="h-4 w-4" />
           Add New Banner
         </button>
@@ -139,7 +139,7 @@ export default function Banners() {
         />
       )}
 
-      <div className="rounded-[24px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] md:p-5">
+      <div className="admin-card p-4 md:p-5">
         <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
           <TextInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search banners by title..." />
           <Select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -159,7 +159,7 @@ export default function Banners() {
 
       {message && !showForm && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
-      <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="admin-card overflow-hidden">
         {loading ? (
           <Loader label="Loading banners..." />
         ) : !filteredBanners.length ? (
@@ -245,7 +245,7 @@ export default function Banners() {
 
 function StatCard({ icon: Icon, label, value, tint }) {
   return (
-    <div className="rounded-[22px] bg-white p-4 shadow-[0_10px_20px_rgba(15,23,42,0.04)] md:p-5">
+    <div className="admin-card p-4 md:p-5">
       <div className="flex items-center gap-4">
         <div className={`grid h-12 w-12 place-items-center rounded-2xl ${tint}`}>
           <Icon className="h-5 w-5" />

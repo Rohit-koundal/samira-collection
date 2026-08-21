@@ -33,6 +33,8 @@ export default function ProductInfoPanel({
   onViewOffers,
   onSelectVariant,
   onShare,
+  isSizeAvailable = () => true,
+  isColorAvailable = () => true,
 }) {
   const sizes = product?.sizes?.length ? product.sizes : ['S', 'M', 'L', 'XL'];
   const colors = product?.colors?.length ? product.colors : ['Wine', 'Pink', 'Gold'];
@@ -93,8 +95,9 @@ export default function ProductInfoPanel({
               <button
                 key={item}
                 type="button"
+                disabled={!isSizeAvailable(item)}
                 onClick={() => setSize?.(item)}
-                className={`sc-info__size${size === item ? ' sc-info__size--active' : ''}`}
+                className={`sc-info__size${size === item ? ' sc-info__size--active' : ''}${!isSizeAvailable(item) ? ' opacity-40' : ''}`}
               >
                 {item}
               </button>
@@ -112,6 +115,7 @@ export default function ProductInfoPanel({
                 <button
                   key={item}
                   type="button"
+                  disabled={!isColorAvailable(item)}
                   onClick={() => setColor?.(item)}
                   className={`sc-info__swatch${color === item ? ' sc-info__swatch--active' : ''}`}
                   style={{ backgroundColor: defaultSwatches[item] || defaultSwatches.Wine }}

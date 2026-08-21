@@ -314,6 +314,13 @@ function MobileAccountView({ navigate, user, logout, switchMode, displayName }) 
               Switch to Admin
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => (user?.availableModes?.includes('seller') ? switchMode('seller') : navigate('/seller/onboarding'))}
+            className="mt-3 h-11 w-full rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-charcoal"
+          >
+            {user?.availableModes?.includes('seller') ? 'Seller dashboard' : 'Open a boutique'}
+          </button>
         </div>
       </div>
     </section>

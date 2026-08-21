@@ -5,6 +5,7 @@ import { Select, TextInput } from '../../components/ui/Field';
 import PageHeader from '../../components/admin/PageHeader';
 import EmptyState from '../../components/admin/EmptyState';
 import Loader from '../../components/admin/Loader';
+import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 import { normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import {
@@ -34,13 +35,7 @@ export default function ProductDrafts() {
   }, [drafts]);
 
   useEffect(() => {
-    try {
-      api.get('/admin/categories?admin=true').then((categoryItems) => {
-        setCategories(Array.isArray(categoryItems) ? categoryItems : []);
-      });
-    } catch {
-      setCategories([]);
-    }
+    fetchCategories(api).then(setCategories).catch(() => setCategories([]));
   }, []);
 
   const selectedCount = useMemo(() => selected.length, [selected]);
@@ -101,7 +96,7 @@ export default function ProductDrafts() {
         note="Bulk upload images, create draft cards, edit fields, and publish when ready."
       />
 
-      <div className="rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] md:p-5">
+      <div className="admin-card p-4 md:p-5">
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
           <label className="grid gap-2">
             <span className="text-sm font-black text-charcoal">Bulk upload draft images</span>
@@ -131,12 +126,12 @@ export default function ProductDrafts() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 admin-card p-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-wine/60">Selected drafts</p>
           <p className="mt-1 text-sm font-semibold text-slate-500">{selectedCount} selected · {drafts.length} total</p>
         </div>
-        <button type="button" onClick={publishSelected} disabled={!selected.length || saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-charcoal px-5 text-sm font-black text-white disabled:opacity-60">
+        <button type="button" onClick={publishSelected} disabled={!selected.length || saving} className="admin-btn disabled:opacity-60">
           <CopyPlus className="h-4 w-4" />
           Publish Selected
         </button>
@@ -144,7 +139,7 @@ export default function ProductDrafts() {
 
       {message && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine md:hidden">{message}</p>}
 
-      <div className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="admin-card overflow-hidden">
         {isLoading || isFetching ? (
           <Loader label="Loading drafts..." />
         ) : !drafts.length ? (
@@ -177,6 +172,7 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
     tags: Array.isArray(draft.tags) ? draft.tags.join(', ') : '',
     highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
   }));
+  const [subcategories, setSubcategories] = useState([]);
 
   useEffect(() => {
     setForm({
@@ -187,6 +183,11 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
       highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
     });
   }, [draft]);
+
+  useEffect(() => {
+    const categoryId = form.category?._id || form.category || '';
+    fetchSubcategories(api, categoryId).then(setSubcategories);
+  }, [form.category]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -209,6 +210,11 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
         <Select value={form.category?._id || form.category || ''} onChange={(event) => update('category', event.target.value)}>
           <option value="">Select category</option>
           {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
+        </Select>
+        <Select value={form.subCategory || ''} onChange={(event) => update('subCategory', event.target.value)}>
+          <option value="">{subcategories.length ? 'Select subcategory' : 'No subcategories yet'}</option>
+          {form.subCategory && !subcategories.includes(form.subCategory) ? <option value={form.subCategory}>{form.subCategory}</option> : null}
+          {subcategories.map((item) => <option key={item} value={item}>{item}</option>)}
         </Select>
         <div className="grid grid-cols-2 gap-2">
           <TextInput type="number" value={form.originalPrice || ''} onChange={(event) => update('originalPrice', event.target.value)} placeholder="Original price" />

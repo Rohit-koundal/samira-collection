@@ -29,10 +29,10 @@ export default function Inventory() {
     return matches && (!filter || (filter === 'low' ? low : out));
   }), [filter, products, query]);
 
-  const updateStock = async (product, stock) => {
+  const updateStock = async (product, stock, variantId) => {
     try {
-      await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock) });
-      setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: Number(stock) } : item));
+      await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock), ...(variantId ? { variantId } : {}) });
+      load();
     } catch (error) {
       setMessage(error.message);
     }
@@ -76,8 +76,15 @@ export default function Inventory() {
             <td className="px-4 py-4">{product.lowStockAlert || 5}</td>
             <td className="px-4 py-4"><StatusBadge value={stockLabel} /></td>
             <td className="px-4 py-4">
-              <div className="flex flex-wrap gap-2">
-                <input type="number" value={product.stock} onChange={(event) => updateStock(product, event.target.value)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
+              <div className="flex flex-col gap-2">
+                {Array.isArray(product.variants) && product.variants.length ? product.variants.map((variant) => (
+                  <label key={variant._id} className="flex items-center gap-2 text-xs font-bold">
+                    <span className="min-w-24">{variant.size} / {variant.color}</span>
+                    <input type="number" value={variant.stock} onChange={(event) => updateStock(product, event.target.value, variant._id)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
+                  </label>
+                )) : (
+                  <input type="number" value={product.stock} onChange={(event) => updateStock(product, event.target.value)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
+                )}
                 <button type="button" onClick={() => markOutOfStock(product)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600">OOS</button>
                 <button type="button" onClick={() => hideProduct(product)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600">Hide</button>
               </div>

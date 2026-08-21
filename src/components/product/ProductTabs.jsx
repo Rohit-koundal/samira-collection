@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, ListChecks, PackageCheck, Ruler, Shirt } from 'lucide-react';
+import { FileText, ListChecks, PackageCheck, Ruler, Shirt, Star } from 'lucide-react';
 import './ProductTabs.css';
 
 const tabs = [
@@ -8,9 +8,10 @@ const tabs = [
   { key: 'fit', label: 'Size & Fit', icon: Ruler },
   { key: 'care', label: 'Material & Care', icon: Shirt },
   { key: 'shipping', label: 'Shipping & Returns', icon: PackageCheck },
+  { key: 'reviews', label: 'Reviews', icon: Star },
 ];
 
-export default function ProductTabs({ product }) {
+export default function ProductTabs({ product, reviews = [], onWriteReview }) {
   const [activeTab, setActiveTab] = useState('description');
 
   const description =
@@ -88,6 +89,21 @@ export default function ProductTabs({ product }) {
 
         {activeTab === 'shipping' && (
           <p>{product?.returnPolicy || 'Free shipping on eligible orders. Easy returns and exchanges are available within the return window when the item is unused and tags are intact.'}</p>
+        )}
+
+        {activeTab === 'reviews' && (
+          <div>
+            <p>{reviews.length ? `${reviews.length} customer review${reviews.length === 1 ? '' : 's'}.` : 'No reviews yet for this product.'}</p>
+            {onWriteReview ? (
+              <button type="button" className="sc-tabs__chip mt-3" onClick={onWriteReview}>Write a review</button>
+            ) : null}
+            {reviews.slice(0, 6).map((review) => (
+              <article key={review._id} className="mt-4">
+                <p className="font-black">{review.user?.name || 'Customer'} {review.verifiedPurchase ? '· Verified purchase' : ''} · {review.rating}/5</p>
+                <p>{review.comment}</p>
+              </article>
+            ))}
+          </div>
         )}
       </div>
     </section>

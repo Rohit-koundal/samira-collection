@@ -6,7 +6,7 @@ export default function ProductPosterModal({ open, product, settings, onClose })
   const [posterUrl, setPosterUrl] = useState('');
   const [message, setMessage] = useState('');
 
-  const shareLink = useMemo(() => `${window.location.origin}/#/product?id=${product?._id || product?.id || product?.slug || ''}`, [product]);
+  const shareLink = useMemo(() => `${window.location.origin}/product/${product?.slug || product?._id || product?.id || ''}`, [product]);
 
   useEffect(() => {
     if (!open || !product) return undefined;

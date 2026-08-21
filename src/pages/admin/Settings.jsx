@@ -4,14 +4,23 @@ import api from '../../services/api';
 
 const fields = [
   ['storeName', 'Store Name'],
+  ['legalBusinessName', 'Legal business name'],
+  ['gstin', 'GSTIN'],
+  ['invoicePrefix', 'Invoice prefix'],
   ['contactEmail', 'Contact Email'],
   ['contactPhone', 'Contact Phone'],
   ['whatsappNumber', 'WhatsApp Number'],
   ['address', 'Store Address'],
+  ['billingAddress', 'Billing address on invoices'],
   ['freeShippingMinAmount', 'Free Shipping Minimum Amount', 'number'],
   ['deliveryCharge', 'Delivery Charge', 'number'],
-  ['codCharge', 'COD Charge', 'number'],
-  ['codMaxAmount', 'COD Max Order Amount', 'number'],
+  ['codCharge', 'COD Charge (added to COD orders)', 'number'],
+  ['codMaxAmount', 'COD Max Order Amount (0 = no limit)', 'number'],
+  ['codMinAmount', 'COD Min Order Amount (0 = no minimum)', 'number'],
+  ['prepaidDiscountValue', 'Prepaid discount value', 'number'],
+  ['rtoBlockMinOrders', 'RTO block min orders (0 = off)', 'number'],
+  ['rtoBlockThreshold', 'RTO block rate 0-1 (0 = off)', 'number'],
+  ['returnWindowDays', 'Return window (days)', 'number'],
   ['footerText', 'Footer Text'],
 ];
 
@@ -36,6 +45,13 @@ export default function Settings() {
         deliveryCharge: Number(form.deliveryCharge || 0),
         codCharge: Number(form.codCharge || 0),
         codMaxAmount: Number(form.codMaxAmount || 0),
+        codMinAmount: Number(form.codMinAmount || 0),
+        prepaidDiscountValue: Number(form.prepaidDiscountValue || 0),
+        rtoBlockMinOrders: Number(form.rtoBlockMinOrders || 0),
+        rtoBlockThreshold: Number(form.rtoBlockThreshold || 0),
+        prepaidDiscountType: form.prepaidDiscountType || '',
+        codPincodes: form.codPincodes,
+        returnWindowDays: Number(form.returnWindowDays || 7),
       });
       setMessage('Settings saved successfully.');
     } catch (error) {
@@ -46,7 +62,7 @@ export default function Settings() {
   return (
     <section className="space-y-5">
       <PageHeader title="Website Settings" note="Control store details, policies and footer content." />
-      <form onSubmit={submit} className="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-2">
+      <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
         {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] || ''} onChange={(value) => update(field, value)} />)}
         <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
           {[
@@ -56,9 +72,24 @@ export default function Settings() {
             ['cardPaymentEnabled', 'Card Payment Enabled'],
             ['netBankingEnabled', 'Net Banking Enabled'],
             ['walletEnabled', 'Wallet Enabled'],
+            ['codConfirmationRequired', 'COD confirmation required'],
+            ['rtoBlockEnabled', 'RTO COD blocking (only with thresholds)'],
           ].map(([field, label]) => <label key={field} className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={!!form[field]} onChange={(event) => update(field, event.target.checked)} className="accent-rose" /> {label}</label>)}
         </div>
+        <Input label="COD pincodes (comma separated, empty = all)" value={Array.isArray(form.codPincodes) ? form.codPincodes.join(', ') : (form.codPincodes || '')} onChange={(value) => update('codPincodes', value)} />
+        <label className="text-sm font-bold">Prepaid discount type
+          <select className="mt-1 h-11 w-full rounded-xl border px-3 font-semibold" value={form.prepaidDiscountType || ''} onChange={(event) => update('prepaidDiscountType', event.target.value)}>
+            <option value="">None</option>
+            <option value="Flat">Flat</option>
+            <option value="Percentage">Percentage</option>
+          </select>
+        </label>
         <Textarea label="Return Policy" value={form.returnPolicy || ''} onChange={(value) => update('returnPolicy', value)} />
+        <Textarea label="Shipping Policy" value={form.shippingPolicy || ''} onChange={(value) => update('shippingPolicy', value)} />
+        <Textarea label="Cancellation Policy" value={form.cancellationPolicy || ''} onChange={(value) => update('cancellationPolicy', value)} />
+        <Textarea label="Size Guide" value={form.sizeGuide || ''} onChange={(value) => update('sizeGuide', value)} />
+        <Textarea label="FAQs" value={form.faqs || ''} onChange={(value) => update('faqs', value)} />
+        <Textarea label="Our Story" value={form.ourStory || ''} onChange={(value) => update('ourStory', value)} />
         <Textarea label="Privacy Policy" value={form.privacyPolicy || ''} onChange={(value) => update('privacyPolicy', value)} />
         <Textarea label="Terms and Conditions" value={form.termsConditions || ''} onChange={(value) => update('termsConditions', value)} />
         <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
@@ -67,16 +98,16 @@ export default function Settings() {
           <Input label="YouTube Link" value={form.socialLinks?.youtube || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, youtube: value })} />
         </div>
         {message && <p className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
-        <button className="h-12 rounded-xl bg-wine text-sm font-black text-white md:col-span-2">Save Settings</button>
+        <button className="admin-btn md:col-span-2">Save Settings</button>
       </form>
     </section>
   );
 }
 
 function Input({ label, value, onChange, type = 'text' }) {
-  return <label className="grid gap-2 text-sm font-black">{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 text-sm font-semibold" /></label>;
+  return <label className="grid gap-2 text-sm font-semibold">{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-[#eadfd5] px-4 text-sm" /></label>;
 }
 
 function Textarea({ label, value, onChange }) {
-  return <label className="grid gap-2 text-sm font-black md:col-span-2">{label}<textarea value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28 rounded-xl border border-slate-200 p-4 text-sm font-semibold" /></label>;
+  return <label className="grid gap-2 text-sm font-semibold md:col-span-2">{label}<textarea value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28 rounded-xl border border-[#eadfd5] p-4 text-sm" /></label>;
 }

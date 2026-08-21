@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react';
 import logo from '../../assets/samira-collection-logo.png';
 import { useGetSettingsQuery } from '../../store/apiSlice';
+import api from '../../services/api';
 import './Footer.css';
 
 const shoppingLinks = [
@@ -53,25 +54,17 @@ const shoppingLinks = [
 
 const policyLinks = [
   ['Track Your Order', '/orders'],
-  ['Returns & Refunds', '/return-policy'],
-  ['Shipping Policy', '/contact'],
-  ['Cancellation Policy', '/contact'],
-  ['Size Guide', '/contact'],
-  ['FAQs', '/contact'],
-  ['Gift Cards', '/contact'],
-  ['Store Locator', '/contact'],
+  ['Returns & Refunds', '/returns'],
+  ['Shipping Policy', '/shipping-policy'],
+  ['Cancellation Policy', '/cancellation-policy'],
+  ['Size Guide', '/size-guide'],
+  ['FAQs', '/faqs'],
   ['Contact Us', '/contact'],
 ];
 
 const aboutLinks = [
-  ['Our Story', '/contact'],
-  ['Why Samaira', '/contact'],
+  ['Our Story', '/our-story'],
   ['Reviews', '/products?bestSeller=true'],
-  ['Careers', '/contact'],
-  ['Press', '/contact'],
-  ['Sustainability', '/contact'],
-  ['Blog', '/contact'],
-  ['Affiliate Program', '/contact'],
 ];
 
 const socialLinks = [
@@ -144,7 +137,8 @@ export default function Footer({ navigate }) {
   };
   const socialUrls = settings.socialLinks || {};
   const appLinks = settings.appLinks || {};
-  const supportEmail = settings.contactEmail || '';
+  const playStoreUrl = appLinks.googlePlay || appLinks.playStore;
+  const appStoreUrl = appLinks.appStore || appLinks.appleStore;
   const openExternal = (url, fallbackPath = '/contact') => {
     if (!url) {
       go(fallbackPath);
@@ -152,18 +146,20 @@ export default function Footer({ navigate }) {
     }
     window.open(url, '_blank', 'noopener,noreferrer');
   };
-  const subscribe = (event) => {
+  const subscribe = async (event) => {
     event.preventDefault();
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setNewsletterStatus('Please enter your email.');
       return;
     }
-    if (supportEmail) {
-      window.location.href = `mailto:${supportEmail}?subject=${encodeURIComponent('Newsletter subscription')}&body=${encodeURIComponent(`Please add ${trimmedEmail} to the Samaira Collection newsletter.`)}`;
+    try {
+      const data = await api.post('/newsletter/subscribe', { email: trimmedEmail, source: 'footer' });
+      setNewsletterStatus(data.message || 'Thanks for subscribing.');
+      setEmail('');
+    } catch (error) {
+      setNewsletterStatus(error.message || 'Unable to subscribe right now.');
     }
-    setNewsletterStatus('Thank you for subscribing.');
-    setEmail('');
   };
 
   return (
@@ -181,24 +177,29 @@ export default function Footer({ navigate }) {
         <FooterColumn title="Customer Policies" links={policyLinks} navigate={go} />
         <FooterColumn title="About" links={aboutLinks} navigate={go} />
 
+        {(playStoreUrl || appStoreUrl) ? (
         <section className="sc-footer__app">
           <h2>Experience Samaira App</h2>
           <p>Shop on the go &amp; get exclusive app-only offers.</p>
           <div className="sc-footer__stores" aria-label="Download app">
-            <button type="button" className="sc-footer__store" onClick={() => openExternal(appLinks.googlePlay || appLinks.playStore)}>
+            {playStoreUrl ? (
+            <button type="button" className="sc-footer__store" onClick={() => openExternal(playStoreUrl)}>
               <IconBrandGooglePlay size={24} aria-hidden="true" />
               <span>
                 <small>Get it on</small>
                 Google Play
               </span>
             </button>
-            <button type="button" className="sc-footer__store" onClick={() => openExternal(appLinks.appStore || appLinks.appleStore)}>
+            ) : null}
+            {appStoreUrl ? (
+            <button type="button" className="sc-footer__store" onClick={() => openExternal(appStoreUrl)}>
               <IconBrandApple size={26} aria-hidden="true" />
               <span>
                 <small>Download on the</small>
                 App Store
               </span>
             </button>
+            ) : null}
           </div>
           <div className="sc-footer__perks">
             {appPerks.map(([label, Icon]) => (
@@ -209,6 +210,7 @@ export default function Footer({ navigate }) {
             ))}
           </div>
         </section>
+        ) : null}
 
         <section className="sc-footer__connect">
           <h2>Keep In Touch</h2>

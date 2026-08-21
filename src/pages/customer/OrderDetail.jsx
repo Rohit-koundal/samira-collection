@@ -14,6 +14,10 @@ export default function OrderDetail({ route = '', navigate }) {
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const [returnItem, setReturnItem] = useState(null);
+  const [returnForm, setReturnForm] = useState({ type: 'return', reason: '', comment: '', quantity: 1 });
+  const [actionMessage, setActionMessage] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -46,6 +50,52 @@ export default function OrderDetail({ route = '', navigate }) {
     return Math.max(0, Number(order.totalMRP || 0) - Number(order.finalAmount || 0));
   }, [order]);
 
+  const canReturn = order?.orderStatus === 'Delivered';
+
+  const submitReturn = async (event) => {
+    event.preventDefault();
+    if (!returnItem) return;
+    setActionMessage('');
+    try {
+      await api.post('/returns', {
+        order: order._id,
+        product: returnItem.product,
+        orderItemId: returnItem._id,
+        variantId: returnItem.variantId,
+        size: returnItem.size,
+        color: returnItem.color,
+        quantity: Number(returnForm.quantity || 1),
+        type: returnForm.type,
+        reason: returnForm.reason,
+        comment: returnForm.comment,
+      });
+      setActionMessage('Return request submitted.');
+      setReturnItem(null);
+      const refreshed = await api.get(`/orders/${orderId}`);
+      setOrder(refreshed);
+    } catch (err) {
+      setActionMessage(err.message);
+    }
+  };
+
+  const submitReview = async (item, rating) => {
+    if (!item?.product || reviewBusy) return;
+    setReviewBusy(true);
+    setActionMessage('');
+    try {
+      await api.post(`/reviews/${item.product}`, { rating, comment: 'Rated from order details' });
+      setActionMessage('Thanks for the review.');
+    } catch (err) {
+      if (err.status === 409) {
+        setActionMessage('You have already reviewed this product.');
+      } else {
+        setActionMessage(err.message);
+      }
+    } finally {
+      setReviewBusy(false);
+    }
+  };
+
   if (error) return <section className="container-page py-8"><Card><CardContent className="section-title p-8 text-center text-rose">{error}</CardContent></Card></section>;
   if (!order) return <section className="container-page py-8"><Card><CardContent className="section-title p-8 text-center">Loading order...</CardContent></Card></section>;
 
@@ -57,7 +107,7 @@ export default function OrderDetail({ route = '', navigate }) {
 
           <div className="space-y-4 px-4 pb-6">
             <MobileStatusCard order={order} />
-            <MobileRatingCard item={primaryItem} />
+            <MobileRatingCard item={primaryItem} onRate={(rating) => submitReview(primaryItem, rating)} />
             {recommendations.length > 0 && <MobileRecommendations items={recommendations} navigate={navigate} />}
             <MobileDeliveryCard order={order} />
             <MobileSavingsCard savings={savings} />
@@ -90,11 +140,28 @@ export default function OrderDetail({ route = '', navigate }) {
             <div className="mt-4 flex justify-between border-t border-slate-100 pt-4"><span className="label-text">Total</span><span className="price">Rs. {order.finalAmount}</span></div>
             <h3 className="small-text mt-6 font-bold uppercase tracking-[0.18em] text-slate-500">Ship To</h3>
             <p className="body-text mt-2 text-slate-600">{order.shippingAddress?.fullName}<br />{order.shippingAddress?.houseNo || order.shippingAddress?.houseNumber}, {order.shippingAddress?.area}<br />{order.shippingAddress?.city}, {order.shippingAddress?.state} - {order.shippingAddress?.pincode}</p>
-            <Button className="no-print mt-5 w-full" variant="outline">Request Return / Exchange</Button>
+            {order.shipment?.trackingNumber ? <p className="body-text mt-3 text-slate-600">Tracking: {order.shipment.courierName || 'Courier'} {order.shipment.trackingNumber}</p> : null}
+            <Button className="no-print mt-5 w-full" variant="outline" disabled={!canReturn} onClick={() => setReturnItem(order.orderItems[0] || null)}>Request Return / Exchange</Button>
+            {actionMessage && <p className="mt-3 text-sm font-bold text-wine">{actionMessage}</p>}
           </CardContent>
         </Card>
       </div>
       {receipt && <div className="mt-6"><Receipt receipt={receipt} /></div>}
+      {returnItem && (
+        <form onSubmit={submitReturn} className="no-print mt-6 rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="header-title">Return / exchange {returnItem.name}</h2>
+          <select value={returnForm.type} onChange={(event) => setReturnForm((current) => ({ ...current, type: event.target.value }))} className="mt-4 h-11 w-full rounded-xl border border-slate-200 px-3 font-bold">
+            <option value="return">Return</option>
+            <option value="exchange">Exchange</option>
+          </select>
+          <input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3" placeholder="Reason" value={returnForm.reason} onChange={(event) => setReturnForm((current) => ({ ...current, reason: event.target.value }))} required />
+          <textarea className="mt-3 min-h-24 w-full rounded-xl border border-slate-200 p-3" placeholder="Comment (optional)" value={returnForm.comment} onChange={(event) => setReturnForm((current) => ({ ...current, comment: event.target.value }))} />
+          <div className="mt-4 flex gap-3">
+            <Button type="submit">Submit request</Button>
+            <Button type="button" variant="outline" onClick={() => setReturnItem(null)}>Cancel</Button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }
@@ -161,7 +228,7 @@ function MobileStatusCard({ order }) {
   );
 }
 
-function MobileRatingCard({ item }) {
+function MobileRatingCard({ item, onRate }) {
   if (!item) return null;
   const image = item.image ? normalizeImageUrl(item.image) : '';
 
@@ -174,7 +241,11 @@ function MobileRatingCard({ item }) {
         <div>
           <p className="text-[15px] font-bold text-[#1f2a44]">Rate this product</p>
           <div className="mt-2 flex gap-1.5">
-            {Array.from({ length: 5 }).map((_, index) => <Star key={index} className="h-6 w-6 text-[#b7bcc9]" strokeWidth={1.7} />)}
+            {Array.from({ length: 5 }).map((_, index) => (
+              <button key={index} type="button" onClick={() => onRate?.(index + 1)} aria-label={`Rate ${index + 1} stars`}>
+                <Star className="h-6 w-6 text-[#b7bcc9]" strokeWidth={1.7} />
+              </button>
+            ))}
           </div>
         </div>
       </div>

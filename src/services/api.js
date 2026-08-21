@@ -5,8 +5,8 @@ import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 function customerSafeMessage(message, status, path = '', code = '') {
   if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
-    return path.includes('/videos')
-      ? 'Video storage is not configured for uploads yet. Please connect R2, then upload again.'
+    return path.includes('/videos') || path.includes('reel')
+      ? 'Reel videos need Cloudflare R2 or Cloudinary. Local disk storage is not enough for AI processing.'
       : 'Image storage is not configured for production uploads yet. Please connect Cloudinary or R2, then upload again.';
   }
   const text = String(message || '').toLowerCase();

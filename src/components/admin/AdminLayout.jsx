@@ -1,16 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminHeader from './AdminHeader';
 import AdminSidebar from './AdminSidebar';
+import './AdminShell.css';
 
 export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => {
+      if (media.matches) setSidebarOpen(false);
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [sidebarOpen]);
+
   return (
-    <div className="min-h-screen bg-[#f7f2eb] lg:pl-[274px]">
-      <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="min-w-0 pb-20 lg:pb-0">
+    <div className="admin-shell">
+      <AdminSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onOpen={() => setSidebarOpen((current) => !current)}
+      />
+      <div className="admin-shell__main">
         <AdminHeader onOpenSidebar={() => setSidebarOpen(true)} />
-        <main className="mx-auto w-full max-w-[1440px] p-3 sm:p-4 lg:p-6 xl:p-8">{children}</main>
+        <main className="admin-shell__content">{children}</main>
       </div>
     </div>
   );

@@ -110,8 +110,8 @@ export function AuthProvider({ children, navigate }) {
       const data = await api.post('/auth/switch-mode', { mode });
       persist(data);
       resetSessionCache();
-      setToast(mode === 'admin' ? 'Switched to Admin Mode' : 'Switched to Customer Mode');
-      navigate(mode === 'admin' ? '/admin' : '/');
+      setToast(mode === 'admin' ? 'Switched to Admin Mode' : mode === 'seller' ? 'Switched to Seller Mode' : 'Switched to Customer Mode');
+      navigate(mode === 'admin' ? '/admin' : mode === 'seller' ? '/seller' : '/');
       return { ok: true };
     } catch (error) {
       setToast(error.message);

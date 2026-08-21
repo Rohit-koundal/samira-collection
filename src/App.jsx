@@ -9,11 +9,14 @@ import MobileBottomNav from './components/layout/MobileBottomNav';
 import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
+import SellerRoute from './components/layout/SellerRoute';
+import { StorefrontProvider, useStorefront } from './context/StorefrontContext';
 import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
 import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
 import { createStoragePlan } from './utils/userStorage';
+import { boutiquePath, consumeLegacyHash, pushAppRoute, readAppRoute } from './utils/routing';
 
 const Home = lazy(() => import('./pages/customer/Home'));
 const Products = lazy(() => import('./pages/customer/Products'));
@@ -31,11 +34,25 @@ const OrderDetail = lazy(() => import('./pages/customer/OrderDetail'));
 const OrderSuccess = lazy(() => import('./pages/customer/OrderSuccess'));
 const PaymentFailed = lazy(() => import('./pages/customer/PaymentFailed'));
 const Contact = lazy(() => import('./pages/customer/Contact'));
+const MyReturns = lazy(() => import('./pages/customer/MyReturns'));
+const StoreHome = lazy(() => import('./pages/customer/StoreHome'));
+const SellerDashboard = lazy(() => import('./pages/seller/Dashboard'));
+const SellerOnboarding = lazy(() => import('./pages/seller/Onboarding'));
+const SellerProducts = lazy(() => import('./pages/seller/Products'));
+const SellerOrders = lazy(() => import('./pages/seller/Orders'));
+const SellerCrm = lazy(() => import('./pages/seller/Crm'));
+const SellerInbox = lazy(() => import('./pages/seller/Inbox'));
+const SellerInstagram = lazy(() => import('./pages/seller/Instagram'));
+const SellerAudit = lazy(() => import('./pages/seller/Audit'));
+const SellerAnalytics = lazy(() => import('./pages/seller/Analytics'));
+const SellerProductForm = lazy(() => import('./pages/seller/ProductFormPage'));
+const SeoHead = lazy(() => import('./components/seo/SeoHead'));
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminProducts = lazy(() => import('./pages/admin/Products'));
 const ProductDrafts = lazy(() => import('./pages/admin/ProductDrafts'));
 const AddProduct = lazy(() => import('./pages/admin/AddProduct'));
+const QuickAddProduct = lazy(() => import('./pages/admin/QuickAddProduct'));
 const EditProduct = lazy(() => import('./pages/admin/EditProduct'));
 const Categories = lazy(() => import('./pages/admin/Categories'));
 const EditCategory = lazy(() => import('./pages/admin/EditCategory'));
@@ -50,6 +67,9 @@ const Returns = lazy(() => import('./pages/admin/Returns'));
 const Inventory = lazy(() => import('./pages/admin/Inventory'));
 const Reports = lazy(() => import('./pages/admin/Reports'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
+const Support = lazy(() => import('./pages/admin/Support'));
+const Subscribers = lazy(() => import('./pages/admin/Subscribers'));
+const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const ReelProductImport = lazy(() => import('./pages/admin/ReelProductImport'));
 const reelImportEnabled = process.env.REACT_APP_ENABLE_REEL_PRODUCT_IMPORT === 'true';
 
@@ -77,6 +97,26 @@ const customerRoutes = {
   '/privacy-policy': Contact,
   '/terms': Contact,
   '/return-policy': Contact,
+  '/shipping-policy': Contact,
+  '/cancellation-policy': Contact,
+  '/size-guide': Contact,
+  '/faqs': Contact,
+  '/our-story': Contact,
+  '/returns': MyReturns,
+};
+
+const sellerRoutes = {
+  '/seller': SellerDashboard,
+  '/seller/onboarding': SellerOnboarding,
+  '/seller/products': SellerProducts,
+  '/seller/products/add': SellerProductForm,
+  '/seller/products/edit': SellerProductForm,
+  '/seller/orders': SellerOrders,
+  '/seller/crm': SellerCrm,
+  '/seller/inbox': SellerInbox,
+  '/seller/instagram': SellerInstagram,
+  '/seller/audit': SellerAudit,
+  '/seller/analytics': SellerAnalytics,
 };
 
 const adminRoutes = {
@@ -84,6 +124,7 @@ const adminRoutes = {
   '/admin/products': AdminProducts,
   '/admin/product-drafts': ProductDrafts,
   '/admin/products/add': AddProduct,
+  '/admin/products/quick-add': QuickAddProduct,
   '/admin/products/edit': EditProduct,
   '/admin/categories': Categories,
   '/admin/categories/edit': EditCategory,
@@ -97,6 +138,9 @@ const adminRoutes = {
   '/admin/returns': Returns,
   '/admin/inventory': Inventory,
   '/admin/reports': Reports,
+  '/admin/support': Support,
+  '/admin/subscribers': Subscribers,
+  '/admin/audit': AuditLogs,
   '/admin/settings': Settings,
   ...(reelImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
 };
@@ -114,18 +158,38 @@ const samiraTheme = createTheme({
   },
 });
 
-function useHashRoute() {
-  const [route, setRoute] = useState(() => window.location.hash.replace('#', '') || '/');
+function useAppRoute() {
+  const [route, setRoute] = useState(() => readAppRoute());
 
   useEffect(() => {
-    const onHashChange = () => setRoute(window.location.hash.replace('#', '') || '/');
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    consumeLegacyHash();
+    setRoute(readAppRoute());
+    const onChange = () => setRoute(readAppRoute());
+    const onClick = (event) => {
+      const anchor = event.target.closest?.('a[href]');
+      if (!anchor || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (anchor.target && anchor.target !== '_self') return;
+      const href = anchor.getAttribute('href') || '';
+      if (!href.startsWith('/') || href.startsWith('//') || href.startsWith('/api') || href.startsWith('/uploads')) return;
+      event.preventDefault();
+      pushAppRoute(href);
+      setRoute(readAppRoute());
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('popstate', onChange);
+    window.addEventListener('hashchange', onChange);
+    document.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('popstate', onChange);
+      window.removeEventListener('hashchange', onChange);
+      document.removeEventListener('click', onClick);
+    };
   }, []);
 
   const navigate = useCallback((path) => {
-    window.location.hash = path;
-    setRoute(path);
+    pushAppRoute(path);
+    setRoute(readAppRoute());
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -133,12 +197,14 @@ function useHashRoute() {
 }
 
 export default function App() {
-  const [route, navigate] = useHashRoute();
+  const [route, navigate] = useAppRoute();
 
   return (
     <MantineProvider theme={samiraTheme}>
       <AuthProvider navigate={navigate}>
-        <AppShell route={route} navigate={navigate} />
+        <StorefrontProvider route={route}>
+          <AppShell route={route} navigate={navigate} />
+        </StorefrontProvider>
       </AuthProvider>
     </MantineProvider>
   );
@@ -146,19 +212,27 @@ export default function App() {
 
 function AppShell({ route, navigate }) {
   const routePath = route.split('?')[0];
+  const logicalPath = boutiquePath(routePath);
   const isAdmin = routePath.startsWith('/admin');
+  const isSeller = routePath.startsWith('/seller');
   const { user } = useAuth();
+  const { isHostStore } = useStorefront();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const mobileLoaderActive = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
   const [showMobileLoader, setShowMobileLoader] = useState(false);
-  const protectedRoutes = ['/profile', '/profile/details', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist'];
+  const protectedRoutes = ['/profile', '/profile/details', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist', '/returns'];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user]);
   const wishlistStoragePlan = useMemo(() => createStoragePlan('samira_wishlist', user), [user]);
+  const isProductPage = routePath === '/product'
+    || routePath.startsWith('/product/')
+    || /\/products\/[^/]+$/.test(logicalPath)
+    || /\/product\/[^/]+$/.test(logicalPath);
+  const hideMobileHeader = focusedMobileRoutes.includes(routePath) || isProductPage;
   const loginFallback = (
     <Suspense fallback={<RouteFallback />}>
       <Login route={`/login?redirect=${encodeURIComponent(route)}`} />
@@ -167,8 +241,19 @@ function AppShell({ route, navigate }) {
   const Page = useMemo(() => {
     if (routePath === '/admin/login') return AdminLogin;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
+    if (isSeller) return sellerRoutes[routePath] || SellerDashboard;
+    if (logicalPath.startsWith('/store/')) {
+      const parts = logicalPath.split('/').filter(Boolean);
+      if (parts[2] === 'product' && parts[3]) return ProductDetail;
+      if (parts[2] === 'products' && parts[3]) return ProductDetail;
+      if (parts[2] === 'products' || parts[2] === 'search' || parts[2] === 'category') return Products;
+      return StoreHome;
+    }
+    if (routePath === '/product' || routePath.startsWith('/product/')) return ProductDetail;
+    if (routePath.startsWith('/products/') && routePath.split('/').filter(Boolean).length >= 2) return ProductDetail;
+    if (isHostStore && routePath === '/') return StoreHome;
     return customerRoutes[routePath] || Home;
-  }, [isAdmin, routePath]);
+  }, [isAdmin, isHostStore, isSeller, logicalPath, routePath]);
   const page = (
     <Suspense fallback={<RouteFallback />}>
       <Page navigate={navigate} route={route} />
@@ -176,7 +261,7 @@ function AppShell({ route, navigate }) {
   );
 
   useEffect(() => {
-    if (isAdmin || user) {
+    if (isAdmin || isSeller || user) {
       setShowLoginPrompt(false);
       return;
     }
@@ -204,7 +289,7 @@ function AppShell({ route, navigate }) {
 
     const timer = window.setTimeout(() => setShowLoginPrompt(true), 250);
     return () => window.clearTimeout(timer);
-  }, [isAdmin, routePath, user]);
+  }, [isAdmin, isSeller, routePath, user]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -261,13 +346,20 @@ function AppShell({ route, navigate }) {
                 {page}
               </AdminRoute>
             )
+          ) : isSeller ? (
+            routePath === '/seller/onboarding' ? (
+              <ProtectedRoute>{page}</ProtectedRoute>
+            ) : (
+              <SellerRoute>{page}</SellerRoute>
+            )
           ) : shouldShowStandaloneAuth ? (
             authContent
           ) : (
             <>
               {showShell && <Navbar navigate={navigate} route={route} />}
-              {showShell && !focusedMobileRoutes.includes(routePath) && <MobileHeader navigate={navigate} route={route} />}
+              {showShell && !hideMobileHeader && <MobileHeader navigate={navigate} route={route} />}
               <main className={`${showShell ? 'pb-20 lg:pb-0' : ''}`}>
+                <Suspense fallback={null}><SeoHead route={route} /></Suspense>
                 {mainContent}
               </main>
               {showShell && <Footer navigate={navigate} />}

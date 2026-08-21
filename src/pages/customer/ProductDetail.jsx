@@ -10,9 +10,14 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageIndex, getPrimaryImageUrl, normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
 import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery, useGetSettingsQuery, useGetVariantGroupQuery } from '../../store/apiSlice';
+import PageState from '../../components/ui/PageState';
+import { findProductVariant, firstInStockVariant, isColorAvailable, isSizeAvailable, variantStock } from '../../utils/variants';
+import { trackEvent } from '../../utils/analytics';
+import SeoHead from '../../components/seo/SeoHead';
+import { parseProductKey } from '../../utils/routing';
 
 export default function ProductDetail({ navigate, route = '' }) {
-  const productKey = new URLSearchParams(route.split('?')[1] || '').get('id');
+  const productKey = parseProductKey(route);
   const cart = useCart();
   const wishlist = useWishlist();
   const { user } = useAuth();
@@ -58,13 +63,19 @@ export default function ProductDetail({ navigate, route = '' }) {
   useEffect(() => {
     if (!productData) return;
     const item = normalizeProduct(productData);
-    setSize(item.sizes?.[0] || 'Free Size');
-    setColor(item.colors?.[0] || 'Wine');
+    const inStock = firstInStockVariant(item);
+    setSize(inStock?.size || item.sizes?.[0] || 'Free Size');
+    setColor(inStock?.color || item.colors?.[0] || 'Wine');
     setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
     setOpenGallery(false);
     setActionMessage('');
     setQuantity(1);
   }, [productData]);
+
+  useEffect(() => {
+    if (!product?._id) return;
+    trackEvent('PRODUCT_VIEW', { productId: product._id });
+  }, [product?._id]);
 
   const isWishlisted = useMemo(
     () => Boolean(productId) && wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
@@ -82,7 +93,9 @@ export default function ProductDetail({ navigate, route = '' }) {
   const selectedMedia = mediaItems[activeImage];
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
   const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
-  const isOutOfStock = hasExplicitStock(product) && Number(product.stock) <= 0;
+  const selectedVariant = findProductVariant(product || {}, { size, color });
+  const selectedStock = variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
+  const isOutOfStock = selectedStock !== null && Number(selectedStock) <= 0;
 
   const cartItem = product ? cart.getCartItem(product, { size, color }) : null;
   const similarPath = product?.categoryId
@@ -99,11 +112,19 @@ export default function ProductDetail({ navigate, route = '' }) {
   };
 
   if (!productKey || error) {
-    return <section className="container-page py-10"><div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Product not found.</div></section>;
+    return (
+      <section className="container-page py-10">
+        <PageState error={error?.data?.message || error?.message || 'Product not found.'} onRetry={() => window.location.reload()} />
+      </section>
+    );
   }
 
   if (isLoading || !product) {
-    return null;
+    return (
+      <section className="container-page py-10">
+        <PageState loading loadingLabel="Loading product..." />
+      </section>
+    );
   }
 
   const add = () => {
@@ -119,7 +140,8 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('Please choose a valid quantity.');
       return { ok: false, reason: 'invalid-quantity' };
     }
-    const result = cart.addToCart(product, size, color, product.variantId || product.selectedVariantId || '', quantity);
+    const selected = findProductVariant(product, { size, color });
+    const result = cart.addToCart(product, size, color, selected?._id || product.variantId || product.selectedVariantId || '', quantity);
     if (result?.ok) {
       setActionMessage(`${quantity} item${Number(quantity) === 1 ? '' : 's'} added to cart.`);
     } else if (result?.reason === 'out-of-stock') {
@@ -152,6 +174,7 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('Store WhatsApp number is not configured.');
       return;
     }
+    trackEvent('WHATSAPP_CLICK', { productId: product?._id });
     if (product?.sizes?.length && !size) {
       setActionMessage('Please select a size first.');
       return;
@@ -225,6 +248,7 @@ export default function ProductDetail({ navigate, route = '' }) {
 
   return (
     <>
+      <SeoHead route={route} product={product} />
       <div className="hidden lg:block">
         <ProductDetailPage
           product={product}
@@ -251,6 +275,8 @@ export default function ProductDetail({ navigate, route = '' }) {
           dealPrice={dealPrice}
           cartItem={cartItem}
           isOutOfStock={isOutOfStock}
+          isSizeAvailable={(item) => isSizeAvailable(product, item)}
+          isColorAvailable={(item) => isColorAvailable(product, item, size)}
           onAddToCart={add}
           onBuyNow={buyNow}
           onOrderWhatsApp={orderOnWhatsApp}
@@ -384,7 +410,7 @@ export default function ProductDetail({ navigate, route = '' }) {
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
-                <button key={item} type="button" onClick={() => setSize(item)} className={`grid h-9 min-w-9 place-items-center rounded-full border px-3 text-[11px] font-semibold md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}>{item}</button>
+                <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => setSize(item)} className={`grid h-9 min-w-9 place-items-center rounded-full border px-3 text-[11px] font-semibold disabled:opacity-40 md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}>{item}</button>
               ))}
             </div>
             {product.colors?.length > 0 && (
@@ -394,6 +420,7 @@ export default function ProductDetail({ navigate, route = '' }) {
                   <button
                     key={item}
                     type="button"
+                    disabled={!isColorAvailable(product, item, size)}
                     onClick={() => setColor(item)}
                     className={`h-6 w-6 rounded-full ring-1 ring-offset-1 ${color === item ? 'ring-[#7a1f36]' : 'ring-slate-200'}`}
                     style={{ backgroundColor: colorSwatches[item] || '#d8b4c0' }}
@@ -726,8 +753,4 @@ function formatWhatsappNumber(value = '') {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.startsWith('91') && digits.length >= 12) return digits.slice(-10);
   return digits.slice(-10);
-}
-
-function hasExplicitStock(product) {
-  return Boolean(product) && product.stock !== undefined && product.stock !== null && product.stock !== '';
 }

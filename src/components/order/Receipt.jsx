@@ -8,19 +8,20 @@ export default function Receipt({ receipt }) {
         <div className="flex items-center gap-3">
           <img src={logo} alt="Samira Collection" className="h-14 rounded-xl border border-slate-100 bg-white p-1" />
           <div>
-            <h2 className="text-xl font-black md:text-2xl">{receipt.storeDetails?.storeName || 'Samira Collection'}</h2>
-            <p className="text-xs font-bold text-slate-500">{receipt.storeDetails?.contactPhone || receipt.storeDetails?.whatsappNumber || ''}</p>
+            <h2 className="text-xl font-black md:text-2xl">{receipt.storeDetails?.legalBusinessName || receipt.storeDetails?.storeName || 'Samira Collection'}</h2>
+            <p className="text-xs font-bold text-slate-500">{receipt.storeDetails?.gstin ? `GSTIN ${receipt.storeDetails.gstin}` : receipt.storeDetails?.contactPhone || receipt.storeDetails?.whatsappNumber || ''}</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Receipt</p>
-          <p className="font-black">#{String(receipt.orderId).slice(-8).toUpperCase()}</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Invoice</p>
+          <p className="font-black">{receipt.invoiceNumber || `#${String(receipt.orderId).slice(-8).toUpperCase()}`}</p>
           <p className="text-xs font-semibold text-slate-500">{new Date(receipt.orderDate).toLocaleString('en-IN')}</p>
         </div>
       </div>
       <div className="grid gap-4 py-5 md:grid-cols-2">
         <Info title="Customer" lines={[receipt.customer?.name || receipt.shippingAddress?.fullName, receipt.customer?.email, receipt.shippingAddress?.mobile || receipt.shippingAddress?.phone]} />
         <Info title="Delivery Address" lines={[formatAddress(receipt.shippingAddress)]} />
+        {receipt.billingAddress ? <Info title="Billing Address" lines={[formatAddress(receipt.billingAddress)]} /> : null}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm md:min-w-[620px]">
@@ -38,7 +39,7 @@ export default function Receipt({ receipt }) {
       </div>
       <div className="mt-5 grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 text-sm md:grid-cols-3">
         <Info title="Payment" lines={[`${receipt.paymentMethod || 'Online'} via ${receipt.paymentProvider || 'Razorpay'}`, receipt.paymentStatus]} />
-        <Info title="Order Status" lines={[receipt.orderStatus, 'Expected delivery: 5-7 days']} />
+        <Info title="Order Status" lines={[receipt.orderStatus, receipt.shipment?.trackingNumber ? `${receipt.shipment.courierName || 'Courier'} ${receipt.shipment.trackingNumber}` : 'Expected delivery: 5-7 days']} />
         <Info title="Policy" lines={[receipt.policies?.returnPolicy || 'Return/exchange as per policy.']} />
       </div>
       <p className="mt-5 text-center text-sm font-black text-wine">Thank you for shopping with Samira Collection.</p>

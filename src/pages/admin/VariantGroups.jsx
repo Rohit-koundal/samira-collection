@@ -98,7 +98,7 @@ export default function VariantGroups() {
     <section className="space-y-5">
       <PageHeader title="Variant Groups" note="Group same-design products by colors and sizes." />
 
-      <div className="rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="admin-card p-4">
         {editingGroupId && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-[20px] border border-wine/20 bg-[#fff4f7] px-4 py-3">
             <p className="text-sm font-black text-wine">Editing variant group</p>
@@ -141,7 +141,7 @@ export default function VariantGroups() {
 
       {message && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
-      <div className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="admin-card overflow-hidden">
         {loading ? (
           <Loader label="Loading variant groups..." />
         ) : !groups.length ? (

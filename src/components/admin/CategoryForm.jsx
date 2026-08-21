@@ -74,7 +74,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-2">
+    <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
       {loading && <p className="rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500 md:col-span-2">Loading category...</p>}
       <Input label="Name" value={form.name} onChange={(value) => update('name', value)} required />
       <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="auto if empty" />
@@ -101,9 +101,9 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
       </label>
       {message && <p className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
       <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row sm:justify-end">
-        {categoryId && <a href="#/admin/categories" className="grid h-12 place-items-center rounded-xl border border-slate-200 px-5 text-sm font-black">Back</a>}
-        {!categoryId && <button type="button" onClick={() => setForm(emptyCategory)} className="h-12 rounded-xl border border-slate-200 px-5 text-sm font-black">Reset</button>}
-        <button disabled={saving} className="h-12 rounded-xl bg-wine px-5 text-sm font-black text-white disabled:opacity-60">{saving ? 'Saving...' : `${mode} Category`}</button>
+        {categoryId && <a href="/admin/categories" className="admin-btn-ghost">Back</a>}
+        {!categoryId && <button type="button" onClick={() => setForm(emptyCategory)} className="admin-btn-ghost">Reset</button>}
+        <button disabled={saving} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : `${mode} Category`}</button>
       </div>
     </form>
   );

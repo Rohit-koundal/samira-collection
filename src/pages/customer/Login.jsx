@@ -28,6 +28,7 @@ export default function Login({ route = '/login' }) {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [autoRequested, setAutoRequested] = useState(false);
+  const [demoOtp, setDemoOtp] = useState('');
   const inputs = useRef([]);
   const normalizedPhone = normalizePhone(phone, countryCode);
   const isOtpComplete = otp.every(Boolean);
@@ -80,7 +81,8 @@ export default function Login({ route = '/login' }) {
       }
       setStep('otp');
       setCooldown(OTP_COOLDOWN_SECONDS);
-      showFeedback(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP sent successfully.', 'success');
+      setDemoOtp(readDemoOtp(data));
+      showFeedback(otpSentMessage(data), 'success');
       setTimeout(() => inputs.current[0]?.focus(), 50);
     } catch (error) {
       showFeedback(error.message, 'error');
@@ -136,7 +138,8 @@ export default function Login({ route = '/login' }) {
     try {
       const data = await resendOtp(normalizedPhone);
       setCooldown(OTP_COOLDOWN_SECONDS);
-      showFeedback(data.devOtp ? `Development OTP: ${data.devOtp}` : 'OTP resent successfully.', 'success');
+      setDemoOtp(readDemoOtp(data));
+      showFeedback(otpSentMessage(data, 'OTP resent successfully.'), 'success');
     } catch (error) {
       showFeedback(error.message, 'error');
     }
@@ -212,6 +215,12 @@ export default function Login({ route = '/login' }) {
                   <p className="mt-1 text-[11px] text-slate-500 sm:text-[12px]">Sent to {maskPhone(phone)}</p>
                 </div>
               </div>
+              {demoOtp ? (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-amber-700">Demo Mode</p>
+                  <p className="mt-1 text-[13px] font-semibold text-amber-900">Demo OTP: {demoOtp}</p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-6 gap-2" onPaste={pasteOtp}>
                 {otp.map((digit, index) => (
                   <input
@@ -339,6 +348,20 @@ function StatusMessage({ type, message, onRetry, loading, className = '' }) {
       )}
     </div>
   );
+}
+
+/**
+ * The backend only returns a code when it is running in demo mode. In
+ * production mode nothing is returned and nothing is shown.
+ */
+function readDemoOtp(response) {
+  if (response?.otpMode && response.otpMode !== 'demo') return '';
+  return String(response?.demoOtp || response?.devOtp || '');
+}
+
+function otpSentMessage(response, fallback = 'OTP sent successfully.') {
+  const code = readDemoOtp(response);
+  return code ? `Demo OTP: ${code}` : fallback;
 }
 
 function normalizePhone(value, countryCode) {

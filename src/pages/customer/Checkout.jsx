@@ -26,18 +26,27 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
+import { trackEvent } from '../../utils/analytics';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import './Checkout.css';
 
-const PAYMENT_OPTIONS = [
-  ['UPI', 'Pay using UPI', 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps'],
-  ['CARD', 'Credit / Debit Card', 'Secure card payment through Razorpay checkout'],
-  ['NETBANKING', 'Net Banking', 'Bank selection through Razorpay checkout'],
-  ['WALLET', 'Wallet', 'Paytm Wallet and other wallets via Razorpay'],
-  ['COD', 'Cash on Delivery', 'Pay when the product is delivered — no online payment'],
-];
+const PAYMENT_METHOD_NOTES = {
+  UPI: 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps',
+  CARD: 'Secure card payment through Razorpay checkout',
+  NETBANKING: 'Bank selection through Razorpay checkout',
+  WALLET: 'Paytm Wallet and other wallets via Razorpay',
+  COD: 'Pay when the product is delivered — no online payment',
+};
+
+function describePaymentOption(option) {
+  if (option.disabledReason) return option.disabledReason;
+  if (option.key === 'COD' && option.charge > 0) {
+    return `${PAYMENT_METHOD_NOTES.COD} (Rs. ${option.charge} handling fee)`;
+  }
+  return PAYMENT_METHOD_NOTES[option.key] || '';
+}
 
 function getPlaceOrderLabel(paymentMethod, placing) {
   if (placing) return paymentMethod === 'COD' ? 'Placing order...' : 'Opening payment...';
@@ -95,7 +104,10 @@ export default function Checkout({ navigate }) {
   const [editingAddressId, setEditingAddressId] = useState('');
   const [addressForm, setAddressForm] = useState({ ...emptyAddress, fullName: user?.name || '', mobile: user?.phone || '' });
   const [couponCode, setCouponCode] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentOptions, setPaymentOptions] = useState([]);
+  const [quote, setQuote] = useState(null);
+  const [quoteError, setQuoteError] = useState('');
   const [paymentApp, setPaymentApp] = useState('Google Pay');
   const [upiId, setUpiId] = useState('');
   const [error, setError] = useState('');
@@ -104,6 +116,10 @@ export default function Checkout({ navigate }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [mobileStep, setMobileStep] = useState(2);
   const [showMobileAddressSelector, setShowMobileAddressSelector] = useState(false);
+
+  useEffect(() => {
+    trackEvent('BEGIN_CHECKOUT');
+  }, []);
   const showFeedback = (text, type = 'error') => {
     if (!text) return;
     if (!notify(text, type, 'Checkout')) {
@@ -133,6 +149,59 @@ export default function Checkout({ navigate }) {
 
   useEffect(() => { loadAddresses(); }, []);
 
+  // Which payment methods exist is decided by the store settings, not the UI.
+  useEffect(() => {
+    let alive = true;
+    api.get('/settings/payment-methods')
+      .then((data) => {
+        if (!alive) return;
+        const methods = Array.isArray(data?.methods) ? data.methods : [];
+        setPaymentOptions(methods);
+        setPaymentMethod((current) => {
+          if (current && methods.some((option) => option.key === current && option.enabled)) return current;
+          return methods.find((option) => option.enabled)?.key || '';
+        });
+      })
+      .catch(() => {
+        if (alive) setPaymentOptions([]);
+      });
+    return () => { alive = false; };
+  }, []);
+
+  const cartSignature = cart.items
+    .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}`)
+    .join('|');
+
+  // Totals always come from the backend so delivery, COD fee and coupon
+  // discount match exactly what the order will be created with.
+  useEffect(() => {
+    if (!cart.items.length || !paymentMethod) {
+      setQuote(null);
+      setQuoteError('');
+      return undefined;
+    }
+
+    let alive = true;
+    setQuoteError('');
+    api.post('/orders/quote', {
+      orderItems: buildOrderItems(cart.items),
+      coupon: cart.coupon,
+      paymentMethod,
+    })
+      .then((data) => {
+        if (!alive) return;
+        setQuote(data?.totals || null);
+        setQuoteError(data?.totals ? '' : 'Unable to calculate order totals. Please refresh and try again.');
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setQuote(null);
+        setQuoteError(err.message || 'Unable to calculate order totals. Please refresh and try again.');
+      });
+
+    return () => { alive = false; };
+  }, [cartSignature, paymentMethod, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
     const onChange = (event) => setIsMobile(event.matches);
@@ -153,6 +222,17 @@ export default function Checkout({ navigate }) {
   const selectedAddress = addresses.find((item) => item._id === selectedAddressId);
   const deliveryWindow = useMemo(() => getDeliveryWindow(), []);
   const placeOrderLabel = getPlaceOrderLabel(paymentMethod, placing);
+
+  // Backend quote wins; the cart figures are only a placeholder while it loads.
+  const summary = useMemo(() => ({
+    items: cart.items,
+    totalMRP: quote?.totalMRP ?? cart.totalMRP,
+    discount: quote?.productDiscount ?? cart.discount,
+    couponDiscount: quote?.couponDiscount ?? cart.couponDiscount,
+    deliveryCharge: quote?.deliveryCharge ?? cart.deliveryCharge,
+    codCharge: quote?.codCharge ?? 0,
+    finalAmount: quote?.finalAmount ?? cart.finalAmount,
+  }), [cart.couponDiscount, cart.deliveryCharge, cart.discount, cart.finalAmount, cart.items, cart.totalMRP, quote]);
 
   const resetAddressEditor = () => {
     setShowAddressForm(false);
@@ -180,8 +260,19 @@ export default function Checkout({ navigate }) {
   const applyCoupon = async () => {
     setError('');
     try {
-      const data = await api.post('/coupons/apply', { code: couponCode, cartTotal: cart.sellingTotal });
+      const data = await api.post('/coupons/apply', {
+        code: couponCode,
+        cartTotal: cart.sellingTotal,
+        paymentMethod,
+        items: cart.items.map((item) => ({
+          product: item.product._id || item.product.id,
+          quantity: item.quantity,
+          price: item.product.price,
+          category: item.product.category?._id || item.product.category,
+        })),
+      });
       cart.setCoupon({ code: data.couponCode, discount: data.discountAmount });
+      trackEvent('COUPON_APPLIED');
       setToast(data.message);
     } catch (err) {
       showFeedback(err.message, 'error');
@@ -189,20 +280,11 @@ export default function Checkout({ navigate }) {
   };
 
   const orderPayload = () => ({
-    orderItems: cart.items.map((item) => ({
-      product: item.product._id || item.product.id,
-      name: item.product.name,
-      image: getPrimaryImageUrl(item.product.images),
-      size: item.size,
-      color: item.color,
-      quantity: item.quantity,
-      price: item.product.price,
-      originalPrice: item.product.originalPrice || item.product.price,
-    })),
+    orderItems: buildOrderItems(cart.items),
     shippingAddress: selectedAddress,
     paymentMethod,
-    paymentProvider: paymentMethod === 'COD' ? 'COD' : 'Razorpay',
-    coupon: cart.coupon,
+    coupon: cart.coupon ? { code: cart.coupon.code } : undefined,
+    attribution: JSON.parse(sessionStorage.getItem('samira_attribution') || '{}'),
   });
 
   const placeOrder = async () => {
@@ -211,6 +293,8 @@ export default function Checkout({ navigate }) {
     if (!user.isPhoneVerified) return showFeedback('Please verify your mobile number to continue checkout.', 'warning');
     if (!cart.items.length) return showFeedback('Your cart is empty.', 'warning');
     if (!selectedAddress) return showFeedback('Please select or add a delivery address.', 'warning');
+    if (!paymentMethod) return showFeedback('Please choose a payment method.', 'warning');
+    if (!quote) return showFeedback(quoteError || 'Please wait while we calculate your order total.', 'warning');
     setPlacing(true);
 
     const payload = orderPayload();
@@ -242,17 +326,26 @@ export default function Checkout({ navigate }) {
         email: user?.email,
         contact: selectedAddress?.mobile || user?.phone,
         onSuccess: async (response) => {
+          // The backend finalises the order it already stored; nothing about
+          // the items or amounts is resent from the browser.
           const result = await api.post('/payments/verify', {
             razorpay_order_id: response.razorpay_order_id,
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_signature: response.razorpay_signature,
-            orderPayload: payload,
           });
           cart.clearCart();
           setToast('Payment successful');
           navigate(`/order-success?id=${result.order._id}`);
         },
-        onDismiss: () => setError('Payment cancelled. You can retry or choose Cash on Delivery.'),
+        onDismiss: async () => {
+          setError('Payment cancelled. You can retry or choose Cash on Delivery.');
+          if (pendingPayment?.razorpayOrderId) {
+            await api.post('/payments/failure', {
+              reason: 'Payment cancelled by customer',
+              razorpayOrderId: pendingPayment.razorpayOrderId,
+            }).catch(() => null);
+          }
+        },
       });
     } catch (err) {
       if (paymentMethod !== 'COD') {
@@ -263,7 +356,6 @@ export default function Checkout({ navigate }) {
         try {
           await api.post('/payments/failure', {
             reason,
-            orderPayload: payload,
             razorpayOrderId: pendingPayment?.razorpayOrderId,
           });
         } catch {
@@ -384,6 +476,8 @@ export default function Checkout({ navigate }) {
           <MobilePaymentStep
             navigate={navigate}
             cart={cart}
+            summary={summary}
+            paymentOptions={paymentOptions}
             couponCode={couponCode}
             setCouponCode={setCouponCode}
             applyCoupon={applyCoupon}
@@ -397,6 +491,8 @@ export default function Checkout({ navigate }) {
             placing={placing}
             placeOrderLabel={placeOrderLabel}
             error={error}
+            quoteError={quoteError}
+            quoteReady={Boolean(quote)}
             onBack={() => setMobileStep(2)}
           />
         )}
@@ -409,6 +505,8 @@ export default function Checkout({ navigate }) {
       navigate={navigate}
       user={user}
       cart={cart}
+      summary={summary}
+      paymentOptions={paymentOptions}
       addresses={addresses}
       selectedAddressId={selectedAddressId}
       setSelectedAddressId={setSelectedAddressId}
@@ -436,6 +534,8 @@ export default function Checkout({ navigate }) {
       placing={placing}
       placeOrderLabel={placeOrderLabel}
       error={isDesktop ? error : ''}
+      quoteError={isDesktop ? quoteError : ''}
+      quoteReady={Boolean(quote)}
     />
   );
 }
@@ -444,6 +544,8 @@ function DesktopCheckout({
   navigate,
   user,
   cart,
+  summary,
+  paymentOptions,
   addresses,
   selectedAddressId,
   setSelectedAddressId,
@@ -471,6 +573,8 @@ function DesktopCheckout({
   placing,
   placeOrderLabel,
   error,
+  quoteError,
+  quoteReady,
 }) {
   const needsLogin = !user;
   const needsVerification = Boolean(user && !user.isPhoneVerified);
@@ -574,17 +678,28 @@ function DesktopCheckout({
             <section className="sc-checkout__card">
               <SectionTitle number="4" icon={CreditCard} title="Payment Method" />
               <div className="sc-checkout__payment">
-                <div className="sc-checkout__payment-tabs">
-                  {PAYMENT_OPTIONS.map(([key, title]) => {
-                    const Icon = paymentIconFor(key);
-                    return (
-                      <button key={key} type="button" className={paymentMethod === key ? 'is-active' : ''} onClick={() => setPaymentMethod(key)}>
-                        <Icon size={14} aria-hidden="true" />
-                        {title}
-                      </button>
-                    );
-                  })}
-                </div>
+                {paymentOptions.length ? (
+                  <div className="sc-checkout__payment-tabs">
+                    {paymentOptions.map((option) => {
+                      const Icon = paymentIconFor(option.key);
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          disabled={!option.enabled}
+                          title={option.disabledReason || undefined}
+                          className={paymentMethod === option.key ? 'is-active' : ''}
+                          onClick={() => option.enabled && setPaymentMethod(option.key)}
+                        >
+                          <Icon size={14} aria-hidden="true" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="sc-checkout__payment-copy">Loading payment options...</p>
+                )}
                 <div className="sc-checkout__payment-panel">
                   {paymentMethod === 'UPI' ? (
                     <>
@@ -598,6 +713,9 @@ function DesktopCheckout({
                   ) : (
                     <p className="sc-checkout__payment-copy">{paymentCopyFor(paymentMethod)}</p>
                   )}
+                  {paymentMethod === 'COD' && summary.codCharge > 0 ? (
+                    <p className="sc-checkout__payment-copy">A Rs. {summary.codCharge} Cash on Delivery handling fee is added to this order.</p>
+                  ) : null}
                   <p className="sc-checkout__secure-note">
                     <ShieldCheck size={14} aria-hidden="true" />
                     {paymentMethod === 'COD' ? 'Please keep exact amount ready at delivery.' : 'You will be redirected to a secure payment page to complete the transaction.'}
@@ -608,12 +726,13 @@ function DesktopCheckout({
           </main>
 
           <aside className="sc-checkout__side">
-            <DesktopPriceSummary cart={cart} cta={placeOrderLabel} placing={placing} onAction={placeOrder} />
+            <DesktopPriceSummary summary={summary} cta={placeOrderLabel} placing={placing} quoteReady={quoteReady} onAction={placeOrder} />
             <DesktopAssurance />
           </aside>
         </div>
 
         {error ? <p className="sc-checkout__error">{error}</p> : null}
+        {quoteError ? <p className="sc-checkout__error">{quoteError}</p> : null}
       </div>
     </section>
   );
@@ -703,22 +822,23 @@ function DesktopOrderItem({ item, onIncrease, onDecrease, onRemove }) {
   );
 }
 
-function DesktopPriceSummary({ cart, cta, placing, onAction }) {
+function DesktopPriceSummary({ summary, cta, placing, quoteReady, onAction }) {
   return (
     <section className="sc-checkout__summary">
       <h2><ShoppingBag size={17} aria-hidden="true" /> Price Summary</h2>
-      <SummaryRow label="Total MRP" value={`₹${formatAmount(cart.totalMRP)}`} />
-      <SummaryRow label="Discount on MRP" value={`- ₹${formatAmount(cart.discount)}`} success />
-      <SummaryRow label="Coupon Discount" value={`- ₹${formatAmount(cart.couponDiscount)}`} success />
-      <SummaryRow label="Delivery Charges" value={cart.deliveryCharge ? `₹${formatAmount(cart.deliveryCharge)}` : 'FREE'} success={!cart.deliveryCharge} />
+      <SummaryRow label="Total MRP" value={`₹${formatAmount(summary.totalMRP)}`} />
+      <SummaryRow label="Discount on MRP" value={`- ₹${formatAmount(summary.discount)}`} success />
+      <SummaryRow label="Coupon Discount" value={`- ₹${formatAmount(summary.couponDiscount)}`} success />
+      <SummaryRow label="Delivery Charges" value={summary.deliveryCharge ? `₹${formatAmount(summary.deliveryCharge)}` : 'FREE'} success={!summary.deliveryCharge} />
+      {summary.codCharge > 0 ? <SummaryRow label="Cash on Delivery Fee" value={`₹${formatAmount(summary.codCharge)}`} /> : null}
       <div className="sc-checkout__grand">
         <span>
           <strong>Grand Total</strong>
           <small>Inclusive of all taxes</small>
         </span>
-        <b>₹{formatAmount(cart.finalAmount)}</b>
+        <b>₹{formatAmount(summary.finalAmount)}</b>
       </div>
-      <button type="button" onClick={onAction} disabled={placing || !cart.items.length}>
+      <button type="button" onClick={onAction} disabled={placing || !quoteReady || !summary.items.length}>
         <LockKeyhole size={15} aria-hidden="true" />
         {cta}
       </button>
@@ -900,6 +1020,8 @@ function MobileAddressSelector({
 function MobilePaymentStep({
   navigate,
   cart,
+  summary,
+  paymentOptions,
   couponCode,
   setCouponCode,
   applyCoupon,
@@ -913,6 +1035,8 @@ function MobilePaymentStep({
   placing,
   placeOrderLabel,
   error,
+  quoteError,
+  quoteReady,
   onBack,
 }) {
   return (
@@ -946,36 +1070,40 @@ function MobilePaymentStep({
           <CardHeader><CardTitle className="text-[16px]">Payment Method</CardTitle></CardHeader>
           <CardContent>
             <div className="mt-4 grid gap-3">
-              {PAYMENT_OPTIONS.map(([key, title, note]) => (
+              {paymentOptions.length ? paymentOptions.map((option) => (
                 <button
-                  key={key}
+                  key={option.key}
                   type="button"
-                  onClick={() => setPaymentMethod(key)}
-                  className={`rounded-2xl border p-4 text-left ${paymentMethod === key ? 'border-wine bg-blush' : 'border-slate-200 bg-white'}`}
+                  disabled={!option.enabled}
+                  onClick={() => option.enabled && setPaymentMethod(option.key)}
+                  className={`rounded-2xl border p-4 text-left disabled:opacity-50 ${paymentMethod === option.key ? 'border-wine bg-blush' : 'border-slate-200 bg-white'}`}
                 >
-                  <p className="label-text">{title}</p>
-                  <p className="body-text mt-1 text-slate-500">{note}</p>
+                  <p className="label-text">{option.label}</p>
+                  <p className="body-text mt-1 text-slate-500">{describePaymentOption(option)}</p>
                 </button>
-              ))}
+              )) : (
+                <p className="body-text text-slate-500">Loading payment options...</p>
+              )}
             </div>
             <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
           </CardContent>
         </Card>
 
         <div className="px-4">
-          <PriceSummary cart={cart} cta={placeOrderLabel} onAction={placeOrder} />
+          <PriceSummary cart={summary} cta={placeOrderLabel} onAction={placeOrder} />
         </div>
 
         {error && <p className="mx-4 rounded-xl bg-rose/10 p-3 text-[13px] text-rose">{error}</p>}
+        {quoteError && <p className="mx-4 rounded-xl bg-rose/10 p-3 text-[13px] text-rose">{quoteError}</p>}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-[12px] uppercase tracking-[0.04em] text-slate-500">Total</p>
-            <p className="text-[18px] font-bold text-[#1f2a44]">Rs. {cart.finalAmount}</p>
+            <p className="text-[18px] font-bold text-[#1f2a44]">Rs. {summary.finalAmount}</p>
           </div>
-          <Button onClick={placeOrder} variant="accent" className="h-14 min-w-[180px] rounded-[4px] text-[14px] font-bold uppercase tracking-[0.05em]">
+          <Button onClick={placeOrder} disabled={placing || !quoteReady} variant="accent" className="h-14 min-w-[180px] rounded-[4px] text-[14px] font-bold uppercase tracking-[0.05em]">
             {placeOrderLabel}
           </Button>
         </div>
@@ -1103,6 +1231,20 @@ function MobileBottomAction({ label, onClick }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Only identifiers and chosen options are sent. Prices come from the
+ * database on the server, never from this payload.
+ */
+function buildOrderItems(items) {
+  return items.map((item) => ({
+    product: item.product._id || item.product.id,
+    size: item.size || '',
+    color: item.color || '',
+    variantId: item.variantId || '',
+    quantity: item.quantity,
+  }));
 }
 
 function buildAddressLines(address) {

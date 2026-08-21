@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import ProductGrid from '../../components/product/ProductGrid';
 import MobileFilterSheet from '../../components/product/MobileFilterSheet';
@@ -15,6 +15,7 @@ import {
   setCatalogFilterValue,
 } from '../../store/catalogSlice';
 import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
+import { trackEvent } from '../../utils/analytics';
 
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
@@ -25,7 +26,7 @@ export default function Products({ navigate, route = '/products' }) {
   const filters = useSelector(selectCatalogFilters);
   const params = useMemo(() => createCatalogSearchParams(filters), [filters]);
   const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: productData = [], isLoading, isFetching, error } = useGetProductsQuery();
+  const { data: productData = [], isLoading, isFetching, error, refetch } = useGetProductsQuery();
   const loading = isLoading || isFetching;
   const catalog = useMemo(() => {
     return normalizeProducts(Array.isArray(productData) ? productData : []);
@@ -36,6 +37,10 @@ export default function Products({ navigate, route = '/products' }) {
   useLayoutEffect(() => {
     dispatch(replaceCatalogFilters(normalizeCatalogQuery(routeQuery)));
   }, [dispatch, routeQuery]);
+
+  useEffect(() => {
+    if (filters.search) trackEvent('SEARCH', { searchQuery: filters.search });
+  }, [filters.search]);
 
   const syncCatalogRoute = (nextFilters) => {
     const nextParams = createCatalogSearchParams(nextFilters);
@@ -48,6 +53,7 @@ export default function Products({ navigate, route = '/products' }) {
     const nextFilters = setCatalogFilterValue(filters, key, value);
     dispatch(replaceCatalogFilters(nextFilters));
     syncCatalogRoute(nextFilters);
+    if (key !== 'search' && value) trackEvent('FILTER_USED', { metadata: { key, value: String(value).slice(0, 80) } });
   };
 
   const clearFilterParams = () => {
@@ -136,7 +142,7 @@ export default function Products({ navigate, route = '/products' }) {
         })}
       </div>
       <div className="md:hidden">
-        {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose">Store data service is temporarily unavailable. Please try again in a few minutes.</div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
+        {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose"><p>Store data service is temporarily unavailable.</p><button type="button" className="mt-4 h-11 rounded-xl bg-wine px-5 text-sm font-black text-white" onClick={refetch}>Try again</button></div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
       </div>
       <MobileFilterSheet
         open={openFilters}

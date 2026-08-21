@@ -50,15 +50,15 @@ export default function BannerForm({
   };
 
   return (
-    <form onSubmit={submit} className="rounded-[24px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] md:p-6">
+    <form onSubmit={submit} className="admin-card p-5 md:p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-wine">{heading}</p>
-          <h2 className="mt-1 text-lg font-black text-charcoal md:text-2xl">{form.title || 'Create a polished storefront banner'}</h2>
-          <p className="mt-1 text-sm font-semibold text-slate-500">Upload banner creative, set placement, and control storefront visibility.</p>
+          <p className="admin-kicker">{heading}</p>
+          <h2 className="mt-1">{form.title || 'Create a storefront banner'}</h2>
+          <p className="admin-note">Upload banner creative, set placement, and control storefront visibility.</p>
         </div>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-600">
+          <button type="button" onClick={onCancel} className="admin-btn-ghost">
             Cancel
           </button>
         )}
@@ -111,7 +111,7 @@ export default function BannerForm({
       {message && <p className="mt-4 rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
       <div className="mt-5 flex flex-wrap justify-end gap-3">
-        <button type="submit" disabled={saving} className="rounded-xl bg-wine px-5 py-3 text-sm font-black text-white disabled:opacity-60">
+        <button type="submit" disabled={saving} className="admin-btn disabled:opacity-60">
           {saving ? 'Saving Banner...' : initialValues?._id ? 'Update Banner' : 'Add New Banner'}
         </button>
       </div>

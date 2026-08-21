@@ -46,6 +46,8 @@ export default function ProductDetailPage({
   onSelectVariant,
   onShare,
   onWriteReview,
+  isSizeAvailable,
+  isColorAvailable,
 }) {
   const breadcrumb = useMemo(
     () => ['Home', product?.category || 'Kurtis', product?.name || 'Product'],
@@ -117,6 +119,8 @@ export default function ProductDetailPage({
               onViewOffers={onViewOffers}
               onSelectVariant={onSelectVariant}
               onShare={onShare}
+              isSizeAvailable={isSizeAvailable}
+              isColorAvailable={isColorAvailable}
             />
 
             <ProductTrustPanel />
@@ -124,7 +128,7 @@ export default function ProductDetailPage({
         </div>
 
         <div className="sc-pdp__below">
-          <ProductTabs product={product} />
+          <ProductTabs product={product} reviews={reviews} onWriteReview={onWriteReview} />
 
           <section className="sc-pdp__feature-card">
             <div className="sc-pdp__section-head">

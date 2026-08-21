@@ -4,6 +4,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, isUsableImageUrl, normalizeImageUrl } from '../../services/normalize';
 import ProductImageCarousel from './ProductImageCarousel';
+import { useStorefront } from '../../context/StorefrontContext';
+import { productHref } from '../../utils/routing';
 
 const swatches = {
   Wine: '#6d1f34',
@@ -45,13 +47,14 @@ export function ProductVisual({ product, compact = false, showMeta = true }) {
 export default function ProductCard({ product, navigate }) {
   const cart = useCart();
   const wishlist = useWishlist();
+  const { storeSlug } = useStorefront();
   const productId = product._id || product.id || product.slug;
   const [wishlistBusy, setWishlistBusy] = useState(false);
   const isWishlisted = wishlist.items.some((item) => (item._id || item.id || item.slug) === productId);
 
   const cartItem = cart.getCartItem(product);
 
-  const openProduct = () => navigate(`/product?id=${productId}`);
+  const openProduct = () => navigate(productHref(product, storeSlug));
 
   const handleWishlist = async (event) => {
     event.stopPropagation();

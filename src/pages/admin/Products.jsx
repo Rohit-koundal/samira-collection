@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Filter, Layers3, PackageCheck, PackageSearch, Plus, SlidersHorizontal, Square, Trash2, PencilLine, X, Camera, MessageSquareText, PackageX, EyeOff } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, Package, PackageCheck, PackageSearch, Plus, SlidersHorizontal, Square, Trash2, PencilLine, X, Camera, MessageSquareText, PackageX, EyeOff } from 'lucide-react';
 import api from '../../services/api';
 import ConfirmModal from '../../components/admin/ConfirmModal';
 import DataTable from '../../components/admin/DataTable';
+import PageHeader from '../../components/admin/PageHeader';
 import StatusBadge from '../../components/admin/StatusBadge';
 import ProductForm from '../../components/admin/ProductForm';
 import { Select as UiSelect } from '../../components/ui/Field';
+import { asCatalogList, fetchCategories } from '../../utils/catalogOptions';
 import { getPrimaryImageUrl } from '../../services/normalize';
 import ProductPosterModal from '../../components/admin/ProductPosterModal';
 import ProductCaptionModal from '../../components/admin/ProductCaptionModal';
@@ -37,10 +39,10 @@ export default function Products() {
     try {
       const [items, categoryItems] = await Promise.all([
         api.get('/admin/products?admin=true'),
-        api.get('/admin/categories?admin=true'),
+        fetchCategories(api),
       ]);
       const settingsData = await api.get('/settings');
-      setProducts(items);
+      setProducts(asCatalogList(items));
       setCategories(categoryItems);
       setSettings(settingsData);
       setMessage('');
@@ -79,6 +81,14 @@ export default function Products() {
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const catalogStats = useMemo(() => {
+    const total = products.length;
+    const active = products.filter((item) => item.isActive).length;
+    const low = products.filter((item) => Number(item.stock || 0) > 0 && Number(item.stock || 0) <= Number(item.lowStockAlert || 5)).length;
+    const out = products.filter((item) => Number(item.stock || 0) <= 0).length;
+    const value = products.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.stock || 0)), 0);
+    return { total, active, low, out, value };
+  }, [products]);
 
   useEffect(() => {
     setPage((value) => Math.min(value, pageCount));
@@ -143,6 +153,32 @@ export default function Products() {
     setPage(1);
   };
 
+  const applyMetric = (key) => {
+    setPage(1);
+    if (key === 'total') {
+      setStatus('');
+      setStock('');
+      setSort('newest');
+      return;
+    }
+    if (key === 'active') {
+      setStatus((current) => (current === 'active' && !stock ? '' : 'active'));
+      setStock('');
+      return;
+    }
+    if (key === 'low') {
+      setStock((current) => (current === 'low' ? '' : 'low'));
+      setStatus('');
+      return;
+    }
+    if (key === 'out') {
+      setStock((current) => (current === 'out' ? '' : 'out'));
+      setStatus('');
+      return;
+    }
+    setSort((current) => (current === 'price' ? 'newest' : 'price'));
+  };
+
   const toggleSelected = (productId) => {
     setSelectedIds((current) => (current.includes(productId)
       ? current.filter((id) => id !== productId)
@@ -174,68 +210,85 @@ export default function Products() {
 
   return (
     <section className="space-y-5">
-      <div className="rounded-[28px] border border-[#eadfd5] bg-white/90 p-5 shadow-[0_12px_40px_rgba(111,74,52,0.06)] lg:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-wine/60">Admin / Products</p>
-            <h1 className="mt-2 text-[28px] font-black tracking-tight text-charcoal lg:text-[34px]">Products</h1>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Manage catalog, pricing, stock, visibility and featured collections.</p>
-          </div>
-          <button onClick={openAddModal} className="inline-flex items-center gap-2 rounded-full bg-wine px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(109,31,52,0.24)]">
-            <Plus className="h-4 w-4" />
-            Add Product
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Products" note="Manage catalog, pricing, stock, visibility and featured collections.">
+        <a href="/admin/products/quick-add" className="admin-btn-ghost">
+          <Plus className="h-4 w-4" />
+          Quick Add
+        </a>
+        <button type="button" onClick={openAddModal} className="admin-btn">
+          <Plus className="h-4 w-4" />
+          Add Product
+        </button>
+      </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          icon={PackageSearch}
-          label="Total Products"
-          value={products.length}
-          note="All products"
+      <div className="admin-kpi-strip">
+        <KpiTile
+          icon={Package}
+          tone="wine"
+          label="Total products"
+          value={catalogStats.total}
+          note="Click to view catalog"
+          percent={100}
+          active={!status && !stock}
+          onClick={() => applyMetric('total')}
         />
-        <SummaryCard
+        <KpiTile
           icon={PackageCheck}
-          label="Active Products"
-          value={products.filter((item) => item.isActive).length}
-          note="Visible to customers"
+          tone="green"
+          label="Active products"
+          value={catalogStats.active}
+          note="Visible on storefront"
+          percent={catalogStats.total ? (catalogStats.active / catalogStats.total) * 100 : 0}
+          active={status === 'active' && !stock}
+          onClick={() => applyMetric('active')}
         />
-        <SummaryCard
-          icon={Filter}
-          label="Low Stock"
-          value={products.filter((item) => Number(item.stock || 0) > 0 && Number(item.stock || 0) <= Number(item.lowStockAlert || 5)).length}
-          note="Reorder soon"
+        <KpiTile
+          icon={AlertTriangle}
+          tone="amber"
+          label="Low stock"
+          value={catalogStats.low}
+          note="Reorder these soon"
+          percent={catalogStats.total ? (catalogStats.low / catalogStats.total) * 100 : 0}
+          active={stock === 'low'}
+          onClick={() => applyMetric('low')}
         />
-        <SummaryCard
-          icon={Layers3}
-          label="Out of Stock"
-          value={products.filter((item) => Number(item.stock || 0) <= 0).length}
-          note="Needs attention"
+        <KpiTile
+          icon={PackageX}
+          tone="rose"
+          label="Out of stock"
+          value={catalogStats.out}
+          note="Needs restocking"
+          percent={catalogStats.total ? (catalogStats.out / catalogStats.total) * 100 : 0}
+          active={stock === 'out'}
+          onClick={() => applyMetric('out')}
         />
-        <SummaryCard
-          icon={SlidersHorizontal}
-          label="Inventory Value"
-          value={formatCurrency(products.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.stock || 0)), 0))}
-          note="Total catalog value"
+        <KpiTile
+          icon={Banknote}
+          tone="gold"
+          label="Inventory value"
+          value={formatCurrency(catalogStats.value)}
+          note="Click to sort by price"
+          percent={100}
+          active={sort === 'price'}
+          onClick={() => applyMetric('value')}
         />
       </div>
 
-      <div className="rounded-[26px] border border-[#eadfd5] bg-white/90 p-4 shadow-[0_12px_40px_rgba(111,74,52,0.06)] lg:p-5">
+      <div className="admin-card p-4 lg:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
             <span className="grid h-9 w-9 place-items-center rounded-full bg-[#fff3f1] text-wine">
               <PackageSearch className="h-4 w-4" />
             </span>
-            Premium filters
+            Filters
           </div>
-          <button type="button" onClick={clearFilters} className="inline-flex items-center gap-2 rounded-full border border-[#eadfd5] bg-white px-4 py-2 text-xs font-black text-slate-600">
+          <button type="button" onClick={clearFilters} className="admin-btn-ghost">
             <Trash2 className="h-3.5 w-3.5" />
             Clear filters
           </button>
         </div>
         <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,0.85fr))]">
-          <div className="flex h-12 items-center gap-2 rounded-[16px] border border-[#eadfd5] bg-[#fffaf7] px-4">
+          <div className="flex h-11 items-center gap-2 rounded-full border border-[#eadfd5] bg-white px-4">
             <PackageSearch className="h-4 w-4 text-slate-400" />
             <input
               value={query}
@@ -244,7 +297,7 @@ export default function Products() {
                 setPage(1);
               }}
               placeholder="Search by product, SKU or category"
-              className="w-full bg-transparent text-sm font-semibold text-charcoal outline-none placeholder:text-slate-400"
+              className="w-full bg-transparent text-sm text-charcoal outline-none placeholder:text-slate-400"
             />
           </div>
           <Select value={category} onChange={(value) => { setCategory(value); setPage(1); }} options={[['', 'All Categories'], ...categories.map((item) => [item._id, item.name])]} />
@@ -256,18 +309,18 @@ export default function Products() {
 
       {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-wine">{message}</p>}
 
-      <div className="overflow-hidden rounded-[28px] border border-[#eadfd5] bg-white shadow-[0_12px_40px_rgba(111,74,52,0.06)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f2e8df] px-4 py-3 lg:px-5">
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfd5] px-4 py-3 lg:px-5">
           <div>
-            <h2 className="text-base font-black text-charcoal">All Products ({filtered.length})</h2>
-            <p className="text-xs font-semibold text-slate-500">{page} of {pageCount} pages · {selectedIds.length} selected</p>
+            <h2>All products ({filtered.length})</h2>
+            <p className="mt-1 text-xs text-slate-500">{page} of {pageCount} pages · {selectedIds.length} selected</p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
             Sort by
             <span className="rounded-full bg-[#fff6f1] px-3 py-1.5 text-charcoal">
-              {sort === 'newest' ? 'Newest First' : sort}
+              {sort === 'newest' ? 'Newest first' : sort}
             </span>
-            <button className="grid h-9 w-9 place-items-center rounded-xl border border-[#eadfd5] text-slate-500">
+            <button type="button" className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] text-slate-500">
               <SlidersHorizontal className="h-4 w-4" />
             </button>
           </div>
@@ -276,38 +329,26 @@ export default function Products() {
         {loading ? (
           <div className="space-y-3 p-4 lg:p-5">
             {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="h-[92px] animate-pulse rounded-[22px] bg-slate-100/80" />
+              <div key={index} className="h-[76px] animate-pulse rounded-[18px] bg-slate-100/80" />
             ))}
           </div>
         ) : visible.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] table-fixed text-left">
-              <colgroup>
-                <col style={{ width: '48px' }} />
-                <col style={{ width: '360px' }} />
-                <col style={{ width: '120px' }} />
-                <col style={{ width: '140px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '110px' }} />
-                <col style={{ width: '160px' }} />
-                <col style={{ width: '120px' }} />
-              </colgroup>
-              <thead className="bg-[#fbf7f2] text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+            <table className="admin-catalog-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-4">
-                    <button type="button" onClick={toggleSelectAll} className="grid h-5 w-5 place-items-center rounded border border-[#d9cec3] bg-white">
+                  <th className="w-12">
+                    <button type="button" onClick={toggleSelectAll} className="grid h-5 w-5 place-items-center rounded border border-[#d9cec3] bg-white" aria-label="Select all products">
                       {selectedIds.length === visible.length && visible.length > 0 ? <Check className="h-3 w-3 text-wine" /> : <Square className="h-3 w-3 text-slate-400" />}
                     </button>
                   </th>
-                  <th className="px-4 py-4">Product</th>
-                  <th className="px-4 py-4">SKU</th>
-                  <th className="px-4 py-4">Category</th>
-                  <th className="px-4 py-4">Price</th>
-                  <th className="px-4 py-4">Stock</th>
-                  <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4">Features</th>
-                  <th className="px-4 py-4 text-right">Actions</th>
+                  <th className="admin-catalog-product">Product</th>
+                  <th>SKU</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -320,17 +361,24 @@ export default function Products() {
                     : stockValue <= lowStockAlert
                       ? 'bg-amber-50 text-amber-700'
                       : 'bg-emerald-50 text-emerald-700';
+                  const selected = selectedIds.includes(product._id);
+                  const description = productDescription(product);
 
                   return (
-                    <tr key={product._id} className="border-t border-[#f3ebe2] align-top transition hover:bg-[#fffaf7]">
-                      <td className="px-4 py-4 align-middle">
-                        <button type="button" onClick={() => toggleSelected(product._id)} className="grid h-5 w-5 place-items-center rounded border border-[#d9cec3] bg-white">
-                          {selectedIds.includes(product._id) ? <Check className="h-3 w-3 text-wine" /> : null}
+                    <tr key={product._id} className={selected ? 'is-selected' : ''}>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => toggleSelected(product._id)}
+                          className={`grid h-5 w-5 place-items-center rounded border ${selected ? 'border-wine bg-wine text-white' : 'border-[#d9cec3] bg-white'}`}
+                          aria-label={`Select ${product.name}`}
+                        >
+                          {selected ? <Check className="h-3 w-3" /> : null}
                         </button>
                       </td>
-                      <td className="px-4 py-4 align-middle">
+                      <td className="admin-catalog-product">
                         <div className="flex items-center gap-3">
-                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-[#fbf2eb] shadow-[0_10px_24px_rgba(111,74,52,0.08)]">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#fbf2eb]">
                             <img
                               src={getPrimaryImageUrl(product.images) || '/uploads/placeholder.jpg'}
                               alt=""
@@ -338,11 +386,18 @@ export default function Products() {
                             />
                           </div>
                           <div className="min-w-0">
-                            <p className="line-clamp-2 text-[14px] font-black leading-5 text-charcoal">{product.name}</p>
-                            <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">
-                              {product.fabric || 'Fashion'} · {product.occasion || 'Collection'} · {product.category?.name || 'Unassigned'}
+                            <p
+                              className="whitespace-nowrap text-[14px] font-semibold leading-5 text-charcoal"
+                              title={productHoverDetails(product)}
+                            >
+                              {shortenText(product.name, 20)}
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
+                            {description ? (
+                              <p className="mt-1 whitespace-nowrap text-xs leading-4 text-slate-500" title={description}>
+                                {shortenText(description, 20)}
+                              </p>
+                            ) : null}
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                               {renderFeatureTag(product.isFeatured, 'Featured')}
                               {renderFeatureTag(product.isNewArrival, 'New')}
                               {renderFeatureTag(product.isBestSeller, 'Best Seller')}
@@ -350,86 +405,57 @@ export default function Products() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-middle font-semibold text-slate-700">{product.sku || '-'}</td>
-                      <td className="px-4 py-4 align-middle font-semibold text-slate-700">{product.category?.name || 'Unassigned'}</td>
-                      <td className="px-4 py-4 align-middle">
-                        <div className="space-y-1">
-                          <p className="text-[15px] font-black leading-tight text-wine">Rs. {formatNumber(product.price)}</p>
-                          {product.originalPrice > product.price && (
-                            <p className="text-xs font-semibold text-slate-400 line-through">Rs. {formatNumber(product.originalPrice)}</p>
-                          )}
-                        </div>
+                      <td>
+                        <span className="admin-catalog-sku" title={product.sku || ''}>
+                          {product.sku ? shortenText(product.sku, 10) : '—'}
+                        </span>
                       </td>
-                      <td className="px-4 py-4 align-middle">
-                        <div className="space-y-2">
+                      <td className="whitespace-nowrap text-slate-700">{product.category?.name || 'Unassigned'}</td>
+                      <td className="whitespace-nowrap">
+                        <p className="text-[15px] font-semibold text-charcoal">Rs. {formatNumber(product.price)}</p>
+                        {product.originalPrice > product.price && (
+                          <p className="mt-0.5 text-xs text-slate-400 line-through">Rs. {formatNumber(product.originalPrice)}</p>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex flex-col items-start gap-1.5">
                           <input
                             type="number"
+                            min="0"
                             value={product.stock}
                             onChange={(event) => updateStock(product, event.target.value)}
-                            className="h-11 w-[104px] rounded-xl border border-[#eadfd5] bg-white px-3 font-bold text-charcoal shadow-[0_6px_18px_rgba(111,74,52,0.04)]"
+                            className="h-9 w-[72px] rounded-lg border border-[#eadfd5] bg-white px-2.5 text-sm font-semibold text-charcoal"
+                            aria-label={`${product.name} stock`}
                           />
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${stockTone}`}>
+                          <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${stockTone}`}>
                             {stockState}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-middle">
-                        <button type="button" onClick={() => toggleStatus(product)}>
+                      <td>
+                        <button type="button" onClick={() => toggleStatus(product)} aria-label={`Toggle ${product.name} status`}>
                           <StatusBadge value={product.isActive ? 'Active' : 'Inactive'} />
                         </button>
                       </td>
-                      <td className="px-4 py-4 align-middle">
-                        <div className="flex flex-wrap gap-1.5">
-                          {featureLabels(product).length ? featureLabels(product).map((label) => (
-                            <span key={label} className="inline-flex rounded-full bg-[#fff4f7] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-wine">
-                              {label}
-                            </span>
-                          )) : <span className="text-sm font-bold text-slate-400">—</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 align-middle">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(product)}
-                            className="grid h-10 place-items-center rounded-xl border border-[#eadfd5] bg-white text-wine shadow-[0_8px_18px_rgba(111,74,52,0.04)]"
-                            aria-label={`Edit ${product.name}`}
-                          >
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" onClick={() => openEditModal(product)} className="admin-catalog-action" aria-label={`Edit ${product.name}`} title="Edit">
                             <PencilLine className="h-4 w-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setPosterProduct(product)}
-                            className="grid h-10 place-items-center rounded-xl border border-[#eadfd5] bg-white text-slate-600 shadow-[0_8px_18px_rgba(111,74,52,0.04)]"
-                            aria-label={`Generate poster for ${product.name}`}
-                          >
+                          <button type="button" onClick={() => setPosterProduct(product)} className="admin-catalog-action" aria-label={`Generate poster for ${product.name}`} title="Poster">
                             <Camera className="h-4 w-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setCaptionProduct(product)}
-                            className="grid h-10 place-items-center rounded-xl border border-[#eadfd5] bg-white text-slate-600 shadow-[0_8px_18px_rgba(111,74,52,0.04)]"
-                            aria-label={`Generate caption for ${product.name}`}
-                          >
+                          <button type="button" onClick={() => setCaptionProduct(product)} className="admin-catalog-action" aria-label={`Generate caption for ${product.name}`} title="Caption">
                             <MessageSquareText className="h-4 w-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(product)}
-                            className="grid h-10 place-items-center rounded-xl border border-[#eadfd5] bg-white text-rose shadow-[0_8px_18px_rgba(111,74,52,0.04)]"
-                            aria-label={`Delete ${product.name}`}
-                          >
+                          <button type="button" onClick={() => markOutOfStock(product)} className="admin-catalog-action" aria-label={`Mark ${product.name} out of stock`} title="Out of stock">
+                            <PackageX className="h-4 w-4" />
+                          </button>
+                          <button type="button" onClick={() => hideProduct(product)} className="admin-catalog-action" aria-label={`Hide ${product.name}`} title="Hide">
+                            <EyeOff className="h-4 w-4" />
+                          </button>
+                          <button type="button" onClick={() => setDeleteTarget(product)} className="admin-catalog-action is-danger" aria-label={`Delete ${product.name}`} title="Delete">
                             <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button type="button" onClick={() => markOutOfStock(product)} className="inline-flex items-center gap-1 rounded-full border border-[#eadfd5] bg-white px-3 py-1 text-[10px] font-black text-slate-600">
-                            <PackageX className="h-3.5 w-3.5" />
-                            Out of Stock
-                          </button>
-                          <button type="button" onClick={() => hideProduct(product)} className="inline-flex items-center gap-1 rounded-full border border-[#eadfd5] bg-white px-3 py-1 text-[10px] font-black text-slate-600">
-                            <EyeOff className="h-3.5 w-3.5" />
-                            Hide
                           </button>
                         </div>
                       </td>
@@ -455,21 +481,21 @@ export default function Products() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3 text-sm font-bold shadow-sm">
-        <span>Showing {visible.length} of {filtered.length} products</span>
+      <div className="admin-card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+        <span className="text-slate-600">Showing {visible.length} of {filtered.length} products</span>
         <div className="flex items-center gap-2">
           <button
             disabled={page === 1}
             onClick={() => setPage((value) => value - 1)}
-            className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40"
+            className="admin-btn-ghost min-h-9 px-3 disabled:opacity-40"
           >
             Prev
           </button>
-          <span>{page} / {pageCount}</span>
+          <span className="min-w-12 text-center text-slate-600">{page} / {pageCount}</span>
           <button
             disabled={page === pageCount}
             onClick={() => setPage((value) => value + 1)}
-            className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40"
+            className="admin-btn-ghost min-h-9 px-3 disabled:opacity-40"
           >
             Next
           </button>
@@ -536,38 +562,58 @@ function Select({ value, onChange, options }) {
   );
 }
 
-function SummaryCard({ icon: Icon, label, value, note }) {
+function KpiTile({ icon: Icon, tone, label, value, note, percent, active, onClick }) {
+  const bar = Number(percent || 0);
   return (
-    <div className="rounded-[24px] border border-[#eadfd5] bg-white px-4 py-4 shadow-[0_10px_32px_rgba(111,74,52,0.06)]">
-      <div className="flex items-start gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff3f1] text-wine">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
-          <p className="mt-1 text-2xl font-black text-charcoal">{value}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{note}</p>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      className={`admin-kpi-tile is-${tone}${active ? ' is-active' : ''}`}
+      style={{ '--kpi-pct': `${bar <= 0 ? 0 : Math.max(10, Math.min(100, bar))}%` }}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      <span className="admin-kpi-tile__icon">
+        <Icon className="h-4 w-4" />
+      </span>
+      <p className="admin-kpi-tile__value">{value}</p>
+      <p className="admin-kpi-tile__label">{label}</p>
+      <p className="admin-kpi-tile__note">{note}</p>
+      <span className="admin-kpi-tile__bar"><span><i /></span></span>
+    </button>
   );
 }
 
 function renderFeatureTag(enabled, label) {
   if (!enabled) return null;
   return (
-    <span className="inline-flex rounded-full bg-[#fff4f7] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-wine">
+    <span className="inline-flex rounded-full bg-[#fff4f7] px-2 py-0.5 text-[10px] font-semibold text-wine">
       {label}
     </span>
   );
 }
 
-function featureLabels(product) {
+function shortenText(value, max = 20) {
+  const text = String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}...`;
+}
+
+function productDescription(product) {
+  return String(product?.shortDescription || product?.description || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function productHoverDetails(product) {
+  const description = productDescription(product);
   return [
-    product.isFeatured && 'Featured',
-    product.isNewArrival && 'New',
-    product.isBestSeller && 'Best Seller',
-  ].filter(Boolean);
+    product?.name,
+    description,
+    product?.sku ? `SKU: ${product.sku}` : '',
+    product?.category?.name ? `Category: ${product.category.name}` : '',
+    [product?.fabric, product?.occasion].filter(Boolean).join(' · '),
+  ].filter(Boolean).join('\n');
 }
 
 function formatNumber(value) {
@@ -581,17 +627,8 @@ function formatCurrency(value) {
 export function AdminPage({ title, action, href, children }) {
   return (
     <section className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-wine md:text-xs md:tracking-[0.18em]">Admin / {title}</p>
-          <h1 className="mt-1 text-xl font-black text-charcoal md:text-3xl">{title}</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">Live MongoDB records with quick admin controls.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {children}
-          {action && <a href={href} className="rounded-xl bg-wine px-4 py-2.5 text-sm font-black text-white md:px-5 md:py-3">{action}</a>}
-        </div>
-      </div>
+      <PageHeader title={title} note="Live catalog records with quick admin controls." actionLabel={action} actionHref={href} />
+      {children}
     </section>
   );
 }

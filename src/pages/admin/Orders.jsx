@@ -98,7 +98,7 @@ export default function Orders() {
                 <select value={order.orderStatus} onChange={(event) => updateOrder(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">
                   {orderStatuses.map((item) => <option key={item}>{item}</option>)}
                 </select>
-                <a href={`#/admin/orders/detail?id=${order._id}`} className="font-black text-wine">View</a>
+                <a href={`/admin/orders/detail?id=${order._id}`} className="font-black text-wine">View</a>
                 <button type="button" onClick={() => setDeleteTarget(order)} className="font-black text-rose">Delete</button>
               </div>
             </td>

@@ -88,9 +88,10 @@ export default function ProfileDetails() {
     setPhoneOtpSending(true);
     try {
       const response = await sendProfilePhoneChangeOtp(phone);
+      const code = readDemoOtp(response);
       setPhoneOtpSent(true);
-      setPhoneDevOtp(response?.devOtp || '');
-      setSuccess(response?.devOtp ? `Development OTP: ${response.devOtp}` : 'OTP sent to your new mobile number');
+      setPhoneDevOtp(code);
+      setSuccess(code ? `Demo OTP: ${code}` : 'OTP sent to your new mobile number');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -109,9 +110,10 @@ export default function ProfileDetails() {
     setEmailOtpSending(true);
     try {
       const response = await sendProfileEmailChangeOtp(email);
+      const code = readDemoOtp(response);
       setEmailOtpSent(true);
-      setEmailDevOtp(response?.devOtp || '');
-      setSuccess(response?.devOtp ? `Development email OTP: ${response.devOtp}` : 'OTP sent to your email address');
+      setEmailDevOtp(code);
+      setSuccess(code ? `Demo email OTP: ${code}` : 'OTP sent to your email address');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -403,8 +405,14 @@ export default function ProfileDetails() {
 
 function VerificationNote({ devOtp, verified, pendingText }) {
   if (verified) return <p className="text-[12px] font-medium text-emerald-600">Verified successfully.</p>;
-  if (devOtp) return <p className="text-[12px] text-slate-500">Development OTP: <span className="font-semibold text-[#1f2a44]">{devOtp}</span></p>;
+  if (devOtp) return <p className="text-[12px] text-slate-500">Demo OTP: <span className="font-semibold text-[#1f2a44]">{devOtp}</span></p>;
   return <p className="text-[12px] text-slate-500">{pendingText}</p>;
+}
+
+/** Only populated when the backend reports demo OTP mode. */
+function readDemoOtp(response) {
+  if (response?.otpMode && response.otpMode !== 'demo') return '';
+  return String(response?.demoOtp || response?.devOtp || '');
 }
 
 function resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent, setPhoneDevOtp, setEmailDevOtp) {

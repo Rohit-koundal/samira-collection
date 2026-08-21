@@ -11,11 +11,13 @@ export default function ImageUploader({
   multiple = false,
   maxFiles = 1,
   uploadContext = 'products',
+  uploadPath = '/admin/uploads',
   compressAboveMb = 2,
   maxUploadMb = 20,
   targetSizeMb = 0.7,
   label = 'Choose Images',
   helpText = 'Drag and drop or click to upload.',
+  showPrimaryControl = true,
 }) {
   const inputRef = useRef(null);
   const [error, setError] = useState('');
@@ -65,10 +67,14 @@ export default function ImageUploader({
 
       setPhase('uploading');
       setProgress(100);
-      const data = await api.upload(`/admin/uploads?folder=${encodeURIComponent(uploadContext)}`, converted, { fieldName: 'images' });
+      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, converted, { fieldName: 'images' });
       const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
       if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
-      const uploaded = uploadedFiles.map((file, index) => ({ ...file, primary: files.length === 0 && index === 0 }));
+      const uploaded = uploadedFiles.map((file, index) => ({
+        ...file,
+        originalName: file.originalName || incoming[index]?.name || converted[index]?.name || '',
+        primary: files.length === 0 && index === 0,
+      }));
       onChange(multiple ? [...files, ...uploaded] : uploaded.slice(0, 1));
     } catch (uploadError) {
       setError(uploadError.message || 'Image upload failed. Please try again.');
@@ -137,10 +143,14 @@ export default function ImageUploader({
           <div key={`${file.url}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
             <img src={normalizeImageUrl(file.url)} alt={file.originalName || file.name || 'Upload preview'} className="h-28 w-full object-cover" />
             {file.primary && <span className="absolute left-2 top-2 rounded-full bg-wine px-2 py-1 text-[10px] font-black text-white">Primary</span>}
-            <div className="grid grid-cols-2">
-              <button type="button" onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>
-              <button type="button" onClick={() => remove(index)} className="h-9 text-xs font-black text-rose">Remove</button>
-            </div>
+            {showPrimaryControl ? (
+              <div className="grid grid-cols-2">
+                <button type="button" onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>
+                <button type="button" onClick={() => remove(index)} className="h-9 text-xs font-black text-rose">Remove</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => remove(index)} className="h-9 w-full text-xs font-black text-rose">Remove</button>
+            )}
           </div>
         ))}
       </div>

@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/samira-collection-logo.png';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
+import '../../components/admin/AdminShell.css';
 
 export default function AdminLogin() {
   const { login } = useAuth();
   const { notify } = useDesktopFeedback();
-  const [email, setEmail] = useState('admin@samiracollection.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -30,17 +31,35 @@ export default function AdminLogin() {
   };
 
   return (
-    <section className="grid min-h-screen place-items-center bg-[#f7f2eb] p-4">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+    <section className="admin-shell grid min-h-screen place-items-center p-4">
+      <form onSubmit={submit} className="admin-card w-full max-w-md p-6 sm:p-8">
         <img src={logo} alt="Samira Collection" className="mx-auto h-16 md:h-20" />
-        <h1 className="mt-5 text-center text-2xl font-black md:mt-6 md:text-3xl">Admin Login</h1>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} className="mt-6 h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder="Email" />
-        <div className="mt-3 flex rounded-xl border border-slate-200">
-          <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 min-w-0 flex-1 rounded-l-xl px-4 text-sm font-semibold outline-none" placeholder="Password" />
-          <button type="button" onClick={() => setShowPassword((value) => !value)} className="px-4 text-xs font-black text-wine">{showPassword ? 'Hide' : 'Show'}</button>
+        <p className="admin-kicker mt-5 text-center">Admin workspace</p>
+        <h1 className="mt-2 text-center">Admin login</h1>
+        <p className="admin-note mx-auto text-center">Sign in with your admin email to manage the catalog and orders.</p>
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          type="email"
+          autoComplete="username"
+          className="mt-6 h-11 w-full rounded-full border border-[#eadfd5] bg-white px-4 text-sm"
+          placeholder="Email"
+        />
+        <div className="mt-3 flex overflow-hidden rounded-full border border-[#eadfd5] bg-white">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            className="h-11 min-w-0 flex-1 border-0 px-4 text-sm outline-none"
+            placeholder="Password"
+          />
+          <button type="button" onClick={() => setShowPassword((value) => !value)} className="px-4 text-xs font-semibold text-wine">
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
         </div>
-        {error && <p className="mt-3 rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose md:hidden">{error}</p>}
-        <button disabled={loading} className="mt-5 h-12 w-full rounded-xl bg-wine text-sm font-black text-white disabled:opacity-60">{loading ? 'Checking...' : 'Login'}</button>
+        {error && <p className="mt-3 rounded-xl bg-rose/10 p-3 text-sm text-rose md:hidden">{error}</p>}
+        <button disabled={loading} className="admin-btn mt-5 w-full disabled:opacity-60">{loading ? 'Checking...' : 'Login'}</button>
       </form>
     </section>
   );
