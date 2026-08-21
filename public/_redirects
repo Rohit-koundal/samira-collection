@@ -1,1 +1,4 @@
-/* /index.html 200
+# Serve the React app for every client route.
+# Home works without this because / maps to index.html.
+# Refresh on /products, /cart, /admin, etc. needs this rewrite.
+/*    /index.html   200
