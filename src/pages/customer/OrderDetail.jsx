@@ -6,6 +6,7 @@ import Receipt from '../../components/order/Receipt';
 import ReceiptActions from '../../components/order/ReceiptActions';
 import { downloadReceiptHtml } from '../../utils/printReceipt';
 import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
+import { canCancelOrder, productIdOf } from '../../utils/orderActions';
 
 export default function OrderDetail({ route = '', navigate }) {
   const orderId = new URLSearchParams(route.split('?')[1] || '').get('id');
@@ -18,6 +19,7 @@ export default function OrderDetail({ route = '', navigate }) {
   const [returnForm, setReturnForm] = useState({ type: 'return', reason: '', comment: '', quantity: 1 });
   const [actionMessage, setActionMessage] = useState('');
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -51,6 +53,8 @@ export default function OrderDetail({ route = '', navigate }) {
   }, [order]);
 
   const canReturn = order?.orderStatus === 'Delivered';
+  const canRate = order?.orderStatus === 'Delivered';
+  const canCancel = canCancelOrder(order);
 
   const submitReturn = async (event) => {
     event.preventDefault();
@@ -79,11 +83,16 @@ export default function OrderDetail({ route = '', navigate }) {
   };
 
   const submitReview = async (item, rating) => {
-    if (!item?.product || reviewBusy) return;
+    const productId = productIdOf(item);
+    if (!productId || reviewBusy) return;
+    if (!canRate) {
+      setActionMessage('You can rate this product after it is delivered.');
+      return;
+    }
     setReviewBusy(true);
     setActionMessage('');
     try {
-      await api.post(`/reviews/${item.product}`, { rating, comment: 'Rated from order details' });
+      await api.post(`/reviews/${productId}`, { rating, comment: 'Rated from order details' });
       setActionMessage('Thanks for the review.');
     } catch (err) {
       if (err.status === 409) {
@@ -93,6 +102,22 @@ export default function OrderDetail({ route = '', navigate }) {
       }
     } finally {
       setReviewBusy(false);
+    }
+  };
+
+  const cancelOrder = async () => {
+    if (!order?._id || cancelBusy || !canCancel) return;
+    if (!window.confirm('Cancel this order? This cannot be undone.')) return;
+    setCancelBusy(true);
+    setActionMessage('');
+    try {
+      const cancelled = await api.post(`/orders/${order._id}/cancel`);
+      setOrder(cancelled);
+      setActionMessage('Order cancelled.');
+    } catch (err) {
+      setActionMessage(err.message);
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -107,7 +132,13 @@ export default function OrderDetail({ route = '', navigate }) {
 
           <div className="space-y-4 px-4 pb-6">
             <MobileStatusCard order={order} />
-            <MobileRatingCard item={primaryItem} onRate={(rating) => submitReview(primaryItem, rating)} />
+            <MobileRatingCard item={primaryItem} canRate={canRate} busy={reviewBusy} onRate={(rating) => submitReview(primaryItem, rating)} />
+            {canCancel ? (
+              <Button type="button" variant="outline" className="w-full border-[#6d1f34] text-[#6d1f34]" disabled={cancelBusy} onClick={cancelOrder}>
+                {cancelBusy ? 'Cancelling...' : 'Cancel Order'}
+              </Button>
+            ) : null}
+            {actionMessage ? <p className="text-center text-sm font-semibold text-[#6d1f34]">{actionMessage}</p> : null}
             {recommendations.length > 0 && <MobileRecommendations items={recommendations} navigate={navigate} />}
             <MobileDeliveryCard order={order} />
             <MobileSavingsCard savings={savings} />
@@ -128,7 +159,7 @@ export default function OrderDetail({ route = '', navigate }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
         <div className="space-y-5">
           <Card><CardContent className="p-5 md:p-7"><h1 className="page-title md:text-3xl">Order #{order._id.slice(-8).toUpperCase()}</h1><p className="body-text mt-2 text-slate-500">Placed on {new Date(order.createdAt).toLocaleString('en-IN')}</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">Payment: {order.paymentStatus}</span><span className="rounded-full bg-wine/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-wine">Order: {order.orderStatus}</span></div><div className="mt-6 grid gap-4">{(order.statusTimeline || []).map((item, index) => <div key={`${item.status}-${index}`} className="flex items-center gap-4"><span className="h-4 w-4 rounded-full bg-rose" /><span><b>{item.status}</b><br /><span className="small-text text-slate-500">{item.date ? new Date(item.date).toLocaleString('en-IN') : ''} {item.note || ''}</span></span></div>)}</div></CardContent></Card>
-          <Card><CardContent className="p-4 md:p-5"><h2 className="header-title">Items</h2><div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="small-text text-slate-500">{item.size} | {item.color} x {item.quantity}</span></span><b>Rs. {item.price * item.quantity}</b></div>)}</div></CardContent></Card>
+          <Card><CardContent className="p-4 md:p-5"><h2 className="header-title">Items</h2><div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="small-text text-slate-500">{item.size} | {item.color} x {item.quantity}</span>{canRate ? <span className="mt-2 flex gap-1">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" disabled={reviewBusy} onClick={() => submitReview(item, rating)} aria-label={`Rate ${rating} stars`}><Star className="h-4 w-4 text-[#b88945]" /></button>)}</span> : <span className="small-text mt-2 block text-slate-400">Rate after delivery</span>}</span><b>Rs. {item.price * item.quantity}</b></div>)}</div></CardContent></Card>
         </div>
         <Card as="aside">
           <CardContent className="p-4 md:p-5">
@@ -137,11 +168,18 @@ export default function OrderDetail({ route = '', navigate }) {
             <Row label="Product Discount" value={`- Rs. ${order.productDiscount || 0}`} />
             <Row label="Coupon Discount" value={`- Rs. ${order.couponDiscount || 0}`} />
             <Row label="Delivery" value={order.deliveryCharge ? `Rs. ${order.deliveryCharge}` : 'FREE'} />
+            {order.platformFee > 0 ? <Row label="Platform Fee" value={`Rs. ${order.platformFee}`} /> : null}
+            {order.taxAmount > 0 ? <Row label={`GST (${order.taxRate || 5}% incl.)`} value={`Rs. ${order.taxAmount}`} /> : null}
             <div className="mt-4 flex justify-between border-t border-slate-100 pt-4"><span className="label-text">Total</span><span className="price">Rs. {order.finalAmount}</span></div>
             <h3 className="small-text mt-6 font-bold uppercase tracking-[0.18em] text-slate-500">Ship To</h3>
             <p className="body-text mt-2 text-slate-600">{order.shippingAddress?.fullName}<br />{order.shippingAddress?.houseNo || order.shippingAddress?.houseNumber}, {order.shippingAddress?.area}<br />{order.shippingAddress?.city}, {order.shippingAddress?.state} - {order.shippingAddress?.pincode}</p>
             {order.shipment?.trackingNumber ? <p className="body-text mt-3 text-slate-600">Tracking: {order.shipment.courierName || 'Courier'} {order.shipment.trackingNumber}</p> : null}
-            <Button className="no-print mt-5 w-full" variant="outline" disabled={!canReturn} onClick={() => setReturnItem(order.orderItems[0] || null)}>Request Return / Exchange</Button>
+            {canCancel ? (
+              <Button className="no-print mt-5 w-full" variant="outline" disabled={cancelBusy} onClick={cancelOrder}>
+                {cancelBusy ? 'Cancelling...' : 'Cancel Order'}
+              </Button>
+            ) : null}
+            <Button className="no-print mt-3 w-full" variant="outline" disabled={!canReturn} onClick={() => setReturnItem(order.orderItems[0] || null)}>Request Return / Exchange</Button>
             {actionMessage && <p className="mt-3 text-sm font-bold text-wine">{actionMessage}</p>}
           </CardContent>
         </Card>
@@ -228,7 +266,7 @@ function MobileStatusCard({ order }) {
   );
 }
 
-function MobileRatingCard({ item, onRate }) {
+function MobileRatingCard({ item, onRate, canRate = false, busy = false }) {
   if (!item) return null;
   const image = item.image ? normalizeImageUrl(item.image) : '';
 
@@ -240,13 +278,17 @@ function MobileRatingCard({ item, onRate }) {
         </div>
         <div>
           <p className="text-[15px] font-bold text-[#1f2a44]">Rate this product</p>
-          <div className="mt-2 flex gap-1.5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <button key={index} type="button" onClick={() => onRate?.(index + 1)} aria-label={`Rate ${index + 1} stars`}>
-                <Star className="h-6 w-6 text-[#b7bcc9]" strokeWidth={1.7} />
-              </button>
-            ))}
-          </div>
+          {canRate ? (
+            <div className="mt-2 flex gap-1.5">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <button key={index} type="button" disabled={busy} onClick={() => onRate?.(index + 1)} aria-label={`Rate ${index + 1} stars`}>
+                  <Star className="h-6 w-6 text-[#b88945]" strokeWidth={1.7} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-slate-500">You can rate this after delivery.</p>
+          )}
         </div>
       </div>
     </section>

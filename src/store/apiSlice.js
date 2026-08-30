@@ -26,12 +26,21 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
+function requestUrl(args) {
+  if (typeof args === 'string') return args;
+  return String(args?.url || args?.path || '');
+}
+
+function isCredentialAuthRequest(args) {
+  return /\/auth\/(login|register|send-otp|resend-otp|verify-otp|refresh)\b/.test(requestUrl(args));
+}
+
 async function baseQueryWithRefresh(args, api, extraOptions) {
   startMobileLoader();
   try {
     let result = await rawBaseQuery(args, api, extraOptions);
 
-    if (result.error?.status === 401) {
+    if (result.error?.status === 401 && !isCredentialAuthRequest(args)) {
       const refreshToken = api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token');
       if (refreshToken) {
         const refreshResult = await rawBaseQuery({

@@ -8,6 +8,8 @@ import { useWishlist } from '../../context/WishlistContext';
 import api from '../../services/api';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 import { startMobileLoader, stopMobileLoader } from '../../utils/mobileLoader';
+import { couponApplyBody, formatCouponOffer } from '../../utils/couponApply';
+import { DEFAULT_GST_RATE, DEFAULT_PLATFORM_FEE, inclusiveTax, readPricingSettings } from '../../utils/priceBreakdown';
 
 export default function Cart({ navigate }) {
   const cart = useCart();
@@ -18,7 +20,8 @@ export default function Cart({ navigate }) {
   const [recommended, setRecommended] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [donation, setDonation] = useState(0);
-  const [showOffers, setShowOffers] = useState(false);
+  const [showOffers, setShowOffers] = useState(true);
+  const [pricing, setPricing] = useState({ platformFee: DEFAULT_PLATFORM_FEE, gstRate: DEFAULT_GST_RATE });
 
   useEffect(() => {
     let active = true;
@@ -27,8 +30,9 @@ export default function Cart({ navigate }) {
     Promise.allSettled([
       api.get('/products?sort=rating'),
       api.get('/coupons'),
+      api.get('/settings'),
     ])
-      .then(([productsResult, couponsResult]) => {
+      .then(([productsResult, couponsResult, settingsResult]) => {
         if (!active) return;
 
         if (productsResult.status === 'fulfilled') {
@@ -42,6 +46,10 @@ export default function Cart({ navigate }) {
         } else {
           setCoupons([]);
         }
+
+        if (settingsResult.status === 'fulfilled') {
+          setPricing(readPricingSettings(settingsResult.value));
+        }
       })
       .finally(() => {
         if (active) stopMobileLoader();
@@ -54,7 +62,8 @@ export default function Cart({ navigate }) {
   }, []);
 
   const selectedCount = cart.itemCount;
-  const platformFee = cart.items.length ? 23 : 0;
+  const platformFee = cart.items.length ? pricing.platformFee : 0;
+  const taxAmount = inclusiveTax(Math.max(0, cart.sellingTotal - cart.couponDiscount), pricing.gstRate);
   const payable = cart.finalAmount + platformFee + donation;
   const deliveryDate = useMemo(() => {
     const date = new Date();
@@ -64,13 +73,18 @@ export default function Cart({ navigate }) {
   const bestCoupon = coupons[0];
 
   const applyCoupon = async (couponCode = code) => {
+    const nextCode = String(couponCode || '').trim().toUpperCase();
     setMessage('');
+    if (!nextCode) {
+      setMessage('Select a coupon or enter a code.');
+      return;
+    }
     startMobileLoader();
     try {
-      const data = await api.post('/coupons/apply', { code: couponCode, cartTotal: cart.sellingTotal });
+      const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart }));
       cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: Number(data.discountAmount ?? data.discount ?? 0) });
-      setCode(data.couponCode || data.coupon?.code || couponCode);
-      setMessage(`${data.couponCode || data.coupon?.code || couponCode} applied`);
+      setCode(data.couponCode || data.coupon?.code || nextCode);
+      setMessage(`${data.couponCode || data.coupon?.code || nextCode} applied`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -224,28 +238,35 @@ export default function Cart({ navigate }) {
             <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Offers</p>
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
-                <h2 className="section-title text-base">Coupon & Bank Offers</h2>
-                <Button type="button" onClick={() => setShowOffers((value) => !value)} variant="ghost" size="sm" className="px-0 text-rose">All Offers &gt;</Button>
+                <h2 className="section-title text-base">Available Coupons</h2>
+                <Button type="button" onClick={() => setShowOffers((value) => !value)} variant="ghost" size="sm" className="px-0 text-rose">{showOffers ? 'Hide' : 'Show'}</Button>
               </div>
               {showOffers && (
                 <div className="mt-4 grid gap-2">
-                  {coupons.map((coupon) => (
-                    <button key={coupon.code} type="button" onClick={() => applyCoupon(coupon.code)} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-sm">
-                      <span><span className="font-black">{coupon.code}</span> - {coupon.discountValue}{coupon.type === 'Percentage' ? '% off' : ' rupees off'}</span>
-                      <span className="font-black text-rose">Apply</span>
+                  {coupons.length ? coupons.map((coupon) => (
+                    <button key={coupon.code} type="button" onClick={() => applyCoupon(coupon.code)} className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm ${cart.coupon?.code === coupon.code ? 'border-[#6d1f34] bg-[#fffaf2]' : 'border-slate-200'}`}>
+                      <span>
+                        <span className="font-black">{coupon.code}</span>
+                        <span className="mt-1 block text-slate-500">{formatCouponOffer(coupon)}</span>
+                      </span>
+                      <span className="font-black text-rose">{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</span>
                     </button>
-                  ))}
+                  )) : (
+                    <p className="body-text text-slate-500">No live coupons right now. Enter a code below if you have one.</p>
+                  )}
                 </div>
               )}
-              <div className="mt-4 rounded-xl border border-emerald-200 p-4">
-                <p className="text-base font-black">Extra Rs. {bestCoupon?.maxDiscountAmount || 136} OFF</p>
-                <p className="body-text mt-2 text-slate-600">{bestCoupon ? `${bestCoupon.discountValue}${bestCoupon.type === 'Percentage' ? '% off' : ' rupees off'} on minimum purchase of Rs. ${bestCoupon.minOrderAmount}` : '15% off upto Rs. 150 on minimum purchase of Rs. 300'}</p>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <span className="label-text border border-dashed border-emerald-400 px-3 py-3">{bestCoupon?.code || 'FWDEORS15'}</span>
-                  <Button onClick={() => applyCoupon(bestCoupon?.code || code)} variant="outline" className="border-rose text-rose hover:bg-rose/5">APPLY COUPON</Button>
+              {bestCoupon ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 p-4">
+                  <p className="text-base font-black">{bestCoupon.code}</p>
+                  <p className="body-text mt-2 text-slate-600">{formatCouponOffer(bestCoupon)}</p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <span className="label-text border border-dashed border-emerald-400 px-3 py-3">{bestCoupon.code}</span>
+                    <Button type="button" onClick={() => applyCoupon(bestCoupon.code)} variant="outline" className="border-rose text-rose hover:bg-rose/5">APPLY COUPON</Button>
+                  </div>
                 </div>
-                {message && <p className="label-text mt-3 text-wine">{message}</p>}
-              </div>
+              ) : null}
+              {message && <p className="label-text mt-3 text-wine">{message}</p>}
               <div className="mt-4 flex gap-2">
                 <TextInput value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="flex-1" placeholder="Enter coupon code" />
                 <Button onClick={() => applyCoupon()}>Apply</Button>
@@ -263,13 +284,13 @@ export default function Cart({ navigate }) {
         </div>
 
         <aside className="hidden md:block">
-          <PriceDetails cart={cart} platformFee={platformFee} donation={donation} payable={payable} />
+          <PriceDetails cart={cart} platformFee={platformFee} taxAmount={taxAmount} taxRate={pricing.gstRate} donation={donation} payable={payable} />
           <Button onClick={() => navigate('/checkout')} variant="accent" className="mt-4 w-full">Place Order</Button>
         </aside>
       </div>
 
       <div className="md:hidden">
-        <PriceDetails cart={cart} platformFee={platformFee} donation={donation} payable={payable} />
+        <PriceDetails cart={cart} platformFee={platformFee} taxAmount={taxAmount} taxRate={pricing.gstRate} donation={donation} payable={payable} />
       </div>
 
       <TrustStrip />
@@ -378,7 +399,7 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
   );
 }
 
-function PriceDetails({ cart, platformFee, donation, payable }) {
+function PriceDetails({ cart, platformFee, taxAmount = 0, taxRate = DEFAULT_GST_RATE, donation, payable }) {
   return (
     <Card className="rounded-none md:rounded-2xl">
       <CardHeader>
@@ -389,6 +410,7 @@ function PriceDetails({ cart, platformFee, donation, payable }) {
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
         <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
         <Row label="Platform Fee" value={`Rs. ${platformFee}`} />
+        {taxAmount > 0 && <Row label={`GST (${taxRate}% incl.)`} value={`Rs. ${taxAmount}`} />}
         {donation > 0 && <Row label="Donation" value={`Rs. ${donation}`} />}
         <div className="flex justify-between border-t border-slate-100 pt-4">
           <span>Total Amount</span>

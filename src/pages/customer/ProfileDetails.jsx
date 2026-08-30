@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { digitsOnly, isValidIndianMobile, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
 
 const baseInputClass = 'h-[48px] w-full rounded-none border border-[#e5e7eb] px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400 focus:border-[#ff4f7d]';
 const fieldLabelClass = 'absolute left-4 top-[-9px] bg-white px-1 text-[12px] text-slate-400';
@@ -170,8 +171,8 @@ export default function ProfileDetails() {
       return;
     }
 
-    if (!normalizedDraftPhone) {
-      setError('Please enter a valid mobile number');
+    if (!isValidIndianMobile(form.phone)) {
+      setError(PHONE_VALIDATION_MESSAGE);
       return;
     }
 
@@ -259,8 +260,14 @@ export default function ProfileDetails() {
                   onChange={(event) => onChange('phone', digitsOnly(event.target.value, 10))}
                   className={baseInputClass}
                   placeholder="Enter mobile number"
-                  inputMode="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  maxLength={10}
+                  pattern="[0-9]*"
                 />
+                {form.phone && !isValidIndianMobile(form.phone) ? (
+                  <p className="text-[12px] font-medium text-[#c81e4a]">{PHONE_VALIDATION_MESSAGE}</p>
+                ) : null}
                 {phoneChanged ? (
                   <>
                     <div className="flex gap-3">
@@ -368,7 +375,10 @@ export default function ProfileDetails() {
             <div className="mt-5 space-y-5">
               <div className="flex h-[48px] overflow-hidden border border-[#e5e7eb]">
                 <div className="flex w-[64px] items-center justify-center border-r border-[#e5e7eb] text-[13px] text-slate-400">+91</div>
-                <input value={form.alternatePhone} onChange={(event) => onChange('alternatePhone', digitsOnly(event.target.value, 10))} className="h-full w-full px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400" placeholder="Alternate mobile number" inputMode="tel" />
+                <input value={form.alternatePhone} onChange={(event) => onChange('alternatePhone', digitsOnly(event.target.value, 10))} className="h-full w-full px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400" placeholder="Alternate mobile number" inputMode="numeric" autoComplete="tel" maxLength={10} pattern="[0-9]*" />
+                {form.alternatePhone && !isValidIndianMobile(form.alternatePhone) ? (
+                  <p className="mt-2 text-[12px] font-medium text-[#c81e4a]">{PHONE_VALIDATION_MESSAGE}</p>
+                ) : null}
               </div>
 
               <div className="relative">
@@ -438,14 +448,11 @@ function buildForm(user) {
   };
 }
 
-function digitsOnly(value, max = Infinity) {
-  return String(value || '').replace(/\D/g, '').slice(0, max);
-}
-
 function normalizePhone(value, allowEmpty = false) {
   const digits = digitsOnly(value, 10);
-  if (!digits && allowEmpty) return '';
-  return digits;
+  if (!digits) return '';
+  if (allowEmpty && !isValidIndianMobile(digits)) return '';
+  return isValidIndianMobile(digits) ? digits : '';
 }
 
 function normalizeEmail(value) {

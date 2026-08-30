@@ -12,6 +12,8 @@ export default function PriceSummary({ cart, cta = 'Checkout', onAction }) {
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
         <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
         <Row label="Delivery Charges" value={cart.deliveryCharge ? `Rs. ${cart.deliveryCharge}` : 'FREE'} />
+        {cart.platformFee > 0 ? <Row label="Platform Fee" value={`Rs. ${cart.platformFee}`} /> : null}
+        {cart.taxAmount > 0 ? <Row label={`GST (${cart.taxRate || 5}% incl.)`} value={`Rs. ${cart.taxAmount}`} /> : null}
         {cart.codCharge > 0 ? <Row label="Cash on Delivery Fee" value={`Rs. ${cart.codCharge}`} /> : null}
         </div>
         <div className="flex items-center justify-between border-t border-slate-100 pt-5">

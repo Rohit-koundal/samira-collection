@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   BadgeCheck,
   Banknote,
-  ChevronDown,
   CreditCard,
   Headphones,
   Landmark,
@@ -30,6 +29,7 @@ import { trackEvent } from '../../utils/analytics';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
+import { couponApplyBody, formatCouponOffer } from '../../utils/couponApply';
 import './Checkout.css';
 
 const PAYMENT_METHOD_NOTES = {
@@ -85,8 +85,8 @@ const emptyAddress = {
   fullName: '',
   mobile: '',
   pincode: '',
-  state: 'Rajasthan',
-  city: 'Jaipur',
+  state: '',
+  city: '',
   houseNo: '',
   area: '',
   landmark: '',
@@ -104,6 +104,7 @@ export default function Checkout({ navigate }) {
   const [editingAddressId, setEditingAddressId] = useState('');
   const [addressForm, setAddressForm] = useState({ ...emptyAddress, fullName: user?.name || '', mobile: user?.phone || '' });
   const [couponCode, setCouponCode] = useState('');
+  const [coupons, setCoupons] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [quote, setQuote] = useState(null);
@@ -148,6 +149,12 @@ export default function Checkout({ navigate }) {
   };
 
   useEffect(() => { loadAddresses(); }, []);
+
+  useEffect(() => {
+    api.get('/coupons')
+      .then((items) => setCoupons(Array.isArray(items) ? items : []))
+      .catch(() => setCoupons([]));
+  }, []);
 
   // Which payment methods exist is decided by the store settings, not the UI.
   useEffect(() => {
@@ -231,6 +238,9 @@ export default function Checkout({ navigate }) {
     couponDiscount: quote?.couponDiscount ?? cart.couponDiscount,
     deliveryCharge: quote?.deliveryCharge ?? cart.deliveryCharge,
     codCharge: quote?.codCharge ?? 0,
+    platformFee: quote?.platformFee ?? 0,
+    taxAmount: quote?.taxAmount ?? 0,
+    taxRate: quote?.taxRate ?? 0,
     finalAmount: quote?.finalAmount ?? cart.finalAmount,
   }), [cart.couponDiscount, cart.deliveryCharge, cart.discount, cart.finalAmount, cart.items, cart.totalMRP, quote]);
 
@@ -257,21 +267,14 @@ export default function Checkout({ navigate }) {
     }
   };
 
-  const applyCoupon = async () => {
+  const applyCoupon = async (code = couponCode) => {
+    const nextCode = String(code || '').trim().toUpperCase();
     setError('');
+    if (!nextCode) return showFeedback('Select a coupon or enter a code.', 'warning');
     try {
-      const data = await api.post('/coupons/apply', {
-        code: couponCode,
-        cartTotal: cart.sellingTotal,
-        paymentMethod,
-        items: cart.items.map((item) => ({
-          product: item.product._id || item.product.id,
-          quantity: item.quantity,
-          price: item.product.price,
-          category: item.product.category?._id || item.product.category,
-        })),
-      });
+      const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart, paymentMethod }));
       cart.setCoupon({ code: data.couponCode, discount: data.discountAmount });
+      setCouponCode(data.couponCode || nextCode);
       trackEvent('COUPON_APPLIED');
       setToast(data.message);
     } catch (err) {
@@ -478,6 +481,7 @@ export default function Checkout({ navigate }) {
             cart={cart}
             summary={summary}
             paymentOptions={paymentOptions}
+            coupons={coupons}
             couponCode={couponCode}
             setCouponCode={setCouponCode}
             applyCoupon={applyCoupon}
@@ -521,6 +525,7 @@ export default function Checkout({ navigate }) {
       openEditAddressForm={openEditAddressForm}
       removeAddress={removeAddress}
       resetAddressEditor={resetAddressEditor}
+      coupons={coupons}
       couponCode={couponCode}
       setCouponCode={setCouponCode}
       applyCoupon={applyCoupon}
@@ -560,6 +565,7 @@ function DesktopCheckout({
   openEditAddressForm,
   removeAddress,
   resetAddressEditor,
+  coupons,
   couponCode,
   setCouponCode,
   applyCoupon,
@@ -664,13 +670,29 @@ function DesktopCheckout({
 
             <section className="sc-checkout__card sc-checkout__coupon">
               <SectionTitle number="3" icon={Tag} title="Coupon / Offers" />
+              {coupons?.length ? (
+                <div className="sc-checkout__coupon-list">
+                  {coupons.map((coupon) => (
+                    <button
+                      key={coupon.code}
+                      type="button"
+                      className={`sc-checkout__coupon-option ${cart.coupon?.code === coupon.code ? 'is-active' : ''}`}
+                      onClick={() => applyCoupon(coupon.code)}
+                    >
+                      <span>
+                        <strong>{coupon.code}</strong>
+                        <small>{formatCouponOffer(coupon)}</small>
+                      </span>
+                      <em>{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</em>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="sc-checkout__payment-copy">No live coupons right now. You can still enter a code below.</p>
+              )}
               <div className="sc-checkout__coupon-row">
-                <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="Enter coupon code" />
-                <button type="button" onClick={applyCoupon}>Apply Coupon</button>
-                <button type="button" className="sc-checkout__offer-link" onClick={() => navigate('/products?discount=20')}>
-                  View Available Offers
-                  <ChevronDown size={13} aria-hidden="true" />
-                </button>
+                <input value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Enter coupon code" />
+                <button type="button" onClick={() => applyCoupon()}>Apply Coupon</button>
               </div>
               {cart.coupon ? <p className="sc-checkout__coupon-success">{cart.coupon.code} applied: ₹{formatAmount(cart.coupon.discount)}</p> : null}
             </section>
@@ -830,6 +852,8 @@ function DesktopPriceSummary({ summary, cta, placing, quoteReady, onAction }) {
       <SummaryRow label="Discount on MRP" value={`- ₹${formatAmount(summary.discount)}`} success />
       <SummaryRow label="Coupon Discount" value={`- ₹${formatAmount(summary.couponDiscount)}`} success />
       <SummaryRow label="Delivery Charges" value={summary.deliveryCharge ? `₹${formatAmount(summary.deliveryCharge)}` : 'FREE'} success={!summary.deliveryCharge} />
+      {summary.platformFee > 0 ? <SummaryRow label="Platform Fee" value={`₹${formatAmount(summary.platformFee)}`} /> : null}
+      {summary.taxAmount > 0 ? <SummaryRow label={`GST (${summary.taxRate || 5}% incl.)`} value={`₹${formatAmount(summary.taxAmount)}`} /> : null}
       {summary.codCharge > 0 ? <SummaryRow label="Cash on Delivery Fee" value={`₹${formatAmount(summary.codCharge)}`} /> : null}
       <div className="sc-checkout__grand">
         <span>
@@ -1022,6 +1046,7 @@ function MobilePaymentStep({
   cart,
   summary,
   paymentOptions,
+  coupons,
   couponCode,
   setCouponCode,
   applyCoupon,
@@ -1058,9 +1083,29 @@ function MobilePaymentStep({
         <Card className="rounded-none border-x-0 shadow-none">
           <CardHeader><CardTitle className="text-[16px]">Apply Coupon</CardTitle></CardHeader>
           <CardContent>
+            {coupons?.length ? (
+              <div className="grid gap-2">
+                {coupons.map((coupon) => (
+                  <button
+                    key={coupon.code}
+                    type="button"
+                    onClick={() => applyCoupon(coupon.code)}
+                    className={`flex items-center justify-between rounded-xl border px-3 py-3 text-left ${cart.coupon?.code === coupon.code ? 'border-[#6d1f34] bg-[#fffaf2]' : 'border-slate-200 bg-white'}`}
+                  >
+                    <span>
+                      <span className="block text-[13px] font-bold">{coupon.code}</span>
+                      <span className="block text-[11px] text-slate-500">{formatCouponOffer(coupon)}</span>
+                    </span>
+                    <span className="text-[12px] font-bold text-[#6d1f34]">{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-slate-500">No live coupons right now. Enter a code below if you have one.</p>
+            )}
             <div className="mt-4 flex gap-2">
-              <TextInput value={couponCode} onChange={(event) => setCouponCode(event.target.value)} className="flex-1" placeholder="Coupon code" />
-              <Button onClick={applyCoupon}>Apply</Button>
+              <TextInput value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} className="flex-1" placeholder="Coupon code" />
+              <Button type="button" onClick={() => applyCoupon()}>Apply</Button>
             </div>
             {cart.coupon && <p className="mt-2 text-[13px] font-semibold text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
           </CardContent>

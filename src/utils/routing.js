@@ -23,16 +23,23 @@ export function consumeLegacyHash() {
   notifyRouteChange();
 }
 
+function normalizePathname(pathname = '/') {
+  const cleaned = String(pathname || '/').replace(/\/{2,}/g, '/');
+  return cleaned || '/';
+}
+
 export function readAppRoute() {
   consumeLegacyHash();
-  const path = window.location.pathname || '/';
+  const path = normalizePathname(window.location.pathname);
   const search = window.location.search || '';
   return `${path}${search}` || '/';
 }
 
 export function pushAppRoute(path) {
-  const next = path.startsWith('/') ? path : `/${path}`;
-  const current = `${window.location.pathname}${window.location.search}` || '/';
+  const [rawPath, rawSearch = ''] = String(path || '/').split('?');
+  const pathname = normalizePathname(rawPath.startsWith('/') ? rawPath : `/${rawPath}`);
+  const next = rawSearch ? `${pathname}?${rawSearch}` : pathname;
+  const current = `${normalizePathname(window.location.pathname)}${window.location.search}` || '/';
   if (current === next) return;
   window.history.pushState(null, '', next);
   notifyRouteChange();

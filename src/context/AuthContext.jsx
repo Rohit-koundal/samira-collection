@@ -91,10 +91,9 @@ export function AuthProvider({ children, navigate }) {
     return data;
   }, [navigate, persist, resetSessionCache]);
 
-  const login = useCallback(async ({ email, password = '', redirectTo = '/profile' }) => {
+  const login = useCallback(async ({ email, phone, password = '', redirectTo = '/profile' }) => {
     try {
-      const path = email.includes('admin') ? '/admin/login' : '/auth/login';
-      const data = await api.post(path, { email, password });
+      const data = await api.post('/auth/login', { email, phone, password });
       persist(data);
       resetSessionCache();
       navigate(redirectTo || (data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile'));

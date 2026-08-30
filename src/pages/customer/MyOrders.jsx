@@ -4,6 +4,7 @@ import { Card, CardContent } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
+import { canCancelOrder } from '../../utils/orderActions';
 
 export default function MyOrders({ navigate }) {
   const { user } = useAuth();
@@ -47,14 +48,25 @@ export default function MyOrders({ navigate }) {
         {!loading && !orders.length && <Card><CardContent className="section-title p-6 text-center md:p-8">No orders yet.</CardContent></Card>}
         <div className="space-y-3 md:space-y-4">
           {orders.map((order) => (
-            <Card as="button" key={order._id} onClick={() => navigate(`/order-detail?id=${order._id}`)} className="w-full text-left">
+            <Card key={order._id} className="w-full text-left">
               <CardContent className="flex items-center justify-between gap-3 p-4 md:p-5">
-                <span className="min-w-0">
+                <button type="button" onClick={() => navigate(`/order-detail?id=${order._id}`)} className="min-w-0 text-left">
                   <b>{order._id.slice(-8).toUpperCase()}</b><br />
                   <span className="body-text text-slate-500">{order.orderStatus}</span>
-                </span>
+                </button>
                 <span className="price shrink-0">Rs. {order.finalAmount}</span>
               </CardContent>
+              {canCancelOrder(order) ? (
+                <div className="border-t border-slate-100 px-4 pb-4">
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-[#6d1f34]"
+                    onClick={() => navigate(`/order-detail?id=${order._id}`)}
+                  >
+                    Cancel order
+                  </button>
+                </div>
+              ) : null}
             </Card>
           ))}
         </div>
@@ -184,9 +196,19 @@ function LuxuryMobileOrderCard({ order, navigate }) {
         <p className="text-[13px] text-[#4b5565]">
           Purchased for <span className="font-bold text-[#1f2a44]">{purchaser}</span>
         </p>
-        <span className="rounded-[14px] bg-white px-3 py-2 text-[12px] font-semibold text-[#6c7484] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-          {order._id.slice(-6).toUpperCase()}
-        </span>
+        {canCancelOrder(order) ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/order-detail?id=${order._id}`)}
+            className="rounded-[14px] bg-white px-3 py-2 text-[12px] font-semibold text-[#6d1f34] shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+          >
+            Cancel order
+          </button>
+        ) : (
+          <span className="rounded-[14px] bg-white px-3 py-2 text-[12px] font-semibold text-[#6c7484] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+            {order._id.slice(-6).toUpperCase()}
+          </span>
+        )}
       </div>
     </article>
   );

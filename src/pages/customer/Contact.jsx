@@ -121,7 +121,7 @@ export default function Contact({ route = '/contact' }) {
             <TextInput className="mt-3" placeholder="Phone (optional)" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
             <TextInput className="mt-3" placeholder="Subject" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} />
             <textarea className="body-text mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4 outline-none transition focus:border-wine focus:ring-2 focus:ring-wine/10" placeholder="Message" value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} required />
-            <Button className="mt-3 w-full" disabled={submitting}>{submitting ? 'Sending...' : 'Send Message'}</Button>
+            <Button type="submit" className="mt-3 w-full" disabled={submitting}>{submitting ? 'Sending...' : 'Send Message'}</Button>
             {sent && <p className="label-text mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-emerald-700">{sent}</p>}
             {error && <p className="label-text mt-3 rounded-xl bg-rose/10 px-4 py-3 text-rose">{error}</p>}
           </CardContent>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, CardContent, Dialog, DialogContent } from '../ui';
 import { cn } from '../../lib/utils';
+import { clearOtpState } from '../../utils/loginOtpStorage';
 
 const LOGIN_PROMPT_KEY = 'samira_login_prompt_dismissed';
 
@@ -37,6 +38,7 @@ export default function LoginPrompt({ open, onClose, onContinue }) {
   if (!open) return null;
 
   const continueLogin = () => {
+    clearOtpState();
     onContinue(normalizedPhone ? phone.replace(/\D/g, '').slice(0, 10) : '');
   };
 
@@ -63,16 +65,22 @@ export default function LoginPrompt({ open, onClose, onContinue }) {
                     onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="body-text h-12 min-w-0 flex-1 px-4 outline-none placeholder:text-slate-400"
                     placeholder="Mobile Number*"
-                    inputMode="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={10}
+                    pattern="[0-9]*"
                   />
                 </div>
               </div>
-              <label className="label-text flex items-start gap-3 text-slate-600">
-                <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-rose" />
-                <span>
-                  By continuing, I agree to the <span className="font-semibold text-rose">Terms of Use</span> and <span className="font-semibold text-rose">Privacy Policy</span> and I am above 18 years old.
-                </span>
-              </label>
+              {phone && !normalizedPhone ? (
+                <p className="text-[12px] font-medium text-[#c81e4a]">Enter a valid 10-digit mobile number starting with 6-9.</p>
+              ) : null}
+              <div className="label-text flex items-start gap-3 text-slate-600">
+                <input id="login-prompt-consent" type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-rose" />
+                <p>
+                  By continuing, I agree to the <a href="/terms" className="font-semibold text-rose underline-offset-2 hover:underline">Terms of Use</a> and <a href="/privacy-policy" className="font-semibold text-rose underline-offset-2 hover:underline">Privacy Policy</a> and I am above 18 years old.
+                </p>
+              </div>
               <Button onClick={continueLogin} disabled={!accepted || !normalizedPhone} variant="secondary" className={cn('h-12 w-full rounded-xl bg-[#a8a8b3] text-white hover:bg-[#9d9da8]', accepted && normalizedPhone && 'bg-charcoal hover:bg-charcoal/90')}>
                 Continue
               </Button>

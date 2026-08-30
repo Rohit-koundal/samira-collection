@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button, TextInput } from '../../components/ui';
-import { ArrowLeft, HelpCircle, Smartphone } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, HelpCircle, Smartphone } from 'lucide-react';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
+import { pushAppRoute } from '../../utils/routing';
+import { clearOtpState, readOtpState, writeOtpState } from '../../utils/loginOtpStorage';
+import { digitsOnly, isValidIndianMobile, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
 
-const OTP_STORAGE_KEY = 'samira_login_otp_state';
 const OTP_COOLDOWN_SECONDS = 60;
 
 export default function Login({ route = '/login' }) {
@@ -12,15 +14,16 @@ export default function Login({ route = '/login' }) {
   const redirectTo = searchParams.get('redirect') || '/profile';
   const initialMode = searchParams.get('mode') || 'otp';
   const autoSendOtp = searchParams.get('autoSendOtp') === '1';
-  const savedOtpState = readOtpState();
+  const routeStep = searchParams.get('step') || '';
   const { sendOtp, verifyOtp, resendOtp, login } = useAuth();
   const { notify } = useDesktopFeedback();
   const routePhone = searchParams.get('phone') || '';
-  const [step, setStep] = useState(savedOtpState?.step || (initialMode === 'password' ? 'password' : 'phone'));
-  const [countryCode] = useState(savedOtpState?.countryCode || '+91');
-  const [phone, setPhone] = useState(savedOtpState?.phone || routePhone || '');
-  const [email, setEmail] = useState('');
+  const savedOtpState = readOtpState();
+  const [step, setStep] = useState(() => (routeStep === 'otp' || routeStep === 'password' ? routeStep : (initialMode === 'password' ? 'password' : 'phone')));
+  const [countryCode] = useState('+91');
+  const [phone, setPhone] = useState(digitsOnly(routePhone, 10));
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [consent, setConsent] = useState(searchParams.get('consent') === '1');
   const [cooldown, setCooldown] = useState(() => getRemainingCooldown(savedOtpState?.cooldownExpiresAt));
@@ -33,6 +36,9 @@ export default function Login({ route = '/login' }) {
   const normalizedPhone = normalizePhone(phone, countryCode);
   const isOtpComplete = otp.every(Boolean);
   const canSubmitPhone = consent && Boolean(normalizedPhone);
+  const canSubmitPassword = Boolean(normalizedPhone) && password.trim().length >= 6;
+  const phoneHint = phone && !normalizedPhone ? PHONE_VALIDATION_MESSAGE : '';
+  const setPhoneDigits = (value) => setPhone(digitsOnly(value, 10));
   const showFeedback = (text, type = 'info') => {
     if (!text) return;
     if (!notify(text, type, 'Login')) {
@@ -43,6 +49,46 @@ export default function Login({ route = '/login' }) {
     }
   };
 
+  const buildLoginUrl = useCallback((nextStep, nextPhone = normalizedPhone || phone) => {
+    const params = new URLSearchParams();
+    if (redirectTo) params.set('redirect', redirectTo);
+    const digits = String(nextPhone || '').replace(/\D/g, '').slice(-10);
+    if (digits) params.set('phone', digits);
+    if (consent) params.set('consent', '1');
+    if (nextStep && nextStep !== 'phone') params.set('step', nextStep);
+    const qs = params.toString();
+    return qs ? `/login?${qs}` : '/login';
+  }, [consent, normalizedPhone, phone, redirectTo]);
+
+  const enterAuthStep = useCallback((nextStep, nextPhone = normalizedPhone || phone) => {
+    const phoneUrl = buildLoginUrl('phone', nextPhone);
+    const nextUrl = buildLoginUrl(nextStep, nextPhone);
+    const current = `${window.location.pathname}${window.location.search}`;
+    const onLoginPhone = window.location.pathname === '/login' && !new URLSearchParams(window.location.search).get('step');
+
+    if (nextStep === 'phone') {
+      clearOtpState();
+      setStep('phone');
+      setOtp(['', '', '', '', '', '']);
+      setDemoOtp('');
+      setMessage('');
+      if (current !== phoneUrl) pushAppRoute(phoneUrl);
+      return;
+    }
+
+    if (!onLoginPhone) {
+      if (window.location.pathname === '/login') {
+        window.history.replaceState(null, '', phoneUrl);
+      } else {
+        window.history.pushState(null, '', phoneUrl);
+      }
+    } else if (new URLSearchParams(window.location.search).get('autoSendOtp')) {
+      window.history.replaceState(null, '', phoneUrl);
+    }
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) pushAppRoute(nextUrl);
+    setStep(nextStep);
+  }, [buildLoginUrl, normalizedPhone, phone]);
+
   useEffect(() => {
     if (!cooldown) return undefined;
     const timer = setInterval(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
@@ -50,17 +96,29 @@ export default function Login({ route = '/login' }) {
   }, [cooldown]);
 
   useEffect(() => {
+    const nextStep = routeStep === 'otp' || routeStep === 'password'
+      ? routeStep
+      : (initialMode === 'password' ? 'password' : 'phone');
+    setStep(nextStep);
+    if (routePhone && digitsOnly(routePhone, 10) !== phone) setPhone(digitsOnly(routePhone, 10));
+    if (nextStep !== 'otp') {
+      setOtp(['', '', '', '', '', '']);
+      setDemoOtp('');
+    }
+  }, [initialMode, routePhone, routeStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (step !== 'otp' || !normalizedPhone) {
-      clearOtpState();
+      if (step !== 'otp') clearOtpState();
       return;
     }
     writeOtpState({
       step,
-      phone,
+      phone: normalizedPhone,
       countryCode,
       cooldownExpiresAt: Date.now() + cooldown * 1000,
     });
-  }, [cooldown, countryCode, normalizedPhone, phone, step]);
+  }, [cooldown, countryCode, normalizedPhone, step]);
 
   const requestOtp = useCallback(async (event) => {
     event?.preventDefault();
@@ -79,9 +137,9 @@ export default function Login({ route = '/login' }) {
         clearOtpState();
         return showFeedback('Logged in successfully.', 'success');
       }
-      setStep('otp');
       setCooldown(OTP_COOLDOWN_SECONDS);
       setDemoOtp(readDemoOtp(data));
+      enterAuthStep('otp', normalizedPhone);
       showFeedback(otpSentMessage(data), 'success');
       setTimeout(() => inputs.current[0]?.focus(), 50);
     } catch (error) {
@@ -89,7 +147,7 @@ export default function Login({ route = '/login' }) {
     } finally {
       setLoading(false);
     }
-  }, [consent, normalizedPhone, sendOtp, showFeedback]);
+  }, [consent, enterAuthStep, normalizedPhone, sendOtp, showFeedback]);
 
   useEffect(() => {
     if (!autoSendOtp || autoRequested) return;
@@ -149,12 +207,15 @@ export default function Login({ route = '/login' }) {
     event.preventDefault();
     setMessage('');
     setMessageType('info');
-    if (!email.trim() || !password.trim()) {
-      return showFeedback('Enter email and password to continue.', 'error');
+    if (!normalizedPhone) {
+      return showFeedback(PHONE_VALIDATION_MESSAGE, 'error');
+    }
+    if (password.trim().length < 6) {
+      return showFeedback('Enter your password to continue.', 'error');
     }
     setLoading(true);
     try {
-      const result = await login({ email, password, redirectTo });
+      const result = await login({ phone: normalizedPhone, password, redirectTo });
       if (result?.ok) {
         return;
       }
@@ -174,9 +235,11 @@ export default function Login({ route = '/login' }) {
             type="button"
             onClick={() => {
               if (step === 'otp' || step === 'password') {
-                setStep('phone');
-                setMessage('');
-                setOtp(['', '', '', '', '', '']);
+                if (window.history.length > 1 && routeStep) {
+                  window.history.back();
+                  return;
+                }
+                enterAuthStep('phone');
                 return;
               }
               window.history.back();
@@ -244,39 +307,55 @@ export default function Login({ route = '/login' }) {
                 {loading ? 'Verifying...' : 'Verify OTP'}
               </Button>
               <div className="flex flex-col items-start gap-4">
-                <button type="button" onClick={() => setStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+                <button type="button" onClick={() => enterAuthStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
                   Log in using <span className="text-[#ff5f86]">Password</span>
                 </button>
                 <button type="button" onClick={doResend} disabled={!!cooldown} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff5f86] disabled:text-slate-400 sm:text-[12px]">
                   Resend OTP
                 </button>
-                <button type="button" className="flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-                  Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
-                </button>
+                <HelpLink />
               </div>
               {message && messageType === 'error' && <StatusMessage type={messageType} message={message} onRetry={doResend} loading={loading || !!cooldown} className="md:hidden" />}
             </form>
           ) : step === 'password' ? (
             <form onSubmit={submitPassword} className="space-y-4">
               <div>
-                <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login or Signup</h2>
+                <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login with Phone</h2>
                 <p className="mt-2 text-[11px] text-slate-500 sm:text-[12px]">Use your mobile number and password to continue.</p>
               </div>
               <div className="grid grid-cols-1 gap-3">
-                <TextInput value={email} onChange={(event) => setEmail(event.target.value)} className="h-10 rounded-xl border-slate-300 text-[13px]" placeholder="Email" type="email" />
-                <div className="w-full overflow-hidden rounded-xl border border-slate-300">
-                  <div className="flex items-center">
-                    <span className="px-4 text-[11px] font-semibold text-slate-500 sm:text-[12px]">+91</span>
-                    <span className="h-10 w-px bg-slate-300" />
-                    <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} className="h-10 w-full min-w-0 flex-1 basis-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px] md:text-[16px] md:tracking-normal" placeholder="Mobile Number*" inputMode="tel" />
-                  </div>
+                <PhoneField value={phone} onChange={setPhoneDigits} />
+                {phoneHint ? <p className="text-[11px] font-medium text-[#c81e4a]">{phoneHint}</p> : null}
+                <div className="relative">
+                  <TextInput
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="h-10 rounded-xl border-slate-300 pr-12 text-[13px]"
+                    placeholder="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <TextInput value={password} onChange={(event) => setPassword(event.target.value)} className="h-10 rounded-xl border-slate-300 text-[13px]" placeholder="Password" type="password" />
               </div>
-              <Button type="submit" disabled={loading} className="h-10 w-full rounded-xl bg-[#a8a8b3] text-white hover:bg-[#9d9da8] disabled:opacity-60">{loading ? 'Logging in...' : 'Continue'}</Button>
-              <button type="button" onClick={() => setStep('phone')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+              <Button
+                type="submit"
+                disabled={loading || !canSubmitPassword}
+                className={`h-10 w-full rounded-xl text-white disabled:cursor-not-allowed disabled:opacity-60 ${canSubmitPassword ? 'bg-[#ff5f86] hover:bg-[#ff4c7b]' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
+              >
+                {loading ? 'Logging in...' : 'Continue'}
+              </Button>
+              <button type="button" onClick={() => enterAuthStep('phone')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
                 Log in using <span className="text-[#ff5f86]">OTP</span>
               </button>
+              <HelpLink />
               {message && <StatusMessage type={messageType} message={message} onRetry={() => {}} loading={loading} className="md:hidden" />}
             </form>
           ) : (
@@ -285,31 +364,23 @@ export default function Login({ route = '/login' }) {
                 <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login or Signup</h2>
                 <p className="mt-2 text-[11px] text-slate-500 sm:text-[12px]">Enter your mobile number to receive a one-time password.</p>
               </div>
-              <div className="w-full overflow-hidden rounded-xl border border-slate-300">
-                <div className="flex w-full items-center">
-                  <span className="shrink-0 px-4 text-[16px] font-semibold text-slate-500 sm:text-[14px]">{countryCode}</span>
-                  <span className="h-10 w-px shrink-0 bg-slate-300" />
-                  <TextInput
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    className="h-10 w-full min-w-0 flex-1 basis-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px] md:text-[16px] md:tracking-normal"
-                    style={{ fontSize: '16px' }}
-                    placeholder="Mobile Number*"
-                    inputMode="tel"
-                  />
-                </div>
-              </div>
-              <label className="flex cursor-pointer items-start gap-3 text-[11px] text-slate-600 sm:text-[12px]">
+              <PhoneField value={phone} onChange={setPhoneDigits} countryCode={countryCode} />
+              {phoneHint ? <p className="text-[11px] font-medium text-[#c81e4a]">{phoneHint}</p> : null}
+              <div className="flex items-start gap-3 text-[11px] text-slate-600 sm:text-[12px]">
                 <input
+                  id="login-consent"
                   type="checkbox"
                   checked={consent}
                   onChange={(event) => setConsent(event.target.checked)}
-                  className="mt-1 h-4 w-4 accent-rose"
+                  className="mt-1 h-4 w-4 shrink-0 accent-rose"
                 />
-                <span>
-                  By continuing, I agree to the <span className="font-semibold text-[#ff5f86]">Terms of Use</span> & <span className="font-semibold text-[#ff5f86]">Privacy Policy</span> and I am above 18 years old.
-                </span>
-              </label>
+                <p>
+                  By continuing, I agree to the <PolicyLink href="/terms">Terms of Use</PolicyLink>
+                  {' & '}
+                  <PolicyLink href="/privacy-policy">Privacy Policy</PolicyLink>
+                  {' '}and I am above 18 years old.
+                </p>
+              </div>
               <Button
                 type="submit"
                 disabled={loading || !canSubmitPhone}
@@ -317,12 +388,10 @@ export default function Login({ route = '/login' }) {
               >
                 {loading ? 'Sending...' : 'Continue'}
               </Button>
-              <button type="button" onClick={() => setStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+              <button type="button" onClick={() => enterAuthStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
                 Log in using <span className="text-[#ff5f86]">Password</span>
               </button>
-              <button type="button" className="flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-                Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
-              </button>
+              <HelpLink />
               {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} className="md:hidden" />}
             </form>
           )}
@@ -364,45 +433,54 @@ function otpSentMessage(response, fallback = 'OTP sent successfully.') {
   return code ? `Demo OTP: ${code}` : fallback;
 }
 
+function PhoneField({ value, onChange, countryCode = '+91' }) {
+  return (
+    <div className="w-full overflow-hidden rounded-xl border border-slate-300">
+      <div className="flex w-full items-center">
+        <span className="shrink-0 px-4 text-[14px] font-semibold text-slate-500">{countryCode}</span>
+        <span className="h-10 w-px shrink-0 bg-slate-300" />
+        <TextInput
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-10 w-full min-w-0 flex-1 basis-0 border-0 px-4 text-[15px] shadow-none focus:ring-0 sm:text-[16px]"
+          style={{ fontSize: '16px' }}
+          placeholder="Mobile Number*"
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={10}
+          pattern="[0-9]*"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PolicyLink({ href, children }) {
+  return (
+    <a href={href} className="font-semibold text-[#ff5f86] underline-offset-2 hover:underline">
+      {children}
+    </a>
+  );
+}
+
+function HelpLink() {
+  return (
+    <a href="/contact" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+      Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
+    </a>
+  );
+}
+
 function normalizePhone(value, countryCode) {
-  const digits = String(value).replace(/\D/g, '');
+  const digits = digitsOnly(value, 12);
   if (countryCode === '+91') {
-    const local = digits.replace(/^91/, '');
-    return /^[6-9]\d{9}$/.test(local) ? local : '';
+    return isValidIndianMobile(digits.replace(/^91/, '')) ? digits.replace(/^91/, '').slice(-10) : '';
   }
   return digits.length >= 6 ? `${countryCode}${digits}` : '';
 }
 
 function maskPhone(value) {
   return value ? `${value.slice(0, 2)}XXXXX${value.slice(-3)}` : '';
-}
-
-function readOtpState() {
-  try {
-    const raw = localStorage.getItem(OTP_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.phone || !parsed?.cooldownExpiresAt) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeOtpState(state) {
-  try {
-    localStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore storage failures and continue with in-memory countdown.
-  }
-}
-
-function clearOtpState() {
-  try {
-    localStorage.removeItem(OTP_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
 }
 
 function getRemainingCooldown(cooldownExpiresAt) {

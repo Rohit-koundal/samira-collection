@@ -10,6 +10,16 @@ function customerSafeMessage(message, status, path = '', code = '') {
       : 'Image storage is not configured for production uploads yet. Please connect Cloudinary or R2, then upload again.';
   }
   const text = String(message || '').toLowerCase();
+  if (status === 401 || status === 403 || status === 400) {
+    if (message) return message;
+    if (path.includes('/auth/login')) return 'Invalid mobile number or password.';
+    if (path.includes('/auth/')) return 'Please check the details and try again.';
+  }
+  if (status === 'FETCH_ERROR' || status === 'TIMEOUT_ERROR') {
+    return path.includes('/auth/')
+      ? 'Unable to reach the login service. Please try again.'
+      : 'Unable to reach the store right now. Please try again.';
+  }
   if (status === 503 || text.includes('database unavailable') || text.includes('mongodb') || text.includes('mongo_uri') || text.includes('atlas')) {
     if (path.includes('/auth/')) return 'Login service is temporarily unavailable. Please try again in a few minutes.';
     if (path.includes('/coupons')) return 'Coupon service is temporarily unavailable. Please try again in a few minutes.';
