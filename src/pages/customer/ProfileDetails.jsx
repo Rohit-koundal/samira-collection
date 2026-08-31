@@ -373,9 +373,11 @@ export default function ProfileDetails() {
           <div>
             <h2 className="text-[16px] font-bold text-[#1f2a44]">Alternate mobile details</h2>
             <div className="mt-5 space-y-5">
-              <div className="flex h-[48px] overflow-hidden border border-[#e5e7eb]">
-                <div className="flex w-[64px] items-center justify-center border-r border-[#e5e7eb] text-[13px] text-slate-400">+91</div>
-                <input value={form.alternatePhone} onChange={(event) => onChange('alternatePhone', digitsOnly(event.target.value, 10))} className="h-full w-full px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400" placeholder="Alternate mobile number" inputMode="numeric" autoComplete="tel" maxLength={10} pattern="[0-9]*" />
+              <div>
+                <div className="flex h-[48px] overflow-hidden border border-[#e5e7eb]">
+                  <div className="flex w-[64px] items-center justify-center border-r border-[#e5e7eb] text-[13px] text-slate-400">+91</div>
+                  <input value={form.alternatePhone} onChange={(event) => onChange('alternatePhone', digitsOnly(event.target.value, 10))} className="h-full w-full px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400" placeholder="Alternate mobile number" inputMode="numeric" autoComplete="tel" maxLength={10} pattern="[0-9]*" />
+                </div>
                 {form.alternatePhone && !isValidIndianMobile(form.alternatePhone) ? (
                   <p className="mt-2 text-[12px] font-medium text-[#c81e4a]">{PHONE_VALIDATION_MESSAGE}</p>
                 ) : null}

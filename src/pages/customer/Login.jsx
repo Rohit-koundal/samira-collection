@@ -39,7 +39,7 @@ export default function Login({ route = '/login' }) {
   const canSubmitPassword = Boolean(normalizedPhone) && password.trim().length >= 6;
   const phoneHint = phone && !normalizedPhone ? PHONE_VALIDATION_MESSAGE : '';
   const setPhoneDigits = (value) => setPhone(digitsOnly(value, 10));
-  const showFeedback = (text, type = 'info') => {
+  const showFeedback = useCallback((text, type = 'info') => {
     if (!text) return;
     if (!notify(text, type, 'Login')) {
       setMessageType(type);
@@ -47,7 +47,7 @@ export default function Login({ route = '/login' }) {
     } else {
       setMessage('');
     }
-  };
+  }, [notify]);
 
   const buildLoginUrl = useCallback((nextStep, nextPhone = normalizedPhone || phone) => {
     const params = new URLSearchParams();
@@ -465,9 +465,12 @@ function PolicyLink({ href, children }) {
 
 function HelpLink() {
   return (
-    <a href="/contact" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-      Having trouble logging in? <span className="text-[#ff5f86]">Get help</span> <HelpCircle className="h-4 w-4 text-[#ff5f86]" />
-    </a>
+    <p className="flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+      Having trouble logging in?
+      <a href="/contact" className="inline-flex items-center gap-1 text-[#ff5f86] underline-offset-2 hover:underline">
+        Get help <HelpCircle className="h-4 w-4" />
+      </a>
+    </p>
   );
 }
 
