@@ -1,3 +1,5 @@
+import { splitFilterValues, toggleFilterValue } from '../../store/catalogSlice';
+
 const filterGroups = [
   { title: 'Size', param: 'size', items: ['XS', 'S', 'M', 'L', 'XL', 'Free Size'] },
   { title: 'Color', param: 'color', items: ['Wine', 'Blush', 'Gold', 'Ivory', 'Black', 'Emerald', 'Navy', 'Rose'] },
@@ -26,6 +28,7 @@ export default function ProductFilters({ categories = [], params = new URLSearch
           active={params.get('category') || ''}
           items={visibleCategories.map((category) => [category._id || category.id || category.slug || category.name, category.name])}
           onChange={setFilter}
+          multiple
         />
         {filterGroups.map((group) => (
           <FilterGroup
@@ -51,22 +54,26 @@ export default function ProductFilters({ categories = [], params = new URLSearch
   );
 }
 
-function FilterGroup({ title, param, active, items, onChange }) {
+function FilterGroup({ title, param, active, items, onChange, multiple = false }) {
+  const selectedValues = new Set(splitFilterValues(active));
   return (
     <div>
       <h3 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>
       <div className="grid gap-2">
-        {items.map((item) => (
-          <label key={Array.isArray(item) ? item[0] : item} className="flex items-center gap-3 text-sm font-semibold text-slate-600">
-            <input
-              type="checkbox"
-              checked={active === String(Array.isArray(item) ? item[0] : item)}
-              onChange={(event) => onChange(param, event.target.checked ? String(Array.isArray(item) ? item[0] : item) : '')}
-              className="accent-rose"
-            />
-            {Array.isArray(item) ? item[1] : item}
-          </label>
-        ))}
+        {items.map((item) => {
+          const value = String(Array.isArray(item) ? item[0] : item);
+          return (
+            <label key={value} className="flex items-center gap-3 text-sm font-semibold text-slate-600">
+              <input
+                type="checkbox"
+                checked={multiple ? selectedValues.has(value) : active === value}
+                onChange={(event) => onChange(param, multiple ? toggleFilterValue(active, value) : (event.target.checked ? value : ''))}
+                className="accent-rose"
+              />
+              {Array.isArray(item) ? item[1] : item}
+            </label>
+          );
+        })}
       </div>
     </div>
   );

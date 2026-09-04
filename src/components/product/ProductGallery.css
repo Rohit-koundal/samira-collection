@@ -70,8 +70,18 @@
   .sc-gallery__media {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: center top;
+    object-fit: contain;
+    object-position: center;
+  }
+
+  .sc-gallery__media-trigger {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
   }
 
   .sc-gallery__wish,

@@ -75,7 +75,14 @@ export default function ProductGallery({
         {current?.type === 'video' ? (
           <video src={current.url} poster={current.thumbnail} controls playsInline className="sc-gallery__media" />
         ) : (
-          <img src={normalizeImageUrl(current?.url)} alt={product?.name || 'Product'} className="sc-gallery__media" />
+          <button
+            type="button"
+            className="sc-gallery__media-trigger"
+            onClick={onOpenFullscreen}
+            aria-label={`View ${product?.name || 'product'} image fullscreen`}
+          >
+            <img src={normalizeImageUrl(current?.url)} alt={product?.name || 'Product'} className="sc-gallery__media" />
+          </button>
         )}
 
         <div className="sc-gallery__footer">

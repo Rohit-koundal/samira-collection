@@ -13,6 +13,8 @@ import {
   selectCatalogFilters,
   selectVisibleProducts,
   setCatalogFilterValue,
+  splitFilterValues,
+  toggleFilterValue,
 } from '../../store/catalogSlice';
 import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 import { trackEvent } from '../../utils/analytics';
@@ -129,11 +131,11 @@ export default function Products({ navigate, route = '/products' }) {
         </button>
         {categories.map((category) => {
           const categoryValue = category._id || category.id || category.slug || category.name;
-          const active = filters.category === categoryValue;
+          const active = splitFilterValues(filters.category).includes(String(categoryValue));
           return (
             <button
               key={categoryValue}
-              onClick={() => updateParam('category', active ? '' : categoryValue)}
+              onClick={() => updateParam('category', toggleFilterValue(filters.category, categoryValue))}
               className={`min-w-max rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-sm ${active ? 'bg-wine text-white' : 'bg-white text-[#1f2a44]'}`}
             >
               {category.name}

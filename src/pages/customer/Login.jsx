@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button, TextInput } from '../../components/ui';
-import { ArrowLeft, Eye, EyeOff, HelpCircle, Smartphone } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Smartphone } from 'lucide-react';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import { pushAppRoute } from '../../utils/routing';
 import { clearOtpState, readOtpState, writeOtpState } from '../../utils/loginOtpStorage';
@@ -12,18 +12,15 @@ const OTP_COOLDOWN_SECONDS = 60;
 export default function Login({ route = '/login' }) {
   const searchParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const redirectTo = searchParams.get('redirect') || '/profile';
-  const initialMode = searchParams.get('mode') || 'otp';
   const autoSendOtp = searchParams.get('autoSendOtp') === '1';
   const routeStep = searchParams.get('step') || '';
-  const { sendOtp, verifyOtp, resendOtp, login } = useAuth();
+  const { sendOtp, verifyOtp, resendOtp } = useAuth();
   const { notify } = useDesktopFeedback();
   const routePhone = searchParams.get('phone') || '';
   const savedOtpState = readOtpState();
-  const [step, setStep] = useState(() => (routeStep === 'otp' || routeStep === 'password' ? routeStep : (initialMode === 'password' ? 'password' : 'phone')));
+  const [step, setStep] = useState(() => (routeStep === 'otp' ? 'otp' : 'phone'));
   const [countryCode] = useState('+91');
   const [phone, setPhone] = useState(digitsOnly(routePhone, 10));
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [consent, setConsent] = useState(searchParams.get('consent') === '1');
   const [cooldown, setCooldown] = useState(() => getRemainingCooldown(savedOtpState?.cooldownExpiresAt));
@@ -36,7 +33,6 @@ export default function Login({ route = '/login' }) {
   const normalizedPhone = normalizePhone(phone, countryCode);
   const isOtpComplete = otp.every(Boolean);
   const canSubmitPhone = consent && Boolean(normalizedPhone);
-  const canSubmitPassword = Boolean(normalizedPhone) && password.trim().length >= 6;
   const phoneHint = phone && !normalizedPhone ? PHONE_VALIDATION_MESSAGE : '';
   const setPhoneDigits = (value) => setPhone(digitsOnly(value, 10));
   const showFeedback = useCallback((text, type = 'info') => {
@@ -96,16 +92,14 @@ export default function Login({ route = '/login' }) {
   }, [cooldown]);
 
   useEffect(() => {
-    const nextStep = routeStep === 'otp' || routeStep === 'password'
-      ? routeStep
-      : (initialMode === 'password' ? 'password' : 'phone');
+    const nextStep = routeStep === 'otp' ? 'otp' : 'phone';
     setStep(nextStep);
     if (routePhone && digitsOnly(routePhone, 10) !== phone) setPhone(digitsOnly(routePhone, 10));
     if (nextStep !== 'otp') {
       setOtp(['', '', '', '', '', '']);
       setDemoOtp('');
     }
-  }, [initialMode, routePhone, routeStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routePhone, routeStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (step !== 'otp' || !normalizedPhone) {
@@ -203,30 +197,6 @@ export default function Login({ route = '/login' }) {
     }
   };
 
-  const submitPassword = async (event) => {
-    event.preventDefault();
-    setMessage('');
-    setMessageType('info');
-    if (!normalizedPhone) {
-      return showFeedback(PHONE_VALIDATION_MESSAGE, 'error');
-    }
-    if (password.trim().length < 6) {
-      return showFeedback('Enter your password to continue.', 'error');
-    }
-    setLoading(true);
-    try {
-      const result = await login({ phone: normalizedPhone, password, redirectTo });
-      if (result?.ok) {
-        return;
-      }
-      showFeedback(result?.error || 'Unable to login.', 'error');
-    } catch (error) {
-      showFeedback(error.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <section className="auth-font min-h-screen bg-[#f6f7fb] px-0 py-0">
       <div className="mx-auto min-h-screen w-full max-w-[470px] overflow-hidden bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:max-w-[560px]">
@@ -234,7 +204,7 @@ export default function Login({ route = '/login' }) {
           <button
             type="button"
             onClick={() => {
-              if (step === 'otp' || step === 'password') {
+              if (step === 'otp') {
                 if (window.history.length > 1 && routeStep) {
                   window.history.back();
                   return;
@@ -307,56 +277,12 @@ export default function Login({ route = '/login' }) {
                 {loading ? 'Verifying...' : 'Verify OTP'}
               </Button>
               <div className="flex flex-col items-start gap-4">
-                <button type="button" onClick={() => enterAuthStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-                  Log in using <span className="text-[#ff5f86]">Password</span>
-                </button>
                 <button type="button" onClick={doResend} disabled={!!cooldown} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff5f86] disabled:text-slate-400 sm:text-[12px]">
                   Resend OTP
                 </button>
                 <HelpLink />
               </div>
               {message && messageType === 'error' && <StatusMessage type={messageType} message={message} onRetry={doResend} loading={loading || !!cooldown} className="md:hidden" />}
-            </form>
-          ) : step === 'password' ? (
-            <form onSubmit={submitPassword} className="space-y-4">
-              <div>
-                <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login with Phone</h2>
-                <p className="mt-2 text-[11px] text-slate-500 sm:text-[12px]">Use your mobile number and password to continue.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3">
-                <PhoneField value={phone} onChange={setPhoneDigits} />
-                {phoneHint ? <p className="text-[11px] font-medium text-[#c81e4a]">{phoneHint}</p> : null}
-                <div className="relative">
-                  <TextInput
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="h-10 rounded-xl border-slate-300 pr-12 text-[13px]"
-                    placeholder="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <Button
-                type="submit"
-                disabled={loading || !canSubmitPassword}
-                className={`h-10 w-full rounded-xl text-white disabled:cursor-not-allowed disabled:opacity-60 ${canSubmitPassword ? 'bg-[#ff5f86] hover:bg-[#ff4c7b]' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
-              >
-                {loading ? 'Logging in...' : 'Continue'}
-              </Button>
-              <button type="button" onClick={() => enterAuthStep('phone')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-                Log in using <span className="text-[#ff5f86]">OTP</span>
-              </button>
-              <HelpLink />
-              {message && <StatusMessage type={messageType} message={message} onRetry={() => {}} loading={loading} className="md:hidden" />}
             </form>
           ) : (
             <form onSubmit={requestOtp} className="space-y-4">
@@ -388,9 +314,6 @@ export default function Login({ route = '/login' }) {
               >
                 {loading ? 'Sending...' : 'Continue'}
               </Button>
-              <button type="button" onClick={() => enterAuthStep('password')} className="text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
-                Log in using <span className="text-[#ff5f86]">Password</span>
-              </button>
               <HelpLink />
               {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} className="md:hidden" />}
             </form>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Grid3X3, Palette, Percent, Ruler, SlidersHorizontal, Sparkles, Tag, X } from 'lucide-react';
+import { splitFilterValues, toggleFilterValue } from '../../store/catalogSlice';
 
 const navItems = [
   { key: 'category', label: 'Category', icon: Grid3X3 },
@@ -49,7 +50,8 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
   }, [open, params]);
 
   const selectedCount = useMemo(() => {
-    return ['category', 'size', 'color', 'fabric', 'discount', 'sort', 'minPrice', 'maxPrice']
+    const categoryCount = splitFilterValues(draft.category).length;
+    return categoryCount + ['size', 'color', 'fabric', 'discount', 'sort', 'minPrice', 'maxPrice']
       .reduce((count, key) => count + (draft[key] ? 1 : 0), 0);
   }, [draft]);
 
@@ -113,12 +115,12 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
                 <div className="space-y-2">
                   {categories.map((category) => {
                     const value = category._id || category.id || category.slug || category.name;
-                    const selected = draft.category === value;
+                    const selected = splitFilterValues(draft.category).includes(String(value));
                     return (
                       <button
                         key={value}
                         type="button"
-                        onClick={() => setDraft((current) => ({ ...current, category: current.category === value ? '' : value }))}
+                        onClick={() => setDraft((current) => ({ ...current, category: toggleFilterValue(current.category, value) }))}
                         className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-left"
                       >
                         <div className="flex items-center gap-3">

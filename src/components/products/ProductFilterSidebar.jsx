@@ -1,4 +1,5 @@
 import { ChevronUp, Filter, X } from 'lucide-react';
+import { splitFilterValues, toggleFilterValue } from '../../store/catalogSlice';
 import './ProductFilterSidebar.css';
 
 const sizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'];
@@ -21,6 +22,7 @@ export default function ProductFilterSidebar({
   const activeColor = params.get('color') || '';
   const activeSize = params.get('size') || '';
   const activeCategory = params.get('category') || '';
+  const activeCategories = new Set(splitFilterValues(activeCategory));
   const activeStock = params.get('stock') || '';
   const minPrice = params.get('minPrice') || '1499';
   const maxPrice = params.get('maxPrice') || '15999';
@@ -52,8 +54,8 @@ export default function ProductFilterSidebar({
                   <span className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={activeCategory === value}
-                      onChange={(event) => update('category', event.target.checked ? value : '')}
+                      checked={activeCategories.has(String(value))}
+                      onChange={() => update('category', toggleFilterValue(activeCategory, value))}
                     />
                     <span>{category.name}</span>
                   </span>

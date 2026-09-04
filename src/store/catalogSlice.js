@@ -1,7 +1,7 @@
 import { createSelector, createSlice } from '@reduxjs/toolkit';
 
 const sortOptions = ['newest', 'priceLowHigh', 'priceHighLow', 'discount', 'rating'];
-export const clearableCatalogFilterKeys = ['category', 'size', 'color', 'fabric', 'occasion', 'discount', 'rating', 'stock', 'minPrice', 'maxPrice', 'featured', 'newArrival', 'bestSeller', 'trending'];
+export const clearableCatalogFilterKeys = ['search', 'category', 'size', 'color', 'fabric', 'occasion', 'discount', 'rating', 'stock', 'minPrice', 'maxPrice', 'featured', 'newArrival', 'bestSeller', 'trending'];
 
 const initialState = {
   search: '',
@@ -119,11 +119,10 @@ function matchesFilters(product, filters, categories) {
 
 function matchesSearch(product, search) {
   if (!search) return true;
-  const term = search.toLowerCase();
   const haystack = [
     product.name,
     product.brand,
-    product.category,
+    getSearchableText(product.category),
     product.fabric,
     product.occasion,
     product.sku,
@@ -133,20 +132,53 @@ function matchesSearch(product, search) {
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-  return haystack.includes(term);
+
+  return String(search)
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((term) => getSearchTermVariants(term).some((variant) => haystack.includes(variant)));
+}
+
+function getSearchableText(value) {
+  if (!value || typeof value !== 'object') return value;
+  return [value.name, value.title, value.slug].filter(Boolean).join(' ');
+}
+
+function getSearchTermVariants(term) {
+  if (term === 'accessory') return ['accessory', 'accessories'];
+  if (term === 'accessories') return ['accessories', 'accessory'];
+  return [term];
 }
 
 function matchesCategory(product, category, categories) {
   if (!category) return true;
-  const selected = normalizeKey(category);
-  const categoryAliases = resolveCategoryAliases(selected, categories);
   const productAliases = new Set([
     normalizeKey(product.categoryId),
     normalizeKey(product.category),
     normalizeKey(product.subCategory),
   ].filter(Boolean));
 
-  return Array.from(categoryAliases).some((alias) => productAliases.has(alias));
+  return splitFilterValues(category).some((selected) => {
+    const categoryAliases = resolveCategoryAliases(normalizeKey(selected), categories);
+    return Array.from(categoryAliases).some((alias) => productAliases.has(alias));
+  });
+}
+
+export function splitFilterValues(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function toggleFilterValue(activeValue, value) {
+  const nextValue = String(value || '').trim();
+  if (!nextValue) return normalizeText(activeValue);
+  const selected = splitFilterValues(activeValue);
+  const exists = selected.includes(nextValue);
+  return (exists ? selected.filter((item) => item !== nextValue) : [...selected, nextValue]).join(',');
 }
 
 function resolveCategoryAliases(value, categories) {
