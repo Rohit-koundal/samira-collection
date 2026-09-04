@@ -32,7 +32,7 @@ function requestUrl(args) {
 }
 
 function isCredentialAuthRequest(args) {
-  return /\/auth\/(login|register|send-otp|resend-otp|verify-otp|refresh)\b/.test(requestUrl(args));
+  return /\/(?:auth\/(?:register|send-otp|resend-otp|verify-otp|refresh)|admin\/login)\b/.test(requestUrl(args));
 }
 
 async function baseQueryWithRefresh(args, api, extraOptions) {

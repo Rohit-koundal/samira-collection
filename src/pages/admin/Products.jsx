@@ -14,10 +14,11 @@ import ProductCaptionModal from '../../components/admin/ProductCaptionModal';
 
 const pageSize = 10;
 
-export default function Products() {
+export default function Products({ route = '/admin/products' }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [query, setQuery] = useState('');
+  const routeSearch = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+  const [query, setQuery] = useState(routeSearch);
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
   const [stock, setStock] = useState('');
@@ -56,6 +57,11 @@ export default function Products() {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    setQuery(routeSearch);
+    setPage(1);
+  }, [routeSearch]);
 
   const filtered = useMemo(() => {
     const term = query.toLowerCase();
@@ -320,7 +326,13 @@ export default function Products() {
             <span className="rounded-full bg-[#fff6f1] px-3 py-1.5 text-charcoal">
               {sort === 'newest' ? 'Newest first' : sort}
             </span>
-            <button type="button" className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] text-slate-500">
+            <button
+              type="button"
+              onClick={() => { setQuery(''); setCategory(''); setStatus(''); setStock(''); setSort('newest'); setPage(1); }}
+              className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] text-slate-500"
+              aria-label="Reset product filters"
+              title="Reset product filters"
+            >
               <SlidersHorizontal className="h-4 w-4" />
             </button>
           </div>

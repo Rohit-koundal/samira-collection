@@ -12,7 +12,7 @@ function customerSafeMessage(message, status, path = '', code = '') {
   const text = String(message || '').toLowerCase();
   if (status === 401 || status === 403 || status === 400) {
     if (message) return message;
-    if (path.includes('/auth/login')) return 'Invalid mobile number or password.';
+    if (path.includes('/admin/login')) return 'Invalid admin email or password.';
     if (path.includes('/auth/')) return 'Please check the details and try again.';
   }
   if (status === 'FETCH_ERROR' || status === 'TIMEOUT_ERROR') {

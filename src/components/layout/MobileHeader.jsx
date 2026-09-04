@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
@@ -12,14 +12,20 @@ export default function MobileHeader({ navigate, route = '/' }) {
   const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(searchValue);
+
+  useEffect(() => {
+    setSearchTerm(searchValue);
+  }, [searchValue]);
 
   const go = (path) => {
     setOpen(false);
     navigate(path);
   };
 
-  const updateSearch = (value) => {
-    const params = new URLSearchParams(route.split('?')[1] || '');
+  const submitSearch = () => {
+    const value = searchTerm.trim();
+    const params = new URLSearchParams();
     if (value) params.set('search', value);
     else params.delete('search');
     navigate(`/search${params.toString() ? `?${params}` : ''}`);
@@ -58,11 +64,17 @@ export default function MobileHeader({ navigate, route = '/' }) {
           <label className="label-text flex h-12 w-full max-w-full items-center gap-3 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-slate-500">
             <Icon name="search" className="h-4.5 w-4.5" />
             <input
-              value={searchValue}
+              value={searchTerm}
               onFocus={() => {
                 if (!route.startsWith('/search')) navigate('/search');
               }}
-              onChange={(event) => updateSearch(event.target.value)}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submitSearch();
+                }
+              }}
               className="body-text min-w-0 flex-1 bg-transparent text-[14px] text-charcoal outline-none placeholder:text-slate-500"
               placeholder="Search sarees, suits, kurtis..."
               inputMode="search"
@@ -107,6 +119,8 @@ export default function MobileHeader({ navigate, route = '/' }) {
                   ['Kurtis', '/products?search=Kurti'],
                   ['Dresses', '/products?search=Dress'],
                   ['Lehengas', '/products?search=Lehenga'],
+                  ['Ethnic Sets', '/products?search=Set'],
+                  ['Accessories', '/products?search=Accessory'],
                   ['Sale', '/products?discount=20'],
                 ].map(([label, path]) => (
                   <button key={label} onClick={() => go(path)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">

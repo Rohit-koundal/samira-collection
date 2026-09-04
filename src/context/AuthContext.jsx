@@ -89,20 +89,20 @@ export function AuthProvider({ children, navigate }) {
     setToast(`Welcome ${data.user.name}`);
     navigate(redirectTo || '/profile');
     return data;
-  }, [navigate, persist, resetSessionCache]);
+  }, [navigate, persist, resetSessionCache, setToast]);
 
-  const login = useCallback(async ({ email, phone, password = '', redirectTo = '/profile' }) => {
+  const login = useCallback(async ({ email, phone, password = '', redirectTo = '' }) => {
     try {
-      const data = await api.post('/auth/login', { email, phone, password });
+      const data = await api.post('/admin/login', { email, phone, password });
       persist(data);
       resetSessionCache();
-      navigate(redirectTo || (data.user.role === 'admin' && data.user.activeMode === 'admin' ? '/admin' : '/profile'));
+      navigate(redirectTo || '/admin');
       return { ok: true };
     } catch (error) {
       setToast(error.message);
       return { ok: false, error: error.message };
     }
-  }, [navigate, persist, resetSessionCache]);
+  }, [navigate, persist, resetSessionCache, setToast]);
 
   const switchMode = useCallback(async (mode) => {
     try {
@@ -116,7 +116,7 @@ export function AuthProvider({ children, navigate }) {
       setToast(error.message);
       return { ok: false, error: error.message };
     }
-  }, [navigate, persist, resetSessionCache]);
+  }, [navigate, persist, resetSessionCache, setToast]);
 
   const updateProfile = useCallback(async (payload) => {
     const profile = await api.put('/auth/profile', payload);
@@ -124,7 +124,7 @@ export function AuthProvider({ children, navigate }) {
     resetSessionCache();
     setToast('Profile updated successfully');
     return profile;
-  }, [dispatch, resetSessionCache]);
+  }, [dispatch, resetSessionCache, setToast]);
 
   const sendProfilePhoneChangeOtp = useCallback((phone) => api.post('/auth/profile/send-phone-change-otp', { phone }), []);
   const verifyProfilePhoneChangeOtp = useCallback((payload) => api.post('/auth/profile/verify-phone-change-otp', payload), []);
@@ -143,7 +143,7 @@ export function AuthProvider({ children, navigate }) {
     setToast(response?.message || 'Account deleted successfully');
     navigate('/');
     return response;
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, setToast]);
 
   const logout = useCallback(() => {
     dispatch(logoutAction());

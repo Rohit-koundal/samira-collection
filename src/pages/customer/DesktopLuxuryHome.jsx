@@ -14,6 +14,7 @@ import {
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
+import api from '../../services/api';
 import styles from './DesktopLuxuryHome.module.css';
 
 const services = [
@@ -37,6 +38,8 @@ export default function DesktopLuxuryHome({
   featuredProducts = [],
   trendingProducts = [],
   newArrivalProducts = [],
+  ethnicSetProducts = [],
+  accessoryProducts = [],
 }) {
   const [heroIndex, setHeroIndex] = useState(0);
 
@@ -168,6 +171,30 @@ export default function DesktopLuxuryHome({
         />
       </section>
 
+      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+        <ProductSection
+          eyebrow="Ethnic Sets"
+          title="Complete Occasion-Ready Looks"
+          subtitle="Coordinated silhouettes for weddings, celebrations, and everyday elegance."
+          products={ethnicSetProducts}
+          navigate={navigate}
+          viewAllPath="/products?search=Set"
+          emptyMessage="No ethnic sets are published yet. Use the admin catalog to publish products for this collection."
+        />
+      </section>
+
+      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+        <ProductSection
+          eyebrow="Accessories"
+          title="The Finishing Touch"
+          subtitle="Complete every look with thoughtfully selected accessories."
+          products={accessoryProducts}
+          navigate={navigate}
+          viewAllPath="/products?search=Accessory"
+          emptyMessage="No accessories are published yet. Browse all products while this collection is being curated."
+        />
+      </section>
+
       <TestimonialSection />
       <NewsletterSection />
     </div>
@@ -254,7 +281,7 @@ function EditorialCard({ className, product, eyebrow, text, action, navigate }) 
   );
 }
 
-function ProductSection({ eyebrow, title, subtitle, products, navigate, viewAllPath, compact = false, className = '' }) {
+function ProductSection({ eyebrow, title, subtitle, products = [], navigate, viewAllPath, compact = false, className = '', emptyMessage = '' }) {
   const scrollerRef = useRef(null);
   const hasSlider = products.length > 4;
 
@@ -278,8 +305,13 @@ function ProductSection({ eyebrow, title, subtitle, products, navigate, viewAllP
           <button type="button" className={styles.viewAllButton} onClick={() => navigate(viewAllPath)}>View All</button>
         </div>
       </div>
-      <div ref={scrollerRef} className={`${styles.productGrid} ${compact ? styles.productGridCompact : ''}`}>
-        {products.map((product) => <LuxuryProductCard key={getProductId(product)} product={product} navigate={navigate} large={!compact} />)}
+      <div ref={scrollerRef} className={`${styles.productGrid} ${compact ? styles.productGridCompact : ''} ${!products.length ? styles.productGridEmpty : ''}`}>
+        {products.length ? products.map((product) => <LuxuryProductCard key={getProductId(product)} product={product} navigate={navigate} large={!compact} />) : (
+          <div className={styles.emptyCollection}>
+            <p>{emptyMessage || `No ${title.toLowerCase()} are published yet.`}</p>
+            <button type="button" onClick={() => navigate('/products')}>Browse all products</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -405,15 +437,26 @@ function TestimonialSection() {
 function NewsletterSection() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setStatus('Please enter your email.');
       return;
     }
-    setStatus('Thank you for subscribing.');
-    setEmail('');
+    setSubmitting(true);
+    setStatus('');
+    try {
+      const data = await api.post('/newsletter/subscribe', { email: trimmedEmail, source: 'homepage' });
+      setStatus(data.message || 'Thank you for subscribing.');
+      setEmail('');
+    } catch (error) {
+      setStatus(error.message || 'Unable to subscribe right now.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -430,7 +473,7 @@ function NewsletterSection() {
           placeholder="Enter your email address"
           aria-label="Email address"
         />
-        <button type="submit">Subscribe</button>
+        <button type="submit" disabled={submitting}>{submitting ? 'Subscribing...' : 'Subscribe'}</button>
         {status ? <small>{status}</small> : null}
       </form>
     </section>

@@ -28,6 +28,7 @@ export default function ProductInfoPanel({
   onBuyNow,
   onOrderWhatsApp,
   onCheckDelivery,
+  deliveryChecking = false,
   variantProducts = [],
   onOpenSizeGuide,
   onViewOffers,
@@ -42,6 +43,9 @@ export default function ProductInfoPanel({
   const currentPrice = Number(product?.price || 0);
   const originalPrice = Number(product?.originalPrice || currentPrice);
   const discount = Number(product?.discountPercentage || 0);
+  const savings = Math.max(0, originalPrice - currentPrice);
+  const rating = Number(product?.rating || 0);
+  const customerLove = Math.max(0, Number(product?.customersLove || 0));
 
   return (
     <div className="sc-info">
@@ -52,14 +56,14 @@ export default function ProductInfoPanel({
         <div className="sc-info__rating-row">
           <div className="sc-info__stars" aria-label={`Rated ${Number(product?.rating || 0).toFixed(1)} out of 5`}>
             {'★★★★★'.split('').map((star, index) => (
-              <span key={`${star}-${index}`}>★</span>
+              <span key={`${star}-${index}`} style={{ opacity: index < Math.round(rating) ? 1 : 0.25 }}>★</span>
             ))}
           </div>
           <p>
             <strong>{Number(product?.rating || 0).toFixed(1)}</strong> ({product?.numReviews || 0} Reviews)
           </p>
           <span className="sc-info__divider">|</span>
-          <p>{Math.max(0, product?.customersLove || 12000)}+ Customers love this</p>
+          <p>{customerLove > 0 ? `${customerLove}+ Customers love this` : 'New to the collection'}</p>
         </div>
 
         <div className="sc-info__price-row">
@@ -71,14 +75,14 @@ export default function ProductInfoPanel({
 
         <div className="sc-info__offer">
           <div className="sc-info__offer-copy">
-            <p>MEGA DEAL</p>
-            <strong>Get at ₹{dealPrice || currentPrice}</strong>
-            <span>With Coupon + Bank Offer</span>
-            <small>Bank offers &amp; extra savings</small>
+            <p>PRODUCT OFFER</p>
+            <strong>Now at ₹{dealPrice || currentPrice}</strong>
+            <span>Current product price</span>
+            <small>Savings calculated from the listed MRP</small>
           </div>
           <div className="sc-info__offer-side">
-            <span className="sc-info__offer-badge">Extra ₹200 OFF</span>
-            <button type="button" className="sc-info__offer-link" onClick={onViewOffers}>View all offers</button>
+            <span className="sc-info__offer-badge">Save ₹{savings}</span>
+            <button type="button" className="sc-info__offer-link" onClick={onViewOffers}>Shop sale</button>
           </div>
         </div>
 
@@ -196,7 +200,7 @@ export default function ProductInfoPanel({
               onChange={(event) => setDeliveryPin?.(event.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="Enter PIN code"
             />
-            <button type="button" onClick={() => onCheckDelivery?.(deliveryPin)}>Check</button>
+            <button type="button" disabled={deliveryPin?.length !== 6 || deliveryChecking} onClick={() => onCheckDelivery?.(deliveryPin)}>{deliveryChecking ? 'Checking...' : 'Check'}</button>
           </div>
           <div className="sc-info__chips">
             <span>Express delivery</span>

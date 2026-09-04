@@ -19,7 +19,6 @@ export default function Cart({ navigate }) {
   const [message, setMessage] = useState('');
   const [recommended, setRecommended] = useState([]);
   const [coupons, setCoupons] = useState([]);
-  const [donation, setDonation] = useState(0);
   const [showOffers, setShowOffers] = useState(true);
   const [pricing, setPricing] = useState({ platformFee: DEFAULT_PLATFORM_FEE, gstRate: DEFAULT_GST_RATE });
 
@@ -63,8 +62,12 @@ export default function Cart({ navigate }) {
 
   const selectedCount = cart.itemCount;
   const platformFee = cart.items.length ? pricing.platformFee : 0;
-  const taxAmount = inclusiveTax(Math.max(0, cart.sellingTotal - cart.couponDiscount), pricing.gstRate);
-  const payable = cart.finalAmount + platformFee + donation;
+  const discountedSubtotal = Math.max(0, cart.sellingTotal - cart.couponDiscount);
+  const deliveryCharge = cart.items.length && discountedSubtotal < pricing.freeShippingMinAmount
+    ? pricing.deliveryCharge
+    : 0;
+  const taxAmount = inclusiveTax(discountedSubtotal, pricing.gstRate);
+  const payable = discountedSubtotal + deliveryCharge + platformFee;
   const deliveryDate = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() + 5);
@@ -217,24 +220,6 @@ export default function Cart({ navigate }) {
           </button>
 
           <section className="bg-[#f5f5f6]">
-            <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Support transformative social work in India</p>
-            <div className="bg-white px-4 py-4">
-              <div className="flex items-center justify-between">
-                <label className="label-text flex min-w-0 items-center gap-3 sm:text-base">
-                  <input type="checkbox" checked={donation > 0} onChange={(event) => setDonation(event.target.checked ? 10 : 0)} className="h-5 w-5 accent-rose" />
-                  Donate and make a difference
-                </label>
-                <Button variant="ghost" size="sm" className="px-0 text-rose">Know More</Button>
-              </div>
-              <div className="mt-4 flex gap-3 overflow-x-auto">
-                {[10, 20, 50, 100].map((amount) => (
-                  <Button key={amount} onClick={() => setDonation(amount)} variant={donation === amount ? 'outline' : 'secondary'} size="sm" className={`min-w-20 rounded-full sm:min-w-24 sm:px-5 ${donation === amount ? 'border-rose text-rose' : ''}`}>Rs. {amount}</Button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-[#f5f5f6]">
             <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Offers</p>
             <div className="bg-white px-4 py-4">
               <div className="flex items-center justify-between">
@@ -284,13 +269,13 @@ export default function Cart({ navigate }) {
         </div>
 
         <aside className="hidden md:block">
-          <PriceDetails cart={cart} platformFee={platformFee} taxAmount={taxAmount} taxRate={pricing.gstRate} donation={donation} payable={payable} />
+          <PriceDetails cart={cart} platformFee={platformFee} deliveryCharge={deliveryCharge} taxAmount={taxAmount} taxRate={pricing.gstRate} payable={payable} />
           <Button onClick={() => navigate('/checkout')} variant="accent" className="mt-4 w-full">Place Order</Button>
         </aside>
       </div>
 
       <div className="md:hidden">
-        <PriceDetails cart={cart} platformFee={platformFee} taxAmount={taxAmount} taxRate={pricing.gstRate} donation={donation} payable={payable} />
+        <PriceDetails cart={cart} platformFee={platformFee} deliveryCharge={deliveryCharge} taxAmount={taxAmount} taxRate={pricing.gstRate} payable={payable} />
       </div>
 
       <TrustStrip />
@@ -399,7 +384,7 @@ function RecommendationRail({ title, products: items, cart, navigate }) {
   );
 }
 
-function PriceDetails({ cart, platformFee, taxAmount = 0, taxRate = DEFAULT_GST_RATE, donation, payable }) {
+function PriceDetails({ cart, platformFee, deliveryCharge = 0, taxAmount = 0, taxRate = DEFAULT_GST_RATE, payable }) {
   return (
     <Card className="rounded-none md:rounded-2xl">
       <CardHeader>
@@ -409,9 +394,9 @@ function PriceDetails({ cart, platformFee, taxAmount = 0, taxRate = DEFAULT_GST_
         <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
         <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
         <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
+        <Row label="Delivery Charges" value={deliveryCharge ? `Rs. ${deliveryCharge}` : 'FREE'} good={!deliveryCharge} />
         <Row label="Platform Fee" value={`Rs. ${platformFee}`} />
         {taxAmount > 0 && <Row label={`GST (${taxRate}% incl.)`} value={`Rs. ${taxAmount}`} />}
-        {donation > 0 && <Row label="Donation" value={`Rs. ${donation}`} />}
         <div className="flex justify-between border-t border-slate-100 pt-4">
           <span>Total Amount</span>
           <span className="price">Rs. {payable}</span>

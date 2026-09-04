@@ -150,9 +150,14 @@ export default function Banners() {
             <option value="">All Positions</option>
             {positionOptions.filter(Boolean).map((item) => <option key={item} value={item}>{item}</option>)}
           </Select>
-          <button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#eadfd7] px-4 py-2.5 text-sm font-black text-wine">
+          <button
+            type="button"
+            onClick={() => { setSearch(''); setStatus(''); setPosition(''); }}
+            disabled={!search && !status && !position}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#eadfd7] px-4 py-2.5 text-sm font-black text-wine disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <Filter className="h-4 w-4" />
-            Filter
+            Reset Filters
           </button>
         </div>
       </div>

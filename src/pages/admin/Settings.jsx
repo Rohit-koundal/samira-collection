@@ -29,6 +29,7 @@ const fields = [
 export default function Settings() {
   const [form, setForm] = useState({});
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function Settings() {
   const submit = async (event) => {
     event.preventDefault();
     setMessage('');
+    setSaving(true);
     try {
       if (!form.storeName?.trim()) throw new Error('Store name is required.');
       if (form.contactEmail && !/^\S+@\S+\.\S+$/.test(form.contactEmail)) throw new Error('Enter a valid email.');
@@ -60,6 +62,8 @@ export default function Settings() {
       setMessage('Settings saved successfully.');
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -67,7 +71,7 @@ export default function Settings() {
     <section className="space-y-5">
       <PageHeader title="Website Settings" note="Control store details, policies and footer content." />
       <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
-        {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] || ''} onChange={(value) => update(field, value)} />)}
+        {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] ?? ''} onChange={(value) => update(field, value)} />)}
         <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
           {[
             ['razorpayEnabled', 'Razorpay Enabled'],
@@ -102,7 +106,7 @@ export default function Settings() {
           <Input label="YouTube Link" value={form.socialLinks?.youtube || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, youtube: value })} />
         </div>
         {message && <p className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
-        <button className="admin-btn md:col-span-2">Save Settings</button>
+        <button disabled={saving} className="admin-btn md:col-span-2 disabled:opacity-60">{saving ? 'Saving...' : 'Save Settings'}</button>
       </form>
     </section>
   );

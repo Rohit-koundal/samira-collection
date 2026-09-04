@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import SizeChartModal from '../../components/product/SizeChartModal';
 import { ProductVisual } from '../../components/product/ProductCard';
 import ProductDetailPage from '../../components/product/ProductDetailPage';
@@ -11,6 +11,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageIndex, getPrimaryImageUrl, normalizeImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
 import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery, useGetSettingsQuery, useGetVariantGroupQuery } from '../../store/apiSlice';
 import PageState from '../../components/ui/PageState';
+import api from '../../services/api';
 import { findProductVariant, firstInStockVariant, isColorAvailable, isSizeAvailable, variantStock } from '../../utils/variants';
 import { trackEvent } from '../../utils/analytics';
 import SeoHead from '../../components/seo/SeoHead';
@@ -31,6 +32,7 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [touchStartX, setTouchStartX] = useState(0);
   const [actionMessage, setActionMessage] = useState('');
   const [wishlistBusy, setWishlistBusy] = useState(false);
+  const [deliveryChecking, setDeliveryChecking] = useState(false);
   const { data: productData, isLoading, error } = useGetProductQuery(productKey || skipToken);
   const { data: settingsData } = useGetSettingsQuery();
   const product = productData ? normalizeProduct(productData) : null;
@@ -92,10 +94,26 @@ export default function ProductDetail({ navigate, route = '' }) {
   }, [product?.images, product?.videos]);
   const selectedMedia = mediaItems[activeImage];
   const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
-  const dealPrice = Math.max(0, Number(product?.price || 0) - Math.round(discountPrice * 0.2));
+  const dealPrice = Number(product?.price || 0);
   const selectedVariant = findProductVariant(product || {}, { size, color });
   const selectedStock = variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
   const isOutOfStock = selectedStock !== null && Number(selectedStock) <= 0;
+
+  useEffect(() => {
+    if (!openGallery || !mediaItems.length) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpenGallery(false);
+      if (event.key === 'ArrowLeft') setActiveImage((current) => (current - 1 + mediaItems.length) % mediaItems.length);
+      if (event.key === 'ArrowRight') setActiveImage((current) => (current + 1) % mediaItems.length);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mediaItems.length, openGallery]);
 
   const cartItem = product ? cart.getCartItem(product, { size, color }) : null;
   const similarPath = product?.categoryId
@@ -103,12 +121,27 @@ export default function ProductDetail({ navigate, route = '' }) {
     : product?.category
       ? `/products?search=${encodeURIComponent(product.category)}`
       : '/products';
-  const handleCheckDelivery = () => {
+  const handleCheckDelivery = async () => {
     if (!deliveryPin || deliveryPin.length < 6) {
       setActionMessage('Please enter a valid 6-digit PIN code.');
       return;
     }
-    setActionMessage(`Delivery check requested for ${deliveryPin}.`);
+    setDeliveryChecking(true);
+    setActionMessage('');
+    try {
+      const data = await api.get(`/settings/payment-methods?pincode=${encodeURIComponent(deliveryPin)}&amount=${encodeURIComponent(product?.price || 0)}`);
+      const cod = (data?.methods || []).find((method) => method.key === 'COD');
+      const codMessage = !cod
+        ? ' Cash on Delivery is not enabled.'
+        : cod.enabled
+          ? ' Cash on Delivery is available.'
+          : ` ${cod.disabledReason || 'Cash on Delivery is unavailable for this pincode.'}`;
+      setActionMessage(`Delivery is available to ${deliveryPin}.${codMessage}`);
+    } catch (deliveryError) {
+      setActionMessage(deliveryError.message || 'Unable to check delivery right now.');
+    } finally {
+      setDeliveryChecking(false);
+    }
   };
 
   if (!productKey || error) {
@@ -281,6 +314,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           onBuyNow={buyNow}
           onOrderWhatsApp={orderOnWhatsApp}
           onCheckDelivery={handleCheckDelivery}
+          deliveryChecking={deliveryChecking}
           relatedProducts={related}
           reviews={reviews}
           variantProducts={variantProducts}
@@ -317,19 +351,19 @@ export default function ProductDetail({ navigate, route = '' }) {
             onTouchEnd={mediaItems.length > 1 ? handleTouchEnd : undefined}
           >
             {selectedMedia ? (
-              <button type="button" onClick={() => setOpenGallery(true)} className="block w-full bg-[#f6efe8]">
-                {selectedMedia.type === 'video' ? (
-                  <video
-                    src={selectedMedia.url}
-                    poster={selectedMedia.thumbnail}
-                    controls
-                    playsInline
-                    className="h-[360px] w-full bg-black object-cover sm:h-[430px] md:h-[620px]"
-                  />
-                ) : (
-                  <img src={selectedMedia.url} alt={product.name} className="h-[360px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px] md:object-cover" />
-                )}
-              </button>
+              selectedMedia.type === 'video' ? (
+                <video
+                  src={selectedMedia.url}
+                  poster={selectedMedia.thumbnail}
+                  controls
+                  playsInline
+                  className="h-[360px] w-full bg-black object-contain sm:h-[430px] md:h-[620px]"
+                />
+              ) : (
+                <button type="button" onClick={() => setOpenGallery(true)} className="block w-full cursor-zoom-in bg-[#f6efe8]" aria-label={`View ${product.name} image fullscreen`}>
+                  <img src={selectedMedia.url} alt={product.name} className="h-[360px] w-full object-contain bg-[#f6efe8] sm:h-[430px] md:h-[620px]" />
+                </button>
+              )
             ) : (
               <ProductVisual product={product} showMeta={false} />
             )}
@@ -391,15 +425,15 @@ export default function ProductDetail({ navigate, route = '' }) {
           <div className="rounded-[14px] bg-white p-4 md:rounded-2xl">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-rose">Mega Deal</p>
-                <p className="mt-1 text-[18px] font-bold text-charcoal md:text-xl">Get at Rs. {dealPrice || product.price}</p>
-                <p className="mt-1 text-[10px] text-slate-500">With Coupon + Bank Offer</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-rose">Product Offer</p>
+                <p className="mt-1 text-[18px] font-bold text-charcoal md:text-xl">Now at Rs. {dealPrice || product.price}</p>
+                <p className="mt-1 text-[10px] text-slate-500">Current product price</p>
               </div>
-              <span className="rounded-full bg-emerald-500 px-3 py-1.5 text-[10px] font-bold text-white md:text-sm">Extra Rs. {Math.max(0, product.price - dealPrice)} Off</span>
+              <span className="rounded-full bg-emerald-500 px-3 py-1.5 text-[10px] font-bold text-white md:text-sm">Save Rs. {discountPrice}</span>
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px]">
-              <span className="text-slate-500">Bank offers &amp; extra savings</span>
-              <button type="button" className="font-semibold text-rose">Details</button>
+              <span className="text-slate-500">Savings are calculated from the listed MRP</span>
+              <button type="button" onClick={() => navigate('/products?discount=20')} className="font-semibold text-rose">Shop sale</button>
             </div>
           </div>
 
@@ -478,7 +512,7 @@ export default function ProductDetail({ navigate, route = '' }) {
             <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">Check Delivery</h2>
             <div className="mt-2 flex gap-2">
               <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="h-11 flex-1 rounded-[10px] border border-slate-300 px-3 text-[12px] outline-none focus:border-rose md:h-12 md:rounded-xl md:px-4 md:text-base" placeholder="Enter PIN Code" />
-              <button type="button" className="h-11 rounded-[10px] bg-[#7a1f36] px-5 text-[12px] font-bold text-white md:h-12 md:rounded-xl">Check</button>
+              <button type="button" onClick={handleCheckDelivery} disabled={deliveryPin.length !== 6 || deliveryChecking} className="h-11 rounded-[10px] bg-[#7a1f36] px-5 text-[12px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 md:h-12 md:rounded-xl">{deliveryChecking ? 'Checking...' : 'Check'}</button>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <MiniFeature icon="box" title="Express delivery" />
@@ -514,7 +548,7 @@ export default function ProductDetail({ navigate, route = '' }) {
         </div>
       )}
 
-      <ReviewsSection product={product} reviews={reviews} />
+      <ReviewsSection product={product} reviews={reviews} onRate={() => navigate(user ? '/orders' : `/login?redirect=${encodeURIComponent(route)}`)} />
 
       <div className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
         <div className="rounded-[14px] border border-slate-200 bg-white p-4 md:rounded-3xl md:p-5">
@@ -552,7 +586,7 @@ export default function ProductDetail({ navigate, route = '' }) {
 
       <SizeChartModal open={openSizeChart} onClose={() => setOpenSizeChart(false)} />
       {openGallery && mediaItems.length > 0 && (
-        <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" role="dialog" aria-modal="true" aria-label={`${product.name} image gallery`} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between px-4 pb-3 pt-6 text-white">
               <button type="button" onClick={() => setOpenGallery(false)} className="grid h-10 w-10 place-items-center text-3xl leading-none" aria-label="Close gallery">
@@ -560,7 +594,17 @@ export default function ProductDetail({ navigate, route = '' }) {
               </button>
               <p className="text-sm font-black">{activeImage + 1} / {mediaItems.length}</p>
             </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center px-3">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 md:px-16">
+              {mediaItems.length > 1 ? (
+                <>
+                  <button type="button" onClick={() => goToImage(activeImage - 1)} className="absolute left-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-slate-900 shadow-lg md:grid" aria-label="Previous image">
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
+                  <button type="button" onClick={() => goToImage(activeImage + 1)} className="absolute right-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-slate-900 shadow-lg md:grid" aria-label="Next image">
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                </>
+              ) : null}
               {mediaItems[activeImage]?.type === 'video' ? (
                 <video
                   src={mediaItems[activeImage]?.url}
@@ -686,13 +730,16 @@ function RailProduct({ product, navigate }) {
   );
 }
 
-function ReviewsSection({ product, reviews }) {
+function ReviewsSection({ product, reviews, onRate }) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleReviews = showAll ? reviews : reviews.slice(0, 6);
+
   return (
     <section className="mx-auto mt-4 max-w-2xl px-4 md:px-6">
       <div className="rounded-[14px] border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-[11px] font-semibold text-charcoal md:text-xl">Ratings & Reviews</h2>
-          <button type="button" className="text-[9px] font-semibold text-rose">Rate this product</button>
+          <button type="button" onClick={onRate} className="text-[9px] font-semibold text-rose">Rate this product</button>
         </div>
         <div className="mt-3 flex items-center gap-3">
           <span className="rounded-xl bg-amber-400 px-3 py-2 text-[10px] font-bold text-white">{Number(product.rating || 0).toFixed(1)} ★</span>
@@ -703,10 +750,14 @@ function ReviewsSection({ product, reviews }) {
         <>
           <div className="mt-5 flex items-center justify-between">
             <h3 className="section-title text-xl">Customer Reviews ({reviews.length})</h3>
-            <button type="button" className="label-text underline">View All</button>
+            {reviews.length > 6 ? (
+              <button type="button" onClick={() => setShowAll((current) => !current)} className="label-text underline">
+                {showAll ? 'Show Less' : 'View All'}
+              </button>
+            ) : null}
           </div>
           <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
-            {reviews.slice(0, 6).map((review) => (
+            {visibleReviews.map((review) => (
               <article key={review._id} className="w-72 shrink-0 rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="small-text flex items-center gap-3">
                   <span className="rounded-lg bg-rose px-2 py-1 font-bold text-white">{review.rating} star</span>

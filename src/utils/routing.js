@@ -3,7 +3,7 @@ export const RESERVED_PATHS = new Set([
   'login', 'register', 'profile', 'orders', 'order-detail', 'order-success',
   'payment-failed', 'contact', 'privacy-policy', 'terms', 'return-policy',
   'shipping-policy', 'cancellation-policy', 'size-guide', 'faqs', 'our-story',
-  'returns', 'seller', 'admin', 'store', 'share', 'api', 'health', 'uploads',
+  'returns', 'notifications', 'seller', 'admin', 'store', 'share', 'api', 'health', 'uploads',
   'robots.txt', 'sitemap.xml',
 ]);
 

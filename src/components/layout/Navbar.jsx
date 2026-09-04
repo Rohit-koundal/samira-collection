@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Flower2, Heart, HelpCircle, Search, ShoppingBag, Shield, Truck, UserRound } from 'lucide-react';
 import logoFallback from '../../assets/samira-collection-logo.png';
 import { useAuth } from '../../context/AuthContext';
@@ -11,7 +11,7 @@ const desktopLinks = [
   { label: 'New In', path: '/products?newArrival=true' },
   { label: 'Shop', path: '/products', hasCaret: true },
   { label: 'Occasions', path: '/products?occasion=Wedding' },
-  { label: 'Ethnic Sets', path: '/products?search=Ethnic Set' },
+  { label: 'Ethnic Sets', path: '/products?search=Set' },
   { label: 'Sarees', path: '/products?search=Saree' },
   { label: 'Bestsellers', path: '/products?bestSeller=true' },
   { label: 'Accessories', path: '/products?search=Accessory' },
@@ -38,30 +38,28 @@ export default function Navbar({
   const { user, switchMode } = useAuth();
   const routePath = route.split('?')[0];
   const searchValue = useMemo(() => new URLSearchParams(route.split('?')[1] || '').get('search') || '', [route]);
+  const [searchTerm, setSearchTerm] = useState(searchValue);
   const cartCount = Number.isFinite(Number(cartCountProp)) ? Number(cartCountProp) : Number(cart?.itemCount || 0);
   const wishlistCount = Number.isFinite(Number(wishlistCountProp)) ? Number(wishlistCountProp) : Number(wishlist?.items?.length || 0);
   const go = onNavigate || navigate || (() => {});
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : user?.role === 'admin';
   const showAdminPill = isAdmin && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin';
 
-  const updateSearch = (value) => {
+  useEffect(() => {
+    setSearchTerm(searchValue);
+  }, [searchValue]);
+
+  const submitSearch = () => {
+    const value = searchTerm.trim();
     if (onSearch) {
       onSearch(value);
       return;
     }
 
-    const params = new URLSearchParams(route.split('?')[1] || '');
+    const params = new URLSearchParams();
     if (value) params.set('search', value);
     else params.delete('search');
     go(`/search${params.toString() ? `?${params}` : ''}`);
-  };
-
-  const submitSearch = () => {
-    if (!searchValue) {
-      go('/search');
-      return;
-    }
-    updateSearch(searchValue);
   };
 
   return (
@@ -133,12 +131,12 @@ export default function Navbar({
               <input
                 className="sc-navbar__search-input"
                 type="search"
-                value={searchValue}
+                value={searchTerm}
                 placeholder="Search for products, styles..."
                 onFocus={() => {
                   if (!routePath.startsWith('/search')) go('/search');
                 }}
-                onChange={(event) => updateSearch(event.currentTarget.value)}
+                onChange={(event) => setSearchTerm(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();

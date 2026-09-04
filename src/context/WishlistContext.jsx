@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 import { normalizeProduct } from '../services/normalize';
 import { useAuth } from './AuthContext';
@@ -61,21 +61,21 @@ export function WishlistProvider({ children }) {
     return () => {
       alive = false;
     };
-  }, [user?._id, user?.phone]);
+  }, [user]);
 
   useEffect(() => {
     if (user) return;
     persistGuestWishlist(items);
   }, [items, user]);
 
-  const updateWishlist = async (nextItems) => {
+  const updateWishlist = useCallback(async (nextItems) => {
     setItems(nextItems);
     if (!user) {
       persistGuestWishlist(nextItems);
     }
-  };
+  }, [user]);
 
-  const toggleWishlist = async (product) => {
+  const toggleWishlist = useCallback(async (product) => {
     const normalizedProduct = normalizeWishlistProduct(product);
     if (!normalizedProduct) return;
     const productId = getWishlistItemId(normalizedProduct);
@@ -106,9 +106,9 @@ export function WishlistProvider({ children }) {
     } catch {
       setItems(previousItems);
     }
-  };
+  }, [items, updateWishlist, user]);
 
-  const addToWishlist = async (product) => {
+  const addToWishlist = useCallback(async (product) => {
     const normalizedProduct = normalizeWishlistProduct(product);
     if (!normalizedProduct) return;
     const productId = getWishlistItemId(normalizedProduct);
@@ -134,9 +134,9 @@ export function WishlistProvider({ children }) {
     } catch {
       setItems(previousItems);
     }
-  };
+  }, [items, updateWishlist, user]);
 
-  const removeFromWishlist = async (productOrId) => {
+  const removeFromWishlist = useCallback(async (productOrId) => {
     const productId = typeof productOrId === 'string' ? productOrId : getWishlistItemId(productOrId);
     if (!productId) return;
 
@@ -156,7 +156,7 @@ export function WishlistProvider({ children }) {
     } catch {
       setItems(previousItems);
     }
-  };
+  }, [items, updateWishlist, user]);
 
   const value = useMemo(() => ({
     items,

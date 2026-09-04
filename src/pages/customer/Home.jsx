@@ -1,16 +1,11 @@
-import { ChevronLeft, ChevronRight, Gem, RotateCcw, ShieldCheck, Sparkles, Truck } from 'lucide-react';
-import { useRef } from 'react';
+import { ChevronRight, Gem, RotateCcw, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { useMediaQuery } from '@mantine/hooks';
 import Icon from '../../components/layout/Icon';
-import Hero from '../../components/home/Hero';
-import CategoryStrip from '../../components/home/CategoryStrip';
 import DesktopLuxuryHome from './DesktopLuxuryHome';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { Button } from '../../components/ui';
 import PageState from '../../components/ui/PageState';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
-import ProductCard from '../../components/product/ProductCard';
 import { useGetBannersQuery, useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 
 const serviceHighlights = [
@@ -33,6 +28,8 @@ export default function Home({ navigate }) {
   const trendingProducts = catalog.filter((product) => product.showInTrending).slice(0, 12);
   const newArrivalProducts = catalog.filter((product) => product.isNewArrival).slice(0, 12);
   const instagramProducts = catalog.filter((product) => getPrimaryImageUrl(product.images)).slice(0, 12);
+  const ethnicSetProducts = catalog.filter((product) => matchesCollection(product, ['ethnic', 'set', 'suit', 'kurti', 'lehenga', 'saree'])).slice(0, 12);
+  const accessoryProducts = catalog.filter((product) => matchesCollection(product, ['accessory', 'accessories', 'jewellery', 'jewelry', 'earring', 'necklace', 'bracelet', 'bag'])).slice(0, 12);
 
   if (isLoading && !catalog.length) {
     return <section className="container-page py-10"><PageState loading loadingLabel="Loading the collection..." /></section>;
@@ -64,6 +61,22 @@ export default function Home({ navigate }) {
           navigate={navigate}
           viewAllPath="/products?newArrival=true&collection=new-arrivals"
         />
+        <MobileProductSection
+          eyebrow="Ethnic Sets"
+          title="Complete occasion-ready looks"
+          products={ethnicSetProducts}
+          navigate={navigate}
+          viewAllPath="/products?search=Set"
+          emptyMessage="No ethnic sets are published yet. Browse the complete collection while new sets are added."
+        />
+        <MobileProductSection
+          eyebrow="Accessories"
+          title="Finishing touches"
+          products={accessoryProducts}
+          navigate={navigate}
+          viewAllPath="/products?search=Accessory"
+          emptyMessage="No accessories are published yet. Browse the complete collection while accessories are added."
+        />
       </div>
 
       {isDesktop && (
@@ -76,272 +89,11 @@ export default function Home({ navigate }) {
           trendingProducts={trendingProducts}
           newArrivalProducts={newArrivalProducts}
           instagramProducts={instagramProducts}
+          ethnicSetProducts={ethnicSetProducts}
+          accessoryProducts={accessoryProducts}
         />
       )}
     </>
-  );
-}
-
-function SectionPanel({ eyebrow, title, path, navigate, products }) {
-  const scrollerRef = useRef(null);
-
-  const scrollRow = (direction) => {
-    scrollerRef.current?.scrollBy({
-      left: direction * 432,
-      behavior: 'smooth',
-    });
-  };
-
-  return (
-    <section className="overflow-hidden bg-white/80 p-3 md:p-4">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="small-text font-bold uppercase tracking-[0.18em] text-wine">{eyebrow}</p>
-          <h2 className="section-title mt-1 text-[23px] md:text-[26px]">{title}</h2>
-        </div>
-        <div className="hidden items-center gap-2 md:flex">
-          <button
-            type="button"
-            onClick={() => navigate(path)}
-            className="text-[12px] font-bold uppercase tracking-[0.12em] text-wine"
-          >
-            View all
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollRow(-1)}
-            className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] bg-white text-slate-600 transition hover:border-[#cfa8b7] hover:text-wine"
-            aria-label={`Scroll ${title} left`}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollRow(1)}
-            className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] bg-white text-slate-600 transition hover:border-[#cfa8b7] hover:text-wine"
-            aria-label={`Scroll ${title} right`}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-      <div
-        ref={scrollerRef}
-        className="hide-scrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 scroll-smooth"
-      >
-        {products.map((product) => (
-          <div key={product.id} className="min-w-[190px] max-w-[190px] flex-none snap-start lg:min-w-[198px] lg:max-w-[198px]">
-            <ProductCard product={product} navigate={navigate} />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function PromoCard({ banner, navigate }) {
-  const image = banner?.image ? normalizeImageUrl(banner.image) : '';
-
-  return (
-    <button
-      type="button"
-      onClick={() => navigate(banner?.link || '/products')}
-      className="relative overflow-hidden rounded-[26px] border border-[#eadfd5] bg-gradient-to-br from-[#4c0d23] via-[#7a1f36] to-[#a73d5c] text-left text-white shadow-[0_14px_28px_rgba(87,43,34,0.14)]"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(255,220,190,0.14),transparent_32%)]" />
-      <div className="relative flex min-h-[100%] flex-col justify-between gap-4 p-6 lg:p-8">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-white/65">Festive collection</p>
-          <h3 className="mt-3 max-w-[12ch] text-[28px] font-semibold leading-[1.05] lg:text-[38px]">Celebrate in Style</h3>
-          <p className="mt-3 max-w-[28ch] text-[14px] leading-6 text-white/82">
-            {banner?.subtitle || 'Elegant festive pieces with rich textures, ornate detailing and premium finishing.'}
-          </p>
-        </div>
-        <div className="overflow-hidden rounded-[24px] border border-white/12 bg-white/10">
-          {image ? (
-            <img src={image} alt={banner?.title || 'Festive collection'} className="h-[220px] w-full object-cover object-top" />
-          ) : (
-            <div className="flex h-[220px] items-center justify-center bg-white/5 text-sm font-bold uppercase tracking-[0.2em] text-white/75">
-              Samira Collection
-            </div>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function CustomerLoveCard({ products }) {
-  const cover = products.slice(0, 4);
-  const highlights = [
-    'Beautiful fabric quality',
-    'Perfect fit and elegant designs',
-    'Loved the packaging',
-    'Fast delivery & great service',
-  ];
-
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_26px_rgba(23,22,26,0.04)]">
-      <p className="small-text font-bold uppercase tracking-[0.18em] text-wine">Loved by 2500+ customers</p>
-      <h3 className="mt-2 text-[26px] font-semibold text-charcoal">Loved for Fit, Fabric & Finish</h3>
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex text-amber-500">★★★★★</div>
-        <span className="text-[12px] text-slate-500">4.9/5 from 2,500+ happy customers</span>
-      </div>
-      <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_120px]">
-        <ul className="space-y-2 text-[13px] text-slate-600">
-          {highlights.map((item) => (
-            <li key={item} className="flex items-center gap-2">
-              <span className="text-wine">✓</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-        <div className="grid grid-cols-2 gap-2">
-          {cover.map((product) => {
-            const image = getPrimaryImageUrl(product.images);
-            return (
-              <div key={product.id} className="overflow-hidden rounded-[16px] border border-[#efe2da] bg-[#f7efe8]">
-                {image ? <img src={image} alt={product.name} className="h-full w-full object-cover" /> : <div className="aspect-square" />}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ReviewCard({ quote, name }) {
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_26px_rgba(23,22,26,0.04)]">
-      <div className="text-[14px] leading-6 text-slate-600">
-        <div className="mb-3 text-amber-500">★★★★★</div>
-        “{quote}”
-      </div>
-      <div className="mt-5 flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-full bg-[#7a1f36] text-[12px] font-black text-white">
-          {name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
-        </div>
-        <div>
-          <p className="text-[13px] font-semibold text-charcoal">{name}</p>
-          <p className="text-[11px] text-slate-500">Verified buyer</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function NewsletterCard() {
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-[#fff8f2] p-4 shadow-[0_10px_26px_rgba(23,22,26,0.03)]">
-      <p className="small-text font-bold uppercase tracking-[0.18em] text-wine">Stay in style</p>
-      <h3 className="mt-2 text-[26px] font-semibold text-charcoal">Get style updates & exclusive offers</h3>
-      <div className="mt-5 flex gap-2">
-        <input className="h-12 min-w-0 flex-1 rounded-full border border-[#e7d7ce] bg-white px-4 text-[14px] outline-none" placeholder="Enter your email address" />
-        <Button className="rounded-full px-5">Subscribe</Button>
-      </div>
-      <p className="mt-3 text-[12px] text-slate-500">No spam, unsubscribe anytime.</p>
-    </section>
-  );
-}
-
-function ServiceStrip() {
-  const items = [
-    { title: 'Secure Payments', subtitle: '100% safe & trusted', icon: ShieldCheck },
-    { title: 'COD Available', subtitle: 'Hassle-free cash on delivery', icon: Truck },
-    { title: 'Worldwide Shipping', subtitle: 'Delivering happiness worldwide', icon: Gem },
-    { title: '24/7 Support', subtitle: 'We’re here to help you anytime', icon: RotateCcw },
-  ];
-
-  return (
-    <section className="overflow-hidden rounded-[22px] border border-[#eadfd5] bg-white px-4 py-4 shadow-[0_10px_22px_rgba(23,22,26,0.03)]">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {items.map((item) => {
-          const IconComp = item.icon;
-          return (
-            <div key={item.title} className="flex items-center gap-3 rounded-[18px] border border-[#f0e4dc] bg-[#fcf7f2] px-4 py-3">
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-wine shadow-[0_8px_16px_rgba(122,31,54,0.08)]">
-                <IconComp className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[13px] font-bold text-charcoal">{item.title}</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">{item.subtitle}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function InstagramStrip({ products, navigate }) {
-  const scrollerRef = useRef(null);
-
-  const scrollGallery = (direction) => {
-    scrollerRef.current?.scrollBy({
-      left: direction * 360,
-      behavior: 'smooth',
-    });
-  };
-
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-[#eadfd5] bg-white p-4 shadow-[0_10px_26px_rgba(23,22,26,0.04)] lg:p-5">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="small-text font-bold uppercase tracking-[0.18em] text-wine">Follow us on Instagram</p>
-          <h3 className="mt-2 text-[24px] font-semibold text-charcoal">Shop the look</h3>
-        </div>
-        <div className="hidden items-center gap-2 md:flex">
-          <button type="button" className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">
-            @samirastylists
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollGallery(-1)}
-            className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] bg-white text-slate-600 transition hover:border-[#cfa8b7] hover:text-wine"
-            aria-label="Scroll gallery left"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollGallery(1)}
-            className="grid h-9 w-9 place-items-center rounded-full border border-[#eadfd5] bg-white text-slate-600 transition hover:border-[#cfa8b7] hover:text-wine"
-            aria-label="Scroll gallery right"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-      <div
-        ref={scrollerRef}
-        className="hide-scrollbar mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 scroll-smooth"
-      >
-        {products.map((product) => {
-          const image = getPrimaryImageUrl(product.images);
-          return (
-            <button
-              key={product.id}
-              type="button"
-              onClick={() => navigate(`/product?id=${product.id}`)}
-              className="min-w-[150px] max-w-[150px] flex-none overflow-hidden rounded-[18px] border border-[#efe2da] bg-[#f6e8df] text-left snap-start md:min-w-[160px] md:max-w-[160px] lg:min-w-[170px] lg:max-w-[170px]"
-            >
-              <div className="aspect-[0.82]">
-                {image ? (
-                  <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
-                ) : (
-                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f4dfd1] to-[#edd4c4] text-[12px] font-semibold text-[#7a1f36]">
-                    Samira
-                  </div>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -519,9 +271,7 @@ function MobileEditorialBanners({ banners, navigate }) {
   );
 }
 
-function MobileProductSection({ eyebrow, title, products, navigate, viewAllPath }) {
-  if (!products?.length) return null;
-
+function MobileProductSection({ eyebrow, title, products = [], navigate, viewAllPath, emptyMessage = '' }) {
   return (
     <section className="px-3 pb-4">
       <div className="mb-3 flex items-center justify-between">
@@ -533,9 +283,24 @@ function MobileProductSection({ eyebrow, title, products, navigate, viewAllPath 
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
-      <MobileCompactProductGrid products={products} navigate={navigate} title={title} />
+      {products.length ? (
+        <MobileCompactProductGrid products={products} navigate={navigate} title={title} />
+      ) : (
+        <div className="rounded-[14px] border border-[#eadfd5] bg-white px-4 py-5 text-center shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+          <p className="text-[12px] font-semibold leading-5 text-slate-500">{emptyMessage || `No ${eyebrow.toLowerCase()} are published yet.`}</p>
+          <button type="button" onClick={() => navigate('/products')} className="mt-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[#7a1f36]">Browse all products</button>
+        </div>
+      )}
     </section>
   );
+}
+
+function matchesCollection(product, terms) {
+  const text = [product?.name, product?.category, product?.subCategory, product?.description, ...(product?.tags || [])]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return terms.some((term) => text.includes(term));
 }
 
 function MobileCompactProductGrid({ products, navigate, title }) {

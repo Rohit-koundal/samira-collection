@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  Bell,
   MapPin,
   MoreVertical,
   Package,
@@ -32,6 +33,7 @@ import { useGetAddressesQuery, useGetCouponsQuery, useGetOrdersQuery } from '../
 import './Profile.css';
 
 const accountLinks = [
+  { title: 'Notifications', subtitle: 'Order, delivery and return updates', icon: Bell, action: '/notifications' },
   { title: 'Orders', subtitle: 'Check your order status', icon: Package, action: '/orders' },
   { title: 'Collections & Wishlist', subtitle: 'All your curated product collections', icon: Heart, action: '/wishlist' },
   { title: 'Addresses', subtitle: 'Save addresses for a hassle-free checkout', icon: MapPin, action: '/profile/addresses' },
@@ -42,6 +44,7 @@ const accountLinks = [
 const desktopMenu = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/profile', active: true },
   { label: 'Orders', icon: Package, path: '/orders' },
+  { label: 'Notifications', icon: Bell, path: '/notifications' },
   { label: 'Wishlist', icon: Heart, path: '/wishlist' },
   { label: 'Addresses', icon: MapPin, path: '/profile/addresses' },
   { label: 'Coupons', icon: TicketPercent, path: '/products?discount=20' },
@@ -50,7 +53,13 @@ const desktopMenu = [
   { label: 'Help & Support', icon: HelpCircle, path: '/contact' },
 ];
 
-const footerLinks = ['FAQs', 'ABOUT US', 'TERMS OF USE', 'CUSTOMER POLICIES', 'USEFUL LINKS'];
+const footerLinks = [
+  { label: 'FAQs', path: '/faqs' },
+  { label: 'ABOUT US', path: '/our-story' },
+  { label: 'TERMS OF USE', path: '/terms' },
+  { label: 'CUSTOMER POLICIES', path: '/return-policy' },
+  { label: 'USEFUL LINKS', path: '/contact' },
+];
 
 const serviceItems = [
   { title: '100% Authentic', text: 'Genuine products, always', icon: BadgeCheck },
@@ -204,7 +213,7 @@ function DesktopAccountDashboard({
               <section className="sc-account__panel sc-account__support">
                 <div>
                   <h2>Help &amp; Support</h2>
-                  <SupportLink label="Frequently Asked Questions" onClick={() => navigate('/contact')} />
+                  <SupportLink label="Frequently Asked Questions" onClick={() => navigate('/faqs')} />
                   <SupportLink label="Track an Order" onClick={() => navigate('/orders')} />
                   <SupportLink label="Returns & Refunds" onClick={() => navigate('/return-policy')} />
                   <SupportLink label="Contact Us" onClick={() => navigate('/contact')} />
@@ -289,9 +298,9 @@ function MobileAccountView({ navigate, user, logout, switchMode, displayName }) 
 
         <div className="border-t-8 border-slate-100 bg-white px-4 py-4">
           <div className="grid gap-4">
-            {footerLinks.map((label) => (
-              <button key={label} type="button" className="text-left text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">
-                {label}
+            {footerLinks.map((item) => (
+              <button key={item.label} type="button" onClick={() => navigate?.(item.path)} className="text-left text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                {item.label}
               </button>
             ))}
           </div>

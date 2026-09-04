@@ -9,7 +9,7 @@ export default function AdminRoute({ children }) {
       <AdminGate
         title="Admin access required"
         note="Login with an admin account to open the dashboard."
-        action={<a href="/login" className="admin-btn">Login now</a>}
+        action={<a href="/admin/login" className="admin-btn">Admin login</a>}
       />
     );
   }

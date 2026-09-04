@@ -16,7 +16,7 @@ import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
 import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
 import { createStoragePlan } from './utils/userStorage';
-import { boutiquePath, consumeLegacyHash, pushAppRoute, readAppRoute } from './utils/routing';
+import { boutiquePath, consumeLegacyHash, pushAppRoute, readAppRoute, ROUTE_CHANGE_EVENT } from './utils/routing';
 
 const Home = lazy(() => import('./pages/customer/Home'));
 const Products = lazy(() => import('./pages/customer/Products'));
@@ -35,6 +35,7 @@ const OrderSuccess = lazy(() => import('./pages/customer/OrderSuccess'));
 const PaymentFailed = lazy(() => import('./pages/customer/PaymentFailed'));
 const Contact = lazy(() => import('./pages/customer/Contact'));
 const MyReturns = lazy(() => import('./pages/customer/MyReturns'));
+const Notifications = lazy(() => import('./pages/customer/Notifications'));
 const StoreHome = lazy(() => import('./pages/customer/StoreHome'));
 const SellerDashboard = lazy(() => import('./pages/seller/Dashboard'));
 const SellerOnboarding = lazy(() => import('./pages/seller/Onboarding'));
@@ -103,6 +104,7 @@ const customerRoutes = {
   '/faqs': Contact,
   '/our-story': Contact,
   '/returns': MyReturns,
+  '/notifications': Notifications,
 };
 
 const sellerRoutes = {
@@ -179,10 +181,12 @@ function useAppRoute() {
     };
     window.addEventListener('popstate', onChange);
     window.addEventListener('hashchange', onChange);
+    window.addEventListener(ROUTE_CHANGE_EVENT, onChange);
     document.addEventListener('click', onClick);
     return () => {
       window.removeEventListener('popstate', onChange);
       window.removeEventListener('hashchange', onChange);
+      window.removeEventListener(ROUTE_CHANGE_EVENT, onChange);
       document.removeEventListener('click', onClick);
     };
   }, []);
@@ -221,7 +225,20 @@ function AppShell({ route, navigate }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const mobileLoaderActive = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
   const [showMobileLoader, setShowMobileLoader] = useState(false);
-  const protectedRoutes = ['/profile', '/profile/details', '/orders', '/checkout', '/order-detail', '/order-success', '/wishlist', '/returns'];
+  const protectedRoutes = [
+    '/profile',
+    '/profile/details',
+    '/profile/addresses',
+    '/profile/addresses/new',
+    '/profile/addresses/edit',
+    '/orders',
+    '/checkout',
+    '/order-detail',
+    '/order-success',
+    '/wishlist',
+    '/returns',
+    '/notifications',
+  ];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
   const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];

@@ -26,6 +26,7 @@ export default function Wishlist({ navigate }) {
           <CardContent className="p-6 text-center md:p-10">
             <h2 className="section-title">Your wishlist is empty</h2>
             <p className="body-text mt-2 text-slate-500">Browse the collection and save styles you want to revisit.</p>
+            <button type="button" onClick={() => navigate('/products')} className="mt-5 rounded-xl bg-wine px-5 py-3 text-sm font-black text-white">Browse products</button>
           </CardContent>
         </Card>
       )}

@@ -38,7 +38,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
         let remoteItems = normalizeCartResponse(remoteCart);
 
         if (localItems.length) {
-          remoteItems = await mergeGuestCartIntoRemote(localItems);
+          remoteItems = await mergeGuestCartIntoRemote(localItems, remoteItems);
           clearGuestCart(guestStorageName, guestLegacyStorageNames);
           if (storageNameProp && storageNameProp !== guestStorageName) {
             clearGuestCart(storageNameProp, legacyStorageNames);
@@ -435,14 +435,23 @@ function normalizeCartProduct(product = {}) {
   });
 }
 
-async function mergeGuestCartIntoRemote(guestItems) {
+async function mergeGuestCartIntoRemote(guestItems, remoteItems = []) {
+  // The backend automatically transfers the server-side guest cart when the
+  // first authenticated cart request includes the same session id. Only send
+  // locally cached lines that did not make it to that server cart; otherwise
+  // every OTP login would add the guest quantity a second time.
+  const remoteKeys = new Set(remoteItems.map(getItemKey));
   for (const guestItem of guestItems) {
     const productId = guestItem.productId || getProductId(guestItem.product);
     if (!productId) continue;
 
+    const guestKey = getItemKey({ ...guestItem, productId });
+    if (remoteKeys.has(guestKey)) continue;
+
     const payload = buildCartPayload(guestItem.product, Number(guestItem.quantity || 1), guestItem.size, guestItem.color, guestItem.variantId);
     try {
       await api.post('/cart', payload);
+      remoteKeys.add(guestKey);
     } catch {
       // Ignore guest items that can no longer be merged.
     }

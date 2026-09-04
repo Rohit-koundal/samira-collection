@@ -760,6 +760,44 @@
   display: none;
 }
 
+.productGridEmpty {
+  display: block;
+  overflow: visible;
+}
+
+.emptyCollection {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--samira-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--samira-muted);
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.emptyCollection p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.emptyCollection button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--samira-primary);
+  border-radius: 5px;
+  color: var(--samira-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .productGridCompact {
   --product-gap: 14px;
   margin-top: 13px;

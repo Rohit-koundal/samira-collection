@@ -25,7 +25,7 @@ export default function AdminLogin() {
     if (!/^\S+@\S+\.\S+$/.test(email)) return showFeedback('Enter a valid email address.');
     if (password.length < 6) return showFeedback('Password must be at least 6 characters.');
     setLoading(true);
-    const result = await login({ email, password });
+    const result = await login({ email, password, redirectTo: '/admin' });
     if (result?.ok === false) showFeedback(result.error || 'Invalid admin login.');
     setLoading(false);
   };

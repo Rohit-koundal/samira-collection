@@ -36,6 +36,7 @@ export default function ProductDetailPage({
   onBuyNow,
   onOrderWhatsApp,
   onCheckDelivery,
+  deliveryChecking = false,
   relatedProducts = [],
   reviews = [],
   variantProducts = [],
@@ -56,6 +57,15 @@ export default function ProductDetailPage({
 
   const rating = Number(product?.rating || 0).toFixed(1);
   const reviewCount = product?.numReviews || reviews.length || 0;
+  const ratingDistribution = useMemo(() => {
+    if (!reviews.length) return new Map([5, 4, 3, 2, 1].map((value) => [value, 0]));
+    const counts = new Map([5, 4, 3, 2, 1].map((value) => [value, 0]));
+    reviews.forEach((review) => {
+      const value = Math.max(1, Math.min(5, Math.round(Number(review.rating || 0))));
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    return new Map(Array.from(counts, ([value, count]) => [value, Math.round((count / reviews.length) * 100)]));
+  }, [reviews]);
   const similarTarget = product?.categoryId
     ? `/products?category=${encodeURIComponent(product.categoryId)}`
     : product?.category
@@ -113,6 +123,7 @@ export default function ProductDetailPage({
               onBuyNow={onBuyNow}
               onOrderWhatsApp={onOrderWhatsApp}
               onCheckDelivery={onCheckDelivery}
+              deliveryChecking={deliveryChecking}
               variantProducts={variantProducts}
               storeWhatsappNumber={storeWhatsappNumber}
               onOpenSizeGuide={onOpenSizeGuide}
@@ -172,7 +183,7 @@ export default function ProductDetailPage({
                 {[5, 4, 3, 2, 1].map((star) => (
                   <div key={star} className="sc-pdp__rating-row">
                     <span>{star}★</span>
-                    <div className="sc-pdp__rating-track"><div className="sc-pdp__rating-fill" style={{ width: `${Math.max(20, 90 - (5 - star) * 16)}%` }} /></div>
+                    <div className="sc-pdp__rating-track"><div className="sc-pdp__rating-fill" style={{ width: `${ratingDistribution.get(star) || 0}%` }} /></div>
                   </div>
                 ))}
               </div>

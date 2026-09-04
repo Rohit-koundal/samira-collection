@@ -271,7 +271,7 @@ export default function Footer({ navigate }) {
       </div>
 
       <div className="sc-footer__bottom">
-        <p>© 2025 Samaira Collection. All Rights Reserved.</p>
+        <p>© {new Date().getFullYear()} Samaira Collection. All Rights Reserved.</p>
         <p>Made with <span aria-hidden="true">♥</span> for fashion lovers</p>
       </div>
     </footer>

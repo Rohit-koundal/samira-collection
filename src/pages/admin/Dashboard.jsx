@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Banknote, ChevronDown, CircleCheck, CircleDashed, Clock3, DollarSign, LayoutDashboard, Package, ShoppingBag, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, Banknote, CircleCheck, CircleDashed, Clock3, DollarSign, LayoutDashboard, Package, ShoppingBag, Sparkles, TrendingUp, Users } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -111,10 +111,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
-        <Panel title="Recent Orders" subtitle="Latest customer activity" actionLabel="View All">
+        <Panel title="Recent Orders" subtitle="Latest customer activity" actionLabel="View All" actionHref="/admin/orders">
           <RecentOrders orders={recentOrders} loading={loading} />
         </Panel>
-        <Panel title="Top Selling Products" subtitle="Best performers from orders" actionLabel="View All">
+        <Panel title="Top Selling Products" subtitle="Best performers from orders" actionLabel="View All" actionHref="/admin/products">
           <TopProducts products={topProducts} loading={loading} />
         </Panel>
       </div>
@@ -144,7 +144,7 @@ function StatCard({ label, value, delta, note, icon: Icon, tint, iconColor, load
   );
 }
 
-function Panel({ title, subtitle, actionLabel, children }) {
+function Panel({ title, subtitle, actionLabel, actionHref, children }) {
   return (
     <div className="admin-card min-w-0 overflow-hidden p-4 lg:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
@@ -152,10 +152,14 @@ function Panel({ title, subtitle, actionLabel, children }) {
           <h2>{title}</h2>
           <p className="admin-note">{subtitle}</p>
         </div>
-        <button type="button" className="admin-btn-ghost text-xs">
-          {actionLabel}
-          <ChevronDown className="h-3.5 w-3.5" />
-        </button>
+        {actionHref ? (
+          <a href={actionHref} className="admin-btn-ghost text-xs">
+            {actionLabel}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
+        ) : (
+          <span className="admin-btn-ghost text-xs">{actionLabel}</span>
+        )}
       </div>
       {children}
     </div>
@@ -338,9 +342,9 @@ function TopProducts({ products, loading }) {
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-charcoal">{formatCurrency(product.revenue || product.price || 0)}</p>
-            <button className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-rose">
+            <a href={`/admin/products/edit?id=${encodeURIComponent(product.id || product._id || '')}`} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-rose">
               Details <ArrowRight className="h-3.5 w-3.5" />
-            </button>
+            </a>
           </div>
         </div>
       ))}

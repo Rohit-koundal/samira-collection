@@ -11,6 +11,7 @@ export default function MyOrders({ navigate }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function MyOrders({ navigate }) {
         setError(err.message);
       })
       .finally(() => setLoading(false));
-  }, [user?._id, user?.id]);
+  }, [reloadKey, user?._id, user?.id]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -44,7 +45,7 @@ export default function MyOrders({ navigate }) {
       <section className="container-page py-6 md:py-8">
         <h1 className="page-title mb-5 md:mb-6 md:text-3xl">My Orders</h1>
         {loading && <Card><CardContent className="section-title p-6 text-center md:p-8">Loading orders...</CardContent></Card>}
-        {error && <Card><CardContent className="section-title p-6 text-center text-rose md:p-8">{error}</CardContent></Card>}
+        {error && <Card><CardContent className="section-title p-6 text-center text-rose md:p-8"><p>{error}</p><button type="button" onClick={() => setReloadKey((value) => value + 1)} className="mt-4 rounded-xl bg-wine px-5 py-2 text-sm font-black text-white">Try again</button></CardContent></Card>}
         {!loading && !orders.length && <Card><CardContent className="section-title p-6 text-center md:p-8">No orders yet.</CardContent></Card>}
         <div className="space-y-3 md:space-y-4">
           {orders.map((order) => (
@@ -102,6 +103,7 @@ export default function MyOrders({ navigate }) {
             <div className="rounded-[30px] border border-[#f3d6db] bg-[linear-gradient(180deg,#fff8f8_0%,#fff2f4_100%)] px-6 py-7 text-center shadow-[0_14px_30px_rgba(197,76,113,0.08)]">
               <p className="text-[16px] font-bold text-[#c54c71]">Unable to load orders</p>
               <p className="mt-2 text-[13px] leading-[1.45] text-slate-500">{error}</p>
+              <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="mt-4 rounded-xl bg-[#c54c71] px-5 py-2.5 text-[13px] font-bold text-white">Try again</button>
             </div>
           </div>
         )}
