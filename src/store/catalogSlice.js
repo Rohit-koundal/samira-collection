@@ -1,6 +1,6 @@
 import { createSelector, createSlice } from '@reduxjs/toolkit';
 
-const sortOptions = ['newest', 'priceLowHigh', 'priceHighLow', 'discount', 'rating'];
+const sortOptions = ['newest', 'bestSeller', 'priceLowHigh', 'priceHighLow', 'discount', 'rating'];
 export const clearableCatalogFilterKeys = ['search', 'category', 'size', 'color', 'fabric', 'occasion', 'discount', 'rating', 'stock', 'minPrice', 'maxPrice', 'featured', 'newArrival', 'bestSeller', 'trending'];
 
 const initialState = {
@@ -44,7 +44,7 @@ export const selectVisibleProducts = createSelector(
     (_state, _products, categories = []) => categories,
   ],
   (filters, products, categories) => sortProducts(
-    products.filter((product) => matchesFilters(product, filters, categories)),
+    products.filter((product) => matchesCatalogFilters(product, filters, categories)),
     filters.sort,
   ),
 );
@@ -98,22 +98,23 @@ export function clearCatalogFilters(filters) {
   return next;
 }
 
-function matchesFilters(product, filters, categories) {
-  if (!matchesSearch(product, filters.search)) return false;
-  if (!matchesCategory(product, filters.category, categories)) return false;
-  if (!matchesArrayValue(product.sizes, filters.size)) return false;
-  if (!matchesArrayValue(product.colors, filters.color)) return false;
-  if (!matchesTextValue(product.fabric, filters.fabric)) return false;
-  if (!matchesTextValue(product.occasion, filters.occasion)) return false;
-  if (!matchesMinimumValue(product.discountPercentage, filters.discount)) return false;
-  if (!matchesMinimumValue(product.rating, filters.rating)) return false;
-  if (!matchesStock(product.stock, filters.stock)) return false;
-  if (!matchesMinimumValue(product.price, filters.minPrice)) return false;
-  if (!matchesMaximumValue(product.price, filters.maxPrice)) return false;
-  if (filters.featured === 'true' && !product.isFeatured) return false;
-  if (filters.newArrival === 'true' && !product.isNewArrival) return false;
-  if (filters.bestSeller === 'true' && !product.isBestSeller) return false;
-  if (filters.trending === 'true' && !product.showInTrending) return false;
+export function matchesCatalogFilters(product, filters, categories, ignoredKeys = []) {
+  const ignored = ignoredKeys instanceof Set ? ignoredKeys : new Set(ignoredKeys);
+  if (!ignored.has('search') && !matchesSearch(product, filters.search)) return false;
+  if (!ignored.has('category') && !matchesCategory(product, filters.category, categories)) return false;
+  if (!ignored.has('size') && !matchesArrayValue(getProductOptionValues(product, 'size'), filters.size)) return false;
+  if (!ignored.has('color') && !matchesArrayValue(getProductOptionValues(product, 'color'), filters.color)) return false;
+  if (!ignored.has('fabric') && !matchesTextValue(product.fabric, filters.fabric)) return false;
+  if (!ignored.has('occasion') && !matchesDelimitedTextValue(product.occasion, filters.occasion)) return false;
+  if (!ignored.has('discount') && !matchesMinimumValue(product.discountPercentage, filters.discount)) return false;
+  if (!ignored.has('rating') && !matchesMinimumValue(product.rating, filters.rating)) return false;
+  if (!ignored.has('stock') && !matchesStock(product.stock, filters.stock)) return false;
+  if (!ignored.has('minPrice') && !matchesMinimumValue(product.price, filters.minPrice)) return false;
+  if (!ignored.has('maxPrice') && !matchesMaximumValue(product.price, filters.maxPrice)) return false;
+  if (!ignored.has('featured') && filters.featured === 'true' && !product.isFeatured) return false;
+  if (!ignored.has('newArrival') && filters.newArrival === 'true' && !product.isNewArrival) return false;
+  if (!ignored.has('bestSeller') && filters.bestSeller === 'true' && !product.isBestSeller) return false;
+  if (!ignored.has('trending') && filters.trending === 'true' && !product.showInTrending) return false;
   return true;
 }
 
@@ -177,8 +178,9 @@ export function toggleFilterValue(activeValue, value) {
   const nextValue = String(value || '').trim();
   if (!nextValue) return normalizeText(activeValue);
   const selected = splitFilterValues(activeValue);
-  const exists = selected.includes(nextValue);
-  return (exists ? selected.filter((item) => item !== nextValue) : [...selected, nextValue]).join(',');
+  const nextKey = normalizeKey(nextValue);
+  const exists = selected.some((item) => normalizeKey(item) === nextKey);
+  return (exists ? selected.filter((item) => normalizeKey(item) !== nextKey) : [...selected, nextValue]).join(',');
 }
 
 function resolveCategoryAliases(value, categories) {
@@ -200,12 +202,38 @@ function resolveCategoryAliases(value, categories) {
 
 function matchesArrayValue(values, activeValue) {
   if (!activeValue) return true;
-  return (values || []).some((value) => normalizeKey(value) === normalizeKey(activeValue));
+  const selectedValues = splitFilterValues(activeValue).map(normalizeKey);
+  return selectedValues.some((selected) => (
+    (values || []).some((value) => normalizeKey(value) === selected)
+  ));
 }
 
 function matchesTextValue(value, activeValue) {
   if (!activeValue) return true;
-  return normalizeKey(value) === normalizeKey(activeValue);
+  const productValues = Array.isArray(value) ? value : [value];
+  const selectedValues = splitFilterValues(activeValue).map(normalizeKey);
+  return selectedValues.some((selected) => (
+    productValues.some((item) => normalizeKey(item) === selected)
+  ));
+}
+
+function matchesDelimitedTextValue(value, activeValue) {
+  if (!activeValue) return true;
+  const productValues = (Array.isArray(value) ? value : [value])
+    .flatMap((item) => String(item || '').split(/[,;|]/))
+    .map(normalizeKey)
+    .filter(Boolean);
+  const selectedValues = splitFilterValues(activeValue).map(normalizeKey);
+  return selectedValues.some((selected) => productValues.includes(selected));
+}
+
+function getProductOptionValues(product, type) {
+  const key = type === 'size' ? 'sizes' : 'colors';
+  const variantKey = type === 'size' ? 'size' : 'color';
+  return [
+    ...(Array.isArray(product?.[key]) ? product[key] : []),
+    ...(Array.isArray(product?.variants) ? product.variants.map((variant) => variant?.[variantKey]) : []),
+  ].filter(Boolean);
 }
 
 function matchesMinimumValue(value, minimum) {
@@ -229,11 +257,18 @@ function sortProducts(products, sort) {
   if (sort === 'priceHighLow') return items.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
   if (sort === 'discount') return items.sort((a, b) => Number(b.discountPercentage || 0) - Number(a.discountPercentage || 0));
   if (sort === 'rating') return items.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+  if (sort === 'bestSeller') {
+    return items.sort((a, b) => (
+      Number(Boolean(b.isBestSeller)) - Number(Boolean(a.isBestSeller))
+      || Number(b.rating || 0) - Number(a.rating || 0)
+      || Number(b.numReviews || 0) - Number(a.numReviews || 0)
+    ));
+  }
   return items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
 function normalizeSort(value) {
-  if (isEmptyValue(value)) return '';
+  if (isEmptyValue(value)) return initialState.sort;
   return sortOptions.includes(value) ? value : initialState.sort;
 }
 

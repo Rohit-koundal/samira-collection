@@ -85,8 +85,10 @@ export default function Inventory() {
                 )) : (
                   <input type="number" value={product.stock} onChange={(event) => updateStock(product, event.target.value)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
                 )}
-                <button type="button" onClick={() => markOutOfStock(product)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600">OOS</button>
-                <button type="button" onClick={() => hideProduct(product)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600">Hide</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => markOutOfStock(product)} className="admin-table-action-link is-danger">Out of stock</button>
+                  <button type="button" onClick={() => hideProduct(product)} className="admin-table-action-link">Hide</button>
+                </div>
               </div>
             </td>
           </tr>

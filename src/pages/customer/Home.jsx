@@ -6,7 +6,9 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import PageState from '../../components/ui/PageState';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
-import { useGetBannersQuery, useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
+import { useGetBannersQuery, useGetCategoriesQuery, useGetFeaturedReviewsQuery, useGetProductsQuery } from '../../store/apiSlice';
+import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
+import { getHomepageSection } from '../../config/websiteCustomization';
 
 const serviceHighlights = [
   { icon: Truck, title: 'Free Shipping', subtitle: 'On all orders' },
@@ -16,10 +18,13 @@ const serviceHighlights = [
 ];
 
 export default function Home({ navigate }) {
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const isDesktop = useMediaQuery('(min-width: 1024px)', false, { getInitialValueInEffect: false });
+  const { config: websiteConfig } = useWebsiteCustomization();
   const { data: productData = [], isLoading, isError, refetch } = useGetProductsQuery();
   const { data: categories = [] } = useGetCategoriesQuery();
   const { data: banners = [] } = useGetBannersQuery();
+  const reviewsSection = getHomepageSection(websiteConfig, 'reviews');
+  const { data: customerReviews = [] } = useGetFeaturedReviewsQuery(undefined, { skip: !isDesktop || !reviewsSection.visible });
   const catalog = normalizeProducts(productData || []);
   const heroBanners = banners.filter((banner) => banner.type === 'Hero');
   const promoBanner = banners.find((banner) => ['Offer', 'Category', 'Sale', 'Hero'].includes(banner.type));
@@ -27,9 +32,28 @@ export default function Home({ navigate }) {
   const featuredProducts = catalog.filter((product) => product.isFeatured || product.showOnHomepage).slice(0, 12);
   const trendingProducts = catalog.filter((product) => product.showInTrending).slice(0, 12);
   const newArrivalProducts = catalog.filter((product) => product.isNewArrival).slice(0, 12);
+  const bestSellerProducts = catalog.filter((product) => product.isBestSeller).slice(0, 12);
   const instagramProducts = catalog.filter((product) => getPrimaryImageUrl(product.images)).slice(0, 12);
   const ethnicSetProducts = catalog.filter((product) => matchesCollection(product, ['ethnic', 'set', 'suit', 'kurti', 'lehenga', 'saree'])).slice(0, 12);
   const accessoryProducts = catalog.filter((product) => matchesCollection(product, ['accessory', 'accessories', 'jewellery', 'jewelry', 'earring', 'necklace', 'bracelet', 'bag'])).slice(0, 12);
+  const selectConfiguredProducts = (sectionId, fallback) => {
+    const ids = websiteConfig.homepage.sectionProductIds?.[sectionId] || [];
+    if (!ids.length) return fallback;
+    const map = new Map(catalog.map((product) => [String(product._id || product.id || product.slug), product]));
+    return ids.map((id) => map.get(String(id))).filter(Boolean).slice(0, 12);
+  };
+  const desktopFeaturedProducts = selectConfiguredProducts('featured', featuredProducts);
+  const desktopTrendingProducts = selectConfiguredProducts('trending', trendingProducts);
+  const desktopNewArrivalProducts = selectConfiguredProducts('newArrivals', newArrivalProducts);
+  const desktopBestSellerProducts = selectConfiguredProducts('bestSellers', bestSellerProducts);
+  const desktopEthnicSetProducts = selectConfiguredProducts('ethnicSets', ethnicSetProducts);
+  const desktopAccessoryProducts = selectConfiguredProducts('accessories', accessoryProducts);
+  const categoryOverrides = new Map((websiteConfig.homepage.categoryImages || []).map((item) => [String(item.categoryId), item.image]));
+  const categoryIds = websiteConfig.homepage.featuredCategoryIds || [];
+  const themedCategories = (categoryIds.length
+    ? categoryIds.map((id) => categories.find((category) => String(category._id || category.id || category.slug) === String(id))).filter(Boolean)
+    : categories
+  ).map((category) => ({ ...category, image: categoryOverrides.get(String(category._id || category.id || category.slug)) || category.image }));
 
   if (isLoading && !catalog.length) {
     return <section className="container-page py-10"><PageState loading loadingLabel="Loading the collection..." /></section>;
@@ -41,7 +65,7 @@ export default function Home({ navigate }) {
 
   return (
     <>
-      <div className="bg-[#fcfaf7] lg:hidden">
+      {!isDesktop && <div className="bg-[#fcfaf7]">
         <MobileHero banner={heroBanners[0] || promoBanner} navigate={navigate} />
         <MobileServices />
         <MobileCategoryScroller categories={categories} navigate={navigate} />
@@ -77,20 +101,23 @@ export default function Home({ navigate }) {
           viewAllPath="/products?search=Accessory"
           emptyMessage="No accessories are published yet. Browse the complete collection while accessories are added."
         />
-      </div>
+      </div>}
 
       {isDesktop && (
         <DesktopLuxuryHome
           navigate={navigate}
-          categories={categories}
+          categories={themedCategories}
           banners={banners}
           catalog={catalog}
-          featuredProducts={featuredProducts}
-          trendingProducts={trendingProducts}
-          newArrivalProducts={newArrivalProducts}
+          featuredProducts={desktopFeaturedProducts}
+          trendingProducts={desktopTrendingProducts}
+          newArrivalProducts={desktopNewArrivalProducts}
+          bestSellerProducts={desktopBestSellerProducts}
           instagramProducts={instagramProducts}
-          ethnicSetProducts={ethnicSetProducts}
-          accessoryProducts={accessoryProducts}
+          ethnicSetProducts={desktopEthnicSetProducts}
+          accessoryProducts={desktopAccessoryProducts}
+          websiteConfig={websiteConfig}
+          customerReviews={customerReviews}
         />
       )}
     </>

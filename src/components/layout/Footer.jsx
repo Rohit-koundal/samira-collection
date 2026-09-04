@@ -37,6 +37,8 @@ import {
 import logo from '../../assets/samira-collection-logo.png';
 import { useGetSettingsQuery } from '../../store/apiSlice';
 import api from '../../services/api';
+import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
+import { normalizeImageUrl } from '../../services/normalize';
 import './Footer.css';
 
 const shoppingLinks = [
@@ -129,13 +131,19 @@ const legalLinks = [
 
 export default function Footer({ navigate }) {
   const { data: settings = {} } = useGetSettingsQuery();
+  const { config: websiteConfig } = useWebsiteCustomization();
+  const footerConfig = websiteConfig.footer;
   const [email, setEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState('');
 
   const go = (path) => {
     if (navigate) navigate(path);
   };
-  const socialUrls = settings.socialLinks || {};
+  const socialUrls = Object.fromEntries(Object.entries({ ...(settings.socialLinks || {}), ...(footerConfig.socialLinks || {}) }).filter(([, value]) => value));
+  const configuredShoppingLinks = menuPairs(footerConfig.menus?.shopping, shoppingLinks);
+  const configuredPolicyLinks = menuPairs(footerConfig.menus?.policies, policyLinks);
+  const configuredAboutLinks = menuPairs(footerConfig.menus?.about, aboutLinks);
+  const footerContactText = [footerConfig.contactEmail || settings.contactEmail, footerConfig.contactPhone || settings.contactPhone, footerConfig.contactAddress].filter(Boolean).join(' · ');
   const appLinks = settings.appLinks || {};
   const playStoreUrl = appLinks.googlePlay || appLinks.playStore;
   const appStoreUrl = appLinks.appStore || appLinks.appleStore;
@@ -162,20 +170,24 @@ export default function Footer({ navigate }) {
     }
   };
 
+  if (!footerConfig.enabled) return null;
+  const configuredLogo = normalizeImageUrl(footerConfig.logo || websiteConfig.branding.logo) || logo;
+
   return (
-    <footer className="sc-footer" aria-label="Samaira Collection footer">
+    <footer className="sc-footer" aria-label={`${websiteConfig.branding.websiteName} footer`} style={{ '--footer-bg': footerConfig.background, '--footer-text': footerConfig.textColor }}>
       <div className="sc-footer__top">
         <section className="sc-footer__brand">
           <button type="button" className="sc-footer__logo-link" onClick={() => go('/')}>
-            <img src={logo} alt="Samaira Collection" className="sc-footer__logo" />
+            <img src={configuredLogo} alt={websiteConfig.branding.websiteName || 'Store logo'} className="sc-footer__logo" />
           </button>
-          <p>{settings.footerText || 'Crafted with elegance, designed for you. Premium ethnic wear for every celebration.'}</p>
-          <SocialRow socialUrls={socialUrls} onOpen={openExternal} />
+          <p>{footerConfig.description || settings.footerText}</p>
+          {footerConfig.showContact && footerContactText && <p>{footerContactText}</p>}
+          {footerConfig.showSocialLinks && <SocialRow socialUrls={socialUrls} onOpen={openExternal} />}
         </section>
 
-        <FooterColumn title="Online Shopping" links={shoppingLinks} navigate={go} />
-        <FooterColumn title="Customer Policies" links={policyLinks} navigate={go} />
-        <FooterColumn title="About" links={aboutLinks} navigate={go} />
+        <FooterColumn title="Online Shopping" links={configuredShoppingLinks} navigate={go} />
+        <FooterColumn title="Customer Policies" links={configuredPolicyLinks} navigate={go} />
+        <FooterColumn title="About" links={configuredAboutLinks} navigate={go} />
 
         {(playStoreUrl || appStoreUrl) ? (
         <section className="sc-footer__app">
@@ -212,7 +224,7 @@ export default function Footer({ navigate }) {
         </section>
         ) : null}
 
-        <section className="sc-footer__connect">
+        {footerConfig.showNewsletter && <section className="sc-footer__connect">
           <h2>Keep In Touch</h2>
           <p>Be the first to know about new arrivals, offers &amp; style inspiration.</p>
           <form className="sc-footer__email" onSubmit={subscribe}>
@@ -237,8 +249,9 @@ export default function Footer({ navigate }) {
             <span />
           </div>
           <p className="sc-footer__social-title">Connect with us on</p>
-          <SocialRow socialUrls={socialUrls} onOpen={openExternal} />
+          {footerConfig.showSocialLinks && <SocialRow socialUrls={socialUrls} onOpen={openExternal} />}
         </section>
+        }
       </div>
 
       <div className="sc-footer__service-strip">
@@ -271,7 +284,7 @@ export default function Footer({ navigate }) {
       </div>
 
       <div className="sc-footer__bottom">
-        <p>© {new Date().getFullYear()} Samaira Collection. All Rights Reserved.</p>
+        <p>{footerConfig.copyrightText || `© ${new Date().getFullYear()} ${websiteConfig.branding.websiteName}. All Rights Reserved.`}</p>
         <p>Made with <span aria-hidden="true">♥</span> for fashion lovers</p>
       </div>
     </footer>
@@ -350,4 +363,9 @@ function PaymentIcon({ type }) {
       <span>{labels[type]}</span>
     </span>
   );
+}
+
+function menuPairs(items, fallback) {
+  if (!Array.isArray(items)) return fallback;
+  return items.map((item) => [item.label, item.path]).filter(([label, path]) => label && path);
 }

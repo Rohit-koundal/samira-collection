@@ -1,10 +1,20 @@
-import { TextInput } from '../ui/Field';
+import { Search } from 'lucide-react';
 
 export default function SearchFilterBar({ search, onSearch, children, placeholder = 'Search records' }) {
   return (
-    <div className="admin-card grid gap-3 p-4 md:grid-cols-[minmax(220px,1fr)_auto] md:items-center">
-      <TextInput value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
-      <div className="flex flex-wrap gap-2">{children}</div>
+    <div className="admin-card admin-filter-bar">
+      <label className="admin-filter-bar__search">
+        <Search className="h-4 w-4" aria-hidden="true" />
+        <span className="sr-only">Search</span>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+        />
+      </label>
+      {children ? <div className="admin-filter-bar__controls">{children}</div> : null}
     </div>
   );
 }

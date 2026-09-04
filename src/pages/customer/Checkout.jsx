@@ -29,7 +29,8 @@ import { trackEvent } from '../../utils/analytics';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
-import { couponApplyBody, formatCouponOffer } from '../../utils/couponApply';
+import { couponApplyBody } from '../../utils/couponApply';
+import CouponSelector from '../../components/coupon/CouponSelector';
 import './Checkout.css';
 
 const PAYMENT_METHOD_NOTES = {
@@ -105,6 +106,9 @@ export default function Checkout({ navigate }) {
   const [addressForm, setAddressForm] = useState({ ...emptyAddress, fullName: user?.name || '', mobile: user?.phone || '' });
   const [couponCode, setCouponCode] = useState('');
   const [coupons, setCoupons] = useState([]);
+  const [bestCouponCode, setBestCouponCode] = useState('');
+  const [couponBusyCode, setCouponBusyCode] = useState('');
+  const [couponFeedback, setCouponFeedback] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [quote, setQuote] = useState(null);
@@ -150,12 +154,6 @@ export default function Checkout({ navigate }) {
 
   useEffect(() => { loadAddresses(); }, []);
 
-  useEffect(() => {
-    api.get('/coupons')
-      .then((items) => setCoupons(Array.isArray(items) ? items : []))
-      .catch(() => setCoupons([]));
-  }, []);
-
   // Which payment methods exist is decided by the store settings, not the UI.
   useEffect(() => {
     let alive = true;
@@ -176,8 +174,30 @@ export default function Checkout({ navigate }) {
   }, []);
 
   const cartSignature = cart.items
-    .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}`)
+    .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}:${item.variantId || ''}`)
     .join('|');
+
+  useEffect(() => {
+    if (!cart.items.length || !paymentMethod) {
+      setCoupons([]);
+      setBestCouponCode('');
+      return undefined;
+    }
+    let alive = true;
+    api.post('/coupons/available', couponApplyBody({ cart, paymentMethod }))
+      .then((data) => {
+        if (!alive) return;
+        setCoupons(Array.isArray(data?.items) ? data.items : []);
+        setBestCouponCode(data?.bestCouponCode || '');
+      })
+      .catch(() => {
+        if (alive) {
+          setCoupons([]);
+          setBestCouponCode('');
+        }
+      });
+    return () => { alive = false; };
+  }, [cartSignature, paymentMethod, user?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Totals always come from the backend so delivery, COD fee and coupon
   // discount match exactly what the order will be created with.
@@ -203,6 +223,12 @@ export default function Checkout({ navigate }) {
       .catch((err) => {
         if (!alive) return;
         setQuote(null);
+        if (cart.coupon?.code && ['INVALID_COUPON', 'COUPON_EXPIRED', 'VALIDATION_ERROR'].includes(err.code)) {
+          const removedCode = cart.coupon.code;
+          cart.setCoupon(null);
+          setCouponCode('');
+          setCouponFeedback(`${removedCode} was removed because it is no longer eligible: ${err.message}`);
+        }
         setQuoteError(err.message || 'Unable to calculate order totals. Please refresh and try again.');
       });
 
@@ -270,16 +296,34 @@ export default function Checkout({ navigate }) {
   const applyCoupon = async (code = couponCode) => {
     const nextCode = String(code || '').trim().toUpperCase();
     setError('');
-    if (!nextCode) return showFeedback('Select a coupon or enter a code.', 'warning');
+    setCouponFeedback('');
+    if (!nextCode) {
+      showFeedback('Select a coupon or enter a code.', 'warning');
+      return false;
+    }
+    setCouponBusyCode(nextCode);
     try {
       const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart, paymentMethod }));
       cart.setCoupon({ code: data.couponCode, discount: data.discountAmount });
       setCouponCode(data.couponCode || nextCode);
+      setCouponFeedback(data.message || `${data.couponCode || nextCode} applied successfully.`);
       trackEvent('COUPON_APPLIED');
       setToast(data.message);
+      return true;
     } catch (err) {
+      setCouponFeedback(err.message);
       showFeedback(err.message, 'error');
+      return false;
+    } finally {
+      setCouponBusyCode('');
     }
+  };
+
+  const removeCoupon = () => {
+    const removedCode = cart.coupon?.code;
+    cart.setCoupon(null);
+    setCouponCode('');
+    setCouponFeedback(removedCode ? `${removedCode} removed.` : 'Coupon removed.');
   };
 
   const orderPayload = () => ({
@@ -482,9 +526,11 @@ export default function Checkout({ navigate }) {
             summary={summary}
             paymentOptions={paymentOptions}
             coupons={coupons}
-            couponCode={couponCode}
-            setCouponCode={setCouponCode}
+            bestCouponCode={bestCouponCode}
             applyCoupon={applyCoupon}
+            removeCoupon={removeCoupon}
+            couponBusyCode={couponBusyCode}
+            couponFeedback={couponFeedback}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
             paymentApp={paymentApp}
@@ -526,9 +572,11 @@ export default function Checkout({ navigate }) {
       removeAddress={removeAddress}
       resetAddressEditor={resetAddressEditor}
       coupons={coupons}
-      couponCode={couponCode}
-      setCouponCode={setCouponCode}
+      bestCouponCode={bestCouponCode}
       applyCoupon={applyCoupon}
+      removeCoupon={removeCoupon}
+      couponBusyCode={couponBusyCode}
+      couponFeedback={couponFeedback}
       paymentMethod={paymentMethod}
       setPaymentMethod={setPaymentMethod}
       paymentApp={paymentApp}
@@ -566,9 +614,11 @@ function DesktopCheckout({
   removeAddress,
   resetAddressEditor,
   coupons,
-  couponCode,
-  setCouponCode,
+  bestCouponCode,
   applyCoupon,
+  removeCoupon,
+  couponBusyCode,
+  couponFeedback,
   paymentMethod,
   setPaymentMethod,
   paymentApp,
@@ -670,31 +720,15 @@ function DesktopCheckout({
 
             <section className="sc-checkout__card sc-checkout__coupon">
               <SectionTitle number="3" icon={Tag} title="Coupon / Offers" />
-              {coupons?.length ? (
-                <div className="sc-checkout__coupon-list">
-                  {coupons.map((coupon) => (
-                    <button
-                      key={coupon.code}
-                      type="button"
-                      className={`sc-checkout__coupon-option ${cart.coupon?.code === coupon.code ? 'is-active' : ''}`}
-                      onClick={() => applyCoupon(coupon.code)}
-                    >
-                      <span>
-                        <strong>{coupon.code}</strong>
-                        <small>{formatCouponOffer(coupon)}</small>
-                      </span>
-                      <em>{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</em>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="sc-checkout__payment-copy">No live coupons right now. You can still enter a code below.</p>
-              )}
-              <div className="sc-checkout__coupon-row">
-                <input value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Enter coupon code" />
-                <button type="button" onClick={() => applyCoupon()}>Apply Coupon</button>
-              </div>
-              {cart.coupon ? <p className="sc-checkout__coupon-success">{cart.coupon.code} applied: ₹{formatAmount(cart.coupon.discount)}</p> : null}
+              <CouponSelector
+                coupons={coupons}
+                bestCouponCode={bestCouponCode}
+                appliedCoupon={cart.coupon}
+                busyCode={couponBusyCode}
+                feedback={couponFeedback}
+                onApply={applyCoupon}
+                onRemove={removeCoupon}
+              />
             </section>
 
             <section className="sc-checkout__card">
@@ -1047,9 +1081,11 @@ function MobilePaymentStep({
   summary,
   paymentOptions,
   coupons,
-  couponCode,
-  setCouponCode,
+  bestCouponCode,
   applyCoupon,
+  removeCoupon,
+  couponBusyCode,
+  couponFeedback,
   paymentMethod,
   setPaymentMethod,
   paymentApp,
@@ -1081,33 +1117,16 @@ function MobilePaymentStep({
         </Card>
 
         <Card className="rounded-none border-x-0 shadow-none">
-          <CardHeader><CardTitle className="text-[16px]">Apply Coupon</CardTitle></CardHeader>
-          <CardContent>
-            {coupons?.length ? (
-              <div className="grid gap-2">
-                {coupons.map((coupon) => (
-                  <button
-                    key={coupon.code}
-                    type="button"
-                    onClick={() => applyCoupon(coupon.code)}
-                    className={`flex items-center justify-between rounded-xl border px-3 py-3 text-left ${cart.coupon?.code === coupon.code ? 'border-[#6d1f34] bg-[#fffaf2]' : 'border-slate-200 bg-white'}`}
-                  >
-                    <span>
-                      <span className="block text-[13px] font-bold">{coupon.code}</span>
-                      <span className="block text-[11px] text-slate-500">{formatCouponOffer(coupon)}</span>
-                    </span>
-                    <span className="text-[12px] font-bold text-[#6d1f34]">{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-slate-500">No live coupons right now. Enter a code below if you have one.</p>
-            )}
-            <div className="mt-4 flex gap-2">
-              <TextInput value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} className="flex-1" placeholder="Coupon code" />
-              <Button type="button" onClick={() => applyCoupon()}>Apply</Button>
-            </div>
-            {cart.coupon && <p className="mt-2 text-[13px] font-semibold text-emerald-600">{cart.coupon.code} applied: Rs. {cart.coupon.discount}</p>}
+          <CardContent className="pt-5">
+            <CouponSelector
+              coupons={coupons}
+              bestCouponCode={bestCouponCode}
+              appliedCoupon={cart.coupon}
+              busyCode={couponBusyCode}
+              feedback={couponFeedback}
+              onApply={applyCoupon}
+              onRemove={removeCoupon}
+            />
           </CardContent>
         </Card>
 

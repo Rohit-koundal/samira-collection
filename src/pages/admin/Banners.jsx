@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, Filter, Image as ImageIcon, PauseCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import BannerForm from '../../components/admin/BannerForm';
-import EmptyState from '../../components/admin/EmptyState';
-import Loader from '../../components/admin/Loader';
+import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
-import { Select, TextInput } from '../../components/ui/Field';
+import SearchFilterBar from '../../components/admin/SearchFilterBar';
+import StatusBadge from '../../components/admin/StatusBadge';
+import { Select } from '../../components/ui/Field';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
 
@@ -139,111 +140,68 @@ export default function Banners() {
         />
       )}
 
-      <div className="admin-card p-4 md:p-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
-          <TextInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search banners by title..." />
-          <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">All Status</option>
-            {statusOptions.filter(Boolean).map((item) => <option key={item} value={item}>{capitalize(item)}</option>)}
-          </Select>
-          <Select value={position} onChange={(event) => setPosition(event.target.value)}>
-            <option value="">All Positions</option>
-            {positionOptions.filter(Boolean).map((item) => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <button
-            type="button"
-            onClick={() => { setSearch(''); setStatus(''); setPosition(''); }}
-            disabled={!search && !status && !position}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#eadfd7] px-4 py-2.5 text-sm font-black text-wine disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Filter className="h-4 w-4" />
-            Reset Filters
-          </button>
-        </div>
-      </div>
+      <SearchFilterBar search={search} onSearch={setSearch} placeholder="Search banners by title">
+        <Select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="">All Status</option>
+          {statusOptions.filter(Boolean).map((item) => <option key={item} value={item}>{capitalize(item)}</option>)}
+        </Select>
+        <Select value={position} onChange={(event) => setPosition(event.target.value)}>
+          <option value="">All Positions</option>
+          {positionOptions.filter(Boolean).map((item) => <option key={item} value={item}>{item}</option>)}
+        </Select>
+        <button
+          type="button"
+          onClick={() => { setSearch(''); setStatus(''); setPosition(''); }}
+          disabled={!search && !status && !position}
+          className="admin-btn-ghost"
+        >
+          <Filter className="h-4 w-4" />
+          Reset
+        </button>
+      </SearchFilterBar>
 
       {message && !showForm && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
-      <div className="admin-card overflow-hidden">
-        {loading ? (
-          <Loader label="Loading banners..." />
-        ) : !filteredBanners.length ? (
-          <div className="p-5">
-            <EmptyState title="No banners found" note="Try adjusting filters or add a new banner." />
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px]">
-                <thead className="border-b border-[#f1e9e3] bg-[#fcfaf8]">
-                  <tr className="text-left text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
-                    <th className="px-5 py-4">#</th>
-                    <th className="px-5 py-4">Banner</th>
-                    <th className="px-5 py-4">Title</th>
-                    <th className="px-5 py-4">Position</th>
-                    <th className="px-5 py-4">Status</th>
-                    <th className="px-5 py-4">Link</th>
-                    <th className="px-5 py-4">Order</th>
-                    <th className="px-5 py-4">Views</th>
-                    <th className="px-5 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBanners.map((banner, index) => (
-                    <tr key={banner._id || banner.id || index} className="border-b border-[#f6eee8] align-top last:border-b-0">
-                      <td className="px-5 py-4 text-sm font-bold text-charcoal">{index + 1}</td>
-                      <td className="px-5 py-4">
-                        <div className="h-[56px] w-[92px] overflow-hidden rounded-xl bg-[#f7eee7]">
-                          {banner.image ? (
-                            <img src={normalizeImageUrl(banner.image)} alt={banner.title} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-[10px] font-black uppercase tracking-[0.08em] text-wine">Samira</div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="text-sm font-black text-charcoal">{banner.title}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{banner.subtitle || 'No subtitle added'}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-[#f5edff] px-3 py-1 text-[11px] font-bold text-[#6f50bf]">
-                          {banner.position || 'Home - Top'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold ${banner.isActive ? 'bg-[#eefaf1] text-[#208b45]' : 'bg-[#fff1f1] text-[#e25b5b]'}`}>
-                          {banner.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-sm font-semibold text-slate-600">{banner.link || '-'}</td>
-                      <td className="px-5 py-4 text-sm font-bold text-charcoal">{banner.displayOrder ?? 0}</td>
-                      <td className="px-5 py-4 text-sm font-bold text-charcoal">{formatNumber(Number(banner.views || 0))}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => openEditForm(banner)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#eadfd7] text-wine">
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button type="button" onClick={() => removeBanner(banner)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#fde0e0] text-[#e25b5b]">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between border-t border-[#f6eee8] px-5 py-4 text-sm font-semibold text-slate-500">
-              <span>Showing 1 to {filteredBanners.length} of {filteredBanners.length} results</span>
-              <div className="flex items-center gap-2">
-                <PaginationBadge active>1</PaginationBadge>
-                <PaginationBadge>2</PaginationBadge>
-                <PaginationBadge>3</PaginationBadge>
+      <DataTable
+        loading={loading}
+        emptyTitle="No banners found"
+        emptyNote="Try adjusting filters or add a new banner."
+        minWidth={1040}
+        heads={['#', 'Banner', 'Title', 'Position', 'Status', 'Link', 'Order', 'Views', 'Actions']}
+        rows={filteredBanners.map((banner, index) => (
+          <tr key={banner._id || banner.id || index}>
+            <td>{index + 1}</td>
+            <td>
+              <div className="h-[56px] w-[92px] overflow-hidden rounded-xl bg-[#f7eee7]">
+                {banner.image ? (
+                  <img src={normalizeImageUrl(banner.image)} alt={banner.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[10px] font-black uppercase tracking-[0.08em] text-wine">Samira</div>
+                )}
               </div>
-            </div>
-          </>
-        )}
-      </div>
+            </td>
+            <td>
+              <p className="text-sm font-black text-charcoal">{banner.title}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{banner.subtitle || 'No subtitle added'}</p>
+            </td>
+            <td><span className="inline-flex rounded-full bg-[#f5edff] px-3 py-1 text-[11px] font-bold text-[#6f50bf]">{banner.position || 'Home - Top'}</span></td>
+            <td><StatusBadge value={banner.isActive ? 'Active' : 'Inactive'} /></td>
+            <td className="text-sm font-semibold text-slate-600">{banner.link || '-'}</td>
+            <td>{banner.displayOrder ?? 0}</td>
+            <td>{formatNumber(Number(banner.views || 0))}</td>
+            <td>
+              <div className="flex gap-2 md:justify-end">
+                <button type="button" onClick={() => openEditForm(banner)} className="admin-catalog-action" aria-label={`Edit ${banner.title}`} title="Edit">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => removeBanner(banner)} className="admin-catalog-action is-danger" aria-label={`Delete ${banner.title}`} title="Delete">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      />
     </section>
   );
 }
@@ -261,14 +219,6 @@ function StatCard({ icon: Icon, label, value, tint }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function PaginationBadge({ active = false, children }) {
-  return (
-    <span className={`grid h-8 w-8 place-items-center rounded-lg text-xs font-black ${active ? 'bg-wine text-white' : 'border border-slate-200 text-slate-500'}`}>
-      {children}
-    </span>
   );
 }
 

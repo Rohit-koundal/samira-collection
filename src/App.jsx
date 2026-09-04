@@ -11,6 +11,8 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import AdminRoute from './components/layout/AdminRoute';
 import SellerRoute from './components/layout/SellerRoute';
 import { StorefrontProvider, useStorefront } from './context/StorefrontContext';
+import { WebsiteCustomizationProvider, useWebsiteCustomization } from './context/WebsiteCustomizationContext';
+import { buildWebsiteCssVariables } from './config/websiteCustomization';
 import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
@@ -68,6 +70,7 @@ const Returns = lazy(() => import('./pages/admin/Returns'));
 const Inventory = lazy(() => import('./pages/admin/Inventory'));
 const Reports = lazy(() => import('./pages/admin/Reports'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
+const WebsiteCustomizer = lazy(() => import('./pages/admin/WebsiteCustomizer'));
 const Support = lazy(() => import('./pages/admin/Support'));
 const Subscribers = lazy(() => import('./pages/admin/Subscribers'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
@@ -144,6 +147,7 @@ const adminRoutes = {
   '/admin/subscribers': Subscribers,
   '/admin/audit': AuditLogs,
   '/admin/settings': Settings,
+  '/admin/customization': WebsiteCustomizer,
   ...(reelImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
 };
 
@@ -205,11 +209,13 @@ export default function App() {
 
   return (
     <MantineProvider theme={samiraTheme}>
-      <AuthProvider navigate={navigate}>
-        <StorefrontProvider route={route}>
-          <AppShell route={route} navigate={navigate} />
-        </StorefrontProvider>
-      </AuthProvider>
+      <WebsiteCustomizationProvider>
+        <AuthProvider navigate={navigate}>
+          <StorefrontProvider route={route}>
+            <AppShell route={route} navigate={navigate} />
+          </StorefrontProvider>
+        </AuthProvider>
+      </WebsiteCustomizationProvider>
     </MantineProvider>
   );
 }
@@ -221,6 +227,7 @@ function AppShell({ route, navigate }) {
   const isSeller = routePath.startsWith('/seller');
   const { user } = useAuth();
   const { isHostStore } = useStorefront();
+  const { config: websiteConfig } = useWebsiteCustomization();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const mobileLoaderActive = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
@@ -341,6 +348,7 @@ function AppShell({ route, navigate }) {
     ((protectedRoutes.includes(routePath) && !user) && !desktopProfileLogin);
   const authContent = protectedRoutes.includes(routePath) && !user ? loginFallback : page;
   const showShell = !(isMobile && immersiveRoutes.includes(routePath));
+  const websiteStyle = useMemo(() => buildWebsiteCssVariables(websiteConfig), [websiteConfig]);
   const mainContent = desktopProfileLogin
     ? loginFallback
     : protectedRoutes.includes(routePath)
@@ -352,7 +360,21 @@ function AppShell({ route, navigate }) {
       : page;
 
   return (
-    <div className="min-h-screen bg-ivory text-charcoal">
+    <div
+      className={`min-h-screen bg-ivory text-charcoal ${!isAdmin && !isSeller ? 'site-storefront' : ''}`}
+      style={!isAdmin && !isSeller ? websiteStyle : undefined}
+      data-layout={!isAdmin && !isSeller ? websiteConfig.layout.mode : undefined}
+      data-button-style={!isAdmin && !isSeller ? websiteConfig.buttons.style : undefined}
+      data-button-hover={!isAdmin && !isSeller ? websiteConfig.buttons.hoverEffect : undefined}
+      data-card-title={!isAdmin && !isSeller ? websiteConfig.productCards.showTitle : undefined}
+      data-card-price={!isAdmin && !isSeller ? websiteConfig.productCards.showPrice : undefined}
+      data-card-discount={!isAdmin && !isSeller ? websiteConfig.productCards.showDiscount : undefined}
+      data-card-rating={!isAdmin && !isSeller ? websiteConfig.productCards.showRating : undefined}
+      data-card-wishlist={!isAdmin && !isSeller ? websiteConfig.productCards.showWishlist : undefined}
+      data-card-cart={!isAdmin && !isSeller ? websiteConfig.productCards.showAddToCart : undefined}
+      data-card-quick={!isAdmin && !isSeller ? websiteConfig.productCards.quickView : undefined}
+      data-card-layout={!isAdmin && !isSeller ? websiteConfig.productCards.layout : undefined}
+    >
       <CartProvider key={cartStoragePlan.storageName} storageName={cartStoragePlan.storageName} legacyStorageNames={cartStoragePlan.legacyStorageNames}>
         <WishlistProvider key={wishlistStoragePlan.storageName} storageName={wishlistStoragePlan.storageName} legacyStorageNames={wishlistStoragePlan.legacyStorageNames}>
           {isAdmin ? (

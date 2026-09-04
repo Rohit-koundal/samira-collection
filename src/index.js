@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import '@mantine/core/styles.css';
 import '@mantine/carousel/styles.css';
 import './index.css';
+import './styles/websiteCustomization.css';
 import App from './App.jsx';
 import { store } from './store/store';
 

@@ -12,7 +12,6 @@ import {
   replaceCatalogFilters,
   selectCatalogFilters,
   selectVisibleProducts,
-  setCatalogFilterValue,
   splitFilterValues,
   toggleFilterValue,
 } from '../../store/catalogSlice';
@@ -51,12 +50,16 @@ export default function Products({ navigate, route = '/products' }) {
     navigate(`${basePath}${nextParams.toString() ? `?${nextParams}` : ''}`);
   };
 
-  const updateParam = (key, value) => {
-    const nextFilters = setCatalogFilterValue(filters, key, value);
+  const updateParams = (values) => {
+    const nextFilters = normalizeCatalogQuery({ ...filters, ...values });
     dispatch(replaceCatalogFilters(nextFilters));
     syncCatalogRoute(nextFilters);
-    if (key !== 'search' && value) trackEvent('FILTER_USED', { metadata: { key, value: String(value).slice(0, 80) } });
+    Object.entries(values).forEach(([key, value]) => {
+      if (key !== 'search' && value) trackEvent('FILTER_USED', { metadata: { key, value: String(value).slice(0, 80) } });
+    });
   };
+
+  const updateParam = (key, value) => updateParams({ [key]: value });
 
   const clearFilterParams = () => {
     const nextFilters = {
@@ -78,7 +81,7 @@ export default function Products({ navigate, route = '/products' }) {
   };
 
   return (
-    <section className=" bg-white">
+    <section className="bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 md:p-0">
       {routePath === '/products' || routePath === '/search' || routePath === '/category' ? (
         <DesktopNewArrivalsLayout
           navigate={navigate}
@@ -89,8 +92,8 @@ export default function Products({ navigate, route = '/products' }) {
           visibleProducts={visibleProducts}
           categories={categories}
           filters={filters}
-          params={params}
           updateParam={updateParam}
+          updateParams={updateParams}
           clearFilterParams={clearFilterParams}
           allProducts={catalog}
         />

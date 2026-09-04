@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, TextInput } from '../../components/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
 import Icon from '../../components/layout/Icon';
 import { ProductVisual } from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
@@ -8,8 +8,9 @@ import { useWishlist } from '../../context/WishlistContext';
 import api from '../../services/api';
 import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 import { startMobileLoader, stopMobileLoader } from '../../utils/mobileLoader';
-import { couponApplyBody, formatCouponOffer } from '../../utils/couponApply';
+import { couponApplyBody } from '../../utils/couponApply';
 import { DEFAULT_GST_RATE, DEFAULT_PLATFORM_FEE, inclusiveTax, readPricingSettings } from '../../utils/priceBreakdown';
+import CouponSelector from '../../components/coupon/CouponSelector';
 
 export default function Cart({ navigate }) {
   const cart = useCart();
@@ -19,8 +20,12 @@ export default function Cart({ navigate }) {
   const [message, setMessage] = useState('');
   const [recommended, setRecommended] = useState([]);
   const [coupons, setCoupons] = useState([]);
-  const [showOffers, setShowOffers] = useState(true);
+  const [bestCouponCode, setBestCouponCode] = useState('');
+  const [couponBusyCode, setCouponBusyCode] = useState('');
   const [pricing, setPricing] = useState({ platformFee: DEFAULT_PLATFORM_FEE, gstRate: DEFAULT_GST_RATE });
+  const cartSignature = useMemo(() => cart.items
+    .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}:${item.variantId || ''}`)
+    .join('|'), [cart.items]);
 
   useEffect(() => {
     let active = true;
@@ -28,22 +33,15 @@ export default function Cart({ navigate }) {
 
     Promise.allSettled([
       api.get('/products?sort=rating'),
-      api.get('/coupons'),
       api.get('/settings'),
     ])
-      .then(([productsResult, couponsResult, settingsResult]) => {
+      .then(([productsResult, settingsResult]) => {
         if (!active) return;
 
         if (productsResult.status === 'fulfilled') {
           setRecommended(normalizeProducts(productsResult.value).slice(0, 8));
         } else {
           setRecommended([]);
-        }
-
-        if (couponsResult.status === 'fulfilled') {
-          setCoupons(couponsResult.value || []);
-        } else {
-          setCoupons([]);
         }
 
         if (settingsResult.status === 'fulfilled') {
@@ -60,6 +58,43 @@ export default function Cart({ navigate }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!cart.items.length) return undefined;
+    let active = true;
+    const body = couponApplyBody({ cart });
+    api.post('/coupons/available', body)
+      .then((data) => {
+        if (!active) return;
+        setCoupons(Array.isArray(data?.items) ? data.items : []);
+        setBestCouponCode(data?.bestCouponCode || '');
+      })
+      .catch(() => {
+        if (active) {
+          setCoupons([]);
+          setBestCouponCode('');
+        }
+      });
+
+    if (cart.coupon?.code) {
+      api.post('/coupons/apply', { ...body, code: cart.coupon.code })
+        .then((data) => {
+          if (!active) return;
+          const nextDiscount = Number(data.discountAmount || 0);
+          if (nextDiscount !== Number(cart.coupon?.discount || 0)) {
+            cart.setCoupon({ code: data.couponCode, discount: nextDiscount });
+          }
+        })
+        .catch((error) => {
+          if (!active) return;
+          const removedCode = cart.coupon?.code;
+          cart.setCoupon(null);
+          setCode('');
+          setMessage(`${removedCode} was removed: ${error.message}`);
+        });
+    }
+    return () => { active = false; };
+  }, [cartSignature, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectedCount = cart.itemCount;
   const platformFee = cart.items.length ? pricing.platformFee : 0;
   const discountedSubtotal = Math.max(0, cart.sellingTotal - cart.couponDiscount);
@@ -73,8 +108,6 @@ export default function Cart({ navigate }) {
     date.setDate(date.getDate() + 5);
     return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   }, []);
-  const bestCoupon = coupons[0];
-
   const applyCoupon = async (couponCode = code) => {
     const nextCode = String(couponCode || '').trim().toUpperCase();
     setMessage('');
@@ -82,15 +115,19 @@ export default function Cart({ navigate }) {
       setMessage('Select a coupon or enter a code.');
       return;
     }
+    setCouponBusyCode(nextCode);
     startMobileLoader();
     try {
       const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart }));
       cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: Number(data.discountAmount ?? data.discount ?? 0) });
       setCode(data.couponCode || data.coupon?.code || nextCode);
-      setMessage(`${data.couponCode || data.coupon?.code || nextCode} applied`);
+      setMessage(data.message || `${data.couponCode || data.coupon?.code || nextCode} applied`);
+      return true;
     } catch (error) {
       setMessage(error.message);
+      return false;
     } finally {
+      setCouponBusyCode('');
       stopMobileLoader();
     }
   };
@@ -219,50 +256,16 @@ export default function Cart({ navigate }) {
             <span className="text-2xl">&gt;</span>
           </button>
 
-          <section className="bg-[#f5f5f6]">
-            <p className="small-text px-4 py-4 font-bold uppercase tracking-wide text-slate-600">Offers</p>
-            <div className="bg-white px-4 py-4">
-              <div className="flex items-center justify-between">
-                <h2 className="section-title text-base">Available Coupons</h2>
-                <Button type="button" onClick={() => setShowOffers((value) => !value)} variant="ghost" size="sm" className="px-0 text-rose">{showOffers ? 'Hide' : 'Show'}</Button>
-              </div>
-              {showOffers && (
-                <div className="mt-4 grid gap-2">
-                  {coupons.length ? coupons.map((coupon) => (
-                    <button key={coupon.code} type="button" onClick={() => applyCoupon(coupon.code)} className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm ${cart.coupon?.code === coupon.code ? 'border-[#6d1f34] bg-[#fffaf2]' : 'border-slate-200'}`}>
-                      <span>
-                        <span className="font-black">{coupon.code}</span>
-                        <span className="mt-1 block text-slate-500">{formatCouponOffer(coupon)}</span>
-                      </span>
-                      <span className="font-black text-rose">{cart.coupon?.code === coupon.code ? 'Applied' : 'Apply'}</span>
-                    </button>
-                  )) : (
-                    <p className="body-text text-slate-500">No live coupons right now. Enter a code below if you have one.</p>
-                  )}
-                </div>
-              )}
-              {bestCoupon ? (
-                <div className="mt-4 rounded-xl border border-emerald-200 p-4">
-                  <p className="text-base font-black">{bestCoupon.code}</p>
-                  <p className="body-text mt-2 text-slate-600">{formatCouponOffer(bestCoupon)}</p>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <span className="label-text border border-dashed border-emerald-400 px-3 py-3">{bestCoupon.code}</span>
-                    <Button type="button" onClick={() => applyCoupon(bestCoupon.code)} variant="outline" className="border-rose text-rose hover:bg-rose/5">APPLY COUPON</Button>
-                  </div>
-                </div>
-              ) : null}
-              {message && <p className="label-text mt-3 text-wine">{message}</p>}
-              <div className="mt-4 flex gap-2">
-                <TextInput value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="flex-1" placeholder="Enter coupon code" />
-                <Button onClick={() => applyCoupon()}>Apply</Button>
-              </div>
-              {cart.coupon && (
-                <div className="mt-3 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
-                  <span className="label-text text-emerald-700">{cart.coupon.code} applied: Rs. {cart.couponDiscount} off</span>
-                  <Button type="button" onClick={removeCoupon} variant="ghost" size="sm" className="px-0 text-rose">Remove</Button>
-                </div>
-              )}
-            </div>
+          <section className="bg-[#f5f5f6] px-4 py-4">
+            <CouponSelector
+              coupons={coupons}
+              bestCouponCode={bestCouponCode}
+              appliedCoupon={cart.coupon}
+              busyCode={couponBusyCode}
+              feedback={message}
+              onApply={applyCoupon}
+              onRemove={removeCoupon}
+            />
           </section>
 
           {recommended.length > 0 && <RecommendationRail title="You may also like:" products={recommended} cart={cart} navigate={navigate} />}

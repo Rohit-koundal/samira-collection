@@ -47,13 +47,8 @@ export default function Dashboard() {
     { label: 'Total Revenue', value: formatCurrency(stats.revenue?.value), delta: stats.revenue?.delta, note: stats.revenue?.note, icon: DollarSign, tint: '#e9f7ef', iconColor: '#35a165' },
   ]), [stats]);
 
-  const chartSeries = Array.isArray(overview?.salesOverview) && overview.salesOverview.length
-    ? overview.salesOverview
-    : fallbackSeries();
-
-  const orderOverview = Array.isArray(overview?.orderOverview) && overview.orderOverview.length
-    ? overview.orderOverview
-    : [{ label: 'Pending', value: 1 }, { label: 'Delivered', value: 1 }];
+  const chartSeries = Array.isArray(overview?.salesOverview) ? overview.salesOverview : [];
+  const orderOverview = Array.isArray(overview?.orderOverview) ? overview.orderOverview : [];
 
   const recentOrders = overview?.recentOrders || [];
   const topProducts = overview?.topProducts || [];
@@ -79,20 +74,20 @@ export default function Dashboard() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="admin-kicker">Store health</p>
-              <h2 className="mt-2">Everything connected</h2>
+              <h2 className="mt-2">{loading ? 'Checking connection' : error ? 'Connection needs attention' : 'Live data connected'}</h2>
             </div>
             <div className="grid h-11 w-11 place-items-center rounded-full bg-wine text-white">
               <Sparkles className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <StatusPill icon={CircleCheck} label="API Ready" detail="Dashboard overview endpoint" tone="text-emerald-700 bg-emerald-50" />
-            <StatusPill icon={CircleDashed} label="Live Data" detail="Orders and products sync" tone="text-wine bg-blush" />
+            <StatusPill icon={error ? CircleDashed : CircleCheck} label={error ? 'API unavailable' : 'API connected'} detail={error || 'Dashboard overview endpoint'} tone={error ? 'text-rose bg-rose/10' : 'text-emerald-700 bg-emerald-50'} />
+            <StatusPill icon={CircleDashed} label="Data source" detail={overview ? 'Orders and products API' : 'Awaiting API response'} tone="text-wine bg-blush" />
           </div>
           <div className="mt-4 rounded-2xl border border-[#eadfd5] bg-[#fffaf2] px-4 py-4">
             <p className="text-sm text-slate-500">Signed in as</p>
             <p className="mt-1 text-lg font-semibold text-charcoal">{user?.name || 'Admin'}</p>
-            <p className="mt-1 text-sm text-slate-500">{user?.phone || user?.email || 'samira-admin'}</p>
+            {user?.phone || user?.email ? <p className="mt-1 text-sm text-slate-500">{user.phone || user.email}</p> : null}
           </div>
         </div>
       </div>
@@ -192,6 +187,8 @@ function SalesChart({ series, loading }) {
         <div className="grid h-[320px] place-items-center rounded-[22px] border border-dashed border-[#eadfd5] bg-white/70">
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
         </div>
+      ) : !series.length ? (
+        <EmptyMetric label="No sales have been recorded for this period." />
       ) : (
         <>
           <svg viewBox={`0 0 ${width} ${height}`} className="h-[300px] w-full">
@@ -237,6 +234,8 @@ function OrdersDonut({ series, loading }) {
         <div className="grid h-[320px] place-items-center rounded-[22px] border border-dashed border-[#eadfd5] bg-white/70">
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
         </div>
+      ) : !series.length ? (
+        <EmptyMetric label="No orders have been recorded for this period." />
       ) : (
         <div className="grid min-w-0 gap-4 min-[1180px]:grid-cols-[minmax(160px,180px)_minmax(0,1fr)] min-[1180px]:items-center">
           <div className="relative mx-auto h-[200px] w-[200px] max-w-full min-[1180px]:h-[180px] min-[1180px]:w-[180px]">
@@ -438,6 +437,7 @@ function StatusBadge({ status }) {
 }
 
 function formatNumber(value) {
+  if (value === undefined || value === null || value === '') return '—';
   return new Intl.NumberFormat('en-IN').format(Number(value || 0));
 }
 
@@ -446,6 +446,7 @@ function formatCompact(value) {
 }
 
 function formatCurrency(value) {
+  if (value === undefined || value === null || value === '') return '—';
   return `Rs. ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Number(value || 0))}`;
 }
 
@@ -458,13 +459,10 @@ function shortOrderId(value = '') {
   return String(value).slice(-8).toUpperCase();
 }
 
-function fallbackSeries() {
-  return [
-    { label: 'Jan', value: 42000 },
-    { label: 'Feb', value: 54000 },
-    { label: 'Mar', value: 47000 },
-    { label: 'Apr', value: 62000 },
-    { label: 'May', value: 58000 },
-    { label: 'Jun', value: 74000 },
-  ];
+function EmptyMetric({ label }) {
+  return (
+    <div className="grid min-h-[320px] place-items-center rounded-[18px] border border-dashed border-[#eadfd5] bg-[#fffaf2] px-6 text-center text-sm font-semibold text-slate-500">
+      {label}
+    </div>
+  );
 }

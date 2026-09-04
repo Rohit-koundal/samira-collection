@@ -5,10 +5,8 @@
 @media (min-width: 1024px) {
   .sc-footer {
     display: block;
-    color: #fff;
-    background:
-      radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.08), transparent 24%),
-      linear-gradient(180deg, #52061e 0%, #3d0718 54%, #2b0612 100%);
+    color: var(--footer-text, #fff);
+    background: var(--footer-bg, #4b071b);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
 

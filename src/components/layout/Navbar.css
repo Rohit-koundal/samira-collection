@@ -5,18 +5,19 @@
 @media (min-width: 1024px) {
   .sc-navbar {
     display: block;
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 60;
     width: 100%;
     margin: 0;
   }
 
+  .sc-navbar--sticky { position: sticky; top: 0; }
+
   .sc-navbar__shell {
     overflow: hidden;
     border-radius: 0;
     box-shadow: 0 14px 35px rgba(0, 0, 0, 0.08);
-    background: #fffaf2;
+    background: var(--navbar-bg, #fffaf2);
     border: 1px solid rgba(234, 216, 203, 0.92);
     border-left: 0;
     border-right: 0;
@@ -29,11 +30,8 @@
     align-items: center;
     min-height: 24px;
     padding: 0 22px;
-    color: #fff;
-    background:
-      radial-gradient(circle at left top, rgba(184, 137, 69, 0.24) 0, rgba(184, 137, 69, 0.24) 12px, transparent 13px),
-      radial-gradient(circle at right top, rgba(184, 137, 69, 0.24) 0, rgba(184, 137, 69, 0.24) 12px, transparent 13px),
-      linear-gradient(90deg, #690825 0%, #8b0e35 48%, #690825 100%);
+    color: var(--navbar-announcement-text, #fff);
+    background: var(--navbar-announcement-bg, #830b31);
   }
 
   .sc-navbar__top::before,
@@ -121,7 +119,8 @@
     gap: 10px;
     min-height: 54px;
     padding: 0 16px 0 12px;
-    background: linear-gradient(180deg, rgba(255, 250, 244, 0.98) 0%, #fffaf2 100%);
+    background: var(--navbar-bg, #fffaf2);
+    color: var(--navbar-text, #17161a);
   }
 
   .sc-navbar__brand {
@@ -145,7 +144,7 @@
 
   .sc-navbar__logo {
     display: block;
-    height: 62px;
+    height: var(--navbar-logo-size, 62px);
     width: auto;
     max-width: 170px;
     object-fit: contain;
@@ -192,19 +191,24 @@
   }
 
   .sc-navbar__link:hover,
-  .sc-navbar__link:focus-visible {
+  .sc-navbar__link:focus-visible,
+  .sc-navbar__link--active {
     color: #8b0e35;
+  }
+
+  .sc-navbar__link:hover,
+  .sc-navbar__link:focus-visible {
     transform: translateY(-1px);
+  }
+
+  .sc-navbar__link--active {
+    font-weight: 600;
   }
 
   .sc-navbar__link:hover::after,
   .sc-navbar__link:focus-visible::after,
   .sc-navbar__link--active::after {
     transform: scaleX(1);
-  }
-
-  .sc-navbar__link--sale {
-    color: #8b0e35;
   }
 
   .sc-navbar__link--hide-1400,

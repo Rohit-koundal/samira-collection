@@ -4,6 +4,7 @@ import { Button, Card, CardContent } from '../../components/ui';
 import api from '../../services/api';
 import Receipt from '../../components/order/Receipt';
 import ReceiptActions from '../../components/order/ReceiptActions';
+import ReviewModal from '../../components/product/ReviewModal';
 import { downloadReceiptHtml } from '../../utils/printReceipt';
 import { normalizeImageUrl, normalizeProducts } from '../../services/normalize';
 import { canCancelOrder, productIdOf } from '../../utils/orderActions';
@@ -19,6 +20,9 @@ export default function OrderDetail({ route = '', navigate }) {
   const [returnForm, setReturnForm] = useState({ type: 'return', reason: '', comment: '', quantity: 1 });
   const [actionMessage, setActionMessage] = useState('');
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewItem, setReviewItem] = useState(null);
+  const [existingReview, setExistingReview] = useState(null);
+  const [reviewInitialRating, setReviewInitialRating] = useState(0);
   const [cancelBusy, setCancelBusy] = useState(false);
 
   useEffect(() => {
@@ -53,7 +57,7 @@ export default function OrderDetail({ route = '', navigate }) {
   }, [order]);
 
   const canReturn = order?.orderStatus === 'Delivered';
-  const canRate = order?.orderStatus === 'Delivered';
+  const canRate = ['Delivered', 'Return Requested', 'Exchange Requested', 'Returned', 'Refunded'].includes(order?.orderStatus);
   const canCancel = canCancelOrder(order);
 
   const submitReturn = async (event) => {
@@ -82,7 +86,7 @@ export default function OrderDetail({ route = '', navigate }) {
     }
   };
 
-  const submitReview = async (item, rating) => {
+  const openReview = async (item, rating = 0) => {
     const productId = productIdOf(item);
     if (!productId || reviewBusy) return;
     if (!canRate) {
@@ -91,18 +95,39 @@ export default function OrderDetail({ route = '', navigate }) {
     }
     setReviewBusy(true);
     setActionMessage('');
+    setExistingReview(null);
     try {
-      await api.post(`/reviews/${productId}`, { rating, comment: 'Rated from order details' });
-      setActionMessage('Thanks for the review.');
-    } catch (err) {
-      if (err.status === 409) {
-        setActionMessage('You have already reviewed this product.');
-      } else {
-        setActionMessage(err.message);
+      const eligibility = await api.get(`/reviews/${productId}/eligibility`);
+      if (!eligibility?.canReview) {
+        setActionMessage(eligibility?.message || 'You can review this product after it is delivered.');
+        return;
       }
+      setExistingReview(eligibility.existingReview || null);
+      setReviewInitialRating(rating);
+      setReviewItem(item);
+    } catch (err) {
+      setActionMessage(err.message || 'Unable to open the review form right now.');
     } finally {
       setReviewBusy(false);
     }
+  };
+
+  const saveOrderReview = async (payload) => {
+    const productId = productIdOf(reviewItem);
+    if (!productId) throw new Error('Product information is unavailable for this order item.');
+    const saved = existingReview?._id
+      ? await api.put(`/reviews/${existingReview._id}`, payload)
+      : await api.post(`/reviews/${productId}`, payload);
+    setExistingReview(saved);
+    setActionMessage(existingReview ? 'Your review was updated successfully.' : 'Thank you. Your verified review was submitted successfully.');
+    return {
+      ...saved,
+      message: saved?.isVisible === false
+        ? 'Your review was saved and is awaiting moderation.'
+        : existingReview
+          ? 'Your updated review is now visible.'
+          : 'Your verified review is now visible to other customers.',
+    };
   };
 
   const cancelOrder = async () => {
@@ -132,7 +157,7 @@ export default function OrderDetail({ route = '', navigate }) {
 
           <div className="space-y-4 px-4 pb-6">
             <MobileStatusCard order={order} />
-            <MobileRatingCard item={primaryItem} canRate={canRate} busy={reviewBusy} onRate={(rating) => submitReview(primaryItem, rating)} />
+            <MobileRatingCard item={primaryItem} canRate={canRate} busy={reviewBusy} onRate={(rating) => openReview(primaryItem, rating)} />
             {canCancel ? (
               <Button type="button" variant="outline" className="w-full border-[#6d1f34] text-[#6d1f34]" disabled={cancelBusy} onClick={cancelOrder}>
                 {cancelBusy ? 'Cancelling...' : 'Cancel Order'}
@@ -149,6 +174,14 @@ export default function OrderDetail({ route = '', navigate }) {
 
           {receipt && <div className="hidden"><Receipt receipt={receipt} /></div>}
         </div>
+        <ReviewModal
+          open={!!reviewItem}
+          product={getOrderReviewProduct(reviewItem)}
+          existingReview={existingReview}
+          initialRating={reviewInitialRating}
+          onClose={() => setReviewItem(null)}
+          onSubmit={saveOrderReview}
+        />
       </section>
     );
   }
@@ -159,7 +192,7 @@ export default function OrderDetail({ route = '', navigate }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
         <div className="space-y-5">
           <Card><CardContent className="p-5 md:p-7"><h1 className="page-title md:text-3xl">Order #{order._id.slice(-8).toUpperCase()}</h1><p className="body-text mt-2 text-slate-500">Placed on {new Date(order.createdAt).toLocaleString('en-IN')}</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">Payment: {order.paymentStatus}</span><span className="rounded-full bg-wine/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-wine">Order: {order.orderStatus}</span></div><div className="mt-6 grid gap-4">{(order.statusTimeline || []).map((item, index) => <div key={`${item.status}-${index}`} className="flex items-center gap-4"><span className="h-4 w-4 rounded-full bg-rose" /><span><b>{item.status}</b><br /><span className="small-text text-slate-500">{item.date ? new Date(item.date).toLocaleString('en-IN') : ''} {item.note || ''}</span></span></div>)}</div></CardContent></Card>
-          <Card><CardContent className="p-4 md:p-5"><h2 className="header-title">Items</h2><div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="small-text text-slate-500">{item.size} | {item.color} x {item.quantity}</span>{canRate ? <span className="mt-2 flex gap-1">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" disabled={reviewBusy} onClick={() => submitReview(item, rating)} aria-label={`Rate ${rating} stars`}><Star className="h-4 w-4 text-[#b88945]" /></button>)}</span> : <span className="small-text mt-2 block text-slate-400">Rate after delivery</span>}</span><b>Rs. {item.price * item.quantity}</b></div>)}</div></CardContent></Card>
+          <Card><CardContent className="p-4 md:p-5"><h2 className="header-title">Items</h2><div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="small-text text-slate-500">{item.size} | {item.color} x {item.quantity}</span>{canRate ? <span className="mt-2 flex gap-1">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" disabled={reviewBusy} onClick={() => openReview(item, rating)} aria-label={`Rate ${rating} stars`}><Star className="h-4 w-4 text-[#b88945]" /></button>)}</span> : <span className="small-text mt-2 block text-slate-400">Rate after delivery</span>}</span><b>Rs. {item.price * item.quantity}</b></div>)}</div></CardContent></Card>
         </div>
         <Card as="aside">
           <CardContent className="p-4 md:p-5">
@@ -200,6 +233,14 @@ export default function OrderDetail({ route = '', navigate }) {
           </div>
         </form>
       )}
+      <ReviewModal
+        open={!!reviewItem}
+        product={getOrderReviewProduct(reviewItem)}
+        existingReview={existingReview}
+        initialRating={reviewInitialRating}
+        onClose={() => setReviewItem(null)}
+        onSubmit={saveOrderReview}
+      />
     </section>
   );
 }
@@ -279,12 +320,15 @@ function MobileRatingCard({ item, onRate, canRate = false, busy = false }) {
         <div>
           <p className="text-[15px] font-bold text-[#1f2a44]">Rate this product</p>
           {canRate ? (
-            <div className="mt-2 flex gap-1.5">
+            <div>
+              <div className="mt-2 flex gap-1.5">
               {Array.from({ length: 5 }).map((_, index) => (
                 <button key={index} type="button" disabled={busy} onClick={() => onRate?.(index + 1)} aria-label={`Rate ${index + 1} stars`}>
                   <Star className="h-6 w-6 text-[#b88945]" strokeWidth={1.7} />
                 </button>
               ))}
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">Tap a star to write or edit your review.</p>
             </div>
           ) : (
             <p className="mt-2 text-[13px] text-slate-500">You can rate this after delivery.</p>
@@ -509,4 +553,14 @@ function formatAddress(address = {}) {
     [address.city, address.state].filter(Boolean).join(', '),
     address.pincode,
   ].filter(Boolean).join(', ');
+}
+
+function getOrderReviewProduct(item) {
+  if (!item) return null;
+  return {
+    _id: productIdOf(item),
+    name: item.name || 'Order item',
+    brand: 'Samira Collection',
+    images: item.image ? [{ url: item.image, primary: true }] : [],
+  };
 }

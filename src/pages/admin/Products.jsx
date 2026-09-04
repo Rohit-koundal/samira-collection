@@ -645,9 +645,11 @@ export function AdminPage({ title, action, href, children }) {
   );
 }
 
-export function AdminTable({ heads, rows }) {
+export function AdminTable({ heads, rows, title = 'Records', emptyTitle = `No ${title.toLowerCase()} found` }) {
   return (
     <DataTable
+      title={title}
+      emptyTitle={emptyTitle}
       heads={heads}
       rows={rows.map((row, i) => (
         <tr key={i} className="border-t border-slate-100">

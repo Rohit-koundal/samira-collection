@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Flower2, Heart, HelpCircle, Search, ShoppingBag, Shield, Truck, UserRound } from 'lucide-react';
+import { Flower2, Heart, HelpCircle, Search, ShoppingBag, Shield, Truck, UserRound } from 'lucide-react';
 import logoFallback from '../../assets/samira-collection-logo.png';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
+import { normalizeImageUrl } from '../../services/normalize';
+import { getDesktopActiveLink } from '../../utils/navbarActive';
 import './Navbar.css';
 
 const desktopLinks = [
   { label: 'Home', path: '/' },
-  { label: 'New In', path: '/products?newArrival=true' },
-  { label: 'Shop', path: '/products', hasCaret: true },
-  { label: 'Occasions', path: '/products?occasion=Wedding' },
-  { label: 'Ethnic Sets', path: '/products?search=Set' },
-  { label: 'Sarees', path: '/products?search=Saree' },
-  { label: 'Bestsellers', path: '/products?bestSeller=true' },
-  { label: 'Accessories', path: '/products?search=Accessory' },
-  { label: 'Sale', path: '/products?discount=20', isSale: true },
+  { label: 'Shop All', path: '/products' },
+  { label: 'New Arrivals', path: '/products?newArrival=true&collection=new-arrivals' },
+  { label: 'Best Sellers', path: '/products?bestSeller=true&collection=best-sellers' },
+  { label: 'Featured', path: '/products?featured=true&collection=featured', hideBelow: 1400 },
+  { label: 'Offers', path: '/products?discount=20', isSale: true, hideBelow: 1280 },
+  { label: 'Contact Us', path: '/contact', hideBelow: 1280 },
 ];
 
 export default function Navbar({
@@ -36,7 +37,12 @@ export default function Navbar({
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
+  const { config: websiteConfig } = useWebsiteCustomization();
+  const headerConfig = websiteConfig.header;
+  const configuredLogo = normalizeImageUrl(websiteConfig.branding.logo) || logoSrc;
   const routePath = route.split('?')[0];
+  const routeParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
+  const activeLinkLabel = useMemo(() => getDesktopActiveLink(routePath, routeParams), [routeParams, routePath]);
   const searchValue = useMemo(() => new URLSearchParams(route.split('?')[1] || '').get('search') || '', [route]);
   const [searchTerm, setSearchTerm] = useState(searchValue);
   const cartCount = Number.isFinite(Number(cartCountProp)) ? Number(cartCountProp) : Number(cart?.itemCount || 0);
@@ -63,12 +69,15 @@ export default function Navbar({
   };
 
   return (
-    <header className="sc-navbar sc-navbar--desktop">
+    <header
+      className={`sc-navbar sc-navbar--desktop ${headerConfig.sticky ? 'sc-navbar--sticky' : 'sc-navbar--static'}`}
+      style={{ '--navbar-bg': headerConfig.background, '--navbar-text': headerConfig.textColor, '--navbar-logo-size': `${headerConfig.logoSize}px`, '--navbar-announcement-bg': headerConfig.announcementBackground, '--navbar-announcement-text': headerConfig.announcementTextColor }}
+    >
       <div className="sc-navbar__shell">
-        <div className="sc-navbar__top">
+        {headerConfig.announcementEnabled && <div className="sc-navbar__top">
           <div className="sc-navbar__announcement">
             <Truck className="h-4.5 w-4.5 text-[#b88945]" strokeWidth={1.9} aria-hidden="true" />
-            <span className="text-[13px] font-medium tracking-[0.01em]">Free Shipping Above ₹999</span>
+            <span className="text-[13px] font-medium tracking-[0.01em]">{headerConfig.announcementText}</span>
           </div>
 
           <div className="sc-navbar__center-mark" aria-hidden="true">
@@ -77,43 +86,40 @@ export default function Navbar({
 
           <div className="sc-navbar__utility">
             <button type="button" className="sc-navbar__top-link" onClick={() => (onTrackOrderClick ? onTrackOrderClick() : go('/orders'))}>
-              Track Order
+              My Orders
             </button>
             <span className="sc-navbar__top-divider" aria-hidden="true">
               |
             </span>
             <button type="button" className="sc-navbar__top-link sc-navbar__top-link--help" onClick={() => (onHelpClick ? onHelpClick() : go('/contact'))}>
               <HelpCircle className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
-              Help
+              Help &amp; Support
             </button>
           </div>
-        </div>
+        </div>}
 
         <div className="sc-navbar__main">
           <div className="sc-navbar__brand">
             <button type="button" className="sc-navbar__brand-link" onClick={() => go('/')}>
-              <img className="sc-navbar__logo" src={logoSrc} alt="Samaira Collection" />
+              <img className="sc-navbar__logo" src={configuredLogo} alt={websiteConfig.branding.websiteName || 'Store logo'} />
             </button>
           </div>
 
-          <nav className="sc-navbar__links" aria-label="Primary">
+          <nav className="sc-navbar__links" aria-label="Primary" style={{ justifyContent: headerConfig.menuAlignment === 'right' ? 'flex-end' : headerConfig.menuAlignment }}>
             {desktopLinks.map((link) => {
-              const isActive =
-                (routePath === '/' && link.path === '/') ||
-                (routePath === '/products' && link.path === '/products' && searchValue === '');
+              const isActive = activeLinkLabel === link.label;
               return (
                 <button
                   key={link.label}
                   type="button"
                   className={`sc-navbar__link${
-                    link.label === 'Bestsellers' ? ' sc-navbar__link--hide-1400' : ''
-                  }${link.label === 'Accessories' ? ' sc-navbar__link--hide-1280' : ''}${
-                    link.isSale ? ' sc-navbar__link--sale sc-navbar__link--hide-1280' : ''
+                    link.hideBelow === 1400 ? ' sc-navbar__link--hide-1400' : ''
+                  }${link.hideBelow === 1280 ? ' sc-navbar__link--hide-1280' : ''}${
+                    link.isSale ? ' sc-navbar__link--sale' : ''
                   }${isActive ? ' sc-navbar__link--active' : ''}`}
                   onClick={() => go(link.path)}
                 >
                   <span>{link.label}</span>
-                  {link.hasCaret ? <ChevronDown className="sc-navbar__shop-caret h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" /> : null}
                 </button>
               );
             })}

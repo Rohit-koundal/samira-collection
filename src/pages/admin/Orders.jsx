@@ -98,8 +98,8 @@ export default function Orders() {
                 <select value={order.orderStatus} onChange={(event) => updateOrder(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">
                   {orderStatuses.map((item) => <option key={item}>{item}</option>)}
                 </select>
-                <a href={`/admin/orders/detail?id=${order._id}`} className="font-black text-wine">View</a>
-                <button type="button" onClick={() => setDeleteTarget(order)} className="font-black text-rose">Delete</button>
+                <a href={`/admin/orders/detail?id=${order._id}`} className="admin-table-action-link">View</a>
+                <button type="button" onClick={() => setDeleteTarget(order)} className="admin-table-action-link is-danger">Cancel</button>
               </div>
             </td>
           </tr>
@@ -107,9 +107,9 @@ export default function Orders() {
       />
       <ConfirmModal
         open={!!deleteTarget}
-        title="Delete order?"
-        message={`This will permanently delete order ${deleteTarget?._id?.slice(-8)?.toUpperCase() || ''}.`}
-        confirmLabel="Delete"
+        title="Cancel order?"
+        message={`Order ${deleteTarget?._id?.slice(-8)?.toUpperCase() || ''} will be cancelled and retained in order history.`}
+        confirmLabel="Cancel order"
         onClose={() => setDeleteTarget(null)}
         onConfirm={deleteOrder}
       />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, CardContent, TextInput } from '../../components/ui';
+import { Clock3, Headphones, Mail, MapPin, MessageCircle, Send } from 'lucide-react';
+import { Card, CardContent } from '../../components/ui';
 import PageState from '../../components/ui/PageState';
 import api from '../../services/api';
 
@@ -104,29 +105,147 @@ export default function Contact({ route = '/contact' }) {
     }
   };
 
+  const email = settings.contactEmail || 'hello@samiracollection.com';
+  const phone = settings.whatsappNumber || settings.contactPhone || '+91 98765 43210';
+
   return (
-    <section className="container-page py-6 md:py-10">
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardContent className="p-5 md:p-7">
-            <h1 className="page-title md:text-3xl">Contact Samira Collection</h1>
-            <p className="body-text mt-4 text-slate-600">Email {settings.contactEmail || 'hello@samiracollection.com'} or WhatsApp {settings.whatsappNumber || settings.contactPhone || '+91 98765 43210'} for product inquiries, returns, and store support.</p>
-            {settings.address && <p className="body-text mt-3 text-slate-500">{settings.address}</p>}
-          </CardContent>
-        </Card>
-        <Card as="form" onSubmit={submit}>
-          <CardContent className="p-5 md:p-7">
-            <TextInput placeholder="Name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
-            <TextInput className="mt-3" type="email" placeholder="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required />
-            <TextInput className="mt-3" placeholder="Phone (optional)" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-            <TextInput className="mt-3" placeholder="Subject" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} />
-            <textarea className="body-text mt-3 min-h-32 w-full rounded-xl border border-slate-200 p-4 outline-none transition focus:border-wine focus:ring-2 focus:ring-wine/10" placeholder="Message" value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} required />
-            <Button type="submit" className="mt-3 w-full" disabled={submitting}>{submitting ? 'Sending...' : 'Send Message'}</Button>
-            {sent && <p className="label-text mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-emerald-700">{sent}</p>}
-            {error && <p className="label-text mt-3 rounded-xl bg-rose/10 px-4 py-3 text-rose">{error}</p>}
-          </CardContent>
-        </Card>
+    <section className="relative isolate overflow-hidden bg-[#fbf7f1] py-8 sm:py-12 lg:py-16">
+      <div className="pointer-events-none absolute -left-28 top-16 h-80 w-80 rounded-full bg-[#f1d9d6]/55 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-[#ead9b7]/45 blur-3xl" aria-hidden="true" />
+
+      <div className="relative mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10">
+        <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:gap-7">
+          <aside className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#721b37] via-[#5d152d] to-[#35101f] p-6 text-white shadow-[0_24px_70px_rgba(69,17,36,0.22)] sm:p-8 lg:p-10">
+            <div className="absolute -right-20 -top-20 h-60 w-60 rounded-full border-[44px] border-white/[0.05]" aria-hidden="true" />
+            <div className="absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#c99f61]/10 blur-2xl" aria-hidden="true" />
+
+            <div className="relative flex h-full flex-col">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#e7c68e]">Contact Samira Collection</p>
+                <h2 className="mt-3 text-[27px] font-semibold leading-tight sm:text-[32px]">Let&apos;s find the right answer together.</h2>
+                <p className="mt-4 max-w-md text-[13px] leading-6 text-white/70 sm:text-[14px]">
+                  Choose the most convenient way to reach us. We can help with product details, sizing, orders, and after-sales support.
+                </p>
+              </div>
+
+              <div className="mt-7 space-y-3 sm:mt-9">
+                <ContactMethod
+                  icon={Mail}
+                  label="Email us"
+                  value={email}
+                  href={`mailto:${email}`}
+                />
+                <ContactMethod
+                  icon={MessageCircle}
+                  label="Chat on WhatsApp"
+                  value={phone}
+                  href={whatsAppHref(phone)}
+                  external
+                />
+                {settings.address ? (
+                  <ContactMethod icon={MapPin} label="Our location" value={settings.address} />
+                ) : null}
+              </div>
+
+              <div className="relative mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-6 sm:mt-auto sm:pt-7">
+                <SupportNote icon={Headphones} title="Thoughtful support" text="Product and order help" />
+                <SupportNote icon={Clock3} title="Quick response" text="We reply as soon as possible" />
+              </div>
+            </div>
+          </aside>
+
+          <form onSubmit={submit} className="rounded-[26px] border border-[#eadfd5] bg-white/95 p-5 shadow-[0_20px_65px_rgba(63,42,31,0.09)] backdrop-blur sm:p-8 lg:p-10">
+            <div className="flex items-start justify-between gap-4 border-b border-[#efe6de] pb-6">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a9773e]">Send a message</p>
+                <h2 className="mt-2 text-[25px] font-semibold text-[#211b1d] sm:text-[30px]">How can we help?</h2>
+                <p className="mt-2 text-[13px] leading-6 text-[#786c6f]">Share a few details and our team will get back to you.</p>
+              </div>
+              <span className="hidden h-12 w-12 shrink-0 place-items-center rounded-full bg-[#fff0f4] text-[#7a1f36] sm:grid">
+                <MessageCircle className="h-5 w-5" aria-hidden="true" />
+              </span>
+            </div>
+
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <ContactField label="Full name" required>
+                <input className={fieldClass} placeholder="Your name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+              </ContactField>
+              <ContactField label="Email address" required>
+                <input className={fieldClass} type="email" placeholder="you@example.com" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required />
+              </ContactField>
+              <ContactField label="Phone number" hint="Optional">
+                <input className={fieldClass} type="tel" inputMode="tel" placeholder="Your mobile number" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+              </ContactField>
+              <ContactField label="Subject">
+                <input className={fieldClass} placeholder="What can we help with?" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} />
+              </ContactField>
+              <ContactField label="Your message" required className="sm:col-span-2">
+                <textarea className={`${fieldClass} min-h-[150px] resize-y py-3.5`} placeholder="Tell us how we can help..." value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} required />
+              </ContactField>
+            </div>
+
+            <button type="submit" className="mt-6 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-[12px] bg-gradient-to-r from-[#7a1f36] to-[#951f48] px-5 text-[13px] font-bold uppercase tracking-[0.08em] text-white shadow-[0_12px_28px_rgba(122,31,54,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(122,31,54,0.3)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0" disabled={submitting}>
+              {submitting ? 'Sending...' : 'Send Message'}
+              {!submitting ? <Send className="h-4 w-4" aria-hidden="true" /> : null}
+            </button>
+            <p className="mt-3 text-center text-[11px] leading-5 text-[#8b8082]">Your details are used only to respond to your enquiry.</p>
+
+            <div aria-live="polite">
+              {sent ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-700">{sent}</p> : null}
+              {error ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">{error}</p> : null}
+            </div>
+          </form>
+        </div>
       </div>
     </section>
   );
+}
+
+const fieldClass = 'h-12 w-full rounded-[12px] border border-[#ded5ce] bg-[#fffdfa] px-4 text-[14px] text-[#2d2527] outline-none transition placeholder:text-[#aaa0a2] focus:border-[#8b2744] focus:bg-white focus:ring-4 focus:ring-[#8b2744]/10';
+
+function ContactField({ label, hint, required, className = '', children }) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-2 flex items-center justify-between gap-2 text-[12px] font-bold text-[#493d40]">
+        <span>{label}{required ? <span className="ml-1 text-[#9b2348]">*</span> : null}</span>
+        {hint ? <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#9a8e90]">{hint}</span> : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ContactMethod({ icon: Icon, label, value, href, external = false }) {
+  const content = (
+    <>
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-[#f1cf99]">
+        <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/50">{label}</span>
+        <span className="mt-1 block break-words text-[13px] font-semibold text-white sm:text-[14px]">{value}</span>
+      </span>
+    </>
+  );
+
+  const classes = 'flex items-center gap-3 rounded-[16px] border border-white/10 bg-white/[0.06] p-3.5 transition hover:border-white/20 hover:bg-white/[0.1]';
+  if (!href) return <div className={classes}>{content}</div>;
+  return <a className={classes} href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined}>{content}</a>;
+}
+
+function SupportNote({ icon: Icon, title, text }) {
+  return (
+    <div className="flex gap-2.5">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#e7c68e]" aria-hidden="true" />
+      <span>
+        <strong className="block text-[11px] font-semibold text-white">{title}</strong>
+        <small className="mt-1 block text-[10px] leading-4 text-white/50">{text}</small>
+      </span>
+    </div>
+  );
+}
+
+function whatsAppHref(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits ? `https://wa.me/${digits}` : undefined;
 }

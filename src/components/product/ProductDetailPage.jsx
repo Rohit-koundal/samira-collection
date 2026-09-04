@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { ChevronRight, Flame, Star } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CheckCircle2, ChevronRight, Flame, Star, ThumbsUp } from 'lucide-react';
 import ProductGallery from './ProductGallery';
 import ProductInfoPanel from './ProductInfoPanel';
 import ProductTrustPanel from './ProductTrustPanel';
@@ -39,6 +39,13 @@ export default function ProductDetailPage({
   deliveryChecking = false,
   relatedProducts = [],
   reviews = [],
+  reviewSummary,
+  myReview,
+  reviewFeedback = '',
+  reviewLoading = false,
+  helpfulReviewIds = [],
+  helpfulBusyId = '',
+  onHelpful,
   variantProducts = [],
   selectedMedia,
   storeWhatsappNumber,
@@ -55,17 +62,8 @@ export default function ProductDetailPage({
     [product?.category, product?.name],
   );
 
-  const rating = Number(product?.rating || 0).toFixed(1);
-  const reviewCount = product?.numReviews || reviews.length || 0;
-  const ratingDistribution = useMemo(() => {
-    if (!reviews.length) return new Map([5, 4, 3, 2, 1].map((value) => [value, 0]));
-    const counts = new Map([5, 4, 3, 2, 1].map((value) => [value, 0]));
-    reviews.forEach((review) => {
-      const value = Math.max(1, Math.min(5, Math.round(Number(review.rating || 0))));
-      counts.set(value, (counts.get(value) || 0) + 1);
-    });
-    return new Map(Array.from(counts, ([value, count]) => [value, Math.round((count / reviews.length) * 100)]));
-  }, [reviews]);
+  const rating = Number(reviewSummary?.average ?? product?.rating ?? 0).toFixed(1);
+  const reviewCount = Number(reviewSummary?.total ?? product?.numReviews ?? reviews.length ?? 0);
   const similarTarget = product?.categoryId
     ? `/products?category=${encodeURIComponent(product.categoryId)}`
     : product?.category
@@ -165,50 +163,135 @@ export default function ProductDetailPage({
             </div>
           </section>
 
-          <section className="sc-pdp__reviews-card">
-            <div className="sc-pdp__section-head">
-              <h2>Ratings &amp; Reviews</h2>
-            </div>
-            <div className="sc-pdp__reviews-top">
-              <div className="sc-pdp__rating">
-                <span className="sc-pdp__rating-value">{rating}</span>
-                <div className="sc-pdp__stars" aria-label={`Rated ${rating} out of 5`}>
-                  {'★★★★★'.split('').map((star, index) => (
-                    <Star key={`${star}-${index}`} className="sc-pdp__star" aria-hidden="true" />
-                  ))}
-                </div>
-                <p>{reviewCount} Reviews</p>
-              </div>
-              <div className="sc-pdp__rating-bars" aria-hidden="true">
-                {[5, 4, 3, 2, 1].map((star) => (
-                  <div key={star} className="sc-pdp__rating-row">
-                    <span>{star}★</span>
-                    <div className="sc-pdp__rating-track"><div className="sc-pdp__rating-fill" style={{ width: `${ratingDistribution.get(star) || 0}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button type="button" className="sc-pdp__review-btn" onClick={onWriteReview}>Write a Review</button>
-            {reviews.length > 0 ? (
-              <div className="sc-pdp__review-list">
-                {reviews.slice(0, 2).map((review) => (
-                  <article key={review._id} className="sc-pdp__review">
-                    <div className="sc-pdp__review-meta">
-                      <strong>{review.user?.name || 'Verified customer'}</strong>
-                      <span>{review.rating}★</span>
-                    </div>
-                    <p>{review.comment}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="sc-pdp__review-empty">Be the first to share your thoughts on this piece.</p>
-            )}
-          </section>
+          <DesktopReviews
+            reviews={reviews}
+            summary={reviewSummary}
+            rating={rating}
+            reviewCount={reviewCount}
+            myReview={myReview}
+            feedback={reviewFeedback}
+            loading={reviewLoading}
+            helpfulReviewIds={helpfulReviewIds}
+            helpfulBusyId={helpfulBusyId}
+            onWriteReview={onWriteReview}
+            onHelpful={onHelpful}
+          />
         </div>
 
         <RelatedProductCarousel products={relatedProducts} navigate={navigate} />
       </div>
     </section>
   );
+}
+
+function DesktopReviews({
+  reviews,
+  summary,
+  rating,
+  reviewCount,
+  myReview,
+  feedback,
+  loading,
+  helpfulReviewIds,
+  helpfulBusyId,
+  onWriteReview,
+  onHelpful,
+}) {
+  const [ratingFilter, setRatingFilter] = useState(0);
+  const [sort, setSort] = useState('newest');
+  const [showAll, setShowAll] = useState(false);
+  const distribution = useMemo(() => {
+    if (summary?.distribution) return summary.distribution;
+    const values = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach((review) => {
+      const value = Number(review?.rating);
+      if (Number.isInteger(value) && value >= 1 && value <= 5) values[value] += 1;
+    });
+    return values;
+  }, [reviews, summary?.distribution]);
+  const filteredReviews = useMemo(() => {
+    const items = ratingFilter ? reviews.filter((review) => Number(review.rating) === ratingFilter) : [...reviews];
+    return items.sort((left, right) => {
+      if (sort === 'highest') return Number(right.rating) - Number(left.rating) || new Date(right.createdAt) - new Date(left.createdAt);
+      if (sort === 'lowest') return Number(left.rating) - Number(right.rating) || new Date(right.createdAt) - new Date(left.createdAt);
+      if (sort === 'helpful') return Number(right.helpfulCount || 0) - Number(left.helpfulCount || 0) || new Date(right.createdAt) - new Date(left.createdAt);
+      return new Date(right.createdAt) - new Date(left.createdAt);
+    });
+  }, [ratingFilter, reviews, sort]);
+  const visibleReviews = showAll ? filteredReviews : filteredReviews.slice(0, 6);
+
+  return (
+    <section className="sc-pdp__reviews-card" id="desktop-ratings-and-reviews">
+      <div className="sc-pdp__section-head">
+        <div><h2>Ratings &amp; Reviews</h2><p className="mt-1 text-sm text-slate-500">Reviews from customers who purchased this product</p></div>
+        <button type="button" className="sc-pdp__review-btn" disabled={loading} onClick={onWriteReview}>{loading ? 'Checking...' : myReview ? 'Edit Your Review' : 'Write a Review'}</button>
+      </div>
+      <div className="sc-pdp__reviews-top">
+        <div className="sc-pdp__rating">
+          <span className="sc-pdp__rating-value">{rating}</span>
+          <div className="sc-pdp__stars" aria-label={`Rated ${rating} out of 5`}>
+            {'★★★★★'.split('').map((star, index) => <Star key={`${star}-${index}`} className="sc-pdp__star" aria-hidden="true" />)}
+          </div>
+          <p>{reviewCount} rating{reviewCount === 1 ? '' : 's'}</p>
+          {reviewCount > 0 ? <p className="mt-2 text-xs font-bold text-emerald-700">{Number(summary?.recommendationPercentage || 0)}% rated 4★ or above</p> : null}
+        </div>
+        <div className="sc-pdp__rating-bars">
+          {[5, 4, 3, 2, 1].map((star) => {
+            const count = Number(distribution?.[star] || 0);
+            const width = reviewCount ? Math.round((count / reviewCount) * 100) : 0;
+            return (
+              <button key={star} type="button" onClick={() => { setRatingFilter((current) => current === star ? 0 : star); setShowAll(false); }} className="sc-pdp__rating-row w-full text-left" aria-label={`Show ${star} star reviews`}>
+                <span>{star}★</span>
+                <span className="sc-pdp__rating-track"><span className="sc-pdp__rating-fill block" style={{ width: `${width}%` }} /></span>
+                <span className="w-8 text-right text-xs text-slate-400">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {feedback ? <p role="status" className="mt-4 rounded-xl bg-[#fff3f6] px-4 py-3 text-sm font-semibold text-[#c51b4d]">{feedback}</p> : null}
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+        <div className="flex flex-wrap gap-2">
+          {[0, 5, 4, 3, 2, 1].map((value) => <button key={value} type="button" onClick={() => { setRatingFilter(value); setShowAll(false); }} className={`rounded-full border px-3 py-2 text-xs font-bold ${ratingFilter === value ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 text-slate-500'}`}>{value ? `${value} ★ (${distribution?.[value] || 0})` : `All (${reviewCount})`}</button>)}
+        </div>
+        <select value={sort} onChange={(event) => setSort(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600" aria-label="Sort reviews"><option value="newest">Most recent</option><option value="helpful">Most helpful</option><option value="highest">Highest rated</option><option value="lowest">Lowest rated</option></select>
+      </div>
+
+      {visibleReviews.length ? (
+        <div className="sc-pdp__review-list mt-2 divide-y divide-slate-100">
+          {visibleReviews.map((review) => {
+            const reviewId = String(review._id || '');
+            const helpful = helpfulReviewIds.includes(reviewId);
+            const isOwnReview = String(myReview?._id || '') === reviewId;
+            return (
+              <article key={reviewId} className="sc-pdp__review py-5">
+                <div className="sc-pdp__review-meta">
+                  <strong>{review.user?.name || 'Customer'}</strong>
+                  <span>{review.rating}★</span>
+                </div>
+                {review.title ? <h3 className="mt-3 font-bold text-charcoal">{review.title}</h3> : null}
+                <p className="whitespace-pre-line">{review.comment || 'Star rating submitted without a written review.'}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  {review.verifiedPurchase ? <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Verified purchase</span> : null}
+                  {review.createdAt ? <span>{formatReviewDate(review.createdAt)}</span> : null}
+                  {!isOwnReview ? <button type="button" onClick={() => onHelpful?.(review)} disabled={helpfulBusyId === reviewId} aria-pressed={helpful} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-bold disabled:opacity-50 ${helpful ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200'}`}><ThumbsUp className={`h-3.5 w-3.5 ${helpful ? 'fill-current' : ''}`} /> Helpful{Number(review.helpfulCount || 0) ? ` (${review.helpfulCount})` : ''}</button> : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="sc-pdp__review-empty">{ratingFilter ? `No ${ratingFilter}-star reviews yet.` : 'No customer reviews yet. Delivered customers can be the first to review this product.'}</p>
+      )}
+      {filteredReviews.length > 6 ? <button type="button" onClick={() => setShowAll((current) => !current)} className="mt-4 h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-charcoal">{showAll ? 'Show fewer reviews' : `View all ${filteredReviews.length} reviews`}</button> : null}
+    </section>
+  );
+}
+
+function formatReviewDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }

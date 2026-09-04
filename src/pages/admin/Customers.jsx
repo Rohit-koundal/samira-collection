@@ -63,7 +63,7 @@ export default function Customers() {
           <td className="px-4 py-4">{customer.availableModes?.join(', ') || 'customer'}</td>
           <td className="px-4 py-4"><StatusBadge value={customer.isBlocked ? 'Blocked' : 'Active'} /></td>
           <td className="px-4 py-4">{new Date(customer.createdAt).toLocaleDateString('en-IN')}</td>
-          <td className="px-4 py-4"><div className="flex flex-wrap gap-3"><button onClick={() => toggle(customer)} className="font-black text-wine">{customer.isBlocked ? 'Unblock' : 'Block'}</button>{customer.role === 'admin' ? <button onClick={() => demote(customer)} className="font-black text-rose">Demote</button> : <button onClick={() => promote(customer)} className="font-black text-emerald-700">Promote</button>}</div></td>
+          <td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button onClick={() => toggle(customer)} className="admin-table-action-link">{customer.isBlocked ? 'Unblock' : 'Block'}</button>{customer.role === 'admin' ? <button onClick={() => demote(customer)} className="admin-table-action-link is-danger">Demote</button> : <button onClick={() => promote(customer)} className="admin-table-action-link is-success">Promote</button>}</div></td>
         </tr>
       ))} />
     </section>

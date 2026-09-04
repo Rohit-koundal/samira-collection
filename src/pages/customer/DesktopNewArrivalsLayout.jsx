@@ -9,8 +9,8 @@ export default function DesktopNewArrivalsLayout({
   visibleProducts,
   categories,
   filters,
-  params,
   updateParam,
+  updateParams,
   clearFilterParams,
   allProducts,
 }) {
@@ -26,10 +26,11 @@ export default function DesktopNewArrivalsLayout({
       breadcrumbs={breadcrumbs}
       products={visibleProducts}
       categories={categories}
-      params={params}
+      filters={filters}
       sortValue={filters.sort}
       onSortChange={(value) => updateParam('sort', value)}
       onFilterChange={updateParam}
+      onFiltersChange={updateParams}
       onClearFilters={clearFilterParams}
       allProducts={allProducts}
     />

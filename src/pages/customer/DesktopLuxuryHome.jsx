@@ -15,6 +15,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
+import { getHomepageSection } from '../../config/websiteCustomization';
+import QuickViewModal from '../../components/product/QuickViewModal';
 import styles from './DesktopLuxuryHome.module.css';
 
 const services = [
@@ -22,12 +24,6 @@ const services = [
   { title: 'COD Available', text: 'Cash on delivery nationwide', icon: IconPackage },
   { title: 'Easy Returns', text: 'Simple returns & refunds', icon: IconRefresh },
   { title: '24/7 Support', text: 'We are here to help you', icon: IconShieldCheck },
-];
-
-const reviews = [
-  { name: 'Priya Sharma', text: 'The fabric quality is beautiful and the fit feels made for me. The finishing is genuinely premium.' },
-  { name: 'Neha Verma', text: 'My order arrived quickly and looked exactly like the photos. I will happily shop here again.' },
-  { name: 'Anjali Mehta', text: 'Elegant designs, thoughtful packaging, and a very smooth shopping experience from start to finish.' },
 ];
 
 export default function DesktopLuxuryHome({
@@ -38,8 +34,12 @@ export default function DesktopLuxuryHome({
   featuredProducts = [],
   trendingProducts = [],
   newArrivalProducts = [],
+  bestSellerProducts = [],
   ethnicSetProducts = [],
   accessoryProducts = [],
+  instagramProducts = [],
+  websiteConfig,
+  customerReviews = [],
 }) {
   const [heroIndex, setHeroIndex] = useState(0);
 
@@ -57,7 +57,10 @@ export default function DesktopLuxuryHome({
   }, [banners]);
 
   const activeHero = heroSlides[heroIndex % heroSlides.length] || {};
-  const heroImage = activeHero.image
+  const heroSection = getHomepageSection(websiteConfig, 'hero');
+  const heroImage = heroSection.image
+    ? normalizeImageUrl(heroSection.image)
+    : activeHero.image
     ? normalizeImageUrl(activeHero.image)
     : getProductImage(productsWithImages[0]);
   const editorialProducts = productsWithImages.slice(0, 3);
@@ -67,9 +70,8 @@ export default function DesktopLuxuryHome({
     ...trendingProducts,
     ...catalog,
   ]).filter((product) => getProductImage(product));
-  const bestSellers = uniqueProducts(
-    catalog.filter((product) => product.isBestSeller),
-  ).filter((product) => getProductImage(product)).slice(0, 12);
+  const bestSellers = uniqueProducts(bestSellerProducts.length ? bestSellerProducts : catalog.filter((product) => product.isBestSeller))
+    .filter((product) => getProductImage(product)).slice(0, 12);
   const trendingNow = uniqueProducts(
     catalog.filter((product) => product.showInTrending),
   ).filter((product) => getProductImage(product)).slice(0, 12);
@@ -81,17 +83,17 @@ export default function DesktopLuxuryHome({
   };
 
   return (
-    <div className={styles.desktopLuxuryHome}>
-      <section className={styles.hero}>
+    <div className={`${styles.desktopLuxuryHome} themed-home-flow themed-home-flow--desktop`}>
+      <ThemedDesktopSection config={websiteConfig} id="hero"><section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>New Festive Collection '24</p>
-            <h1>Where Tradition<br />Meets <em>Modern Grace</em></h1>
+            <h1>{heroSection.heading}</h1>
             <p className={styles.heroDescription}>
-              {activeHero.subtitle || 'Premium ethnic wear crafted for weddings, festive moments, and everyday elegance.'}
+              {heroSection.description || activeHero.subtitle || 'Premium ethnic wear crafted for weddings, festive moments, and everyday elegance.'}
             </p>
             <div className={styles.heroButtons}>
-              <button type="button" className={styles.primaryButton} onClick={() => navigate(activeHero.link || '/products?newArrival=true')}>Shop New Arrivals</button>
+              <button type="button" className={`${styles.primaryButton} site-theme-button`} onClick={() => navigate(heroSection.buttonLink || activeHero.link || '/products?newArrival=true')}>{heroSection.buttonText || 'Shop New Arrivals'}</button>
               <button type="button" className={styles.secondaryButton} onClick={() => navigate('/products')}>Explore Collections</button>
             </div>
             <div className={styles.trustPoints}>
@@ -117,86 +119,105 @@ export default function DesktopLuxuryHome({
             />
           ))}
         </div>
-      </section>
+      </section></ThemedDesktopSection>
 
-      <CategorySection categories={categories.slice(0, 8)} products={productsWithImages} navigate={navigate} />
+      <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={categories.slice(0, 8)} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.editorialProductsGrid}`}>
-        <EditorialGrid products={editorialProducts} navigate={navigate} />
+      <ThemedDesktopSection config={websiteConfig} id="promotional"><section className={styles.luxuryContainer}>
+        <EditorialGrid products={editorialProducts} navigate={navigate} section={getHomepageSection(websiteConfig, 'promotional')} />
+      </section></ThemedDesktopSection>
+
+      <ThemedDesktopSection config={websiteConfig} id="featured"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
         <ProductSection
-          className={styles.newArrivalsBlock}
-          eyebrow="Fresh Drops"
-          title="New Arrivals"
-          subtitle="Latest pieces added to the collection."
-          products={arrivals.slice(0, 12)}
+          eyebrow="Featured"
+          title={getHomepageSection(websiteConfig, 'featured').heading}
+          subtitle={getHomepageSection(websiteConfig, 'featured').description}
+          products={featuredProducts}
           navigate={navigate}
-          viewAllPath="/products?newArrival=true"
-          compact
+          viewAllPath={getHomepageSection(websiteConfig, 'featured').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'featured').buttonText}
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <SaleBanner banner={saleBanner} fallbackProduct={productsWithImages[0]} navigate={navigate} />
-      <ServiceStrip />
+      <ThemedDesktopSection config={websiteConfig} id="sale"><SaleBanner banner={saleBanner} fallbackProduct={productsWithImages[0]} navigate={navigate} section={getHomepageSection(websiteConfig, 'sale')} /></ThemedDesktopSection>
+      <ThemedDesktopSection config={websiteConfig} id="services"><ServiceStrip /></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+      <ThemedDesktopSection config={websiteConfig} id="trending"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
         <ProductSection
           eyebrow="Trending Now"
-          title="Most-Loved Styles"
-          subtitle="Discover the pieces everyone is reaching for right now."
+          title={getHomepageSection(websiteConfig, 'trending').heading}
+          subtitle={getHomepageSection(websiteConfig, 'trending').description}
           products={trendingNow}
           navigate={navigate}
-          viewAllPath="/products?trending=true"
+          viewAllPath={getHomepageSection(websiteConfig, 'trending').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'trending').buttonText}
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+      <ThemedDesktopSection config={websiteConfig} id="newArrivals"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
         <ProductSection
           eyebrow="New Arrivals"
-          title="Freshly Added"
-          subtitle="The latest silhouettes, colors, and festive details from Samira."
+          title={getHomepageSection(websiteConfig, 'newArrivals').heading}
+          subtitle={getHomepageSection(websiteConfig, 'newArrivals').description}
           products={latestArrivals}
           navigate={navigate}
-          viewAllPath="/products?newArrival=true"
+          viewAllPath={getHomepageSection(websiteConfig, 'newArrivals').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'newArrivals').buttonText}
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.bestSellers}`}>
+      <ThemedDesktopSection config={websiteConfig} id="bestSellers"><section className={`${styles.luxuryContainer} ${styles.bestSellers}`}>
         <ProductSection
           eyebrow="Best Sellers"
-          title="Customer Favorites"
-          subtitle="Most-loved styles chosen by the Samira community."
+          title={getHomepageSection(websiteConfig, 'bestSellers').heading}
+          subtitle={getHomepageSection(websiteConfig, 'bestSellers').description}
           products={bestSellers}
           navigate={navigate}
-          viewAllPath="/products?bestSeller=true"
+          viewAllPath={getHomepageSection(websiteConfig, 'bestSellers').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'bestSellers').buttonText}
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+      <ThemedDesktopSection config={websiteConfig} id="ethnicSets"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
         <ProductSection
           eyebrow="Ethnic Sets"
-          title="Complete Occasion-Ready Looks"
-          subtitle="Coordinated silhouettes for weddings, celebrations, and everyday elegance."
+          title={getHomepageSection(websiteConfig, 'ethnicSets').heading}
+          subtitle={getHomepageSection(websiteConfig, 'ethnicSets').description}
           products={ethnicSetProducts}
           navigate={navigate}
-          viewAllPath="/products?search=Set"
+          viewAllPath={getHomepageSection(websiteConfig, 'ethnicSets').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'ethnicSets').buttonText}
           emptyMessage="No ethnic sets are published yet. Use the admin catalog to publish products for this collection."
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+      <ThemedDesktopSection config={websiteConfig} id="accessories"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
         <ProductSection
           eyebrow="Accessories"
-          title="The Finishing Touch"
-          subtitle="Complete every look with thoughtfully selected accessories."
+          title={getHomepageSection(websiteConfig, 'accessories').heading}
+          subtitle={getHomepageSection(websiteConfig, 'accessories').description}
           products={accessoryProducts}
           navigate={navigate}
-          viewAllPath="/products?search=Accessory"
+          viewAllPath={getHomepageSection(websiteConfig, 'accessories').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'accessories').buttonText}
           emptyMessage="No accessories are published yet. Browse all products while this collection is being curated."
         />
-      </section>
+      </section></ThemedDesktopSection>
 
-      <TestimonialSection />
-      <NewsletterSection />
+      <ThemedDesktopSection config={websiteConfig} id="instagram"><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}>
+        <ProductSection
+          eyebrow="Style Inspiration"
+          title={getHomepageSection(websiteConfig, 'instagram').heading}
+          subtitle={getHomepageSection(websiteConfig, 'instagram').description}
+          products={instagramProducts}
+          navigate={navigate}
+          viewAllPath={getHomepageSection(websiteConfig, 'instagram').buttonLink}
+          viewAllLabel={getHomepageSection(websiteConfig, 'instagram').buttonText}
+        />
+      </section></ThemedDesktopSection>
+
+      <ThemedDesktopSection config={websiteConfig} id="reviews"><TestimonialSection section={getHomepageSection(websiteConfig, 'reviews')} reviews={customerReviews} /></ThemedDesktopSection>
+      <ThemedDesktopSection config={websiteConfig} id="newsletter"><NewsletterSection section={getHomepageSection(websiteConfig, 'newsletter')} /></ThemedDesktopSection>
     </div>
   );
 }
@@ -210,11 +231,11 @@ function TrustPoint({ icon: IconComponent, title, text }) {
   );
 }
 
-function CategorySection({ categories, products, navigate }) {
+function CategorySection({ categories, products, navigate, section }) {
   return (
     <section className={styles.categorySection}>
-      <div className={styles.sectionTitleDecorated}><span /><h2>Shop by Category</h2><span /></div>
-      <p>Curated styles for every occasion</p>
+      <div className={styles.sectionTitleDecorated}><span /><h2>{section?.heading || 'Shop by Category'}</h2><span /></div>
+      <p>{section?.description || 'Curated styles for every occasion'}</p>
       <div className={styles.categoryGrid}>
         {categories.map((category) => {
           const categoryId = category._id || category.id || category.slug || category.name;
@@ -234,15 +255,17 @@ function CategorySection({ categories, products, navigate }) {
   );
 }
 
-function EditorialGrid({ products, navigate }) {
+function EditorialGrid({ products, navigate, section }) {
   return (
     <div className={styles.editorialGrid}>
       <EditorialCard
         className={styles.featureCardLarge}
         product={products[0]}
-        eyebrow="Festive Edit"
-        text="Graceful styles for celebration season"
-        action="Explore Festive Wear"
+        eyebrow={section?.heading || 'Festive Edit'}
+        text={section?.description || 'Graceful styles for celebration season'}
+        action={section?.buttonText || 'Explore Festive Wear'}
+        actionPath={section?.buttonLink}
+        imageOverride={section?.image}
         navigate={navigate}
       />
       <EditorialCard
@@ -265,9 +288,9 @@ function EditorialGrid({ products, navigate }) {
   );
 }
 
-function EditorialCard({ className, product, eyebrow, text, action, navigate }) {
+function EditorialCard({ className, product, eyebrow, text, action, navigate, actionPath, imageOverride }) {
   const productId = getProductId(product);
-  const image = getProductImage(product);
+  const image = imageOverride ? normalizeImageUrl(imageOverride) : getProductImage(product);
   return (
     <article className={className}>
       {image ? <img src={image} alt={product?.name || eyebrow} /> : <div className={styles.imageFallback}>Samira Collection</div>}
@@ -275,13 +298,13 @@ function EditorialCard({ className, product, eyebrow, text, action, navigate }) 
       <div className={styles.editorialCopy}>
         <h3>{eyebrow}</h3>
         <p>{text}</p>
-        <button type="button" onClick={() => productId ? navigate(`/product?id=${encodeURIComponent(productId)}`) : navigate('/products')}>{action} <span aria-hidden="true">&rarr;</span></button>
+        <button type="button" onClick={() => navigate(actionPath || (productId ? `/product?id=${encodeURIComponent(productId)}` : '/products'))}>{action} <span aria-hidden="true">&rarr;</span></button>
       </div>
     </article>
   );
 }
 
-function ProductSection({ eyebrow, title, subtitle, products = [], navigate, viewAllPath, compact = false, className = '', emptyMessage = '' }) {
+function ProductSection({ eyebrow, title, subtitle, products = [], navigate, viewAllPath, viewAllLabel = 'View All', compact = false, className = '', emptyMessage = '' }) {
   const scrollerRef = useRef(null);
   const hasSlider = products.length > 4;
 
@@ -302,7 +325,7 @@ function ProductSection({ eyebrow, title, subtitle, products = [], navigate, vie
               <button type="button" className={styles.sectionArrow} onClick={() => slideSection(1)} aria-label={`Slide ${title} right`}><IconChevronRight /></button>
             </>
           )}
-          <button type="button" className={styles.viewAllButton} onClick={() => navigate(viewAllPath)}>View All</button>
+          <button type="button" className={styles.viewAllButton} onClick={() => navigate(viewAllPath)}>{viewAllLabel || 'View All'}</button>
         </div>
       </div>
       <div ref={scrollerRef} className={`${styles.productGrid} ${compact ? styles.productGridCompact : ''} ${!products.length ? styles.productGridEmpty : ''}`}>
@@ -319,6 +342,7 @@ function ProductSection({ eyebrow, title, subtitle, products = [], navigate, vie
 
 function LuxuryProductCard({ product, navigate, large }) {
   const [imageIndex, setImageIndex] = useState(0);
+  const [quickOpen, setQuickOpen] = useState(false);
   const cart = useCart();
   const wishlist = useWishlist();
   const productId = getProductId(product);
@@ -345,12 +369,13 @@ function LuxuryProductCard({ product, navigate, large }) {
   };
 
   return (
-    <article className={`${styles.productCard} ${large ? styles.productCardLarge : ''}`} onClick={() => navigate(`/product?id=${encodeURIComponent(productId)}`)}>
-      <div className={styles.productImageWrap}>
+    <article className={`${styles.productCard} ${large ? styles.productCardLarge : ''}`} onClick={() => navigate(`/product?id=${encodeURIComponent(productId)}`)} data-theme-product-card>
+      <div className={styles.productImageWrap} data-theme-product-media>
         <img src={image} alt={product.name} />
         {(product.isNewArrival || product.isBestSeller) && <span className={styles.productBadge}>{product.isBestSeller ? 'Bestseller' : 'New'}</span>}
-        <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} aria-label="Toggle wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
-        <button type="button" className={styles.cartButton} onClick={addToCart} aria-label="Add to cart"><IconShoppingBag /></button>
+        <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
+        <button type="button" className={styles.cartButton} onClick={addToCart} aria-label="Add to cart" data-card-field="cart"><IconShoppingBag /></button>
+        <button type="button" data-card-field="quick-view" className="absolute bottom-3 right-3 z-20 rounded-lg bg-white/95 px-3 py-2 text-[10px] font-black uppercase text-wine shadow" onClick={(event) => { event.stopPropagation(); setQuickOpen(true); }}>Quick view</button>
         {productImages.length > 1 && (
           <>
             <button type="button" className={`${styles.productImageArrow} ${styles.productImageArrowLeft}`} onClick={(event) => slideImage(event, -1)} aria-label="Previous product image"><IconChevronLeft /></button>
@@ -372,27 +397,28 @@ function LuxuryProductCard({ product, navigate, large }) {
           </>
         )}
       </div>
-      <h3>{product.name}</h3>
+      <h3 data-card-field="title">{product.name}</h3>
       <p className={styles.productCategory}>{formatCategory(product.category) || product.fabric || 'Samira Collection'}</p>
-      <div className={styles.priceRow}>
+      <div className={styles.priceRow} data-card-field="price">
         <strong>Rs. {formatPrice(price)}</strong>
         {originalPrice > price && <del>Rs. {formatPrice(originalPrice)}</del>}
-        {discount > 0 && <span>{discount}% OFF</span>}
+        {discount > 0 && <span data-card-field="discount">{discount}% OFF</span>}
       </div>
-      <div className={styles.ratingRow}>
+      <div className={styles.ratingRow} data-card-field="rating">
         <span>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)}</span>
         <small>({product.numReviews || product.rating || 0})</small>
       </div>
+      {quickOpen && <QuickViewModal product={product} onClose={() => setQuickOpen(false)} onOpenFull={() => { setQuickOpen(false); navigate(`/product?id=${encodeURIComponent(productId)}`); }} />}
     </article>
   );
 }
 
-function SaleBanner({ banner, fallbackProduct, navigate }) {
-  const image = banner?.image ? normalizeImageUrl(banner.image) : getProductImage(fallbackProduct);
+function SaleBanner({ banner, fallbackProduct, navigate, section }) {
+  const image = section?.image ? normalizeImageUrl(section.image) : banner?.image ? normalizeImageUrl(banner.image) : getProductImage(fallbackProduct);
   return (
     <section className={`${styles.luxuryContainer} ${styles.saleBanner}`}>
-      <div className={styles.saleCopy}><span>Samira Festive Sale</span><h2>Flat 50% Off</h2><p>on selected styles</p></div>
-      <button type="button" onClick={() => navigate(banner?.link || '/products?discount=20')}>Shop Sale</button>
+      <div className={styles.saleCopy}><span>Samira Collection</span><h2>{section?.heading || banner?.title || 'Season Sale'}</h2><p>{section?.description || 'Discover current offers'}</p></div>
+      <button type="button" className="site-theme-button" onClick={() => navigate(section?.buttonLink || banner?.link || '/products?discount=20')}>{section?.buttonText || 'Shop Sale'}</button>
       <div className={styles.saleVisual}>{image && <img src={image} alt={banner?.title || 'Festive sale'} />}</div>
     </section>
   );
@@ -411,30 +437,31 @@ function ServiceStrip() {
   );
 }
 
-function TestimonialSection() {
+function TestimonialSection({ section, reviews }) {
+  const averageRating = reviews.length ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1) : '—';
   return (
     <section className={`${styles.luxuryContainer} ${styles.testimonialSection}`}>
       <div className={styles.testimonialIntro}>
-        <span>Loved by 2500+ customers</span>
-        <h2>Loved for Fit,<br />Fabric &amp; Finish</h2>
-        <div className={styles.testimonialRating}>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)} <strong>4.9/5</strong></div>
-        <p>Trusted by women who value thoughtful design, comfort, and beautiful craftsmanship.</p>
+        <span>{reviews.length ? `${reviews.length} featured customer ${reviews.length === 1 ? 'story' : 'stories'}` : 'Customer stories'}</span>
+        <h2>{section?.heading || 'Loved for Fit, Fabric & Finish'}</h2>
+        <div className={styles.testimonialRating}>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)} <strong>{averageRating}/5</strong></div>
+        <p>{section?.description || 'Trusted by women who value thoughtful design, comfort, and beautiful craftsmanship.'}</p>
       </div>
       <div className={styles.reviewGrid}>
-        {reviews.map((review) => (
-          <article key={review.name} className={styles.reviewCard}>
-            <div>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)}</div>
-            <p>“{review.text}”</p>
-            <strong>{review.name}</strong>
+        {reviews.length ? reviews.map((review) => (
+          <article key={review._id} className={styles.reviewCard}>
+            <div>{Array.from({ length: Math.max(1, Math.min(5, Number(review.rating || 5))) }).map((_, star) => <IconStarFilled key={star} />)}</div>
+            <p>“{review.comment}”</p>
+            <strong>{review.user?.name || 'Verified customer'}</strong>
             <small>Verified Buyer</small>
           </article>
-        ))}
+        )) : <article className={styles.reviewCard}><p>Customer reviews will appear here after they are approved.</p></article>}
       </div>
     </section>
   );
 }
 
-function NewsletterSection() {
+function NewsletterSection({ section }) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -461,7 +488,7 @@ function NewsletterSection() {
 
   return (
     <section className={`${styles.luxuryContainer} ${styles.newsletterSection}`}>
-      <div><span>Stay in style</span><h2>Join Samira Circle</h2><p>Get early access to new drops, offers, and styling updates.</p></div>
+      <div><span>Stay in style</span><h2>{section?.heading || 'Join Samira Circle'}</h2><p>{section?.description || 'Get early access to new drops, offers, and styling updates.'}</p></div>
       <form onSubmit={submit}>
         <input
           type="email"
@@ -473,11 +500,18 @@ function NewsletterSection() {
           placeholder="Enter your email address"
           aria-label="Email address"
         />
-        <button type="submit" disabled={submitting}>{submitting ? 'Subscribing...' : 'Subscribe'}</button>
+        <button type="submit" className="site-theme-button" disabled={submitting}>{submitting ? 'Subscribing...' : (section?.buttonText || 'Subscribe')}</button>
         {status ? <small>{status}</small> : null}
       </form>
     </section>
   );
+}
+
+function ThemedDesktopSection({ config, id, children }) {
+  const section = getHomepageSection(config, id);
+  if (!section?.visible) return null;
+  const background = normalizeImageUrl(section.backgroundImage);
+  return <div className="themed-home-section" style={{ '--home-section-order': section.order, ...(background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>{children}</div>;
 }
 
 function uniqueProducts(products) {

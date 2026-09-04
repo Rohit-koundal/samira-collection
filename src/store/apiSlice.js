@@ -76,7 +76,7 @@ function params(query) {
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications'],
+  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
@@ -111,6 +111,7 @@ export const samiraApi = createApi({
     getCoupons: builder.query({ query: () => '/coupons', providesTags: ['Coupons'] }),
     getOrders: builder.query({ query: () => '/orders/my-orders', providesTags: ['Orders'] }),
     getReviews: builder.query({ query: (productId) => `/reviews/${productId}`, providesTags: ['Reviews'] }),
+    getFeaturedReviews: builder.query({ query: () => '/reviews/featured', providesTags: ['Reviews'] }),
     getAdminStats: builder.query({ query: () => '/admin/dashboard/stats', providesTags: ['AdminDashboard'] }),
     getAdminProducts: builder.query({ query: () => '/admin/products', providesTags: ['AdminProducts'] }),
     getAdminCategories: builder.query({ query: () => '/admin/categories', providesTags: ['AdminCategories'] }),
@@ -183,6 +184,7 @@ export const samiraApi = createApi({
 });
 
 function tagsForPath(path = '', mutation = false) {
+  if (path.includes('/admin/customization') || path.includes('/website-config')) return ['WebsiteCustomization'];
   if (path.includes('/auth/')) return ['Auth'];
   if (path.includes('/admin/dashboard')) return ['AdminDashboard'];
   if (path.includes('/quick-analyze')) return [];
@@ -233,6 +235,7 @@ export const {
   useGetVariantGroupQuery,
   useGetVariantGroupsQuery,
   useGetReviewsQuery,
+  useGetFeaturedReviewsQuery,
   useGetSettingsQuery,
   useGetWishlistQuery,
   useBulkUploadProductDraftsMutation,

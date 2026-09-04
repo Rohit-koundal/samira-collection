@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap } from 'lucide-react';
+import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap, Palette } from 'lucide-react';
 import logo from '../../assets/samira-collection-logo.png';
 import useAppPath from '../../hooks/useAppPath';
 
@@ -24,6 +24,7 @@ export const ADMIN_LINKS = [
   ['Support', '/admin/support'],
   ['Subscribers', '/admin/subscribers'],
   ['Audit log', '/admin/audit'],
+  ['Website Designer', '/admin/customization'],
   ['Settings', '/admin/settings'],
 ];
 
@@ -139,6 +140,7 @@ function iconForLabel(label) {
     Support: <MessageCircle className="h-4 w-4" />,
     Subscribers: <Mail className="h-4 w-4" />,
     'Audit log': <ClipboardList className="h-4 w-4" />,
+    'Website Designer': <Palette className="h-4 w-4" />,
     Settings: <Settings className="h-4 w-4" />,
   };
   return map[label] || <LayoutDashboard className="h-4 w-4" />;

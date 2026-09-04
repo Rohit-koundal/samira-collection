@@ -15,7 +15,7 @@
   }
 
   .sc-plp__panel {
-    padding: 2px 48px 40px;
+    padding: 12px 30px 40px;
     border: 1px solid #ead8cb;
     /* border-radius: 18px; */
     background: linear-gradient(180deg, #fffaf5 0%, #fff8f2 100%);
@@ -96,6 +96,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
+    margin: 10px 0 12px;
   }
 
   .sc-plp__divider-line {
@@ -112,19 +113,25 @@
 
   .sc-plp__content {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
-    gap: 28px;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 20px;
     align-items: flex-start;
   }
 
   .sc-plp__grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
   }
 }
 
-@media (min-width: 1440px) {
+@media (min-width: 1280px) {
+  .sc-plp__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1640px) {
   .sc-plp__grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }

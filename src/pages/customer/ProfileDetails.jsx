@@ -34,12 +34,9 @@ export default function ProfileDetails() {
   const [emailOtpSending, setEmailOtpSending] = useState(false);
   const [phoneOtpVerifying, setPhoneOtpVerifying] = useState(false);
   const [emailOtpVerifying, setEmailOtpVerifying] = useState(false);
-  const [phoneDevOtp, setPhoneDevOtp] = useState('');
-  const [emailDevOtp, setEmailDevOtp] = useState('');
-
   useEffect(() => {
     setForm(buildForm(user));
-    resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent, setPhoneDevOtp, setEmailDevOtp);
+    resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent);
   }, [user]);
 
   const normalizedCurrentPhone = normalizePhone(user?.phone || '');
@@ -67,14 +64,12 @@ export default function ProfileDetails() {
       setPhoneOtp('');
       setPhoneVerificationToken('');
       setPhoneOtpSent(false);
-      setPhoneDevOtp('');
     }
 
     if (key === 'email') {
       setEmailOtp('');
       setEmailVerificationToken('');
       setEmailOtpSent(false);
-      setEmailDevOtp('');
     }
   };
 
@@ -88,11 +83,9 @@ export default function ProfileDetails() {
     setSuccess('');
     setPhoneOtpSending(true);
     try {
-      const response = await sendProfilePhoneChangeOtp(phone);
-      const code = readDemoOtp(response);
+      await sendProfilePhoneChangeOtp(phone);
       setPhoneOtpSent(true);
-      setPhoneDevOtp(code);
-      setSuccess(code ? `Demo OTP: ${code}` : 'OTP sent to your new mobile number');
+      setSuccess('OTP sent to your new mobile number');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -110,11 +103,9 @@ export default function ProfileDetails() {
     setSuccess('');
     setEmailOtpSending(true);
     try {
-      const response = await sendProfileEmailChangeOtp(email);
-      const code = readDemoOtp(response);
+      await sendProfileEmailChangeOtp(email);
       setEmailOtpSent(true);
-      setEmailDevOtp(code);
-      setSuccess(code ? `Demo email OTP: ${code}` : 'OTP sent to your email address');
+      setSuccess('OTP sent to your email address');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -206,7 +197,7 @@ export default function ProfileDetails() {
         hintName: form.hintName.trim(),
       });
       setForm(buildForm(profile));
-      resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent, setPhoneDevOtp, setEmailDevOtp);
+      resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent);
       setMobileEditable(false);
       setEmailEditable(false);
       setSuccess('Details saved successfully');
@@ -285,7 +276,7 @@ export default function ProfileDetails() {
                     <button type="button" onClick={confirmPhoneOtp} disabled={phoneOtpVerifying || phoneOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
                       {phoneOtpVerifying ? 'Verifying...' : (phoneVerificationToken ? 'Verified' : 'Verify Mobile Number')}
                     </button>
-                    <VerificationNote devOtp={phoneDevOtp} verified={Boolean(phoneVerificationToken)} pendingText="New number needs OTP verification before save." />
+                    <VerificationNote verified={Boolean(phoneVerificationToken)} pendingText="New number needs OTP verification before save." />
                   </>
                 ) : (
                   <p className="text-[12px] text-slate-500">Your current number is already linked to this account.</p>
@@ -335,7 +326,7 @@ export default function ProfileDetails() {
                     <button type="button" onClick={confirmEmailOtp} disabled={emailOtpVerifying || emailOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
                       {emailOtpVerifying ? 'Verifying...' : (emailVerificationToken ? 'Verified' : 'Verify Email')}
                     </button>
-                    <VerificationNote devOtp={emailDevOtp} verified={Boolean(emailVerificationToken)} pendingText="Email must be verified before save." />
+                    <VerificationNote verified={Boolean(emailVerificationToken)} pendingText="Email must be verified before save." />
                   </>
                 ) : normalizedDraftEmail ? (
                   <p className="text-[12px] text-slate-500">{emailVerified ? 'Your email is verified.' : 'This email is on your account.'}</p>
@@ -415,27 +406,18 @@ export default function ProfileDetails() {
   );
 }
 
-function VerificationNote({ devOtp, verified, pendingText }) {
+function VerificationNote({ verified, pendingText }) {
   if (verified) return <p className="text-[12px] font-medium text-emerald-600">Verified successfully.</p>;
-  if (devOtp) return <p className="text-[12px] text-slate-500">Demo OTP: <span className="font-semibold text-[#1f2a44]">{devOtp}</span></p>;
   return <p className="text-[12px] text-slate-500">{pendingText}</p>;
 }
 
-/** Only populated when the backend reports demo OTP mode. */
-function readDemoOtp(response) {
-  if (response?.otpMode && response.otpMode !== 'demo') return '';
-  return String(response?.demoOtp || response?.devOtp || '');
-}
-
-function resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent, setPhoneDevOtp, setEmailDevOtp) {
+function resetVerificationState(setPhoneOtp, setEmailOtp, setPhoneVerificationToken, setEmailVerificationToken, setPhoneOtpSent, setEmailOtpSent) {
   setPhoneOtp('');
   setEmailOtp('');
   setPhoneVerificationToken('');
   setEmailVerificationToken('');
   setPhoneOtpSent(false);
   setEmailOtpSent(false);
-  setPhoneDevOtp('');
-  setEmailDevOtp('');
 }
 
 function buildForm(user) {

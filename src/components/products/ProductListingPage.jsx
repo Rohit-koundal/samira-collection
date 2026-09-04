@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import ProductCard from './ProductCard';
 import ProductFilterSidebar from './ProductFilterSidebar';
+import { buildCatalogFacets } from '../../utils/catalogFacets';
 import './ProductListingPage.css';
 
 export default function ProductListingPage({
@@ -9,14 +11,19 @@ export default function ProductListingPage({
   breadcrumbs = [],
   products = [],
   categories = [],
-  params,
+  filters,
   sortValue,
   onSortChange,
   onFilterChange,
+  onFiltersChange,
   onClearFilters,
   allProducts = [],
 }) {
-  const productCounts = buildCounts(allProducts.length ? allProducts : products, categories);
+  const facetProducts = allProducts.length ? allProducts : products;
+  const facets = useMemo(
+    () => buildCatalogFacets(facetProducts, categories, filters),
+    [facetProducts, categories, filters],
+  );
 
   return (
     <section className="sc-plp">
@@ -41,12 +48,12 @@ export default function ProductListingPage({
             <div className="sc-plp__sort">
               <label htmlFor="sc-plp-sort">Sort by</label>
               <select id="sc-plp-sort" value={sortValue} onChange={(event) => onSortChange?.(event.target.value)}>
-                <option value="newest">Newest</option>
-                <option value="">All</option>
+                <option value="newest">Recommended</option>
+                <option value="bestSeller">Popularity</option>
                 <option value="priceLowHigh">Price: Low to High</option>
                 <option value="priceHighLow">Price: High to Low</option>
-                <option value="bestSeller">Bestselling</option>
-                <option value="discount">Discount</option>
+                <option value="discount">Better Discount</option>
+                <option value="rating">Customer Rating</option>
               </select>
             </div>
           </div>
@@ -59,11 +66,11 @@ export default function ProductListingPage({
 
           <div className="sc-plp__content">
             <ProductFilterSidebar
-              categories={categories}
-              params={params}
+              facets={facets}
+              filters={filters}
               onFilterChange={onFilterChange}
+              onFiltersChange={onFiltersChange}
               onClearAll={onClearFilters}
-              productCounts={productCounts}
             />
 
             <div className="sc-plp__grid">
@@ -80,24 +87,4 @@ export default function ProductListingPage({
       </div>
     </section>
   );
-}
-
-function buildCounts(products, categories = []) {
-  const counts = { inStock: 0 };
-  products.forEach((product) => {
-    if (Number(product?.stock || 0) > 0) counts.inStock += 1;
-    const keys = [product?.categoryId, product?.category, product?.subCategory]
-      .filter(Boolean)
-      .map((value) => String(value).toLowerCase());
-    keys.forEach((key) => {
-      counts[key] = (counts[key] || 0) + 1;
-    });
-  });
-
-  categories.forEach((category) => {
-    const key = String(category?._id || category?.id || category?.slug || category?.name || '').toLowerCase();
-    if (key && counts[key] == null) counts[key] = category?.count || category?.productCount || 0;
-  });
-
-  return counts;
 }

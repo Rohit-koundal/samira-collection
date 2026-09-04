@@ -1,47 +1,76 @@
 import { useEffect, useState } from 'react';
-import logo from '../../assets/samira-collection-logo.png';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
-import { X } from 'lucide-react';
+import {
+  ChevronRight,
+  Grid2x2,
+  Headphones,
+  Heart,
+  Home,
+  MapPin,
+  Package,
+  Search,
+  ShoppingBag,
+  Sparkles,
+  Tag,
+  X,
+} from 'lucide-react';
+import MobileSearchOverlay from './MobileSearchOverlay';
+
+const categoryLinks = [
+  ['Sarees', '/products?search=Saree'],
+  ['Suits', '/products?search=Suit'],
+  ['Kurtis', '/products?search=Kurti'],
+  ['Dresses', '/products?search=Dress'],
+  ['Lehengas', '/products?search=Lehenga'],
+  ['Ethnic Sets', '/products?search=Set'],
+  ['Accessories', '/products?search=Accessory'],
+];
 
 export default function MobileHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
-  const [searchTerm, setSearchTerm] = useState(searchValue);
 
   useEffect(() => {
-    setSearchTerm(searchValue);
-  }, [searchValue]);
+    setSearchOpen(false);
+  }, [route]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
 
   const go = (path) => {
     setOpen(false);
     navigate(path);
   };
 
-  const submitSearch = () => {
-    const value = searchTerm.trim();
-    const params = new URLSearchParams();
-    if (value) params.set('search', value);
-    else params.delete('search');
-    navigate(`/search${params.toString() ? `?${params}` : ''}`);
-  };
-
   return (
     <>
       <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
-        <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_84px] items-center gap-2 px-3 pt-1">
+        <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_132px] items-center gap-1 px-3 pt-1">
           <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5.5 w-5.5" />
           </button>
-          <button onClick={() => navigate('/')} className="header-title min-w-0 px-1">
-            <img src={logo} alt="Samira Collection" className="mx-auto h-10 w-auto max-w-full" />
-          </button>
-          <div className="flex shrink-0 justify-end gap-1">
+          <div className="col-start-3 flex shrink-0 justify-end gap-1">
+            <button onClick={() => setSearchOpen(true)} className="grid h-11 w-10 place-items-center text-slate-700" aria-label="Search products">
+              <Search className="h-5.5 w-5.5" strokeWidth={1.9} />
+            </button>
             <button onClick={() => navigate('/wishlist')} className="relative grid h-11 w-11 place-items-center text-slate-700" aria-label="Open wishlist">
               <Icon name="heart" className="h-5.5 w-5.5" />
               {wishlist.items.length > 0 && (
@@ -60,121 +89,129 @@ export default function MobileHeader({ navigate, route = '/' }) {
             </button>
           </div>
         </div>
-        <div className="px-3 pb-3">
-          <label className="label-text flex h-12 w-full max-w-full items-center gap-3 overflow-hidden rounded-full bg-[#f4f1ec] px-4 text-slate-500">
-            <Icon name="search" className="h-4.5 w-4.5" />
-            <input
-              value={searchTerm}
-              onFocus={() => {
-                if (!route.startsWith('/search')) navigate('/search');
-              }}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  submitSearch();
-                }
-              }}
-              className="body-text min-w-0 flex-1 bg-transparent text-[14px] text-charcoal outline-none placeholder:text-slate-500"
-              placeholder="Search sarees, suits, kurtis..."
-              inputMode="search"
-              enterKeyHint="search"
-            />
-          </label>
-        </div>
       </header>
-      {open && (
-        <div className="fixed inset-0 z-[75] lg:hidden">
-          <button type="button" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/45" aria-label="Close menu" />
-          <aside className="absolute inset-y-0 left-0 w-80 max-w-[86vw] overflow-y-auto bg-white shadow-2xl">
-            <div className="bg-[#3e3648] px-4 py-4 text-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-xl bg-white/10">
-                    <Icon name="user" className="h-6 w-6 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-bold leading-[1.1]">{user?.name || 'Guest'}</p>
-                    <p className="mt-1 text-[11px] text-white/70">{user?.phone || user?.email || 'Sign in for a better experience'}</p>
-                  </div>
-                </div>
-                <button onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-full text-white/90" aria-label="Close menu">
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-            </div>
-            <div className="border-b border-slate-100 px-4 py-4">
-              <button onClick={() => go('/profile')} className="flex w-full items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
-                <span className="text-[14px] font-bold text-charcoal">Account</span>
-                <span className="text-slate-400">›</span>
+      {searchOpen && <MobileSearchOverlay initialValue={searchValue} navigate={navigate} onClose={() => setSearchOpen(false)} />}
+      <div
+        className={`fixed inset-0 z-[75] transition-[visibility] duration-0 lg:hidden ${open ? 'visible pointer-events-auto delay-0' : 'invisible pointer-events-none delay-300'}`}
+        aria-hidden={!open}
+      >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className={`absolute inset-0 z-0 bg-[#17121a]/55 backdrop-blur-[1px] transition-opacity duration-300 motion-reduce:duration-0 ${open ? 'opacity-100' : 'opacity-0'}`}
+            aria-label="Close menu"
+          />
+          <aside
+            className={`absolute inset-y-0 left-0 z-10 flex w-[min(88vw,360px)] flex-col overflow-hidden bg-white shadow-[18px_0_45px_rgba(20,12,17,.22)] transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:duration-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Shopping menu"
+          >
+            <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#5f102d] via-wine to-[#a7164b] px-5 pb-5 pt-[calc(env(safe-area-inset-top)+18px)] text-white">
+              <div className="pointer-events-none absolute -right-10 -top-12 z-0 h-36 w-36 rounded-full border-[24px] border-white/5" />
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); setOpen(false); }}
+                className="absolute right-3 top-[calc(env(safe-area-inset-top)+8px)] z-20 grid h-10 w-10 touch-manipulation place-items-center rounded-full bg-white/10 text-white"
+                aria-label="Close menu panel"
+              >
+                <X className="h-5 w-5" />
               </button>
+              <div className="relative flex items-center gap-3 pr-10">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-white/30 bg-white/15 shadow-inner">
+                  {user?.name ? <span className="text-xl font-black uppercase">{user.name.trim().charAt(0)}</span> : <Icon name="user" className="h-6 w-6 text-white" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[16px] font-black leading-tight">{user?.name || 'Welcome'}</p>
+                  <p className="mt-1 truncate text-[11px] font-medium text-white/75">{user?.phone || user?.email || 'Sign in to view orders and rewards'}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => go(user ? '/profile' : '/login?redirect=/profile')}
+                className="relative mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 text-[11px] font-black uppercase tracking-[.06em] text-white"
+              >
+                {user ? 'View profile' : 'Login / Sign up'}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+              {!user && <p className="relative mt-2 text-[9px] font-semibold text-white/60">Secure login with mobile number and OTP</p>}
             </div>
 
-            <div className="px-4 py-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Shop for Women</p>
-              <div className="mt-3 grid gap-2">
-                {[
-                  ['Sarees', '/products?search=Saree'],
-                  ['Suits', '/products?search=Suit'],
-                  ['Kurtis', '/products?search=Kurti'],
-                  ['Dresses', '/products?search=Dress'],
-                  ['Lehengas', '/products?search=Lehenga'],
-                  ['Ethnic Sets', '/products?search=Set'],
-                  ['Accessories', '/products?search=Accessory'],
-                  ['Sale', '/products?discount=20'],
-                ].map(([label, path]) => (
-                  <button key={label} onClick={() => go(path)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
-                    <span className="text-[14px] font-semibold text-charcoal">{label}</span>
-                    <span className="text-slate-300">›</span>
-                  </button>
+            <nav className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(env(safe-area-inset-bottom)+16px)]">
+              <div className="border-b-[6px] border-[#f7f7f7] py-2">
+                <DrawerLink icon={Home} label="Home" onClick={() => go('/')} />
+                <DrawerLink icon={Grid2x2} label="Shop All" onClick={() => go('/products')} />
+                <DrawerLink icon={Sparkles} label="New Arrivals" badge="NEW" onClick={() => go('/products?newArrival=true')} />
+                <DrawerLink icon={Tag} label="Offers" badge="SALE" accent onClick={() => go('/products?discount=20')} />
+              </div>
+
+              <DrawerSection title="Shop by category">
+                {categoryLinks.map(([label, path]) => (
+                  <DrawerLink key={label} label={label} onClick={() => go(path)} compact />
                 ))}
-              </div>
-            </div>
+              </DrawerSection>
 
-            <div className="border-t border-slate-100 px-4 py-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Quick Links</p>
-              <div className="mt-3 grid gap-2">
-                {[
-                  ['Orders', '/orders'],
-                  ['Wishlist', '/wishlist'],
-                  ['Addresses', '/profile/addresses'],
-                  ['Coupons', '/profile'],
-                  ['Gift Cards', '/contact'],
-                ].map(([label, path]) => (
-                  <button key={label} onClick={() => go(path)} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left">
-                    <span className="text-[14px] text-slate-700">{label}</span>
-                    <span className="text-slate-300">›</span>
+              <DrawerSection title="My account">
+                <DrawerLink icon={Package} label="My Orders" onClick={() => go('/orders')} />
+                <DrawerLink icon={Heart} label="Wishlist" badge={wishlist.items.length || ''} onClick={() => go('/wishlist')} />
+                <DrawerLink icon={ShoppingBag} label="My Cart" badge={cart.itemCount || ''} onClick={() => go('/cart')} />
+                <DrawerLink icon={MapPin} label="Saved Addresses" onClick={() => go('/profile/addresses')} />
+                <DrawerLink icon={Tag} label="Coupons" onClick={() => go('/profile')} />
+              </DrawerSection>
+
+              <DrawerSection title="More">
+                <DrawerLink icon={Headphones} label="Help & Support" onClick={() => go('/contact')} />
+              </DrawerSection>
+
+              {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+                <div className="border-t border-slate-100 px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); switchMode('admin'); }}
+                    className="h-11 w-full rounded-xl bg-wine px-4 text-[12px] font-black text-white shadow-sm"
+                  >
+                    Switch to Admin
                   </button>
-                ))}
-              </div>
-            </div>
+                </div>
+              )}
 
-            {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
-              <div className="border-t border-slate-100 px-4 py-4">
-                <button
-                  onClick={() => switchMode('admin')}
-                  className="w-full rounded-2xl bg-wine px-4 py-3 text-left text-[14px] font-semibold text-white"
-                >
-                  Switch to Admin
-                </button>
+              <div className="px-5 pb-2 pt-5">
+                <p className="text-[9px] font-bold uppercase tracking-[.16em] text-slate-300">Samira Collection</p>
+                <p className="mt-1 text-[10px] font-medium text-slate-400">Premium ethnic fashion, made easy.</p>
               </div>
-            )}
-
-            <div className="mt-0 grid gap-2 px-4 pb-5">
-              {[
-                ['Home', '/'],
-                ['Products', '/products'],
-                ['Cart', '/cart'],
-                ['Contact', '/contact'],
-              ].map(([label, path]) => (
-                <button key={label} onClick={() => go(path)} className="rounded-2xl bg-[#f8f2ec] px-4 py-3 text-left text-[14px] text-charcoal">
-                  {label}
-                </button>
-              ))}
-            </div>
+            </nav>
           </aside>
         </div>
-      )}
     </>
+  );
+}
+
+function DrawerSection({ title, children }) {
+  return (
+    <section className="border-b-[6px] border-[#f7f7f7] py-3">
+      <h2 className="px-5 pb-2 text-[10px] font-black uppercase tracking-[.15em] text-slate-400">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function DrawerLink({ icon: RowIcon, label, badge, accent = false, compact = false, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex w-full items-center gap-3 px-5 text-left transition-colors active:bg-[#fff2f6] ${compact ? 'h-10' : 'h-12'} ${accent ? 'text-[#e11d5b]' : 'text-charcoal'}`}
+    >
+      {RowIcon ? (
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${accent ? 'bg-[#fff0f5] text-[#e11d5b]' : 'bg-[#f7f4f2] text-slate-500'}`}>
+          <RowIcon className="h-4 w-4" strokeWidth={1.9} />
+        </span>
+      ) : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#d7c6cc]" />}
+      <span className={`min-w-0 flex-1 truncate ${accent ? 'font-black' : 'font-semibold'} ${compact ? 'text-[13px]' : 'text-[13px]'}`}>{label}</span>
+      {badge !== undefined && badge !== '' ? (
+        <span className={`rounded-full px-2 py-0.5 text-[8px] font-black ${accent ? 'bg-[#e11d5b] text-white' : 'bg-[#fff0f5] text-[#d31352]'}`}>{badge}</span>
+      ) : null}
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-active:translate-x-0.5" />
+    </button>
   );
 }

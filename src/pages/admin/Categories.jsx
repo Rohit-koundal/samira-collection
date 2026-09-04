@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import CategoryForm from '../../components/admin/CategoryForm';
+import StatusBadge from '../../components/admin/StatusBadge';
 import { AdminPage, AdminTable } from './Products';
 import api from '../../services/api';
 import { fetchCategories } from '../../utils/catalogOptions';
@@ -25,15 +26,15 @@ export default function Categories() {
     <AdminPage title="Categories">
       <CategoryForm onSaved={load} />
       {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-wine">{message}</p>}
-      <AdminTable heads={['Name', 'Slug', 'Products', 'Active', 'Display Order', 'Actions']} rows={categories.map((category) => [
+      <AdminTable title="Categories" heads={['Name', 'Slug', 'Products', 'Active', 'Display Order', 'Actions']} rows={categories.map((category) => [
         category.name,
         category.slug,
         '-',
-        category.isActive ? 'Yes' : 'No',
+        <StatusBadge value={category.isActive ? 'Active' : 'Inactive'} />,
         category.displayOrder,
         <div className="flex items-center gap-3">
-          <a href={`/admin/categories/edit?id=${category._id}`} className="font-black text-wine">Edit</a>
-          <button onClick={() => remove(category)} className="font-black text-rose">Delete</button>
+          <a href={`/admin/categories/edit?id=${category._id}`} className="admin-table-action-link">Edit</a>
+          <button onClick={() => remove(category)} className="admin-table-action-link is-danger">Delete</button>
         </div>,
       ])} />
     </AdminPage>
