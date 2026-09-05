@@ -1,14 +1,33 @@
 import { BadgeCheck, PackageOpen, ShieldCheck, CreditCard } from 'lucide-react';
 import './ProductTrustPanel.css';
 
-const trustItems = [
-  { title: 'Genuine Product', subtitle: '100% authentic', icon: BadgeCheck },
-  { title: 'Easy Returns', subtitle: 'Hassle-free returns', icon: PackageOpen },
-  { title: 'Pay on Delivery', subtitle: 'Available across India', icon: CreditCard },
-  { title: 'Secure Payment', subtitle: '100% safe & secure', icon: ShieldCheck },
-];
+export default function ProductTrustPanel({ settings = {}, returnPolicy = '' }) {
+  const storeName = String(settings.storeName || 'Samira Collection').trim();
+  const returnDays = Math.max(0, Number(settings.returnWindowDays || 0));
+  const enabledPayments = [
+    settings.upiEnabled === true ? 'UPI' : '',
+    settings.cardPaymentEnabled === true ? 'cards' : '',
+    settings.netBankingEnabled === true ? 'net banking' : '',
+  ].filter(Boolean);
+  const trustItems = [
+    { title: 'Store product', subtitle: `Listed by ${storeName}`, icon: BadgeCheck },
+    {
+      title: 'Returns',
+      subtitle: returnDays > 0 ? `${returnDays}-day return window` : returnPolicy ? 'Policy available below' : 'Eligibility shown at checkout',
+      icon: PackageOpen,
+    },
+    {
+      title: settings.codEnabled === true ? 'Pay on delivery' : settings.codEnabled === false ? 'Prepaid orders' : 'Payment options',
+      subtitle: settings.codEnabled === true ? 'For eligible PIN codes' : settings.codEnabled === false ? 'COD is not enabled' : 'Check availability above',
+      icon: CreditCard,
+    },
+    {
+      title: 'Secure checkout',
+      subtitle: enabledPayments.length ? enabledPayments.join(', ') : 'Available methods shown at checkout',
+      icon: ShieldCheck,
+    },
+  ];
 
-export default function ProductTrustPanel() {
   return (
     <aside className="sc-trust sc-pdp__trust">
       <div className="sc-trust__card">

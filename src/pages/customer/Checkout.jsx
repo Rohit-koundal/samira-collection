@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -20,7 +20,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import PriceSummary from '../../components/cart/PriceSummary';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, TextInput } from '../../components/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -30,6 +30,7 @@ import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import { couponApplyBody } from '../../utils/couponApply';
+import { shouldExitEmptyCheckout } from '../../utils/checkoutGuard';
 import CouponSelector from '../../components/coupon/CouponSelector';
 import './Checkout.css';
 
@@ -54,20 +55,12 @@ function getPlaceOrderLabel(paymentMethod, placing) {
   return paymentMethod === 'COD' ? 'Place COD Order' : 'Pay Now';
 }
 
-function OnlinePaymentNote({ paymentMethod, paymentApp, setPaymentApp, upiId, setUpiId }) {
+function OnlinePaymentNote({ paymentMethod }) {
   if (paymentMethod === 'UPI') {
     return (
-      <div className="mt-4 rounded-2xl bg-[#fbf8f4] p-4">
-        <div className="flex flex-wrap gap-2">
-          {['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => (
-            <Button key={app} onClick={() => setPaymentApp(app)} variant={paymentApp === app ? 'primary' : 'secondary'} size="sm">{app}</Button>
-          ))}
-        </div>
-        <TextInput value={upiId} onChange={(event) => setUpiId(event.target.value)} className="mt-3 w-full" placeholder="yourname@upi (optional)" />
-        <p className="body-text mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
-          Click <strong>Pay Now</strong> to open the secure Razorpay payment window.
-        </p>
-      </div>
+      <p className="body-text mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+        Click <strong>Pay Now</strong>, then choose a supported UPI app securely in Razorpay.
+      </p>
     );
   }
 
@@ -113,14 +106,17 @@ export default function Checkout({ navigate }) {
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState('');
-  const [paymentApp, setPaymentApp] = useState('Google Pay');
-  const [upiId, setUpiId] = useState('');
   const [error, setError] = useState('');
   const [placing, setPlacing] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [mobileStep, setMobileStep] = useState(2);
   const [showMobileAddressSelector, setShowMobileAddressSelector] = useState(false);
+  const checkoutCompletedRef = useRef(false);
+  const emptyRedirectStartedRef = useRef(false);
+  const cartHydrated = cart.hydrated;
+  const cartItemCount = cart.items.length;
+  const setCartCoupon = cart.setCoupon;
 
   useEffect(() => {
     trackEvent('BEGIN_CHECKOUT');
@@ -252,6 +248,19 @@ export default function Checkout({ navigate }) {
     }
   }, [isMobile]);
 
+  useEffect(() => {
+    if (!shouldExitEmptyCheckout({
+      hydrated: cartHydrated,
+      itemCount: cartItemCount,
+      orderCompleted: checkoutCompletedRef.current,
+    }) || emptyRedirectStartedRef.current) return;
+
+    emptyRedirectStartedRef.current = true;
+    setCartCoupon(null);
+    setToast('Your bag is empty. Add an item before checkout.');
+    navigate('/cart');
+  }, [cartHydrated, cartItemCount, navigate, setCartCoupon, setToast]);
+
   const selectedAddress = addresses.find((item) => item._id === selectedAddressId);
   const deliveryWindow = useMemo(() => getDeliveryWindow(), []);
   const placeOrderLabel = getPlaceOrderLabel(paymentMethod, placing);
@@ -350,6 +359,7 @@ export default function Checkout({ navigate }) {
     try {
       if (paymentMethod === 'COD') {
         const order = await api.post('/orders/cod', payload);
+        checkoutCompletedRef.current = true;
         cart.clearCart();
         setToast('COD order placed successfully');
         navigate(`/order-success?id=${order._id}`);
@@ -372,6 +382,7 @@ export default function Checkout({ navigate }) {
         name: selectedAddress?.fullName || user?.name,
         email: user?.email,
         contact: selectedAddress?.mobile || user?.phone,
+        preferredMethod: paymentMethod,
         onSuccess: async (response) => {
           // The backend finalises the order it already stored; nothing about
           // the items or amounts is resent from the browser.
@@ -380,6 +391,7 @@ export default function Checkout({ navigate }) {
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_signature: response.razorpay_signature,
           });
+          checkoutCompletedRef.current = true;
           cart.clearCart();
           setToast('Payment successful');
           navigate(`/order-success?id=${result.order._id}`);
@@ -479,6 +491,8 @@ export default function Checkout({ navigate }) {
     setEditingAddressId('');
   };
 
+  if (!cartHydrated || !cartItemCount) return null;
+
   if (isMobile) {
     return (
       <section className="min-h-screen bg-[#f6f7fb] pb-28">
@@ -533,10 +547,6 @@ export default function Checkout({ navigate }) {
             couponFeedback={couponFeedback}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
-            paymentApp={paymentApp}
-            setPaymentApp={setPaymentApp}
-            upiId={upiId}
-            setUpiId={setUpiId}
             placeOrder={placeOrder}
             placing={placing}
             placeOrderLabel={placeOrderLabel}
@@ -579,10 +589,6 @@ export default function Checkout({ navigate }) {
       couponFeedback={couponFeedback}
       paymentMethod={paymentMethod}
       setPaymentMethod={setPaymentMethod}
-      paymentApp={paymentApp}
-      setPaymentApp={setPaymentApp}
-      upiId={upiId}
-      setUpiId={setUpiId}
       placeOrder={placeOrder}
       placing={placing}
       placeOrderLabel={placeOrderLabel}
@@ -621,10 +627,6 @@ function DesktopCheckout({
   couponFeedback,
   paymentMethod,
   setPaymentMethod,
-  paymentApp,
-  setPaymentApp,
-  upiId,
-  setUpiId,
   placeOrder,
   placing,
   placeOrderLabel,
@@ -634,6 +636,7 @@ function DesktopCheckout({
 }) {
   const needsLogin = !user;
   const needsVerification = Boolean(user && !user.isPhoneVerified);
+  const unavailableOnlineOptions = paymentOptions.filter((option) => option.key !== 'COD' && !option.enabled);
 
   return (
     <section className="sc-checkout">
@@ -744,11 +747,13 @@ function DesktopCheckout({
                           type="button"
                           disabled={!option.enabled}
                           title={option.disabledReason || undefined}
-                          className={paymentMethod === option.key ? 'is-active' : ''}
+                          className={`${paymentMethod === option.key ? 'is-active' : ''}${!option.enabled ? ' is-disabled' : ''}`}
                           onClick={() => option.enabled && setPaymentMethod(option.key)}
+                          aria-pressed={paymentMethod === option.key}
                         >
                           <Icon size={14} aria-hidden="true" />
-                          {option.label}
+                          <span>{option.label}</span>
+                          {!option.enabled ? <small>Unavailable</small> : null}
                         </button>
                       );
                     })}
@@ -757,18 +762,15 @@ function DesktopCheckout({
                   <p className="sc-checkout__payment-copy">Loading payment options...</p>
                 )}
                 <div className="sc-checkout__payment-panel">
+                  <p className="sc-checkout__payment-copy">{paymentCopyFor(paymentMethod)}</p>
                   {paymentMethod === 'UPI' ? (
-                    <>
-                      <div className="sc-checkout__app-row">
-                        {['Google Pay', 'PhonePe', 'Paytm', 'Other UPI Apps'].map((app) => (
-                          <button key={app} type="button" className={paymentApp === app ? 'is-active' : ''} onClick={() => setPaymentApp(app)}>{app}</button>
-                        ))}
-                      </div>
-                      <input value={upiId} onChange={(event) => setUpiId(event.target.value)} placeholder="Enter your UPI ID (e.g. name@upi)" />
-                    </>
-                  ) : (
-                    <p className="sc-checkout__payment-copy">{paymentCopyFor(paymentMethod)}</p>
-                  )}
+                    <p className="sc-checkout__payment-copy">Google Pay, PhonePe, Paytm and other supported UPI apps are shown securely inside Razorpay.</p>
+                  ) : null}
+                  {unavailableOnlineOptions.length ? (
+                    <p className="sc-checkout__payment-unavailable">
+                      {unavailableOnlineOptions.map((option) => option.label).join(', ')}: {unavailableOnlineOptions[0].disabledReason || 'currently unavailable'}.
+                    </p>
+                  ) : null}
                   {paymentMethod === 'COD' && summary.codCharge > 0 ? (
                     <p className="sc-checkout__payment-copy">A Rs. {summary.codCharge} Cash on Delivery handling fee is added to this order.</p>
                   ) : null}
@@ -1088,10 +1090,6 @@ function MobilePaymentStep({
   couponFeedback,
   paymentMethod,
   setPaymentMethod,
-  paymentApp,
-  setPaymentApp,
-  upiId,
-  setUpiId,
   placeOrder,
   placing,
   placeOrderLabel,
@@ -1149,7 +1147,7 @@ function MobilePaymentStep({
                 <p className="body-text text-slate-500">Loading payment options...</p>
               )}
             </div>
-            <OnlinePaymentNote paymentMethod={paymentMethod} paymentApp={paymentApp} setPaymentApp={setPaymentApp} upiId={upiId} setUpiId={setUpiId} />
+            <OnlinePaymentNote paymentMethod={paymentMethod} />
           </CardContent>
         </Card>
 

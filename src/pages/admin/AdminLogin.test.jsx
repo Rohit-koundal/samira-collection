@@ -1,34 +1,29 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import AdminLogin from './AdminLogin';
 
-const mockLogin = jest.fn();
-
-jest.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ login: mockLogin }),
-}));
-
-jest.mock('../../hooks/useDesktopFeedback', () => () => ({
-  notify: () => false,
-}));
+jest.mock('../customer/Login', () => function MockMobileOtpLogin({ route }) {
+  return <div data-testid="mobile-otp-login">{route}</div>;
+});
 
 describe('admin login', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('uses the separate admin flow and redirects to the dashboard', async () => {
-    mockLogin.mockResolvedValue({ ok: true });
+  test('uses the shared mobile OTP flow and defaults to the admin dashboard', () => {
     render(<AdminLogin />);
 
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'admin@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Login' }));
+    expect(screen.getByTestId('mobile-otp-login')).toHaveTextContent(
+      '/login?redirect=%2Fadmin',
+    );
+  });
 
-    await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({
-      email: 'admin@example.com',
-      password: 'password123',
-      redirectTo: '/admin',
-    }));
+  test('returns to the requested reel import after mobile OTP verification', () => {
+    render(
+      <AdminLogin
+        route="/admin/login?redirect=%2Fadmin%2Freel-import%3FjobId%3Djob-1"
+      />,
+    );
+
+    expect(screen.getByTestId('mobile-otp-login')).toHaveTextContent(
+      '/login?redirect=%2Fadmin%2Freel-import%3FjobId%3Djob-1',
+    );
   });
 });

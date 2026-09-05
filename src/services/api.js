@@ -43,7 +43,10 @@ async function request(path, options = {}) {
   const body = options.body ? JSON.parse(options.body) : undefined;
   const endpoint = method === 'GET' ? samiraApi.endpoints.request : samiraApi.endpoints.mutate;
   const action = method === 'GET'
-    ? endpoint.initiate({ path })
+    ? endpoint.initiate({ path }, {
+      forceRefetch: options.forceRefetch !== false,
+      subscribe: false,
+    })
     : endpoint.initiate({ path, method, body });
   const promise = store.dispatch(action);
   startMobileLoader();
@@ -55,7 +58,7 @@ async function request(path, options = {}) {
     throw toCustomerError(error, path);
   } finally {
     stopMobileLoader();
-    if (method === 'GET') promise.unsubscribe?.();
+    if (method === 'GET') promise?.unsubscribe?.();
   }
 }
 

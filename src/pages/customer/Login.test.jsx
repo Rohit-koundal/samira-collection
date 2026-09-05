@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Login from './Login';
 
 const mockAuth = {
@@ -46,4 +46,105 @@ describe('customer login', () => {
     expect(screen.getByRole('link', { name: /Get help/i })).toHaveAttribute('href', '/contact');
   });
 
+  test('supports typing, replacing, deleting and moving backward through OTP digits', () => {
+    renderOtpStep();
+    const inputs = otpInputs();
+
+    inputs[0].focus();
+    fireEvent.keyDown(inputs[0], { key: '1' });
+    expect(inputs[0]).toHaveValue('1');
+    expect(inputs[1]).toHaveFocus();
+
+    fireEvent.keyDown(inputs[1], { key: '2' });
+    fireEvent.keyDown(inputs[2], { key: '3' });
+    fireEvent.keyDown(inputs[3], { key: '4' });
+    fireEvent.keyDown(inputs[4], { key: '5' });
+    fireEvent.keyDown(inputs[5], { key: '6' });
+    expect(inputs.map((input) => input.value).join('')).toBe('123456');
+    expect(screen.getByRole('button', { name: 'Verify OTP' })).toBeEnabled();
+
+    fireEvent.keyDown(inputs[5], { key: 'Backspace' });
+    expect(inputs[5]).toHaveValue('');
+    expect(inputs[5]).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Verify OTP' })).toBeDisabled();
+
+    fireEvent.keyDown(inputs[5], { key: 'Backspace' });
+    expect(inputs[4]).toHaveValue('');
+    expect(inputs[4]).toHaveFocus();
+
+    fireEvent.keyDown(inputs[4], { key: '9' });
+    expect(inputs[4]).toHaveValue('9');
+    expect(inputs[5]).toHaveFocus();
+
+    fireEvent.keyDown(inputs[5], { key: '7' });
+    fireEvent.keyDown(inputs[5], { key: 'ArrowLeft' });
+    expect(inputs[4]).toHaveFocus();
+    fireEvent.keyDown(inputs[4], { key: 'Delete' });
+    expect(inputs[4]).toHaveValue('');
+  });
+
+  test('fills all OTP boxes from paste and enables verification', () => {
+    renderOtpStep();
+    const inputs = otpInputs();
+
+    fireEvent.paste(inputs[0], {
+      clipboardData: { getData: () => '12a-34 56' },
+    });
+
+    expect(inputs.map((input) => input.value).join('')).toBe('123456');
+    expect(inputs[5]).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Verify OTP' })).toBeEnabled();
+  });
+
+  test('keeps an incorrect OTP editable and focuses the last digit for correction', async () => {
+    mockAuth.verifyOtp.mockRejectedValueOnce(new Error('Incorrect OTP. Please try again.'));
+    renderOtpStep();
+    const inputs = otpInputs();
+
+    fireEvent.paste(inputs[0], {
+      clipboardData: { getData: () => '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify OTP' }));
+
+    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
+      phone: '9876543086',
+      otp: '123456',
+      redirectTo: '/admin/reel-import?jobId=job-1',
+    }));
+    expect(await screen.findByText('Incorrect OTP. Please try again.')).toBeVisible();
+    expect(inputs.map((input) => input.value).join('')).toBe('123456');
+    expect(inputs[5]).toHaveFocus();
+
+    fireEvent.keyDown(inputs[5], { key: 'Backspace' });
+    expect(inputs[5]).toHaveValue('');
+    expect(screen.queryByText('Incorrect OTP. Please try again.')).not.toBeInTheDocument();
+  });
+
+  test('resends only when the cooldown allows it and starts a new cooldown', async () => {
+    mockAuth.resendOtp.mockResolvedValueOnce({ message: 'OTP sent again.' });
+    renderOtpStep();
+
+    const resend = screen.getByRole('button', { name: 'Resend OTP' });
+    expect(resend).toBeEnabled();
+    fireEvent.click(resend);
+
+    await waitFor(() => expect(mockAuth.resendOtp).toHaveBeenCalledWith('9876543086'));
+    expect(await screen.findByText(/OTP sent again/i)).toBeVisible();
+    expect(resend).toBeDisabled();
+  });
+
 });
+
+function renderOtpStep() {
+  render(
+    <Login
+      route="/login?step=otp&phone=9876543086&consent=1&redirect=%2Fadmin%2Freel-import%3FjobId%3Djob-1"
+    />,
+  );
+}
+
+function otpInputs() {
+  return Array.from({ length: 6 }, (_, index) => (
+    screen.getByRole('textbox', { name: `OTP digit ${index + 1}` })
+  ));
+}

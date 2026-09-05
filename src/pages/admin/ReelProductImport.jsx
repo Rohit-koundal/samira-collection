@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, FileVideo, GitMerge, MoveRight, Plus, RefreshCcw,
-  Scissors, Search, Trash2, Upload, X,
+  ArrowLeft, Check, FileVideo, GitMerge, Info, MoveRight, Plus, RefreshCcw,
+  Scissors, Search, Sparkles, Trash2, Upload, WandSparkles, X,
 } from 'lucide-react';
 import PageHeader from '../../components/admin/PageHeader';
 import EmptyState from '../../components/admin/EmptyState';
 import Loader from '../../components/admin/Loader';
 import StatusBadge from '../../components/admin/StatusBadge';
-import { Select, TextInput } from '../../components/ui/Field';
+import { Select, TextArea, TextInput } from '../../components/ui/Field';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import {
+  buildReelProgressSteps,
+  reelActivityLabel,
+  uploadReelForProcessing,
+} from '../../services/reelImport';
 import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 
 const TERMINAL = new Set(['review_required', 'completed', 'failed', 'cancelled']);
@@ -34,6 +39,7 @@ function ImportWorkspace({ navigate }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [capabilities, setCapabilities] = useState(null);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -59,6 +65,16 @@ function ImportWorkspace({ navigate }) {
   }, [load]);
 
   useEffect(() => {
+    let active = true;
+    api.get('/admin/reel-imports/capabilities')
+      .then((response) => { if (active) setCapabilities(response?.data || response); })
+      .catch((error) => {
+        if (active) setCapabilities({ ready: false, issues: [error.message || 'Unable to verify reel import services.'] });
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     if (!items.some((item) => !TERMINAL.has(item.status))) return undefined;
     const timer = window.setInterval(() => load(true), 4000);
     return () => window.clearInterval(timer);
@@ -71,8 +87,9 @@ function ImportWorkspace({ navigate }) {
       notify('Only MP4, MOV, and WebM videos are supported.', 'error', 'Upload Product Reel');
       return;
     }
-    if (selected.size > 250 * 1024 * 1024) {
-      notify('The reel must be 250MB or smaller.', 'error', 'Upload Product Reel');
+    const maxFileSizeMb = Number(capabilities?.maxFileSizeMb || 250);
+    if (selected.size > maxFileSizeMb * 1024 * 1024) {
+      notify(`The reel must be ${maxFileSizeMb}MB or smaller.`, 'error', 'Upload Product Reel');
       return;
     }
     setFile(selected);
@@ -83,36 +100,16 @@ function ImportWorkspace({ navigate }) {
     setUploading(true);
     setUploadProgress(10);
     try {
-      const uploadResponse = await api.upload(
-        '/admin/uploads/videos?folder=reel-imports/original',
-        [file],
-        {
-          fieldName: 'videos',
-          onRequest: (request) => {
-            uploadRef.current = request;
-            setUploadProgress(35);
-          },
-        },
-      );
-      const storedVideo = uploadResponse.files?.[0];
-      const provider = storedVideo?.provider || uploadResponse.provider;
-      if (!storedVideo?.publicId || !storedVideo?.url || !provider || provider === 'local') {
-        throw new Error('Video upload did not return a valid storage reference. Please try again.');
+      if (capabilities && !capabilities.ready) {
+        throw new Error(capabilities.issues?.[0] || 'Reel Import is not ready on the server.');
       }
-      setUploadProgress(80);
-      uploadRef.current = null;
-      const response = await api.post('/admin/reel-imports', {
-        sourceVideo: {
-          provider,
-          storageKey: storedVideo.publicId,
-          url: storedVideo.url,
-          originalFilename: file.name,
-          mimeType: file.type,
-          sizeBytes: file.size,
+      const { response, job } = await uploadReelForProcessing(file, {
+        onRequest: (request) => {
+          uploadRef.current = request;
+          setUploadProgress(45);
         },
       });
       setUploadProgress(100);
-      const job = response.data || response;
       if (response.warning || job.status === 'failed') {
         notify(response.warning || job.error?.safeMessage || 'Reel uploaded, but background processing is not available yet.', 'warning', 'Upload Product Reel');
       } else {
@@ -174,6 +171,12 @@ function ImportWorkspace({ navigate }) {
       <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="admin-card p-4 md:p-6">
           <h2 className="text-lg font-black text-charcoal">Upload Product Reel</h2>
+          {capabilities && !capabilities.ready && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold leading-5 text-amber-900" role="alert">
+              <p>Reel Import needs attention before uploads can start:</p>
+              <ul className="mt-1 list-disc pl-5">{(capabilities.issues || ['The processing service is unavailable.']).map((issue) => <li key={issue}>{issue}</li>)}</ul>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -185,7 +188,7 @@ function ImportWorkspace({ navigate }) {
             <span>
               <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-wine text-white"><Plus className="h-6 w-6" /></span>
               <span className="mt-4 block text-base font-black text-charcoal">Drop a reel here or select a file</span>
-              <span className="mt-2 block text-xs font-semibold text-slate-500">MP4, MOV or WebM · up to 180 seconds · maximum 250MB</span>
+              <span className="mt-2 block text-xs font-semibold text-slate-500">MP4, MOV or WebM · up to {capabilities?.maxDurationSeconds || 180} seconds · maximum {capabilities?.maxFileSizeMb || 250}MB</span>
               <span className="mt-4 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-black text-wine shadow-sm">Select file</span>
             </span>
           </button>
@@ -207,7 +210,7 @@ function ImportWorkspace({ navigate }) {
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" disabled={!file || uploading} onClick={upload} className="admin-btn disabled:opacity-50">
+            <button type="button" disabled={!file || uploading || capabilities?.ready === false} onClick={upload} className="admin-btn disabled:opacity-50">
               <Upload className="h-4 w-4" />{uploading ? 'Uploading…' : 'Upload and process'}
             </button>
             {uploading && <button type="button" onClick={cancelUpload} className="h-11 rounded-xl border border-rose-200 px-5 text-sm font-black text-rose">Cancel upload</button>}
@@ -267,7 +270,7 @@ function HistoryRow({ job, onCancel, onRetry, onDelete }) {
       </div>
       <div className="flex flex-wrap gap-2 md:justify-end">
         <a href={`/admin/reel-import?jobId=${id}`} className="rounded-xl bg-wine px-3 py-2 text-xs font-black text-white">{job.status === 'review_required' || job.status === 'completed' ? 'Open results' : 'View progress'}</a>
-        {job.status === 'failed' && <button type="button" onClick={() => onRetry(job)} className="rounded-xl border border-slate-200 p-2" aria-label="Retry"><RefreshCcw className="h-4 w-4" /></button>}
+        {['failed', 'cancelled'].includes(job.status) && <button type="button" onClick={() => onRetry(job)} className="rounded-xl border border-slate-200 p-2" aria-label="Retry"><RefreshCcw className="h-4 w-4" /></button>}
         {['queued', 'processing'].includes(job.status) && <button type="button" onClick={() => onCancel(job)} className="rounded-xl border border-slate-200 p-2" aria-label="Cancel"><X className="h-4 w-4" /></button>}
         {!['processing', 'creating_drafts'].includes(job.status) && <button type="button" onClick={() => onDelete(job)} className="rounded-xl border border-rose-100 p-2 text-rose" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>}
       </div>
@@ -277,21 +280,30 @@ function HistoryRow({ job, onCancel, onRetry, onDelete }) {
 
 function ReviewWorkspace({ jobId }) {
   const { notify } = useAuth();
+  const loadInFlightRef = useRef(false);
   const [job, setJob] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [capabilities, setCapabilities] = useState(null);
   const [forms, setForms] = useState({});
   const [selected, setSelected] = useState([]);
   const [draftSelected, setDraftSelected] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [smartFilling, setSmartFilling] = useState([]);
+  const [smartFillingAll, setSmartFillingAll] = useState(false);
+  const [jobAction, setJobAction] = useState('');
+  const [pollError, setPollError] = useState('');
 
   const load = useCallback(async (quiet = false) => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     if (!quiet) setLoading(true);
     try {
       const jobResponse = await api.get(`/admin/reel-imports/${jobId}`);
       const currentJob = jobResponse.data || jobResponse;
       setJob(currentJob);
+      setPollError('');
       if (['review_required', 'completed'].includes(currentJob.status)) {
         const candidateResponse = await api.get(`/admin/reel-imports/${jobId}/candidates`);
         const nextCandidates = candidateResponse.data || [];
@@ -307,8 +319,10 @@ function ReviewWorkspace({ jobId }) {
         });
       }
     } catch (error) {
-      notify(error.message, 'error', 'Reel review');
+      setPollError(error.message);
+      if (!quiet) notify(error.message, 'error', 'Reel review');
     } finally {
+      loadInFlightRef.current = false;
       if (!quiet) setLoading(false);
     }
   }, [jobId, notify]);
@@ -316,6 +330,9 @@ function ReviewWorkspace({ jobId }) {
   useEffect(() => {
     load();
     fetchCategories(api).then(setCategories).catch(() => setCategories([]));
+    api.get('/admin/reel-imports/capabilities')
+      .then((response) => setCapabilities(response?.data || response))
+      .catch(() => setCapabilities({ smartSuggestionsEnabled: false }));
   }, [load]);
 
   useEffect(() => {
@@ -323,6 +340,35 @@ function ReviewWorkspace({ jobId }) {
     const timer = window.setInterval(() => load(true), 3500);
     return () => window.clearInterval(timer);
   }, [job, load]);
+
+  const retryJob = async () => {
+    if (jobAction) return;
+    setJobAction('retry');
+    try {
+      const response = await api.post(`/admin/reel-imports/${jobId}/retry`, {});
+      setJob(response.data || response);
+      notify('A new processing attempt has been queued.', 'success', 'Reel review');
+      await load(true);
+    } catch (error) {
+      notify(error.message, 'error', 'Reel review');
+    } finally {
+      setJobAction('');
+    }
+  };
+
+  const cancelJob = async () => {
+    if (jobAction) return;
+    setJobAction('cancel');
+    try {
+      const response = await api.post(`/admin/reel-imports/${jobId}/cancel`, {});
+      setJob(response.data || response);
+      notify('Processing cancelled safely.', 'success', 'Reel review');
+    } catch (error) {
+      notify(error.message, 'error', 'Reel review');
+    } finally {
+      setJobAction('');
+    }
+  };
 
   const updateForm = (id, field, value) => setForms((current) => ({ ...current, [id]: { ...current[id], [field]: value } }));
 
@@ -333,13 +379,68 @@ function ReviewWorkspace({ jobId }) {
       status: form.status,
       adminOverrides: {
         name: form.name, category: form.category, subCategory: form.subCategory, primaryColor: form.primaryColor,
-        pattern: form.pattern, tags: form.tags, price: form.price,
-        sizes: form.sizes, stock: form.stock,
+        pattern: form.pattern, fabric: form.fabric, occasion: form.occasion, tags: form.tags,
+        description: form.description, price: form.price, sizes: form.sizingMode === 'free-size' ? '' : form.sizes,
+        sizingMode: form.sizingMode, stock: form.stock,
       },
       selectedFrameIds: form.selectedFrameIds,
     });
     if (!quiet) notify('Candidate saved.', 'success', 'Reel review');
     return response;
+  };
+
+  const smartFillCandidate = async (candidate, quiet = false) => {
+    const id = candidate._id || candidate.id;
+    const currentForm = forms[id] || candidateForm(candidate);
+    setSmartFilling((current) => current.includes(id) ? current : [...current, id]);
+    try {
+      const response = await api.post(`/admin/reel-imports/${jobId}/candidates/${id}/analyze`, {
+        selectedFrameIds: currentForm.selectedFrameIds,
+      });
+      const nextCandidate = response.data || response;
+      setCandidates((current) => current.map((item) => (item._id || item.id) === id ? nextCandidate : item));
+      setForms((current) => ({
+        ...current,
+        [id]: mergeSmartCandidateForm(current[id] || currentForm, candidateForm(candidate), candidateForm(nextCandidate)),
+      }));
+      const completed = nextCandidate.analysis?.status === 'completed';
+      if (!quiet) {
+        notify(
+          completed ? 'Product details suggested from the selected reel views.' : (response.warning || nextCandidate.analysis?.error || 'Smart suggestions need another try.'),
+          completed ? 'success' : 'warning',
+          'Smart Reel Assistant',
+        );
+      }
+      return completed;
+    } catch (error) {
+      if (!quiet) notify(error.message, 'error', 'Smart Reel Assistant');
+      return false;
+    } finally {
+      setSmartFilling((current) => current.filter((item) => item !== id));
+    }
+  };
+
+  const smartFillAll = async () => {
+    if (smartFillingAll || capabilities?.smartSuggestionsEnabled !== true) return;
+    const eligible = candidates.filter((candidate) => !['ignored', 'merged', 'draft_created'].includes(candidate.status));
+    if (!eligible.length) return notify('There are no candidates available for smart fill.', 'info', 'Smart Reel Assistant');
+    setSmartFillingAll(true);
+    let completed = 0;
+    try {
+      for (const candidate of eligible) {
+        if (await smartFillCandidate(candidate, true)) completed += 1;
+      }
+      const failed = eligible.length - completed;
+      notify(
+        failed
+          ? `${completed} of ${eligible.length} products were filled. ${failed} need clearer photos or manual details.`
+          : `${completed} product${completed === 1 ? '' : 's'} filled with catalog suggestions. Please confirm before creating drafts.`,
+        failed ? 'warning' : 'success',
+        'Smart Reel Assistant',
+      );
+    } finally {
+      setSmartFillingAll(false);
+    }
   };
 
   const saveAll = async () => {
@@ -421,6 +522,9 @@ function ReviewWorkspace({ jobId }) {
 
   if (loading) return <Loader label="Loading reel import…" />;
   if (!job) return <EmptyState title="Reel import not found" note="Return to import history and choose another job." />;
+  const progressSteps = buildReelProgressSteps(job);
+  const active = !TERMINAL.has(job.status);
+  const analyzedCount = candidates.filter((candidate) => candidate.analysis?.status === 'completed').length;
 
   return (
     <section className="space-y-5">
@@ -435,17 +539,72 @@ function ReviewWorkspace({ jobId }) {
         <Stat label="Possible products" value={job.statistics?.detectedProducts || 0} />
       </div>
 
-      {!TERMINAL.has(job.status) && (
+      {(active || ['failed', 'cancelled'].includes(job.status)) && (
         <div className="admin-card p-5">
-          <div className="flex justify-between text-sm font-black"><span>{job.progress?.currentStep || 'Processing reel'}</span><span>{job.progress?.percentage || 0}%</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-charcoal">{job.progress?.currentStep || 'Processing reel'}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{reelActivityLabel(job)} · Attempt {Math.max(1, Number(job.attemptCount || 0))}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-wine">{Number(job.progress?.percentage || 0)}%</span>
+              {active && <button type="button" disabled={Boolean(jobAction)} onClick={cancelJob} className="h-9 rounded-xl border border-slate-200 px-3 text-xs font-black disabled:opacity-50">{jobAction === 'cancel' ? 'Cancelling…' : 'Cancel'}</button>}
+              {['failed', 'cancelled'].includes(job.status) && <button type="button" disabled={Boolean(jobAction)} onClick={retryJob} className="inline-flex h-9 items-center gap-2 rounded-xl bg-wine px-3 text-xs font-black text-white disabled:opacity-50"><RefreshCcw className="h-3.5 w-3.5" />{jobAction === 'retry' ? 'Queueing…' : 'Retry'}</button>}
+            </div>
+          </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-wine transition-all" style={{ width: `${job.progress?.percentage || 0}%` }} /></div>
           <p className="mt-3 text-xs font-semibold text-slate-500">{job.progress?.message}</p>
+          <div className="mt-5 overflow-x-auto pb-1" aria-label="Reel import processing stages">
+            <ol className="grid min-w-[840px] grid-cols-10 gap-2">
+              {progressSteps.map((step, index) => (
+                <li key={step.key} className="relative text-center">
+                  {index > 0 && <span className={`absolute right-1/2 top-3 h-0.5 w-full ${step.status === 'pending' ? 'bg-slate-200' : 'bg-wine/50'}`} />}
+                  <span className={`relative mx-auto grid h-6 w-6 place-items-center rounded-full border text-[10px] font-black ${progressStepClass(step.status)}`}>
+                    {step.status === 'completed' ? <Check className="h-3.5 w-3.5" /> : ['failed', 'cancelled'].includes(step.status) ? <X className="h-3.5 w-3.5" /> : index + 1}
+                  </span>
+                  <span className={`relative mt-1.5 block text-[10px] font-bold ${step.status === 'pending' ? 'text-slate-400' : 'text-slate-700'}`}>{step.label}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
       )}
-      {job.status === 'failed' && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-800">{job.error?.safeMessage || 'Processing failed. Return to history to retry.'}</div>}
+      {pollError && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Live progress could not be refreshed: {pollError}</div>}
+      {job.error?.safeMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-800">{job.error.safeMessage}</div>}
 
       {candidates.length > 0 && (
         <>
+          <div className="relative overflow-hidden rounded-[24px] border border-wine/15 bg-gradient-to-br from-[#fff8f4] via-white to-[#f8edf1] p-5 shadow-sm md:p-6">
+            <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-wine/5" />
+            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-wine text-white shadow-lg shadow-wine/15"><Sparkles className="h-5 w-5" /></span>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-wine px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-white">New</span>
+                    <p className="text-base font-black text-charcoal">Smart Reel Assistant</p>
+                    {analyzedCount > 0 && <span className="text-xs font-bold text-wine">{analyzedCount}/{candidates.length} analyzed</span>}
+                  </div>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                    Uses several reel views to suggest the product name, category, colour, pattern, fabric, occasion, tags and description. Your corrections always stay in control.
+                  </p>
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-500"><Info className="h-3.5 w-3.5" />Price, stock and actual available sizes stay manual so the catalog never invents commercial details.</p>
+                  {capabilities?.smartSuggestionsEnabled === false && (
+                    <p className="mt-3 text-xs font-black text-amber-800">{capabilities.smartSuggestionsMessage || 'Smart suggestions are unavailable on the server. Manual review remains available.'}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={smartFillAll}
+                disabled={smartFillingAll || capabilities?.smartSuggestionsEnabled !== true}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-wine px-5 text-sm font-black text-white shadow-lg shadow-wine/15 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <WandSparkles className={`h-4 w-4 ${smartFillingAll ? 'animate-pulse' : ''}`} />
+                {smartFillingAll ? `Analyzing ${smartFilling.length ? `(${smartFilling.length})` : ''}` : (analyzedCount ? 'Refresh all suggestions' : 'Smart fill all products')}
+              </button>
+            </div>
+          </div>
           <div className="sticky top-[74px] z-20 flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-[#eadfd5] bg-white/95 p-3 shadow-lg backdrop-blur">
             <p className="text-xs font-black text-slate-500">{draftSelected.length} selected for drafts · {selected.length} selected to merge</p>
             <div className="flex flex-wrap gap-2">
@@ -463,12 +622,15 @@ function ReviewWorkspace({ jobId }) {
                 candidates={candidates}
                 categories={categories}
                 form={forms[candidate._id || candidate.id] || candidateForm(candidate)}
+                smartEnabled={capabilities?.smartSuggestionsEnabled === true}
+                smartFilling={smartFilling.includes(candidate._id || candidate.id)}
                 mergeSelected={selected.includes(candidate._id || candidate.id)}
                 draftSelected={draftSelected.includes(candidate._id || candidate.id)}
                 onMergeSelect={() => toggleId(setSelected, candidate._id || candidate.id)}
                 onDraftSelect={() => toggleId(setDraftSelected, candidate._id || candidate.id)}
                 onUpdate={(field, value) => updateForm(candidate._id || candidate.id, field, value)}
                 onSave={() => saveCandidate(candidate)}
+                onSmartFill={() => smartFillCandidate(candidate)}
                 onSplit={() => split(candidate)}
                 onMove={(frameId, targetId) => moveFrame(candidate, frameId, targetId)}
               />
@@ -481,9 +643,11 @@ function ReviewWorkspace({ jobId }) {
   );
 }
 
-function CandidateCard({ candidate, candidates, categories, form, mergeSelected, draftSelected, onMergeSelect, onDraftSelect, onUpdate, onSave, onSplit, onMove }) {
+function CandidateCard({ candidate, candidates, categories, form, smartEnabled, smartFilling, mergeSelected, draftSelected, onMergeSelect, onDraftSelect, onUpdate, onSave, onSmartFill, onSplit, onMove }) {
   const id = candidate._id || candidate.id;
   const confidence = Math.round(Number(candidate.confidence?.overall || 0) * 100);
+  const completion = candidateFormCompletion(form);
+  const analysisStatus = candidate.analysis?.status || 'pending';
   const [subcategories, setSubcategories] = useState([]);
 
   useEffect(() => {
@@ -494,13 +658,22 @@ function CandidateCard({ candidate, candidates, categories, form, mergeSelected,
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2"><h2 className="text-base font-black text-charcoal">Candidate {candidate.groupNumber}</h2><StatusBadge value={labelStatus(candidate.status)} /></div>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{formatDuration(candidate.sourceRange?.startSeconds)}–{formatDuration(candidate.sourceRange?.endSeconds)} · {confidence}% confidence</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+            <span>{formatDuration(candidate.sourceRange?.startSeconds)}–{formatDuration(candidate.sourceRange?.endSeconds)}</span>
+            <span>·</span>
+            <span>{completion.completed}/{completion.total} catalog details ready</span>
+            {analysisStatus === 'completed' && <span className="rounded-full bg-emerald-50 px-2 py-1 font-black text-emerald-700">Smart confidence {confidence}%</span>}
+            {analysisStatus === 'failed' && <span className="rounded-full bg-amber-50 px-2 py-1 font-black text-amber-800">Needs another look</span>}
+          </div>
         </div>
         <div className="flex gap-3 text-xs font-black">
           <label className="flex items-center gap-1.5"><input type="checkbox" checked={mergeSelected} onChange={onMergeSelect} className="accent-wine" />Merge</label>
           <label className="flex items-center gap-1.5"><input type="checkbox" checked={draftSelected} onChange={onDraftSelect} className="accent-wine" />Draft</label>
         </div>
       </div>
+      {candidate.analysis?.error && analysisStatus === 'failed' && (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">{candidate.analysis.error}</p>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(candidate.frames || []).map((frame) => (
           <div key={frame._id || frame.storageKey} className={`overflow-hidden rounded-xl border ${form.selectedFrameIds.includes(String(frame._id)) ? 'border-wine ring-2 ring-wine/10' : 'border-slate-200'}`}>
@@ -513,9 +686,21 @@ function CandidateCard({ candidate, candidates, categories, form, mergeSelected,
           </div>
         ))}
       </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fbf7f3] px-3 py-2.5">
+        <p className="text-xs font-semibold text-slate-600">Choose the clearest views, then let Smart Fill compare them.</p>
+        <button
+          type="button"
+          disabled={!smartEnabled || smartFilling}
+          onClick={onSmartFill}
+          className="inline-flex h-9 items-center gap-2 rounded-xl border border-wine/20 bg-white px-3 text-xs font-black text-wine disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <WandSparkles className={`h-3.5 w-3.5 ${smartFilling ? 'animate-pulse' : ''}`} />
+          {smartFilling ? 'Reading views…' : (analysisStatus === 'completed' ? 'Refresh suggestions' : 'Smart fill details')}
+        </button>
+      </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Labeled label="Product name"><TextInput value={form.name} onChange={(event) => onUpdate('name', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
-        <Labeled label="Category">
+        <Labeled label="Product name" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.name) : ''}><TextInput value={form.name} onChange={(event) => onUpdate('name', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
+        <Labeled label="Category" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.category) : ''}>
           <Select value={form.category} onChange={(event) => onUpdate('category', event.target.value)} className="w-full">
             <option value="">Please confirm</option>{categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
           </Select>
@@ -526,12 +711,23 @@ function CandidateCard({ candidate, candidates, categories, form, mergeSelected,
             {subcategories.map((item) => <option key={item} value={item}>{item}</option>)}
           </Select>
         </Labeled>
-        <Labeled label="Primary colour"><TextInput value={form.primaryColor} onChange={(event) => onUpdate('primaryColor', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
-        <Labeled label="Pattern"><TextInput value={form.pattern} onChange={(event) => onUpdate('pattern', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
+        <Labeled label="Primary colour" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.primaryColor) : ''}><TextInput value={form.primaryColor} onChange={(event) => onUpdate('primaryColor', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
+        <Labeled label="Pattern" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.pattern) : ''}><TextInput value={form.pattern} onChange={(event) => onUpdate('pattern', event.target.value)} placeholder="Please confirm" className="w-full" /></Labeled>
+        <Labeled label="Fabric" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.fabric) : ''}><TextInput value={form.fabric} onChange={(event) => onUpdate('fabric', event.target.value)} placeholder="Confirm if visible" className="w-full" /></Labeled>
+        <Labeled label="Occasion"><TextInput value={form.occasion} onChange={(event) => onUpdate('occasion', event.target.value)} placeholder="Festive, wedding" className="w-full" /></Labeled>
         <Labeled label="Tags"><TextInput value={form.tags} onChange={(event) => onUpdate('tags', event.target.value)} placeholder="festive, maroon" className="w-full" /></Labeled>
-        <Labeled label="Sizes"><TextInput value={form.sizes} onChange={(event) => onUpdate('sizes', event.target.value)} placeholder="S, M, L, XL" className="w-full" /></Labeled>
-        <Labeled label="Selling price"><TextInput type="number" min="0" value={form.price} onChange={(event) => onUpdate('price', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
-        <Labeled label="Stock"><TextInput type="number" min="0" value={form.stock} onChange={(event) => onUpdate('stock', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
+        <Labeled label="Size behavior" hint="Confirm before draft">
+          <Select value={form.sizingMode} onChange={(event) => onUpdate('sizingMode', event.target.value)} className="w-full">
+            <option value="confirm">Confirm manually</option>
+            <option value="sized">Customer selects a size</option>
+            <option value="free-size">No size selection / free size</option>
+          </Select>
+        </Labeled>
+        {form.sizingMode !== 'free-size' && <Labeled label="Available sizes" hint="Manual"><TextInput value={form.sizes} onChange={(event) => onUpdate('sizes', event.target.value)} placeholder="S, M, L, XL" className="w-full" /></Labeled>}
+        {form.sizingMode === 'free-size' && <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">Size buttons will stay hidden for this garment. Change the size behavior if this suggestion is not correct.</div>}
+        <Labeled label="Selling price" hint="Manual"><TextInput type="number" min="0" value={form.price} onChange={(event) => onUpdate('price', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
+        <Labeled label="Stock" hint="Manual"><TextInput type="number" min="0" value={form.stock} onChange={(event) => onUpdate('stock', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
+        <div className="sm:col-span-2"><Labeled label="Product description"><TextArea value={form.description} onChange={(event) => onUpdate('description', event.target.value)} placeholder="Describe the visible style, work and silhouette" className="w-full" maxLength={800} /></Labeled></div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={onSave} className="inline-flex h-10 items-center gap-2 rounded-xl bg-wine px-4 text-xs font-black text-white"><Check className="h-4 w-4" />Save candidate</button>
@@ -559,8 +755,8 @@ function Stat({ label, value }) {
   return <div className="rounded-2xl border border-[#eadfd5] bg-white p-4"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine/60">{label}</p><p className="mt-2 truncate text-lg font-black text-charcoal">{value}</p></div>;
 }
 
-function Labeled({ label, children }) {
-  return <label className="grid gap-1.5"><span className="text-xs font-black text-slate-600">{label}</span>{children}</label>;
+function Labeled({ label, hint = '', children }) {
+  return <label className="grid gap-1.5"><span className="flex items-center justify-between gap-2 text-xs font-black text-slate-600"><span>{label}</span>{hint && <span className="text-[9px] font-black uppercase tracking-[0.08em] text-wine/60">{hint}</span>}</span>{children}</label>;
 }
 
 function candidateForm(candidate) {
@@ -568,17 +764,56 @@ function candidateForm(candidate) {
   const suggestions = candidate.suggestions || {};
   return {
     name: overrides.name || suggestions.name || '',
-    category: overrides.category || '',
+    category: overrides.category || suggestions.category || '',
     subCategory: overrides.subCategory || suggestions.subcategory || suggestions.subCategory || '',
     primaryColor: overrides.primaryColor || suggestions.primaryColor || '',
     pattern: overrides.pattern || suggestions.pattern || '',
+    fabric: overrides.fabric || suggestions.fabric || '',
+    occasion: Array.isArray(overrides.occasion || suggestions.occasion) ? (overrides.occasion || suggestions.occasion).join(', ') : overrides.occasion || suggestions.occasion || '',
     tags: Array.isArray(overrides.tags || suggestions.tags) ? (overrides.tags || suggestions.tags).join(', ') : overrides.tags || '',
     sizes: Array.isArray(overrides.sizes) ? overrides.sizes.join(', ') : overrides.sizes || '',
-    price: overrides.price || overrides.sellingPrice || '',
+    sizingMode: overrides.sizingMode || suggestions.sizingMode || 'confirm',
+    description: overrides.description || suggestions.description || suggestions.shortDescription || '',
+    price: overrides.price ?? overrides.sellingPrice ?? '',
     stock: overrides.stock ?? '',
     status: candidate.status || 'suggested',
     selectedFrameIds: (candidate.frames || []).filter((frame) => frame.selected).map((frame) => String(frame._id)),
   };
+}
+
+function mergeSmartCandidateForm(current, before, suggested) {
+  const next = { ...current };
+  Object.keys(suggested).forEach((field) => {
+    if (field === 'selectedFrameIds' || field === 'status') return;
+    const currentValue = current?.[field];
+    const previousValue = before?.[field];
+    const unchanged = JSON.stringify(currentValue) === JSON.stringify(previousValue);
+    if (unchanged || currentValue === '' || currentValue == null) next[field] = suggested[field];
+  });
+  next.selectedFrameIds = current?.selectedFrameIds || suggested.selectedFrameIds || [];
+  next.status = current?.status || suggested.status || 'suggested';
+  return next;
+}
+
+function candidateFormCompletion(form = {}) {
+  const values = [
+    form.name && !/^product\s+\d+$/i.test(form.name) ? form.name : '',
+    form.category,
+    form.primaryColor,
+    form.pattern,
+    form.fabric,
+    form.occasion,
+    form.tags,
+    form.description,
+  ];
+  return { completed: values.filter((value) => String(value || '').trim()).length, total: values.length };
+}
+
+function confidenceHint(value) {
+  const score = Number(value || 0);
+  if (score >= 0.75) return 'High confidence';
+  if (score >= 0.5) return 'Suggested';
+  return 'Please check';
 }
 
 function toggleId(setter, id) {
@@ -591,6 +826,14 @@ function toggleValue(values, value) {
 
 function labelStatus(value = '') {
   return String(value).split('_').map((part) => part ? part[0].toUpperCase() + part.slice(1) : '').join(' ');
+}
+
+function progressStepClass(status) {
+  if (status === 'completed') return 'border-wine bg-wine text-white';
+  if (status === 'running') return 'border-wine bg-white text-wine ring-4 ring-wine/10';
+  if (status === 'failed') return 'border-rose-500 bg-rose-50 text-rose-700';
+  if (status === 'cancelled') return 'border-slate-400 bg-slate-100 text-slate-600';
+  return 'border-slate-200 bg-white text-slate-400';
 }
 
 function formatDate(value) {

@@ -13,10 +13,11 @@ import { getPrimaryImageIndex, getPrimaryImageUrl, normalizeImageUrl, normalizeP
 import { useGetProductQuery, useGetProductsQuery, useGetReviewsQuery, useGetSettingsQuery, useGetVariantGroupQuery } from '../../store/apiSlice';
 import PageState from '../../components/ui/PageState';
 import api from '../../services/api';
-import { findProductVariant, firstInStockVariant, isColorAvailable, isSizeAvailable, variantStock } from '../../utils/variants';
+import { activeVariants, findProductVariant, firstInStockVariant, hasManagedVariants, isColorAvailable, isSizeAvailable, variantStock } from '../../utils/variants';
 import { trackEvent } from '../../utils/analytics';
 import SeoHead from '../../components/seo/SeoHead';
 import { parseProductKey } from '../../utils/routing';
+import { getSelectableSizes } from '../../utils/productSizing';
 
 export default function ProductDetail({ navigate, route = '' }) {
   const productKey = parseProductKey(route);
@@ -34,6 +35,7 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [actionMessage, setActionMessage] = useState('');
   const [wishlistBusy, setWishlistBusy] = useState(false);
   const [deliveryChecking, setDeliveryChecking] = useState(false);
+  const [deliveryResult, setDeliveryResult] = useState(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewEligibility, setReviewEligibility] = useState(null);
   const [reviewEligibilityLoading, setReviewEligibilityLoading] = useState(false);
@@ -71,16 +73,19 @@ export default function ProductDetail({ navigate, route = '' }) {
   const reviews = useMemo(() => Array.isArray(reviewsData) ? reviewsData : [], [reviewsData]);
   const effectiveReviewSummary = useMemo(() => reviewSummary || buildReviewSummary(reviews), [reviewSummary, reviews]);
   const storeWhatsappNumber = formatWhatsappNumber(settingsData?.whatsappNumber || '');
+  const selectableSizes = product ? getSelectableSizes(product) : [];
 
   useEffect(() => {
     if (!productData) return;
     const item = normalizeProduct(productData);
     const inStock = firstInStockVariant(item);
-    setSize(inStock?.size || item.sizes?.[0] || 'Free Size');
-    setColor(inStock?.color || item.colors?.[0] || 'Wine');
+    const availableSizes = getSelectableSizes(item);
+    setSize(availableSizes.includes(inStock?.size) ? inStock.size : (availableSizes[0] || ''));
+    setColor(inStock?.color || item.colors?.[0] || '');
     setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
     setOpenGallery(false);
     setActionMessage('');
+    setDeliveryResult(null);
     setQuantity(1);
   }, [productData]);
 
@@ -124,27 +129,49 @@ export default function ProductDetail({ navigate, route = '' }) {
     () => Boolean(productId) && wishlist.items.some((item) => (item._id || item.id || item.slug) === productId),
     [wishlist.items, productId],
   );
+  const selectedVariant = hasManagedVariants(product || {})
+    ? (selectableSizes.length
+      ? findProductVariant(product || {}, { size, color })
+      : activeVariants(product || {}).find((variant) => (!color || String(variant.color) === String(color)) && Number(variant.stock || 0) > 0)
+        || activeVariants(product || {})[0]
+        || null)
+    : null;
   const mediaItems = useMemo(() => {
-    const imageItems = product?.images?.length
+    const variantImageItems = selectedVariant?.images?.length
+      ? selectedVariant.images.map((image) => ({ type: 'image', url: normalizeImageUrl(image.url), thumbnail: normalizeImageUrl(image.url) }))
+      : [];
+    const productImageItems = product?.images?.length
       ? product.images.map((image) => ({ type: 'image', url: normalizeImageUrl(image.url), thumbnail: normalizeImageUrl(image.url) }))
       : [];
     const videoItems = product?.videos?.length
       ? product.videos.map((video) => ({ type: 'video', url: normalizeImageUrl(video.url), thumbnail: normalizeImageUrl(video.thumbnail || video.url) }))
       : [];
-    return [...imageItems, ...videoItems].filter((item) => item.url);
-  }, [product?.images, product?.videos]);
+    const byUrl = new Map();
+    [...variantImageItems, ...productImageItems, ...videoItems].forEach((item) => {
+      if (item.url && !byUrl.has(item.url)) byUrl.set(item.url, item);
+    });
+    return Array.from(byUrl.values());
+  }, [product?.images, product?.videos, selectedVariant?.images]);
   const selectedMedia = mediaItems[activeImage];
-  const discountPrice = Math.max(0, Number(product?.originalPrice || 0) - Number(product?.price || 0));
-  const dealPrice = Number(product?.price || 0);
-  const originalPrice = Math.max(dealPrice, Number(product?.originalPrice || dealPrice));
-  const discountPercentage = Number(product?.discountPercentage || (originalPrice > dealPrice ? Math.round(((originalPrice - dealPrice) / originalPrice) * 100) : 0));
+  const dealPrice = Math.max(0, Number(selectedVariant?.price ?? product?.price ?? 0));
+  const originalPrice = Math.max(dealPrice, Number(selectedVariant?.originalPrice ?? product?.originalPrice ?? dealPrice));
+  const discountPrice = Math.max(0, originalPrice - dealPrice);
+  const discountPercentage = originalPrice > dealPrice
+    ? Math.round(((originalPrice - dealPrice) / originalPrice) * 100)
+    : 0;
   const freeShippingMinimum = Number(settingsData?.freeShippingMinAmount || 0);
   const qualifiesForFreeShipping = freeShippingMinimum > 0 && dealPrice >= freeShippingMinimum;
   const returnWindowDays = Number(settingsData?.returnWindowDays || 0);
   const returnPolicyText = product?.returnPolicy || settingsData?.returnPolicy || (returnWindowDays > 0 ? `${returnWindowDays}-day return window` : '');
-  const selectedVariant = findProductVariant(product || {}, { size, color });
   const selectedStock = variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
   const isOutOfStock = selectedStock !== null && Number(selectedStock) <= 0;
+
+  useEffect(() => {
+    if (selectedVariant?.images?.length) setActiveImage(0);
+    if (selectedStock !== null && Number(selectedStock) > 0) {
+      setQuantity((current) => Math.min(Math.max(1, current), Number(selectedStock)));
+    }
+  }, [selectedStock, selectedVariant?._id, selectedVariant?.images?.length]);
 
   useEffect(() => {
     if (!openGallery || !mediaItems.length) return undefined;
@@ -170,22 +197,36 @@ export default function ProductDetail({ navigate, route = '' }) {
       : '/products';
   const handleCheckDelivery = async () => {
     if (!deliveryPin || deliveryPin.length < 6) {
-      setActionMessage('Please enter a valid 6-digit PIN code.');
+      const message = 'Please enter a valid 6-digit PIN code.';
+      setDeliveryResult({ status: 'error', title: 'Invalid PIN code', lines: [message], message });
+      setActionMessage(message);
       return;
     }
     setDeliveryChecking(true);
     setActionMessage('');
+    setDeliveryResult(null);
     try {
-      const data = await api.get(`/settings/payment-methods?pincode=${encodeURIComponent(deliveryPin)}&amount=${encodeURIComponent(product?.price || 0)}`);
+      const data = await api.get(`/settings/payment-methods?pincode=${encodeURIComponent(deliveryPin)}&amount=${encodeURIComponent(dealPrice)}`);
       const cod = (data?.methods || []).find((method) => method.key === 'COD');
-      const codMessage = !cod
-        ? ' Cash on Delivery is not enabled.'
-        : cod.enabled
-          ? ' Cash on Delivery is available.'
-          : ` ${cod.disabledReason || 'Cash on Delivery is unavailable for this pincode.'}`;
-      setActionMessage(`Delivery is available to ${deliveryPin}.${codMessage}`);
+      const freeShippingThreshold = Math.max(0, Number(data?.freeShippingMinAmount || 0));
+      const shippingCharge = freeShippingThreshold > 0 && Number(dealPrice) >= freeShippingThreshold
+        ? 0
+        : Math.max(0, Number(data?.deliveryCharge || 0));
+      const lines = [
+        shippingCharge > 0 ? `Delivery charge: ₹${shippingCharge.toLocaleString('en-IN')}.` : 'This order qualifies for free shipping.',
+        !cod
+          ? 'Cash on Delivery is not enabled.'
+          : cod.enabled
+            ? `Cash on Delivery is available${Number(data?.codCharge || 0) > 0 ? ` with a ₹${Number(data.codCharge).toLocaleString('en-IN')} charge` : ''}.`
+            : cod.disabledReason || 'Cash on Delivery is unavailable for this PIN code.',
+      ];
+      const result = { status: 'success', title: `Options for ${deliveryPin}`, lines, message: lines.join(' ') };
+      setDeliveryResult(result);
+      setActionMessage(result.message);
     } catch (deliveryError) {
-      setActionMessage(deliveryError.message || 'Unable to check delivery right now.');
+      const message = deliveryError.message || 'Unable to check delivery right now.';
+      setDeliveryResult({ status: 'error', title: 'Could not check this PIN code', lines: [message], message });
+      setActionMessage(message);
     } finally {
       setDeliveryChecking(false);
     }
@@ -208,7 +249,7 @@ export default function ProductDetail({ navigate, route = '' }) {
   }
 
   const add = () => {
-    if (product?.sizes?.length && !size) {
+    if (selectableSizes.length && !size) {
       setActionMessage('Please select a size first.');
       return { ok: false, reason: 'missing-size' };
     }
@@ -220,7 +261,11 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('Please choose a valid quantity.');
       return { ok: false, reason: 'invalid-quantity' };
     }
-    const selected = findProductVariant(product, { size, color });
+    const selected = selectedVariant;
+    if (hasManagedVariants(product) && !selected) {
+      setActionMessage('This size and colour combination is unavailable. Please choose another option.');
+      return { ok: false, reason: 'variant-unavailable' };
+    }
     const result = cart.addToCart(product, size, color, selected?._id || product.variantId || product.selectedVariantId || '', quantity);
     if (result?.ok) {
       setActionMessage(`${quantity} item${Number(quantity) === 1 ? '' : 's'} added to cart.`);
@@ -232,6 +277,26 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('Unable to add this product right now.');
     }
     return result;
+  };
+
+  const selectDesktopSize = (nextSize) => {
+    setSize(nextSize);
+    if (hasManagedVariants(product) && (!color || !isColorAvailable(product, color, nextSize))) {
+      const compatible = activeVariants(product).find((variant) => String(variant.size) === String(nextSize) && Number(variant.stock || 0) > 0);
+      setColor(compatible?.color || '');
+    }
+    setQuantity(1);
+    setActionMessage('');
+  };
+
+  const selectDesktopColor = (nextColor) => {
+    setColor(nextColor);
+    if (selectableSizes.length && hasManagedVariants(product) && (!size || !activeVariants(product).some((variant) => String(variant.size) === String(size) && String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0))) {
+      const compatible = activeVariants(product).find((variant) => String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0);
+      setSize(compatible?.size || '');
+    }
+    setQuantity(1);
+    setActionMessage('');
   };
 
   const handleWishlist = async () => {
@@ -349,7 +414,7 @@ export default function ProductDetail({ navigate, route = '' }) {
       return;
     }
     trackEvent('WHATSAPP_CLICK', { productId: product?._id });
-    if (product?.sizes?.length && !size) {
+    if (selectableSizes.length && !size) {
       setActionMessage('Please select a size first.');
       return;
     }
@@ -368,10 +433,10 @@ export default function ProductDetail({ navigate, route = '' }) {
       'I want to order this product:',
       '',
       `Product: ${product.name}`,
-      `Size: ${size || 'N/A'}`,
+      ...(selectableSizes.length ? [`Size: ${size}`] : []),
       `Color: ${color || 'N/A'}`,
       `Quantity: ${quantity}`,
-      `Price: ₹${product.price}`,
+      `Price: ₹${dealPrice}`,
       `Link: ${currentUrl}`,
     ];
     if (user?.name) lines.push(`Customer Name: ${user.name}`);
@@ -438,15 +503,19 @@ export default function ProductDetail({ navigate, route = '' }) {
           isWishlisted={isWishlisted}
           wishlistBusy={wishlistBusy}
           size={size}
-          setSize={setSize}
+          setSize={selectDesktopSize}
           color={color}
-          setColor={setColor}
+          setColor={selectDesktopColor}
           quantity={quantity}
           setQuantity={setQuantity}
           deliveryPin={deliveryPin}
           setDeliveryPin={setDeliveryPin}
           actionMessage={actionMessage}
+          deliveryResult={deliveryResult}
           dealPrice={dealPrice}
+          originalPrice={originalPrice}
+          discountPercentage={discountPercentage}
+          selectedStock={selectedStock}
           cartItem={cartItem}
           isOutOfStock={isOutOfStock}
           isSizeAvailable={(item) => isSizeAvailable(product, item)}
@@ -468,8 +537,9 @@ export default function ProductDetail({ navigate, route = '' }) {
           variantProducts={variantProducts}
           selectedMedia={selectedMedia}
           storeWhatsappNumber={storeWhatsappNumber}
+          settings={settingsData || {}}
+          returnPolicy={returnPolicyText}
           onOpenSizeGuide={() => setOpenSizeChart(true)}
-          onViewOffers={() => navigate('/products?discount=20')}
           onSelectVariant={(variant) => {
             const variantId = variant?._id || variant?.id || variant?.slug;
             if (variantId) navigate(`/product?id=${variantId}`);
@@ -586,15 +656,19 @@ export default function ProductDetail({ navigate, route = '' }) {
           </div>
 
           <section className="rounded-[14px] bg-white p-4 md:rounded-none md:bg-transparent md:p-0">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[14px] font-bold uppercase tracking-[.04em] text-charcoal md:text-xl">Select size</h2>
-              <button type="button" onClick={() => setOpenSizeChart(true)} className="inline-flex items-center gap-1 text-[11px] font-bold text-[#ff3e6c]">Size chart <ChevronRight className="h-3.5 w-3.5" /></button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2.5">
-              {(product.sizes?.length ? product.sizes : ['Free Size']).map((item) => (
-                <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => setSize(item)} className={`grid h-11 min-w-11 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`}>{item}</button>
-              ))}
-            </div>
+            {selectableSizes.length ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[14px] font-bold uppercase tracking-[.04em] text-charcoal md:text-xl">Select size</h2>
+                  <button type="button" onClick={() => setOpenSizeChart(true)} className="inline-flex items-center gap-1 text-[11px] font-bold text-[#ff3e6c]">Size chart <ChevronRight className="h-3.5 w-3.5" /></button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2.5">
+                  {selectableSizes.map((item) => (
+                    <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => setSize(item)} className={`grid h-11 min-w-11 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`}>{item}</button>
+                  ))}
+                </div>
+              </>
+            ) : null}
             {product.colors?.length > 0 && (
               <div className="mt-5 border-t border-slate-100 pt-4">
                 <p className="text-[13px] font-bold text-charcoal">Select colour <span className="ml-1 font-medium text-slate-500">{color}</span></p>
@@ -620,12 +694,12 @@ export default function ProductDetail({ navigate, route = '' }) {
               <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white">
                 <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="h-10 w-10 text-lg font-black text-[#ff3e6c] disabled:text-slate-300" disabled={quantity <= 1} aria-label="Decrease quantity">−</button>
                 <span className="grid h-10 min-w-10 place-items-center border-x border-slate-200 px-2 text-[13px] font-black text-charcoal">{quantity}</span>
-                <button type="button" onClick={() => setQuantity((value) => value + 1)} className="h-10 w-10 text-lg font-black text-[#ff3e6c]" aria-label="Increase quantity">+</button>
+                <button type="button" onClick={() => setQuantity((value) => selectedStock === null ? value + 1 : Math.min(value + 1, Number(selectedStock)))} disabled={selectedStock !== null && quantity >= Number(selectedStock)} className="h-10 w-10 text-lg font-black text-[#ff3e6c] disabled:text-slate-300" aria-label="Increase quantity">+</button>
               </div>
             </div>
             <div className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5 text-[11px] font-semibold ${isOutOfStock ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
               {isOutOfStock ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-              {isOutOfStock ? 'This size and colour combination is currently unavailable.' : selectedStock === null ? 'Available to order' : `${selectedStock} item${Number(selectedStock) === 1 ? '' : 's'} available for this selection`}
+              {isOutOfStock ? 'This selection is currently unavailable.' : selectedStock === null ? 'Available to order' : `${selectedStock} item${Number(selectedStock) === 1 ? '' : 's'} available for this selection`}
             </div>
           </section>
 
@@ -768,7 +842,16 @@ export default function ProductDetail({ navigate, route = '' }) {
         onClose={() => setReviewModalOpen(false)}
         onSubmit={saveReview}
       />
-      <SizeChartModal open={openSizeChart} onClose={() => setOpenSizeChart(false)} />
+      <SizeChartModal
+        open={openSizeChart}
+        onClose={() => setOpenSizeChart(false)}
+        product={product}
+        sizes={selectableSizes}
+        guideText={settingsData?.sizeGuide || ''}
+        selectedSize={size}
+        onSelectSize={selectDesktopSize}
+        isSizeAvailable={(item) => isSizeAvailable(product, item)}
+      />
       {openGallery && mediaItems.length > 0 && (
         <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" role="dialog" aria-modal="true" aria-label={`${product.name} image gallery`} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           <div className="flex h-full flex-col">
@@ -830,13 +913,14 @@ export default function ProductDetail({ navigate, route = '' }) {
 }
 
 function DetailsCard({ product, returnPolicy }) {
+  const selectableSizes = getSelectableSizes(product);
   const specifications = [
     ['Category', product.category],
     ['Subcategory', product.subCategory],
     ['Fabric', product.fabric],
     ['Occasion', product.occasion],
     ['Colours', product.colors?.join(', ')],
-    ['Available sizes', product.sizes?.join(', ')],
+    ['Available sizes', selectableSizes.join(', ')],
     ['Product code', product.sku],
   ].filter(([, value]) => String(value || '').trim());
   const description = product.description || product.shortDescription || '';

@@ -28,12 +28,19 @@ const fields = [
 
 export default function Settings() {
   const [form, setForm] = useState({});
+  const [paymentReadiness, setPaymentReadiness] = useState(null);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   useEffect(() => {
-    api.get('/admin/settings').then(setForm).catch((error) => setMessage(error.message));
+    Promise.all([
+      api.get('/admin/settings'),
+      api.get('/admin/settings/payment-readiness'),
+    ]).then(([settings, readiness]) => {
+      setForm(settings);
+      setPaymentReadiness(readiness);
+    }).catch((error) => setMessage(error.message));
   }, []);
 
   const submit = async (event) => {
@@ -43,7 +50,7 @@ export default function Settings() {
     try {
       if (!form.storeName?.trim()) throw new Error('Store name is required.');
       if (form.contactEmail && !/^\S+@\S+\.\S+$/.test(form.contactEmail)) throw new Error('Enter a valid email.');
-      await api.put('/admin/settings', {
+      const saved = await api.put('/admin/settings', {
         ...form,
         freeShippingMinAmount: Number(form.freeShippingMinAmount || 0),
         deliveryCharge: Number(form.deliveryCharge || 0),
@@ -59,6 +66,8 @@ export default function Settings() {
         codPincodes: form.codPincodes,
         returnWindowDays: Number(form.returnWindowDays || 7),
       });
+      setForm(saved);
+      setPaymentReadiness(await api.get('/admin/settings/payment-readiness'));
       setMessage('Settings saved successfully.');
     } catch (error) {
       setMessage(error.message);
@@ -72,14 +81,51 @@ export default function Settings() {
       <PageHeader title="Website Settings" note="Control store details, policies and footer content." />
       <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
         {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] ?? ''} onChange={(value) => update(field, value)} />)}
+        <section className="rounded-2xl border border-[#eadfd5] bg-[#fbf8f4] p-4 md:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black text-slate-900">Online payment gateway</h2>
+              <p className="mt-1 text-sm text-slate-600">UPI, cards, net banking and wallets are processed securely by Razorpay.</p>
+            </div>
+            <GatewayStatus readiness={paymentReadiness} />
+          </div>
+
+          {paymentReadiness && !paymentReadiness.configured ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+              Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to the backend environment, then restart the server. Online methods stay unavailable until both keys are present.
+            </p>
+          ) : null}
+          {paymentReadiness?.configured && !paymentReadiness.webhookConfigured ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+              Add RAZORPAY_WEBHOOK_SECRET before going live so successful payments are recovered even if the customer closes the browser.
+            </p>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {[
+              ['razorpayEnabled', 'Accept online payments'],
+              ['upiEnabled', 'UPI'],
+              ['cardPaymentEnabled', 'Credit / Debit Card'],
+              ['netBankingEnabled', 'Net Banking'],
+              ['walletEnabled', 'Wallet'],
+            ].map(([field, label]) => (
+              <label key={field} className="flex items-center gap-2 text-sm font-bold">
+                <input
+                  type="checkbox"
+                  checked={!!form[field]}
+                  disabled={field === 'razorpayEnabled' && !paymentReadiness?.configured}
+                  onChange={(event) => update(field, event.target.checked)}
+                  className="accent-rose disabled:cursor-not-allowed"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </section>
+
         <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
           {[
-            ['razorpayEnabled', 'Razorpay Enabled'],
             ['codEnabled', 'COD Enabled'],
-            ['upiEnabled', 'UPI Enabled'],
-            ['cardPaymentEnabled', 'Card Payment Enabled'],
-            ['netBankingEnabled', 'Net Banking Enabled'],
-            ['walletEnabled', 'Wallet Enabled'],
             ['codConfirmationRequired', 'COD confirmation required'],
             ['rtoBlockEnabled', 'RTO COD blocking (only with thresholds)'],
           ].map(([field, label]) => <label key={field} className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={!!form[field]} onChange={(event) => update(field, event.target.checked)} className="accent-rose" /> {label}</label>)}
@@ -110,6 +156,18 @@ export default function Settings() {
       </form>
     </section>
   );
+}
+
+function GatewayStatus({ readiness }) {
+  if (!readiness) return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">Checking...</span>;
+  if (readiness.ready) {
+    return (
+      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase text-emerald-800">
+        Ready · {readiness.mode} mode
+      </span>
+    );
+  }
+  return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase text-amber-900">Setup required</span>;
 }
 
 function Input({ label, value, onChange, type = 'text' }) {

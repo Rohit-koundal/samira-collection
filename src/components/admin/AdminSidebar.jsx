@@ -2,15 +2,15 @@ import { useMemo } from 'react';
 import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap, Palette } from 'lucide-react';
 import logo from '../../assets/samira-collection-logo.png';
 import useAppPath from '../../hooks/useAppPath';
+import { reelProductImportEnabled } from '../../config/features';
 
-const reelImportEnabled = process.env.REACT_APP_ENABLE_REEL_PRODUCT_IMPORT === 'true';
 export const ADMIN_LINKS = [
   ['Dashboard', '/admin'],
   ['Products', '/admin/products'],
   ['Add Product', '/admin/products/add'],
   ['Quick Add', '/admin/products/quick-add'],
   ['Product Drafts', '/admin/product-drafts'],
-  ...(reelImportEnabled ? [['Reel Product Import', '/admin/reel-import']] : []),
+  ...(reelProductImportEnabled ? [['Reel Product Import', '/admin/reel-import']] : []),
   ['Categories', '/admin/categories'],
   ['Variant Groups', '/admin/variant-groups'],
   ['Orders', '/admin/orders'],

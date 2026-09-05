@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronRight, Flame, Star, ThumbsUp } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Star, ThumbsUp } from 'lucide-react';
+import { normalizeImageUrl } from '../../services/normalize';
 import ProductGallery from './ProductGallery';
 import ProductInfoPanel from './ProductInfoPanel';
 import ProductTrustPanel from './ProductTrustPanel';
@@ -30,6 +31,10 @@ export default function ProductDetailPage({
   setDeliveryPin,
   actionMessage,
   dealPrice,
+  originalPrice,
+  discountPercentage,
+  selectedStock,
+  deliveryResult,
   cartItem,
   isOutOfStock,
   onAddToCart,
@@ -56,9 +61,11 @@ export default function ProductDetailPage({
   onWriteReview,
   isSizeAvailable,
   isColorAvailable,
+  settings = {},
+  returnPolicy = '',
 }) {
   const breadcrumb = useMemo(
-    () => ['Home', product?.category || 'Kurtis', product?.name || 'Product'],
+    () => ['Home', product?.category || 'Products', product?.name || 'Product'],
     [product?.category, product?.name],
   );
 
@@ -69,6 +76,7 @@ export default function ProductDetailPage({
     : product?.category
       ? `/products?search=${encodeURIComponent(product.category)}`
       : '/products';
+  const scrollToReviews = () => document.getElementById('desktop-ratings-and-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
     <section className="sc-pdp">
@@ -79,7 +87,9 @@ export default function ProductDetailPage({
               key={`${item}-${index}`}
               className={`sc-pdp__breadcrumb-item${index === breadcrumb.length - 1 ? ' sc-pdp__breadcrumb-item--active' : ''}`}
             >
-              {item}
+              {index === breadcrumb.length - 1 ? item : (
+                <button type="button" onClick={() => navigate(index === 0 ? '/' : similarTarget)}>{item}</button>
+              )}
               {index < breadcrumb.length - 1 ? <ChevronRight className="sc-pdp__breadcrumb-sep" aria-hidden="true" /> : null}
             </span>
           ))}
@@ -99,7 +109,7 @@ export default function ProductDetailPage({
             wishlistBusy={wishlistBusy}
             onViewSimilar={() => navigate(similarTarget)}
             selectedMedia={selectedMedia}
-            ratingLabel={`${rating} • ${reviewCount}`}
+            ratingLabel={reviewCount ? `${rating} • ${reviewCount}` : 'No ratings yet'}
           />
 
           <div className="sc-pdp__info-stack">
@@ -115,6 +125,10 @@ export default function ProductDetailPage({
               setDeliveryPin={setDeliveryPin}
               actionMessage={actionMessage}
               dealPrice={dealPrice}
+              originalPrice={originalPrice}
+              discountPercentage={discountPercentage}
+              selectedStock={selectedStock}
+              deliveryResult={deliveryResult}
               cartItem={cartItem}
               isOutOfStock={isOutOfStock}
               onAddToCart={onAddToCart}
@@ -125,43 +139,28 @@ export default function ProductDetailPage({
               variantProducts={variantProducts}
               storeWhatsappNumber={storeWhatsappNumber}
               onOpenSizeGuide={onOpenSizeGuide}
-              onViewOffers={onViewOffers}
               onSelectVariant={onSelectVariant}
               onShare={onShare}
+              onViewReviews={scrollToReviews}
+              rating={rating}
+              reviewCount={reviewCount}
               isSizeAvailable={isSizeAvailable}
               isColorAvailable={isColorAvailable}
             />
 
-            <ProductTrustPanel />
+            <ProductTrustPanel settings={settings} returnPolicy={returnPolicy} />
           </div>
         </div>
 
         <div className="sc-pdp__below">
-          <ProductTabs product={product} reviews={reviews} onWriteReview={onWriteReview} />
-
-          <section className="sc-pdp__feature-card">
-            <div className="sc-pdp__section-head">
-              <h2>Why you&apos;ll love it</h2>
-              <Flame className="sc-pdp__head-icon" aria-hidden="true" />
-            </div>
-            <div className="sc-pdp__feature-grid">
-              {[
-                ['Timeless Design', 'Clean silhouettes that never go out of style'],
-                ['Premium Comfort', 'Soft, breathable fabrics for all-day wear'],
-                ['Versatile Styling', 'Dress it up or down with ease'],
-                ['Perfect Fit', 'Balanced structure for a flattering fall'],
-                ['Everyday Elegance', 'Minimal yet refined for any occasion'],
-              ].map(([title, copy]) => (
-                <div key={title} className="sc-pdp__feature">
-                  <span className="sc-pdp__feature-icon" aria-hidden="true">
-                    <Star />
-                  </span>
-                  <strong>{title}</strong>
-                  <p>{copy}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          <ProductTabs
+            product={product}
+            returnPolicy={returnPolicy}
+            shippingPolicy={settings.shippingPolicy || ''}
+            freeShippingMinimum={settings.freeShippingMinAmount}
+            deliveryCharge={settings.deliveryCharge}
+            onOpenSizeGuide={onOpenSizeGuide}
+          />
 
           <DesktopReviews
             reviews={reviews}
@@ -230,7 +229,7 @@ function DesktopReviews({
         <div className="sc-pdp__rating">
           <span className="sc-pdp__rating-value">{rating}</span>
           <div className="sc-pdp__stars" aria-label={`Rated ${rating} out of 5`}>
-            {'★★★★★'.split('').map((star, index) => <Star key={`${star}-${index}`} className="sc-pdp__star" aria-hidden="true" />)}
+            {[1, 2, 3, 4, 5].map((value) => <Star key={value} className={`sc-pdp__star${value <= Math.round(Number(rating)) ? ' is-filled' : ''}`} aria-hidden="true" />)}
           </div>
           <p>{reviewCount} rating{reviewCount === 1 ? '' : 's'}</p>
           {reviewCount > 0 ? <p className="mt-2 text-xs font-bold text-emerald-700">{Number(summary?.recommendationPercentage || 0)}% rated 4★ or above</p> : null}
@@ -240,7 +239,7 @@ function DesktopReviews({
             const count = Number(distribution?.[star] || 0);
             const width = reviewCount ? Math.round((count / reviewCount) * 100) : 0;
             return (
-              <button key={star} type="button" onClick={() => { setRatingFilter((current) => current === star ? 0 : star); setShowAll(false); }} className="sc-pdp__rating-row w-full text-left" aria-label={`Show ${star} star reviews`}>
+              <button key={star} type="button" onClick={() => { setRatingFilter((current) => current === star ? 0 : star); setShowAll(false); }} className={`sc-pdp__rating-row w-full text-left${ratingFilter === star ? ' is-active' : ''}`} aria-label={`Show ${star} star reviews`} aria-pressed={ratingFilter === star}>
                 <span>{star}★</span>
                 <span className="sc-pdp__rating-track"><span className="sc-pdp__rating-fill block" style={{ width: `${width}%` }} /></span>
                 <span className="w-8 text-right text-xs text-slate-400">{count}</span>
@@ -273,6 +272,15 @@ function DesktopReviews({
                 </div>
                 {review.title ? <h3 className="mt-3 font-bold text-charcoal">{review.title}</h3> : null}
                 <p className="whitespace-pre-line">{review.comment || 'Star rating submitted without a written review.'}</p>
+                {Array.isArray(review.photos) && review.photos.length ? (
+                  <div className="sc-pdp__review-photos">
+                    {review.photos.map((photo, index) => (
+                      <a key={`${photo}-${index}`} href={normalizeImageUrl(photo)} target="_blank" rel="noreferrer" aria-label={`Open review photo ${index + 1}`}>
+                        <img src={normalizeImageUrl(photo)} alt={`Customer review ${index + 1}`} />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                   {review.verifiedPurchase ? <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Verified purchase</span> : null}
                   {review.createdAt ? <span>{formatReviewDate(review.createdAt)}</span> : null}

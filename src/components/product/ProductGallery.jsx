@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Heart, Maximize2, ScanSearch, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Maximize2, ScanSearch, Star } from 'lucide-react';
 import { getPrimaryImageIndex, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import './ProductGallery.css';
 
@@ -48,16 +48,6 @@ export default function ProductGallery({
             )}
           </button>
         ))}
-        {images.length > 5 ? (
-          <button
-            type="button"
-            className="sc-gallery__thumb sc-gallery__thumb--more"
-            onClick={() => onSelect?.((currentIndex + 1) % images.length)}
-            aria-label="Show next image"
-          >
-            <ChevronDown className="sc-gallery__thumb-more" />
-          </button>
-        ) : null}
       </div>
 
       <div className="sc-gallery__stage">
@@ -65,12 +55,12 @@ export default function ProductGallery({
           <Heart className={isWishlisted ? 'sc-gallery__wish-icon sc-gallery__wish-icon--active' : 'sc-gallery__wish-icon'} />
         </button>
 
-        <button type="button" className="sc-gallery__nav sc-gallery__nav--left" onClick={onPrev} aria-label="Previous image">
-          <ChevronLeft />
-        </button>
-        <button type="button" className="sc-gallery__nav sc-gallery__nav--right" onClick={onNext} aria-label="Next image">
-          <ChevronRight />
-        </button>
+        {images.length > 1 ? (
+          <>
+            <button type="button" className="sc-gallery__nav sc-gallery__nav--left" onClick={onPrev} aria-label="Previous image"><ChevronLeft /></button>
+            <button type="button" className="sc-gallery__nav sc-gallery__nav--right" onClick={onNext} aria-label="Next image"><ChevronRight /></button>
+          </>
+        ) : null}
 
         {current?.type === 'video' ? (
           <video src={current.url} poster={current.thumbnail} controls playsInline className="sc-gallery__media" />

@@ -14,6 +14,10 @@ export function Select({ className = '', children, ...props }) {
   );
 }
 
+export function TextArea({ className = '', ...props }) {
+  return <textarea className={cn(baseControl, 'h-auto min-h-24 resize-y py-3', className)} {...props} />;
+}
+
 export function FieldLabel({ className = '', ...props }) {
   return <label className={cn('label-text text-slate-500', className)} {...props} />;
 }

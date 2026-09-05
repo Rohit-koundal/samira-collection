@@ -37,6 +37,7 @@
     "postbuild": "node scripts/copy-spa-fallback.js",
     "start:web": "node scripts/serve-frontend.js",
     "server": "node backend/server.js",
+    "audit:product-links": "node scripts/audit-product-links.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

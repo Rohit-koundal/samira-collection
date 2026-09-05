@@ -76,7 +76,7 @@ function params(query) {
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization'],
+  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization', 'ReelImports'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
@@ -184,6 +184,7 @@ export const samiraApi = createApi({
 });
 
 function tagsForPath(path = '', mutation = false) {
+  if (path.includes('/admin/reel-imports')) return ['ReelImports'];
   if (path.includes('/admin/customization') || path.includes('/website-config')) return ['WebsiteCustomization'];
   if (path.includes('/auth/')) return ['Auth'];
   if (path.includes('/admin/dashboard')) return ['AdminDashboard'];

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Copy, Download, X } from 'lucide-react';
 import { normalizeImageUrl } from '../../services/normalize';
+import { productHref } from '../../utils/routing';
 
 export default function ProductPosterModal({ open, product, settings, onClose }) {
   const [posterUrl, setPosterUrl] = useState('');
   const [message, setMessage] = useState('');
 
-  const shareLink = useMemo(() => `${window.location.origin}/product/${product?.slug || product?._id || product?.id || ''}`, [product]);
+  const shareLink = useMemo(() => `${window.location.origin}${productHref(product)}`, [product]);
 
   useEffect(() => {
     if (!open || !product) return undefined;

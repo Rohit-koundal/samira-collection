@@ -15,6 +15,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
   const [items, setItems] = useState([]);
   const [coupon, setCoupon] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [notice, setNotice] = useState('');
 
   const isAuthenticated = Boolean(user);
@@ -27,6 +28,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
 
     async function hydrate() {
       setLoading(true);
+      setHydrated(false);
       const guestCart = loadGuestCart(guestStorageName, guestLegacyStorageNames);
       const legacyCart = storageNameProp && storageNameProp !== guestStorageName
         ? loadGuestCart(storageNameProp, legacyStorageNames)
@@ -55,6 +57,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
       } finally {
         if (alive && requestId === requestIdRef.current) {
           setLoading(false);
+          setHydrated(true);
         }
       }
     }
@@ -75,6 +78,10 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const timer = window.setTimeout(() => setNotice(''), 2500);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (hydrated && !items.length && coupon) setCoupon(null);
+  }, [coupon, hydrated, items.length]);
 
   const addToCart = (product, size = product.sizes?.[0] || 'M', color = product.colors?.[0] || 'Wine', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
     const normalizedProduct = normalizeCartProduct(product);
@@ -294,7 +301,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
   const sellingTotal = items.reduce((sum, item) => sum + Number(item.product.price || 0) * item.quantity, 0);
   const discount = Math.max(0, totalMRP - sellingTotal);
   const couponDiscount = coupon?.discount || 0;
-  const deliveryCharge = sellingTotal > 999 ? 0 : 99;
+  const deliveryCharge = items.length && sellingTotal <= 999 ? 99 : 0;
   const finalAmount = Math.max(0, sellingTotal - couponDiscount + deliveryCharge);
   const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
@@ -302,6 +309,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     items,
     itemCount,
     loading,
+    hydrated,
     addToCart,
     updateQuantity,
     increaseQuantity,

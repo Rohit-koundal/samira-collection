@@ -14,6 +14,48 @@ function loadRazorpayScript() {
   });
 }
 
+export const RAZORPAY_METHODS = Object.freeze({
+  UPI: 'upi',
+  CARD: 'card',
+  NETBANKING: 'netbanking',
+  WALLET: 'wallet',
+});
+
+const METHOD_LABELS = Object.freeze({
+  UPI: 'UPI',
+  CARD: 'Credit / Debit Card',
+  NETBANKING: 'Net Banking',
+  WALLET: 'Wallet',
+});
+
+/**
+ * Keep the method selected on Samira Checkout selected inside Razorpay too.
+ * The display block also limits the gateway screen to that method, so this
+ * works for mobile-number-only accounts where an email may not be available
+ * for Razorpay's top-level `method` preselection.
+ */
+export function buildPaymentMethodConfig(preferredMethod) {
+  const normalizedMethod = String(preferredMethod || '').toUpperCase();
+  const gatewayMethod = RAZORPAY_METHODS[normalizedMethod];
+  if (!gatewayMethod) return {};
+
+  return {
+    method: gatewayMethod,
+    config: {
+      display: {
+        blocks: {
+          selected: {
+            name: `Pay by ${METHOD_LABELS[normalizedMethod]}`,
+            instruments: [{ method: gatewayMethod }],
+          },
+        },
+        sequence: ['block.selected'],
+        preferences: { show_default_blocks: false },
+      },
+    },
+  };
+}
+
 export async function openRazorpayCheckout({
   key,
   amount,
@@ -22,6 +64,7 @@ export async function openRazorpayCheckout({
   name,
   email,
   contact,
+  preferredMethod,
   description = 'Samira Collection order',
   onSuccess,
   onDismiss,
@@ -48,6 +91,7 @@ export async function openRazorpayCheckout({
         email: email || '',
         contact: contact || '',
       },
+      ...buildPaymentMethodConfig(preferredMethod),
       theme: { color: '#7b1f3a' },
       handler: (response) => {
         Promise.resolve(onSuccess(response)).then(resolve).catch(reject);

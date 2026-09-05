@@ -3,8 +3,7 @@
     display: grid;
     grid-template-columns: 62px minmax(0, 1fr);
     gap: 10px;
-    align-items: stretch;
-    height: 100%;
+    align-items: start;
     min-width: 0;
   }
 
@@ -12,8 +11,7 @@
     display: flex;
     flex-direction: column;
     gap: 9px;
-    height: 100%;
-    max-height: none;
+    max-height: clamp(520px, calc(100vh - 150px), 720px);
     overflow: auto;
     padding-right: 2px;
     scrollbar-width: none;
@@ -59,8 +57,7 @@
 
   .sc-gallery__stage {
     position: relative;
-    min-height: 420px;
-    height: 420px;
+    height: clamp(520px, calc(100vh - 150px), 720px);
     border-radius: 8px;
     overflow: hidden;
     background: #f8eee7;
@@ -191,11 +188,5 @@
     width: 14px;
     height: 14px;
     fill: currentColor;
-  }
-}
-
-@media (min-width: 1400px) {
-  .sc-gallery__stage {
-    height: 440px;
   }
 }

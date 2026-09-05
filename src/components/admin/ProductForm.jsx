@@ -10,6 +10,16 @@ import {
 } from '../../utils/productAssistant';
 import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 import { buildVariantMatrix, hasManagedVariants } from '../../utils/variants';
+import {
+  buildSizeChartPayload,
+  getSelectableSizes,
+  getSizeChartColumns,
+  getSizeChartValidation,
+  inferSizeChartProfile,
+  reconcileSizeChartRows,
+  resolveSizingMode,
+  SIZE_CHART_PROFILES,
+} from '../../utils/productSizing';
 
 const DRAFT_PREFIX = 'samira-admin-product-draft';
 
@@ -25,15 +35,19 @@ const emptyProduct = {
   subCategory: '',
   stock: 0,
   lowStockAlert: 5,
-  sizes: 'S, M, L, XL',
-  colors: 'Wine, Blush, Gold',
+  sizes: '',
+  sizingMode: 'auto',
+  sizeChartProfile: 'auto',
+  sizeChart: { unit: 'in', columns: [], rows: [] },
+  sizeFitNotes: '',
+  colors: '',
   tags: '',
   fabric: '',
   occasion: '',
   description: '',
   images: [],
   videos: [],
-  highlights: ['Premium fabric', 'Comfortable fit'],
+  highlights: [],
   careInstructions: '',
   returnPolicy: '',
   metaTitle: '',
@@ -139,6 +153,10 @@ export default function ProductForm({
         ...mergedDraft,
         category: mergedDraft.category ?? (product.category?._id || product.category || ''),
         sizes: mergedDraft.sizes || (product.sizes || []).join(', '),
+        sizingMode: mergedDraft.sizingMode || product.sizingMode || 'auto',
+        sizeChartProfile: mergedDraft.sizeChartProfile || product.sizeChartProfile || 'auto',
+        sizeChart: mergedDraft.sizeChart || product.sizeChart || emptyProduct.sizeChart,
+        sizeFitNotes: mergedDraft.sizeFitNotes ?? product.sizeFitNotes ?? '',
         colors: mergedDraft.colors || (product.colors || []).join(', '),
         tags: mergedDraft.tags || (product.tags || []).join(', '),
         highlights: Array.isArray(mergedDraft.highlights) && mergedDraft.highlights.length
@@ -205,6 +223,30 @@ export default function ProductForm({
     }));
   };
 
+  const updateSizeMeasurement = (sizeLabel, field, value) => {
+    setForm((current) => {
+      const sizingProduct = withCategoryName(current, categories);
+      const columns = getSizeChartColumns(sizingProduct);
+      const rows = reconcileSizeChartRows(current.sizeChart?.rows, getSelectableSizes(sizingProduct), columns)
+        .map((row) => row.size === sizeLabel ? { ...row, [field]: value } : row);
+      return {
+        ...current,
+        sizeChart: {
+          unit: current.sizeChart?.unit === 'cm' ? 'cm' : 'in',
+          columns: columns.map((column) => column.key),
+          rows,
+        },
+      };
+    });
+  };
+
+  const updateSizeChartUnit = (unit) => {
+    setForm((current) => ({
+      ...current,
+      sizeChart: { ...(current.sizeChart || {}), unit: unit === 'cm' ? 'cm' : 'in' },
+    }));
+  };
+
   const updateAssistant = (field, value) => setAssistant((current) => ({ ...current, [field]: value }));
 
   const generateAssistant = () => {
@@ -246,7 +288,8 @@ export default function ProductForm({
 
   const submit = async (event) => {
     event.preventDefault();
-    const nextErrors = validate(form);
+    const sizingProduct = withCategoryName(form, categories);
+    const nextErrors = validate(form, sizingProduct);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     setSaving(true);
@@ -254,6 +297,9 @@ export default function ProductForm({
     try {
       const price = Number(form.price);
       const originalPrice = Number(form.originalPrice || form.price);
+      const sizingMode = resolveSizingMode(sizingProduct);
+      const selectableSizes = getSelectableSizes(sizingProduct);
+      const tracksVariants = sizingMode === 'sized' && form.trackVariants;
       const payload = {
         ...form,
         images: prepareImages(form.images),
@@ -261,11 +307,14 @@ export default function ProductForm({
         price,
         originalPrice,
         lowStockAlert: Number(form.lowStockAlert),
-        sizes: splitList(form.sizes),
+        sizes: sizingMode === 'sized' ? selectableSizes : [],
+        sizingMode: form.sizingMode || 'auto',
+        sizeChartProfile: form.sizeChartProfile || 'auto',
+        sizeChart: buildSizeChartPayload(sizingProduct),
         colors: splitList(form.colors),
         tags: splitList(form.tags),
-        variants: form.trackVariants ? form.variants : [],
-        stock: form.trackVariants
+        variants: tracksVariants ? form.variants : [],
+        stock: tracksVariants
           ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0)
           : Number(form.stock),
         discountPercentage: originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0,
@@ -285,6 +334,12 @@ export default function ProductForm({
   };
 
   const previewImage = (form.images || []).find((image) => image?.primary)?.url || form.images?.[0]?.url || '';
+  const sizingProduct = withCategoryName(form, categories);
+  const effectiveSizingMode = resolveSizingMode(sizingProduct);
+  const inferredSizeProfile = inferSizeChartProfile(sizingProduct);
+  const sizeChartColumns = getSizeChartColumns(sizingProduct);
+  const selectableSizes = getSelectableSizes(sizingProduct);
+  const sizeChartRows = reconcileSizeChartRows(form.sizeChart?.rows, selectableSizes, sizeChartColumns);
   const checklist = [
     { id: 'photo', label: 'Photo', done: Boolean(previewImage), target: 'product-media', icon: ImagePlus },
     { id: 'name', label: 'Name', done: String(form.name || '').trim().length >= 3, target: 'product-basics', icon: Type },
@@ -376,11 +431,18 @@ export default function ProductForm({
         <Input label="Selling price" type="number" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
         <Input label="Stock quantity" type="number" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" />
         <Input label="Low stock alert" type="number" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} placeholder="5" />
-        <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
-          <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
-          Track stock by size and colour
-        </label>
-        {form.trackVariants ? (
+        {effectiveSizingMode === 'sized' ? (
+          <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
+            <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
+            Track stock by size and colour
+          </label>
+        ) : (
+          <div className="admin-form-hint lg:col-span-2">
+            <h3>One-size inventory</h3>
+            <p>This product does not require a size choice. Stock is tracked at product level and colour variants remain optional.</p>
+          </div>
+        )}
+        {effectiveSizingMode === 'sized' && form.trackVariants ? (
           <div className="lg:col-span-2 overflow-x-auto rounded-2xl border border-[#eadfd5]">
             <table className="w-full min-w-[480px] text-left text-sm">
               <thead className="bg-[#fffaf4] text-xs uppercase tracking-[0.12em] text-slate-500">
@@ -442,10 +504,98 @@ export default function ProductForm({
           />
           <p className="mt-2 text-xs font-semibold text-slate-500">{form.videos.length}/2 videos uploaded.</p>
         </div>
-        <Input label="Sizes" value={form.sizes} onChange={(value) => update('sizes', value)} placeholder="XS, S, M, L, XL, Free Size" />
+        <label className="admin-field">
+          <span>Customer sizing</span>
+          <select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)} className="admin-field__control">
+            <option value="auto">Automatic from product category</option>
+            <option value="sized">Customer must select a size</option>
+            <option value="free-size">No size selection / free size</option>
+          </select>
+          <small className="text-xs font-semibold text-slate-500">
+            Current behaviour: {effectiveSizingMode === 'sized' ? 'show size choices and size chart' : 'hide size choices'}.
+          </small>
+        </label>
+        <label className="admin-field">
+          <span>Measurement template</span>
+          <select
+            value={form.sizeChartProfile || 'auto'}
+            onChange={(event) => update('sizeChartProfile', event.target.value)}
+            disabled={effectiveSizingMode !== 'sized'}
+            className="admin-field__control disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            <option value="auto">Automatic ({SIZE_CHART_PROFILES[inferredSizeProfile]?.label || 'category based'})</option>
+            {Object.entries(SIZE_CHART_PROFILES).map(([value, profile]) => <option key={value} value={value}>{profile.label}</option>)}
+          </select>
+        </label>
+        {effectiveSizingMode === 'sized' ? (
+          <Input label="Selectable sizes" value={form.sizes} onChange={(value) => update('sizes', value)} error={errors.sizes} placeholder="XS, S, M, L, XL, XXL" />
+        ) : (
+          <div className="admin-form-hint lg:col-span-2">
+            <h3>No size chart required</h3>
+            <p>Sarees and other one-size products will not show S, M, L or XL buttons on the product page. Customers can add the product directly.</p>
+          </div>
+        )}
         <Input label="Colors" value={form.colors} onChange={(value) => update('colors', value)} placeholder="Pink, Maroon, Gold" />
         <Input label="Tags" value={form.tags} onChange={(value) => update('tags', value)} placeholder="festive, silk, wedding" />
         <Input label="Care Instructions" value={form.careInstructions} onChange={(value) => update('careInstructions', value)} placeholder="Dry clean preferred" />
+
+        {effectiveSizingMode === 'sized' ? (
+          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-[#eadfd5] bg-white">
+            <div className="flex flex-col gap-3 border-b border-[#f0e5dc] bg-[#fffaf6] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-black text-charcoal">Garment size chart</h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Enter the actual finished-garment measurement for every available size.</p>
+              </div>
+              <div className="inline-flex w-fit rounded-full border border-[#ead8cb] bg-white p-1" aria-label="Size chart unit">
+                {['in', 'cm'].map((unit) => (
+                  <button key={unit} type="button" onClick={() => updateSizeChartUnit(unit)} className={`h-8 rounded-full px-4 text-xs font-black uppercase ${form.sizeChart?.unit === unit ? 'bg-wine text-white' : 'text-slate-500'}`}>{unit}</button>
+                ))}
+              </div>
+            </div>
+            {selectableSizes.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-max text-left text-xs">
+                  <thead className="bg-[#fbf7f3] text-[10px] uppercase tracking-[0.08em] text-slate-500">
+                    <tr>
+                      <th className="sticky left-0 z-10 min-w-20 bg-[#fbf7f3] p-3">Size</th>
+                      {sizeChartColumns.map((column) => <th key={column.key} className="min-w-32 p-3">{column.label}<span className="ml-1 normal-case">({form.sizeChart?.unit || 'in'})</span></th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sizeChartRows.map((row) => (
+                      <tr key={row.size} className="border-t border-[#f3ebe3]">
+                        <th className="sticky left-0 z-10 bg-white p-3 text-sm font-black text-charcoal">{row.size}</th>
+                        {sizeChartColumns.map((column) => (
+                          <td key={column.key} className="p-2">
+                            <input
+                              type="number"
+                              min="0.1"
+                              step="0.1"
+                              value={row[column.key] ?? ''}
+                              onChange={(event) => updateSizeMeasurement(row.size, column.key, event.target.value)}
+                              aria-label={`${row.size} ${column.label}`}
+                              className="h-10 w-28 rounded-lg border border-[#e5d8cf] px-3 font-bold outline-none focus:border-wine focus:ring-2 focus:ring-wine/10"
+                              placeholder="0.0"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="p-4 text-xs font-semibold text-amber-700">Add the selectable sizes above to generate measurement rows.</p>
+            )}
+            <div className="border-t border-[#f0e5dc] p-4">
+              <label className="admin-field">
+                <span>Fit and measurement note</span>
+                <textarea value={form.sizeFitNotes || ''} onChange={(event) => update('sizeFitNotes', event.target.value)} className="admin-field__control min-h-20" placeholder="Example: Garment measurements. Choose one size larger for a relaxed fit." />
+              </label>
+              {errors.sizeChart ? <p className="admin-field__error mt-2">{errors.sizeChart}</p> : null}
+            </div>
+          </div>
+        ) : null}
       </Section>
 
       <Section step="04" title="Smart Product Assistant" note="Optional. Fill empty fields from a few basic details.">
@@ -745,7 +895,7 @@ function splitList(value) {
   return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 }
 
-function validate(form) {
+function validate(form, sizingProduct = form) {
   const errors = {};
   if (form.name.trim().length < 3) errors.name = 'Product name must be at least 3 characters.';
   if (!form.sku.trim()) errors.sku = 'SKU is required.';
@@ -756,6 +906,14 @@ function validate(form) {
   if (Number(form.stock) < 0) errors.stock = 'Stock cannot be negative.';
   if (!form.images.length) errors.images = 'Upload at least one product image.';
   if (form.description.trim().length < 20) errors.description = 'Description must be at least 20 characters.';
+  if (resolveSizingMode(sizingProduct) === 'sized') {
+    const sizeValidation = getSizeChartValidation(sizingProduct);
+    if (!getSelectableSizes(sizingProduct).length) errors.sizes = 'Add at least one selectable size.';
+    if (!sizeValidation.valid && sizeValidation.missing.length) {
+      const sample = sizeValidation.missing.slice(0, 3).join(', ');
+      errors.sizeChart = `Complete every measurement before saving. Missing: ${sample}${sizeValidation.missing.length > 3 ? ` and ${sizeValidation.missing.length - 3} more` : ''}.`;
+    }
+  }
   return errors;
 }
 
@@ -832,10 +990,20 @@ function mergeDraftIntoProduct(draft) {
 
     if (typeof value === 'number') {
       if (!Number.isNaN(value)) merged[key] = value;
+      continue;
+    }
+
+    if (value && typeof value === 'object') {
+      merged[key] = value;
     }
   }
 
   return merged;
+}
+
+function withCategoryName(form, categories = []) {
+  const selected = categories.find((category) => String(category._id) === String(form.category));
+  return { ...form, category: selected?.name || form.category || '' };
 }
 
 function isMeaningfulDraft(draft) {
@@ -860,6 +1028,10 @@ function isMeaningfulDraft(draft) {
 
     if (typeof value === 'number') {
       return !Number.isNaN(value) && value !== defaultValue;
+    }
+
+    if (value && typeof value === 'object') {
+      return JSON.stringify(value) !== JSON.stringify(defaultValue);
     }
 
     return false;

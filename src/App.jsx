@@ -13,6 +13,7 @@ import SellerRoute from './components/layout/SellerRoute';
 import { StorefrontProvider, useStorefront } from './context/StorefrontContext';
 import { WebsiteCustomizationProvider, useWebsiteCustomization } from './context/WebsiteCustomizationContext';
 import { buildWebsiteCssVariables } from './config/websiteCustomization';
+import { reelProductImportEnabled } from './config/features';
 import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
@@ -75,7 +76,6 @@ const Support = lazy(() => import('./pages/admin/Support'));
 const Subscribers = lazy(() => import('./pages/admin/Subscribers'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const ReelProductImport = lazy(() => import('./pages/admin/ReelProductImport'));
-const reelImportEnabled = process.env.REACT_APP_ENABLE_REEL_PRODUCT_IMPORT === 'true';
 
 const customerRoutes = {
   '/': Home,
@@ -148,7 +148,7 @@ const adminRoutes = {
   '/admin/audit': AuditLogs,
   '/admin/settings': Settings,
   '/admin/customization': WebsiteCustomizer,
-  ...(reelImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
+  ...(reelProductImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
 };
 
 const samiraTheme = createTheme({
@@ -263,6 +263,7 @@ function AppShell({ route, navigate }) {
     </Suspense>
   );
   const Page = useMemo(() => {
+    // Legacy admin-login links use the same mobile + OTP flow as every account.
     if (routePath === '/admin/login') return AdminLogin;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
     if (isSeller) return sellerRoutes[routePath] || SellerDashboard;

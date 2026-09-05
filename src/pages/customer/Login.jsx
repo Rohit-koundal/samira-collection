@@ -25,6 +25,7 @@ export default function Login({ route = '/login' }) {
   const [consent, setConsent] = useState(searchParams.get('consent') === '1');
   const [cooldown, setCooldown] = useState(() => getRemainingCooldown(savedOtpState?.cooldownExpiresAt));
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [autoRequested, setAutoRequested] = useState(false);
@@ -36,12 +37,9 @@ export default function Login({ route = '/login' }) {
   const setPhoneDigits = (value) => setPhone(digitsOnly(value, 10));
   const showFeedback = useCallback((text, type = 'info') => {
     if (!text) return;
-    if (!notify(text, type, 'Login')) {
-      setMessageType(type);
-      setMessage(text);
-    } else {
-      setMessage('');
-    }
+    notify(text, type, 'Login');
+    setMessageType(type);
+    setMessage(text);
   }, [notify]);
 
   const buildLoginUrl = useCallback((nextStep, nextPhone = normalizedPhone || phone) => {
@@ -160,35 +158,142 @@ export default function Login({ route = '/login' }) {
       clearOtpState();
     } catch (error) {
       showFeedback(error.message, 'error');
+      inputs.current[5]?.focus();
+      inputs.current[5]?.select();
     } finally {
       setLoading(false);
     }
   };
 
+  const clearOtpError = () => {
+    if (messageType === 'error') setMessage('');
+  };
+
+  const focusOtpInput = (index, { select = false } = {}) => {
+    const input = inputs.current[Math.max(0, Math.min(5, index))];
+    input?.focus();
+    if (select) input?.select();
+  };
+
+  const fillOtpFrom = (startIndex, value) => {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 6 - startIndex);
+    if (!digits) return;
+
+    const next = [...otp];
+    digits.split('').forEach((digit, offset) => {
+      next[startIndex + offset] = digit;
+    });
+    setOtp(next);
+    clearOtpError();
+
+    const nextIndex = startIndex + digits.length;
+    if (nextIndex < 6) focusOtpInput(nextIndex);
+    else focusOtpInput(5);
+  };
+
   const handleOtp = (index, value) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
+    const digits = String(value || '').replace(/\D/g, '');
+    if (digits.length > 1) {
+      const incoming = otp[index] && digits.startsWith(otp[index])
+        ? digits.slice(-1)
+        : digits;
+      fillOtpFrom(index, incoming);
+      return;
+    }
+
+    const digit = digits.slice(-1);
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
-    if (digit && index < 5) inputs.current[index + 1]?.focus();
+    clearOtpError();
+    if (digit && index < 5) focusOtpInput(index + 1);
   };
 
-  const pasteOtp = (event) => {
-    const text = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (text.length === 6) {
+  const handleOtpKeyDown = (event, index) => {
+    if (/^\d$/.test(event.key)) {
       event.preventDefault();
-      setOtp(text.split(''));
+      const next = [...otp];
+      next[index] = event.key;
+      setOtp(next);
+      clearOtpError();
+      if (index < 5) focusOtpInput(index + 1);
+      return;
+    }
+
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      const next = [...otp];
+      if (next[index]) {
+        next[index] = '';
+        setOtp(next);
+        clearOtpError();
+        focusOtpInput(index);
+        return;
+      }
+
+      if (index > 0) {
+        next[index - 1] = '';
+        setOtp(next);
+        clearOtpError();
+        focusOtpInput(index - 1);
+      }
+      return;
+    }
+
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      const next = [...otp];
+      next[index] = '';
+      setOtp(next);
+      clearOtpError();
+      focusOtpInput(index);
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      focusOtpInput(index - 1, { select: true });
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && index < 5) {
+      event.preventDefault();
+      focusOtpInput(index + 1, { select: true });
+    }
+  };
+
+  const handleOtpBeforeInput = (event, index) => {
+    const inputType = event.nativeEvent?.inputType;
+    if (inputType !== 'deleteContentBackward' || otp[index] || index === 0) return;
+
+    event.preventDefault();
+    const next = [...otp];
+    next[index - 1] = '';
+    setOtp(next);
+    clearOtpError();
+    focusOtpInput(index - 1);
+  };
+
+  const pasteOtp = (event, index) => {
+    const text = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (text) {
+      event.preventDefault();
+      fillOtpFrom(index, text);
     }
   };
 
   const doResend = async () => {
-    if (cooldown) return;
+    if (cooldown || resending) return;
+    setMessage('');
+    setResending(true);
     try {
       const data = await resendOtp(normalizedPhone);
       setCooldown(OTP_COOLDOWN_SECONDS);
       showFeedback(otpSentMessage(data, 'OTP resent successfully.'), 'success');
     } catch (error) {
       showFeedback(error.message, 'error');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -243,7 +348,7 @@ export default function Login({ route = '/login' }) {
                   <p className="mt-1 text-[11px] text-slate-500 sm:text-[12px]">Sent to {maskPhone(phone)}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-6 gap-2" onPaste={pasteOtp}>
+              <div className="grid grid-cols-6 gap-2">
                 {otp.map((digit, index) => (
                   <input
                     key={index}
@@ -252,8 +357,17 @@ export default function Login({ route = '/login' }) {
                     }}
                     value={digit}
                     onChange={(event) => handleOtp(index, event.target.value)}
+                    onKeyDown={(event) => handleOtpKeyDown(event, index)}
+                    onBeforeInput={(event) => handleOtpBeforeInput(event, index)}
+                    onPaste={(event) => pasteOtp(event, index)}
+                    onFocus={(event) => event.target.select()}
+                    onClick={(event) => event.currentTarget.select()}
                     className="h-10 w-full rounded-lg border border-slate-300 text-center text-[14px] font-semibold text-[#2f3851] outline-none focus:border-[#ff5f86] focus:ring-2 focus:ring-[#ff5f86]/10 sm:text-[15px]"
                     inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={index === 0 ? 6 : 1}
+                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                    aria-label={`OTP digit ${index + 1}`}
                   />
                 ))}
               </div>
@@ -266,12 +380,12 @@ export default function Login({ route = '/login' }) {
                 {loading ? 'Verifying...' : 'Verify OTP'}
               </Button>
               <div className="flex flex-col items-start gap-4">
-                <button type="button" onClick={doResend} disabled={!!cooldown} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff5f86] disabled:text-slate-400 sm:text-[12px]">
-                  Resend OTP
+                <button type="button" onClick={doResend} disabled={!!cooldown || resending} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff5f86] disabled:text-slate-400 sm:text-[12px]">
+                  {resending ? 'Sending...' : 'Resend OTP'}
                 </button>
                 <HelpLink />
               </div>
-              {message && messageType === 'error' && <StatusMessage type={messageType} message={message} onRetry={doResend} loading={loading || !!cooldown} className="md:hidden" />}
+              {message && <StatusMessage type={messageType} message={message} />}
             </form>
           ) : (
             <form onSubmit={requestOtp} className="space-y-4">
@@ -304,7 +418,7 @@ export default function Login({ route = '/login' }) {
                 {loading ? 'Sending...' : 'Continue'}
               </Button>
               <HelpLink />
-              {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} className="md:hidden" />}
+              {message && <StatusMessage type={messageType} message={message} onRetry={requestOtp} loading={loading} />}
             </form>
           )}
         </div>
@@ -320,7 +434,7 @@ function StatusMessage({ type, message, onRetry, loading, className = '' }) {
     <div className={`body-text mt-4 rounded-2xl p-4 ${className} ${isError ? 'bg-rose/10 text-wine' : isSuccess ? 'bg-emerald-50 text-emerald-800' : 'bg-blush text-wine'}`}>
       <p className="text-[12px] font-semibold">{isError ? 'We could not continue right now' : isSuccess ? 'All set' : 'Note'}</p>
       <p className="mt-1 text-[12px] leading-[1.4]">{message}</p>
-      {isError && (
+      {isError && onRetry && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button type="button" onClick={onRetry} disabled={loading} className="rounded-xl bg-white px-4 py-2 text-[12px] text-rose shadow-sm disabled:opacity-60">
             Try Again

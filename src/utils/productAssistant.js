@@ -95,7 +95,8 @@ export function buildAssistantSuggestions(input = {}) {
   const style = normalizeText(input.style || input.type || 'Ethnic');
   const work = normalizeText(input.workPattern || input.work || 'Plain');
   const fit = normalizeText(input.fit || 'Regular');
-  const sizeRange = normalizeText(input.sizeRange || input.sizes || 'S, M, L, XL');
+  const usesSelectableSizes = productType !== 'saree';
+  const sizeRange = usesSelectableSizes ? normalizeText(input.sizeRange || input.sizes || 'S, M, L, XL') : '';
   const priceSegment = normalizeText(input.priceSegment || 'Premium');
   const targetCustomer = normalizeText(input.targetCustomer || '');
   const subCategory = normalizeText(input.subCategory || '');
@@ -119,7 +120,7 @@ export function buildAssistantSuggestions(input = {}) {
     categoryName: categoryLabel,
     productType,
   });
-  const sizes = generateSizes(sizeRange);
+  const sizes = usesSelectableSizes ? generateSizes(sizeRange) : [];
   const colors = generateColors(mainColor, secondaryColors);
   const tags = generateTags({
     categoryName: categoryLabel,
@@ -278,14 +279,14 @@ export function generateHighlights(input = {}) {
   const occasion = normalizeText(input.occasion || 'special occasions').toLowerCase();
   const work = normalizeText(input.work || input.workPattern || 'clean');
   const fit = normalizeText(input.fit || 'comfortable');
-  const sizeRange = normalizeText(input.sizeRange || 'S, M, L, XL');
+  const sizeRange = normalizeText(input.sizeRange || '');
   return unique([
     `Premium ${fabric.toLowerCase()} finish`,
     `Elegant ${color.toLowerCase()} styling`,
     `${work} detailing for a polished look`,
     `Comfortable ${fit.toLowerCase()} fit`,
     `Perfect for ${occasion}`,
-    `Available in ${sizeRange}`,
+    sizeRange && `Available in ${sizeRange}`,
   ]).slice(0, 6);
 }
 

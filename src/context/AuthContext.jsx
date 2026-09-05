@@ -83,34 +83,33 @@ export function AuthProvider({ children, navigate }) {
   const resendOtp = useCallback((phone) => api.post('/auth/resend-otp', { phone }), []);
 
   const verifyOtp = useCallback(async ({ phone, otp, redirectTo = '/profile' }) => {
-    const data = await api.post('/auth/verify-otp', { phone, otp });
+    let data = await api.post('/auth/verify-otp', { phone, otp });
     persist(data);
+
+    const isAdminDestination = String(redirectTo || '').startsWith('/admin')
+      && !String(redirectTo || '').startsWith('//');
+    if (isAdminDestination && data.user?.role === 'admin' && data.user?.activeMode !== 'admin') {
+      try {
+        data = await api.post('/auth/switch-mode', { mode: 'admin' });
+        persist(data);
+      } catch {
+        // The protected route can still offer the safe manual mode switch.
+      }
+    }
+
     resetSessionCache();
     setToast(`Welcome ${data.user.name}`);
     navigate(redirectTo || '/profile');
     return data;
   }, [navigate, persist, resetSessionCache, setToast]);
 
-  const login = useCallback(async ({ email, phone, password = '', redirectTo = '' }) => {
-    try {
-      const data = await api.post('/admin/login', { email, phone, password });
-      persist(data);
-      resetSessionCache();
-      navigate(redirectTo || '/admin');
-      return { ok: true };
-    } catch (error) {
-      setToast(error.message);
-      return { ok: false, error: error.message };
-    }
-  }, [navigate, persist, resetSessionCache, setToast]);
-
-  const switchMode = useCallback(async (mode) => {
+  const switchMode = useCallback(async (mode, redirectTo = '') => {
     try {
       const data = await api.post('/auth/switch-mode', { mode });
       persist(data);
       resetSessionCache();
       setToast(mode === 'admin' ? 'Switched to Admin Mode' : mode === 'seller' ? 'Switched to Seller Mode' : 'Switched to Customer Mode');
-      navigate(mode === 'admin' ? '/admin' : mode === 'seller' ? '/seller' : '/');
+      navigate(redirectTo || (mode === 'admin' ? '/admin' : mode === 'seller' ? '/seller' : '/'));
       return { ok: true };
     } catch (error) {
       setToast(error.message);
@@ -158,7 +157,6 @@ export function AuthProvider({ children, navigate }) {
 
   const value = useMemo(() => ({
     user,
-    login,
     sendOtp,
     resendOtp,
     verifyOtp,
@@ -178,7 +176,7 @@ export function AuthProvider({ children, navigate }) {
     isAdmin: user?.role === 'admin',
     activeMode: user?.activeMode || 'customer',
     availableModes: user?.availableModes || ['customer'],
-  }), [deleteProfile, login, logout, notify, refreshProfile, resendOtp, sendOtp, sendProfileEmailChangeOtp, sendProfilePhoneChangeOtp, setToast, switchMode, toast, updateProfile, user, verifyOtp, verifyProfileEmailChangeOtp, verifyProfilePhoneChangeOtp]);
+  }), [deleteProfile, logout, notify, refreshProfile, resendOtp, sendOtp, sendProfileEmailChangeOtp, sendProfilePhoneChangeOtp, setToast, switchMode, toast, updateProfile, user, verifyOtp, verifyProfileEmailChangeOtp, verifyProfilePhoneChangeOtp]);
 
   return (
     <AuthContext.Provider value={value}>

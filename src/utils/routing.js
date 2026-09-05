@@ -55,20 +55,36 @@ export function boutiquePath(routePath = '/') {
 
 export function parseProductKey(route = '') {
   const [path, queryString] = String(route).split('?');
-  const queryId = new URLSearchParams(queryString || '').get('id');
+  const queryId = String(new URLSearchParams(queryString || '').get('id') || '').trim();
   if (queryId) return queryId;
   const parts = boutiquePath(path).split('/').filter(Boolean);
-  if (parts[0] === 'product' && parts[1]) return decodeURIComponent(parts[1]);
-  if (parts[0] === 'store' && parts[2] === 'products' && parts[3]) return decodeURIComponent(parts[3]);
-  if (parts[0] === 'store' && parts[2] === 'product' && parts[3]) return decodeURIComponent(parts[3]);
+  if (parts[0] === 'product' && parts[1]) return decodeRoutePart(parts[1]);
+  if (parts[0] === 'products' && parts[1]) return decodeRoutePart(parts[1]);
+  if (parts[0] === 'store' && parts[2] === 'products' && parts[3]) return decodeRoutePart(parts[3]);
+  if (parts[0] === 'store' && parts[2] === 'product' && parts[3]) return decodeRoutePart(parts[3]);
   return '';
 }
 
 export function productHref(product, storeSlug = '') {
-  const key = product?.slug || product?._id || product?.id || '';
+  const slug = String(product?.slug || '').trim();
+  const rawId = String(product?._id || product?.id || '').trim();
+  const stableId = /^[a-f\d]{24}$/i.test(rawId) ? rawId : '';
+  const key = slug || stableId || rawId;
   if (!key) return '/products';
-  if (storeSlug) return `/store/${storeSlug}/products/${encodeURIComponent(key)}`;
-  return `/product/${encodeURIComponent(key)}`;
+  const pathname = storeSlug
+    ? `/store/${encodeURIComponent(String(storeSlug).trim())}/products/${encodeURIComponent(key)}`
+    : `/product/${encodeURIComponent(key)}`;
+  return stableId && stableId !== key
+    ? `${pathname}?id=${encodeURIComponent(stableId)}`
+    : pathname;
+}
+
+function decodeRoutePart(value) {
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return String(value || '').trim();
+  }
 }
 
 export function currentPath() {

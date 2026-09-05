@@ -1,111 +1,109 @@
-import { useState } from 'react';
-import { FileText, ListChecks, PackageCheck, Ruler, Shirt, Star } from 'lucide-react';
+import { CheckCircle2, Info, PackageCheck, Ruler, Shirt, Tag } from 'lucide-react';
+import { buildProductDetails } from '../../utils/productDetails';
 import './ProductTabs.css';
 
-const tabs = [
-  { key: 'description', label: 'Description', icon: FileText },
-  { key: 'details', label: 'Details', icon: ListChecks },
-  { key: 'fit', label: 'Size & Fit', icon: Ruler },
-  { key: 'care', label: 'Material & Care', icon: Shirt },
-  { key: 'shipping', label: 'Shipping & Returns', icon: PackageCheck },
-  { key: 'reviews', label: 'Reviews', icon: Star },
-];
-
-export default function ProductTabs({ product, reviews = [], onWriteReview }) {
-  const [activeTab, setActiveTab] = useState('description');
-
-  const description =
-    product?.description ||
-    product?.shortDescription ||
-    'Elevate your everyday style with this elegant white modern top from Samaira Collection. Featuring delicate embroidery and a flattering silhouette, it’s perfect for festive gatherings, workwear, or casual outings.';
-
-  const highlights = product?.highlights?.length
-    ? product.highlights
-    : ['Elegant embroidered design', 'Comfortable all-day wear', 'Versatile & easy to style', 'Perfect for any occasion'];
+export default function ProductTabs({
+  product,
+  returnPolicy = '',
+  shippingPolicy = '',
+  freeShippingMinimum = 0,
+  deliveryCharge = 0,
+  onOpenSizeGuide,
+}) {
+  const details = buildProductDetails(product);
+  const hasMaterialCare = Boolean(details.fabric || details.careInstructions);
+  const hasDeliveryInformation = Boolean(returnPolicy || shippingPolicy || freeShippingMinimum || deliveryCharge);
 
   return (
-    <section className="sc-tabs">
-      <div className="sc-tabs__nav" role="tablist" aria-label="Product details tabs">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.key}
-              className={`sc-tabs__tab${activeTab === tab.key ? ' sc-tabs__tab--active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <Icon className="sc-tabs__icon" aria-hidden="true" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+    <section className="sc-tabs" id="desktop-product-details" aria-labelledby="desktop-product-details-title">
+      <header className="sc-tabs__header">
+        <div>
+          <p className="sc-tabs__eyebrow">Everything about this style</p>
+          <h2 id="desktop-product-details-title">Product details</h2>
+        </div>
+        {product?.sku ? <span className="sc-tabs__code">Product code: {product.sku}</span> : null}
+      </header>
 
-      <div className="sc-tabs__panel">
-        {activeTab === 'description' && (
-          <>
-            <p>{description}</p>
-            <div className="sc-tabs__chips">
-              {highlights.slice(0, 4).map((item) => (
-                <span key={item} className="sc-tabs__chip">
-                  {item}
-                </span>
+      <div className={`sc-tabs__body${details.highlights.length ? '' : ' sc-tabs__body--single'}`}>
+        {details.description ? (
+          <section className="sc-tabs__description">
+            <SectionTitle icon={Info}>Description</SectionTitle>
+            <p>{details.description}</p>
+          </section>
+        ) : (
+          <section className="sc-tabs__description sc-tabs__description--pending">
+            <SectionTitle icon={Info}>Description</SectionTitle>
+            <p>Detailed product copy is being updated. Please use the verified specifications below when choosing this style.</p>
+          </section>
+        )}
+
+        {details.highlights.length ? (
+          <section className="sc-tabs__highlights">
+            <h3>Key highlights</h3>
+            <ul>
+              {details.highlights.map((item) => (
+                <li key={item}><CheckCircle2 aria-hidden="true" /><span>{item}</span></li>
               ))}
-            </div>
-          </>
-        )}
+            </ul>
+          </section>
+        ) : null}
 
-        {activeTab === 'details' && (
-          <dl className="sc-tabs__details">
-            <div>
-              <dt>Category</dt>
-              <dd>{product?.category || '-'}</dd>
-            </div>
-            <div>
-              <dt>Fabric</dt>
-              <dd>{product?.fabric || 'Premium fabric'}</dd>
-            </div>
-            <div>
-              <dt>Occasion</dt>
-              <dd>{product?.occasion || 'Everyday festive'}</dd>
-            </div>
-            <div>
-              <dt>Pattern</dt>
-              <dd>{product?.tags?.[0] || 'Designer'}</dd>
-            </div>
-          </dl>
-        )}
+        {details.specifications.length ? (
+          <section className="sc-tabs__specifications">
+            <h3>Specifications</h3>
+            <dl className="sc-tabs__details">
+              {details.specifications.map(({ label, value }) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ) : null}
 
-        {activeTab === 'fit' && (
-          <p>Available sizes: {(product?.sizes?.length ? product.sizes : ['S', 'M', 'L', 'XL']).join(', ')}</p>
-        )}
+        <div className="sc-tabs__service-grid">
+          {details.sizes.length ? (
+            <section className="sc-tabs__service-card">
+              <SectionTitle icon={Ruler}>Size &amp; fit</SectionTitle>
+              <p>Available in {details.sizes.join(', ')}.</p>
+              {product?.sizeFitNotes ? <p>{product.sizeFitNotes}</p> : null}
+              {onOpenSizeGuide ? <button type="button" onClick={onOpenSizeGuide}>View size guide</button> : null}
+            </section>
+          ) : null}
 
-        {activeTab === 'care' && (
-          <p>{product?.careInstructions || `Fabric: ${product?.fabric || 'Premium fabric'}. Dry clean recommended.`}</p>
-        )}
+          {hasMaterialCare ? (
+            <section className="sc-tabs__service-card">
+              <SectionTitle icon={Shirt}>Material &amp; care</SectionTitle>
+              {details.fabric ? <p><strong>Fabric:</strong> {details.fabric}</p> : null}
+              {details.careInstructions ? <p><strong>Care:</strong> {details.careInstructions}</p> : null}
+            </section>
+          ) : null}
 
-        {activeTab === 'shipping' && (
-          <p>{product?.returnPolicy || 'Free shipping on eligible orders. Easy returns and exchanges are available within the return window when the item is unused and tags are intact.'}</p>
-        )}
+          {hasDeliveryInformation ? (
+            <section className="sc-tabs__service-card">
+              <SectionTitle icon={PackageCheck}>Delivery &amp; returns</SectionTitle>
+              {shippingPolicy ? <p>{shippingPolicy}</p> : freeShippingMinimum > 0 ? (
+                <p>Free shipping on orders of ₹{Number(freeShippingMinimum).toLocaleString('en-IN')} or more.</p>
+              ) : deliveryCharge > 0 ? (
+                <p>Standard delivery charge: ₹{Number(deliveryCharge).toLocaleString('en-IN')}.</p>
+              ) : null}
+              {returnPolicy ? <p><strong>Returns:</strong> {returnPolicy}</p> : null}
+            </section>
+          ) : null}
+        </div>
 
-        {activeTab === 'reviews' && (
-          <div>
-            <p>{reviews.length ? `${reviews.length} customer review${reviews.length === 1 ? '' : 's'}.` : 'No reviews yet for this product.'}</p>
-            {onWriteReview ? (
-              <button type="button" className="sc-tabs__chip mt-3" onClick={onWriteReview}>Write a review</button>
-            ) : null}
-            {reviews.slice(0, 6).map((review) => (
-              <article key={review._id} className="mt-4">
-                <p className="font-black">{review.user?.name || 'Customer'} {review.verifiedPurchase ? '· Verified purchase' : ''} · {review.rating}/5</p>
-                <p>{review.comment}</p>
-              </article>
-            ))}
-          </div>
-        )}
+        {details.tags.length ? (
+          <section className="sc-tabs__tags">
+            <SectionTitle icon={Tag}>Style tags</SectionTitle>
+            <div>{details.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+          </section>
+        ) : null}
       </div>
     </section>
   );
+}
+
+function SectionTitle({ icon: Icon, children }) {
+  return <h3 className="sc-tabs__section-title"><Icon aria-hidden="true" />{children}</h3>;
 }

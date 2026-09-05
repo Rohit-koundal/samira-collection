@@ -12,7 +12,7 @@ export function normalizeProduct(product) {
     categoryId: product.category?._id || product.category,
     rating: product.rating || 0,
     numReviews: product.numReviews || 0,
-    colors: product.colors?.length ? product.colors : ['Wine'],
+    colors: product.colors?.length ? product.colors : [],
     originalPrice: product.originalPrice || product.price,
     discountPercentage: product.discountPercentage || 0,
     primaryImageUrl: getPrimaryImageUrl(images),

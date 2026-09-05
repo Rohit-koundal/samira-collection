@@ -15,6 +15,15 @@ import {
   usePublishSelectedDraftsMutation,
   useUpdateProductDraftMutation,
 } from '../../store/apiSlice';
+import {
+  buildSizeChartPayload,
+  getSelectableSizes,
+  getSizeChartColumns,
+  inferSizeChartProfile,
+  reconcileSizeChartRows,
+  resolveSizingMode,
+  SIZE_CHART_PROFILES,
+} from '../../utils/productSizing';
 
 export default function ProductDrafts() {
   const [categories, setCategories] = useState([]);
@@ -64,7 +73,7 @@ export default function ProductDrafts() {
     try {
       await updateProductDraft({
         id: draft._id || draft.id,
-        body: normalizeDraftBody(draft),
+        body: normalizeDraftBody(draft, categories),
       }).unwrap();
       showFeedback('Draft saved successfully.', 'success');
     } catch (error) {
@@ -171,6 +180,9 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
     colors: Array.isArray(draft.colors) ? draft.colors.join(', ') : '',
     tags: Array.isArray(draft.tags) ? draft.tags.join(', ') : '',
     highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
+    sizingMode: draft.sizingMode || 'auto',
+    sizeChartProfile: draft.sizeChartProfile || 'auto',
+    sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
   }));
   const [subcategories, setSubcategories] = useState([]);
 
@@ -181,6 +193,9 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
       colors: Array.isArray(draft.colors) ? draft.colors.join(', ') : '',
       tags: Array.isArray(draft.tags) ? draft.tags.join(', ') : '',
       highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
+      sizingMode: draft.sizingMode || 'auto',
+      sizeChartProfile: draft.sizeChartProfile || 'auto',
+      sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
     });
   }, [draft]);
 
@@ -190,6 +205,24 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
   }, [form.category]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
+  const sizingProduct = { ...form, category: categoryName };
+  const sizingMode = resolveSizingMode(sizingProduct);
+  const profile = inferSizeChartProfile(sizingProduct);
+  const sizes = getSelectableSizes(sizingProduct);
+  const columns = getSizeChartColumns(sizingProduct);
+  const rows = reconcileSizeChartRows(form.sizeChart?.rows, sizes, columns);
+  const updateMeasurement = (size, field, value) => {
+    setForm((current) => ({
+      ...current,
+      sizeChart: {
+        unit: current.sizeChart?.unit === 'cm' ? 'cm' : 'in',
+        columns: columns.map((column) => column.key),
+        rows: reconcileSizeChartRows(current.sizeChart?.rows, getSelectableSizes({ ...current, category: categoryName }), columns)
+          .map((row) => row.size === size ? { ...row, [field]: value } : row),
+      },
+    }));
+  };
 
   return (
     <article className="rounded-[22px] border border-[#f0e5db] bg-[#fffdfa] p-4 shadow-[0_10px_24px_rgba(111,74,52,0.05)]">
@@ -222,8 +255,35 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
         </div>
         <div className="grid grid-cols-2 gap-2">
           <TextInput type="number" value={form.stock || ''} onChange={(event) => update('stock', event.target.value)} placeholder="Stock" />
-          <TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="Sizes" />
+          {sizingMode === 'sized' ? <TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="Sizes: S, M, L" /> : <div className="grid place-items-center rounded-xl bg-emerald-50 px-2 text-center text-[10px] font-black text-emerald-700">No size selection</div>}
         </div>
+        <Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}>
+          <option value="auto">Automatic sizing</option>
+          <option value="sized">Selectable sizes</option>
+          <option value="free-size">No size selection / free size</option>
+        </Select>
+        {sizingMode === 'sized' ? (
+          <details className="rounded-xl border border-[#eadfd5] bg-white">
+            <summary className="cursor-pointer px-3 py-3 text-xs font-black text-charcoal">Edit garment size chart</summary>
+            <div className="border-t border-[#eee5de] p-3">
+              <Select value={form.sizeChartProfile || 'auto'} onChange={(event) => update('sizeChartProfile', event.target.value)}>
+                <option value="auto">Automatic ({SIZE_CHART_PROFILES[profile]?.label || 'apparel'})</option>
+                {Object.entries(SIZE_CHART_PROFILES).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
+              </Select>
+              <div className="mt-3 flex justify-end gap-1">
+                {['in', 'cm'].map((unit) => <button key={unit} type="button" onClick={() => update('sizeChart', { ...(form.sizeChart || {}), unit })} className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${form.sizeChart?.unit === unit ? 'bg-wine text-white' : 'bg-slate-100 text-slate-500'}`}>{unit}</button>)}
+              </div>
+              {sizes.length ? (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-max text-left text-[10px]">
+                    <thead><tr><th className="p-2">Size</th>{columns.map((column) => <th key={column.key} className="min-w-28 p-2">{column.shortLabel}</th>)}</tr></thead>
+                    <tbody>{rows.map((row) => <tr key={row.size} className="border-t"><th className="p-2">{row.size}</th>{columns.map((column) => <td key={column.key} className="p-1"><input type="number" min="0.1" step="0.1" value={row[column.key] ?? ''} onChange={(event) => updateMeasurement(row.size, column.key, event.target.value)} aria-label={`${row.size} ${column.label}`} className="h-9 w-24 rounded-lg border px-2" /></td>)}</tr>)}</tbody>
+                  </table>
+                </div>
+              ) : <p className="mt-3 text-[10px] font-bold text-amber-700">Add size labels to generate the chart.</p>}
+            </div>
+          </details>
+        ) : null}
         <TextInput value={form.colors || ''} onChange={(event) => update('colors', event.target.value)} placeholder="Colors" />
         <TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} placeholder="Fabric" />
         <TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} placeholder="Occasion" />
@@ -237,7 +297,10 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
   );
 }
 
-function normalizeDraftBody(form) {
+function normalizeDraftBody(form, categories = []) {
+  const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
+  const sizingProduct = { ...form, category: categoryName };
+  const sizingMode = resolveSizingMode(sizingProduct);
   return {
     ...form,
     category: form.category?._id || form.category || undefined,
@@ -247,5 +310,10 @@ function normalizeDraftBody(form) {
     originalPrice: Number(form.originalPrice || form.sellingPrice || form.price || 0),
     sellingPrice: Number(form.sellingPrice || form.price || 0),
     stock: Number(form.stock || 0),
+    sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
+    sizingMode: form.sizingMode || 'auto',
+    sizeChartProfile: form.sizeChartProfile || 'auto',
+    sizeChart: buildSizeChartPayload(sizingProduct),
+    sizeFitNotes: form.sizeFitNotes || '',
   };
 }

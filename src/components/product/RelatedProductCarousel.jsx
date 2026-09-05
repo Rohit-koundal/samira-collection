@@ -49,7 +49,7 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
               <div className="sc-related__image">
                 <button type="button" className="sc-related__image-open" onClick={() => navigate(`/product?id=${productId}`)}>
                   {image ? <img src={normalizeImageUrl(image)} alt={product.name} /> : <div className="sc-related__fallback" />}
-                  <span className="sc-related__badge">NEW</span>
+                  {product.isNewArrival ? <span className="sc-related__badge">NEW</span> : null}
                 </button>
                 <button
                   type="button"
