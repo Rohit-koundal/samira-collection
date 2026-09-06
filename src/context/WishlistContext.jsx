@@ -21,14 +21,26 @@ function loadGuest() {
 function storeGuest(items) {
   try { localStorage.setItem(GUEST_STORAGE.storageName, JSON.stringify(items)); return true; } catch { return false; }
 }
+function normalizeRemoteItems(values) {
+  if (!Array.isArray(values) || values.some(product => !product || typeof product !== 'object' || !itemId(product))) {
+    throw new Error('Your wishlist could not be loaded. Please retry to retrieve your saved items.');
+  }
+  return normalizeItems(values);
+}
 
 export function WishlistProvider({ children }) {
   const { user, notify } = useAuth();
   const account = user ? String(user._id || user.id || user.phone) : 'guest';
-  const ownerRef = useRef(account); ownerRef.current = account;
+  const ownerRef = useRef({ account });
   const alive = useRef(true);
   const queue = useRef(Promise.resolve());
   const requests = useRef(new Map());
+  if (ownerRef.current.account !== account) {
+    ownerRef.current = { account };
+    queue.current = Promise.resolve();
+    requests.current = new Map();
+  }
+  const session = ownerRef.current;
   const [items, setItems] = useState(() => user ? [] : loadGuest());
   const itemsRef = useRef(items);
   const guestStorageFailed = useRef(false);
@@ -37,7 +49,7 @@ export function WishlistProvider({ children }) {
   const [pendingIds, setPendingIds] = useState([]);
   const lastRefresh = useRef(0);
   const authenticated = account !== 'guest';
-  const valid = useCallback(() => alive.current && ownerRef.current === account, [account]);
+  const valid = useCallback(() => alive.current && ownerRef.current === session, [session]);
   const commit = useCallback((values, persist = false) => {
     if (!valid()) return;
     const next = normalizeItems(values); itemsRef.current = next; setItems(next);
@@ -58,14 +70,14 @@ export function WishlistProvider({ children }) {
     setLoading(true); setError('');
     try {
       if (authenticated) {
-        let remote = normalizeItems(await api.get('/wishlist', { silent: true }));
+        let remote = normalizeRemoteItems(await api.get('/wishlist', { silent: true }));
         if (!valid()) return { ok: false };
         commit(remote);
         let mergeFailed = false;
         for (const saved of loadGuest()) {
           if (!valid()) return { ok: false };
           try {
-            if (!remote.some(item => itemId(item) === itemId(saved))) remote = normalizeItems(await api.post(`/wishlist/${encodeURIComponent(itemId(saved))}`));
+            if (!remote.some(item => itemId(item) === itemId(saved))) remote = normalizeRemoteItems(await api.post(`/wishlist/${encodeURIComponent(itemId(saved))}`));
             if (!valid()) return { ok: false };
             commit(remote);
             storeGuest(loadGuest().filter(item => itemId(item) !== itemId(saved)));
@@ -76,7 +88,7 @@ export function WishlistProvider({ children }) {
         const local = currentGuest(); commit(local);
         const resolved = [];
         for (let start = 0; start < local.length; start += 200) {
-          resolved.push(...await api.post('/wishlist/resolve', { ids: local.slice(start, start + 200).map(itemId) }));
+          resolved.push(...normalizeRemoteItems(await api.post('/wishlist/resolve', { ids: local.slice(start, start + 200).map(itemId) })));
         }
         // Refresh product details without restoring removals or losing new saves
         // made in another tab while the catalogue request was in flight.
@@ -123,7 +135,7 @@ export function WishlistProvider({ children }) {
         if (authenticated) {
           const response = remove ? await api.delete(`/wishlist/${encodeURIComponent(id)}`) : await api.post(`/wishlist/${encodeURIComponent(id)}`);
           if (!valid()) return { ok: false, message: 'Your account changed. Please retry.' };
-          commit(response);
+          commit(normalizeRemoteItems(response));
           try { localStorage.setItem(SYNC_KEY, JSON.stringify({ account, at: Date.now(), nonce: Math.random() })); } catch { /* focus refresh still works */ }
         } else {
           // Read the latest storage value so another tab's saves are preserved.
@@ -137,7 +149,7 @@ export function WishlistProvider({ children }) {
         return { ok: false, message };
       }
     }).finally(() => {
-      requests.current.delete(requestKey);
+      if (requests.current.get(requestKey) === promise) requests.current.delete(requestKey);
       if (valid()) setPendingIds(current => current.filter(value => value !== id));
     });
     requests.current.set(requestKey, promise);

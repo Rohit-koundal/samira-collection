@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, Headphones, MapPin, RefreshCw, Star, Truck } from 'lucide-react';
 import api from '../../services/api';
 import Receipt from '../../components/order/Receipt';
@@ -11,6 +11,14 @@ import { money, orderCode, orderDate, paymentLabel, paymentNote, priceLines, saf
 
 export default function OrderDetail({ route = '', navigate }) {
   const orderId = new URLSearchParams(route.split('?')[1] || '').get('id');
+  const scopeRef = useRef({ orderId, active: true, pending: false });
+  if (scopeRef.current.orderId !== orderId) scopeRef.current = { orderId, active: true, pending: false };
+  const scope = scopeRef.current;
+  const isCurrent = () => scopeRef.current === scope && scope.active;
+  useEffect(() => {
+    scope.active = true;
+    return () => { scope.active = false; };
+  }, [scope]);
   const [order, setOrder] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
@@ -32,6 +40,7 @@ export default function OrderDetail({ route = '', navigate }) {
     let active = true;
     setLoading(true); setError(''); setOrder(null); setReturns(null); setReceipt(null); setReturnError(''); setReceiptError('');
     setCancelOpen(false); setReturnItem(null); setReviewItem(null); setActionError('');
+    setBusy(false); setNotice(''); setCancelReason(''); setExistingReview(null);
     setInvoiceOpen(false);
     if (!orderId) { setError('Order not found.'); setLoading(false); return undefined; }
     api.get(`/orders/${orderId}`).then((data) => { if (active) setOrder(data); })
@@ -43,27 +52,32 @@ export default function OrderDetail({ route = '', navigate }) {
   const refresh = () => setReload((value) => value + 1);
   const help = () => navigate(`/contact?order=${encodeURIComponent(orderId)}`);
   const cancel = async (event) => {
-    event.preventDefault(); if (busy || !canCancelOrder(order)) return;
+    event.preventDefault(); if (scope.pending || !isCurrent() || !canCancelOrder(order)) return;
+    scope.pending = true;
     setBusy(true); setActionError('');
-    try { await api.post(`/orders/${orderId}/cancel`, { reason: cancelReason }); setCancelOpen(false); setNotice('Your order has been cancelled.'); refresh(); }
-    catch (err) { setActionError(err.message); } finally { setBusy(false); }
+    try { await api.post(`/orders/${orderId}/cancel`, { reason: cancelReason }); if (!isCurrent()) return; setCancelOpen(false); setNotice('Your order has been cancelled.'); refresh(); }
+    catch (err) { if (isCurrent()) setActionError(err.message); } finally { scope.pending = false; if (isCurrent()) setBusy(false); }
   };
   const submitReturn = async (form) => {
-    if (busy) return;
+    if (scope.pending || !isCurrent()) return;
+    scope.pending = true;
     setBusy(true); setActionError('');
     try {
       await api.post('/returns', { ...form, order: orderId, product: productIdOf(returnItem), orderItemId: returnItem._id, variantId: returnItem.variantId, size: returnItem.size, color: returnItem.color });
+      if (!isCurrent()) return;
       setReturnItem(null); setNotice(`${form.type === 'exchange' ? 'Exchange' : 'Return'} request submitted. You can follow its progress below.`); refresh();
-    } catch (err) { setActionError(err.message); } finally { setBusy(false); }
+    } catch (err) { if (isCurrent()) setActionError(err.message); } finally { scope.pending = false; if (isCurrent()) setBusy(false); }
   };
   const openReview = async (item) => {
-    if (busy || !productIdOf(item)) return;
+    if (scope.pending || !isCurrent() || !productIdOf(item)) return;
+    scope.pending = true;
     setBusy(true); setActionError('');
     try {
       const eligibility = await api.get(`/reviews/${productIdOf(item)}/eligibility`);
+      if (!isCurrent()) return;
       if (!eligibility.canReview) { setActionError(eligibility.message || 'Reviews are available after delivery.'); return; }
       setExistingReview(eligibility.existingReview || null); setReviewItem(item);
-    } catch (err) { setActionError(err.message); } finally { setBusy(false); }
+    } catch (err) { if (isCurrent()) setActionError(err.message); } finally { scope.pending = false; if (isCurrent()) setBusy(false); }
   };
   const saveReview = async (payload) => {
     const result = existingReview?._id ? await api.put(`/reviews/${existingReview._id}`, payload) : await api.post(`/reviews/${productIdOf(reviewItem)}`, payload);
@@ -117,7 +131,7 @@ export default function OrderDetail({ route = '', navigate }) {
     </>}
     {cancelOpen && <OrderModal title="Cancel this order?" busy={busy} onClose={() => setCancelOpen(false)}><form className="sc-order-form" onSubmit={cancel}><p>This will cancel all items in this order.</p>{order.paymentStatus === 'Paid' && <p>Cancellation and refund processing are separate. Contact support to check your refund after cancellation.</p>}<label>Reason for cancellation<select required disabled={busy} value={cancelReason} onChange={(event) => setCancelReason(event.target.value)}><option value="">Select a reason</option>{['Ordered by mistake', 'Need to change size or address', 'Delivery is taking too long', 'Changed my mind', 'Other'].map((reason) => <option key={reason}>{reason}</option>)}</select></label>{actionError && <p role="alert" className="sc-orders__error">{actionError}</p>}<div className="sc-order-form__actions"><button type="button" className="sc-orders__outline" disabled={busy} onClick={() => setCancelOpen(false)}>Keep order</button><button className="sc-orders__button" disabled={busy}>{busy ? 'Cancelling…' : 'Confirm cancellation'}</button></div></form></OrderModal>}
     {returnItem && activeReturnEligibility && <OrderModal title="Return or exchange" busy={busy} onClose={() => setReturnItem(null)}><ReturnRequestForm item={returnItem} eligibility={activeReturnEligibility} onSubmit={submitReturn} busy={busy} error={actionError} onCancel={() => setReturnItem(null)} /></OrderModal>}
-    <ReviewModal open={!!reviewItem} product={reviewItem ? { _id: productIdOf(reviewItem), name: reviewItem.name, images: [reviewItem.image].filter(Boolean) } : null} existingReview={existingReview} onClose={() => setReviewItem(null)} onSubmit={saveReview} />
+    <ReviewModal key={orderId} open={!!reviewItem} product={reviewItem ? { _id: productIdOf(reviewItem), name: reviewItem.name, images: [reviewItem.image].filter(Boolean) } : null} existingReview={existingReview} onClose={() => setReviewItem(null)} onSubmit={saveReview} />
   </OrderShell>;
 }
 function ChevronRightIcon() { return <span aria-hidden="true">›</span>; }

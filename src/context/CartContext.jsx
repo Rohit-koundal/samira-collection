@@ -16,9 +16,16 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
   const { user } = useAuth();
   const account = String(user?._id || user?.id || user?.phone || 'guest');
   const authenticated = account !== 'guest';
-  const owner = useRef(account); owner.current = account;
+  const owner = useRef({ account });
   const alive = useRef(true), queue = useRef(Promise.resolve()), requests = useRef(new Map());
   const refreshRequests = useRef(new Map());
+  if (owner.current.account !== account) {
+    owner.current = { account };
+    queue.current = Promise.resolve();
+    requests.current = new Map();
+    refreshRequests.current = new Map();
+  }
+  const session = owner.current;
   const guestName = !authenticated && storageNameProp ? storageNameProp : GUEST_STORAGE.storageName;
   const guestLegacy = !authenticated && legacyStorageNames.length ? legacyStorageNames : GUEST_STORAGE.legacyStorageNames;
   const [items, setItems] = useState(() => authenticated ? [] : loadGuestCart(guestName, guestLegacy).items);
@@ -26,16 +33,17 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
   const [coupon, setCouponState] = useState(null);
   const [loading, setLoading] = useState(true), [hydrated, setHydrated] = useState(false);
   const [pendingCount, setPendingCount] = useState(0), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const valid = useCallback(() => alive.current && owner.current === account, [account]);
+  const valid = useCallback(() => alive.current && owner.current === session, [session]);
   const commit = useCallback(next => {
     if (!valid()) return;
     itemsRef.current = next; setItems(next);
     if (!authenticated) persistGuestCart(guestName, guestLegacy, { items: next, coupon: couponRef.current, synced: !next.some(item => item.localOnly) });
   }, [authenticated, guestLegacy, guestName, valid]);
   const setCoupon = useCallback(value => {
+    if (!valid()) return;
     couponRef.current = value; setCouponState(value);
     if (!authenticated) persistGuestCart(guestName, guestLegacy, { items: itemsRef.current, coupon: value, synced: !itemsRef.current.some(item => item.localOnly) });
-  }, [authenticated, guestLegacy, guestName]);
+  }, [authenticated, guestLegacy, guestName, valid]);
   const enqueue = useCallback(operation => {
     const next = queue.current.catch(() => {}).then(() => valid() ? operation() : { ok: false, message: 'Your account changed. Please retry.' });
     queue.current = next; return next;
@@ -120,7 +128,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
         if (valid()) { setError(message); setNotice(message); }
         return { ok: false, message };
       }
-    }).finally(() => { requests.current.delete(requestKey); if (valid()) setPendingCount(value => Math.max(0, value - 1)); });
+    }).finally(() => { if (requests.current.get(requestKey) === promise) requests.current.delete(requestKey); if (valid()) setPendingCount(value => Math.max(0, value - 1)); });
     requests.current.set(requestKey, promise); return promise;
   };
   const addToCartConfirmed = (product, size = '', color = '', variantId = '', quantity = 1) =>
