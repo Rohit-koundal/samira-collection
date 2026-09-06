@@ -7,6 +7,9 @@ import PageHeader from '../../components/admin/PageHeader';
 import EmptyState from '../../components/admin/EmptyState';
 import Loader from '../../components/admin/Loader';
 import StatusBadge from '../../components/admin/StatusBadge';
+import ImportSizeFields from '../../components/admin/ImportSizeFields';
+import { socialPublishMissing } from '../../utils/socialImport';
+import './SocialProductImport.css';
 import { Select, TextArea, TextInput } from '../../components/ui/Field';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -285,6 +288,9 @@ function ReviewWorkspace({ jobId }) {
   const [candidates, setCandidates] = useState([]);
   const [categories, setCategories] = useState([]);
   const [capabilities, setCapabilities] = useState(null);
+  const [structure, setStructure] = useState(null);
+  const [checkingSetup, setCheckingSetup] = useState(false);
+  const [publishedProducts, setPublishedProducts] = useState([]);
   const [forms, setForms] = useState({});
   const [selected, setSelected] = useState([]);
   const [draftSelected, setDraftSelected] = useState([]);
@@ -308,7 +314,10 @@ function ReviewWorkspace({ jobId }) {
         const candidateResponse = await api.get(`/admin/reel-imports/${jobId}/candidates`);
         const nextCandidates = candidateResponse.data || [];
         setCandidates(nextCandidates);
-        setDraftSelected((current) => current.length ? current : nextCandidates.filter((item) => !['ignored', 'merged'].includes(item.status)).map((item) => item._id || item.id));
+        setDraftSelected((current) => {
+          const eligible = nextCandidates.filter((item) => !['ignored', 'merged'].includes(item.status) && !item.savedDraft?.publishedProductId).map((item) => item._id || item.id);
+          return current.length ? current.filter((id) => eligible.includes(id)) : eligible;
+        });
         setForms((current) => {
           const next = { ...current };
           nextCandidates.forEach((candidate) => {
@@ -330,10 +339,22 @@ function ReviewWorkspace({ jobId }) {
   useEffect(() => {
     load();
     fetchCategories(api).then(setCategories).catch(() => setCategories([]));
+    api.get('/catalog-configuration').then(setStructure).catch(() => setStructure(null));
     api.get('/admin/reel-imports/capabilities')
       .then((response) => setCapabilities(response?.data || response))
       .catch(() => setCapabilities({ smartSuggestionsEnabled: false }));
   }, [load]);
+
+  const checkSetup = async () => {
+    setCheckingSetup(true);
+    try {
+      const response = await api.get('/admin/reel-imports/capabilities');
+      const value = response?.data || response;
+      setCapabilities(value);
+      notify(value.smartSuggestionsEnabled ? 'The AI key is configured. You can now fill product details.' : value.smartSuggestionsMessage || 'The backend AI key is still missing.', value.smartSuggestionsEnabled ? 'success' : 'warning', 'Smart Reel Assistant');
+    } catch (error) { notify(error.message, 'error', 'Smart Reel Assistant'); }
+    finally { setCheckingSetup(false); }
+  };
 
   useEffect(() => {
     if (!job || TERMINAL.has(job.status)) return undefined;
@@ -381,7 +402,8 @@ function ReviewWorkspace({ jobId }) {
         name: form.name, category: form.category, subCategory: form.subCategory, primaryColor: form.primaryColor,
         pattern: form.pattern, fabric: form.fabric, occasion: form.occasion, tags: form.tags,
         description: form.description, price: form.price, sizes: form.sizingMode === 'free-size' ? '' : form.sizes,
-        sizingMode: form.sizingMode, stock: form.stock,
+        sizingMode: form.sizingMode, stock: form.stock, primaryFrameId: form.primaryFrameId,
+        originalPrice: form.originalPrice, sizeChart: form.sizeChart, sizeChartProfile: form.sizeChartProfile, attributeValues: form.attributeValues,
       },
       selectedFrameIds: form.selectedFrameIds,
     });
@@ -422,7 +444,7 @@ function ReviewWorkspace({ jobId }) {
 
   const smartFillAll = async () => {
     if (smartFillingAll || capabilities?.smartSuggestionsEnabled !== true) return;
-    const eligible = candidates.filter((candidate) => !['ignored', 'merged', 'draft_created'].includes(candidate.status));
+    const eligible = candidates.filter((candidate) => !['ignored', 'merged'].includes(candidate.status) && !candidate.savedDraft?.publishedProductId);
     if (!eligible.length) return notify('There are no candidates available for smart fill.', 'info', 'Smart Reel Assistant');
     setSmartFillingAll(true);
     let completed = 0;
@@ -504,14 +526,28 @@ function ReviewWorkspace({ jobId }) {
     }
   };
 
-  const createDrafts = async () => {
+  const createDrafts = async (publish = false) => {
     if (!draftSelected.length || saving) return notify('Select at least one candidate for draft creation.', 'warning', 'Create drafts');
+    if (publish && !structure) return notify('Product configuration could not be loaded. Refresh this page before publishing.', 'error', 'Publish products');
+    if (publish) for (const candidate of candidates.filter((item) => draftSelected.includes(item._id || item.id))) {
+      const form = forms[candidate._id || candidate.id] || candidateForm(candidate);
+      const addedPhotos = (candidate.savedDraft?.images || []).filter((image) => !candidate.frames?.some((frame) => frame.url === image.url));
+      const missing = socialPublishMissing({ ...form, imageIds: [...form.selectedFrameIds, ...addedPhotos.map((image) => image.url)] }, categories, structure);
+      if (missing.length) return notify(`Product ${candidate.groupNumber}: complete ${missing.join(', ')}.`, 'warning', 'Publish products');
+    }
     setSaving(true);
     try {
       await Promise.all(candidates.filter((item) => draftSelected.includes(item._id || item.id)).map((item) => saveCandidate(item, true)));
       const response = await api.post(`/admin/reel-imports/${jobId}/create-drafts`, { candidateIds: draftSelected });
       const count = response.data?.drafts?.length || draftSelected.length;
-      notify(`${count} product draft${count > 1 ? 's' : ''} created.`, 'success', 'Create drafts');
+      if (publish) {
+        const ids = (response.data?.drafts || []).map((draft) => draft._id || draft.id).filter(Boolean);
+        if (!ids.length) throw new Error('The saved drafts were not confirmed. Refresh this review before publishing.');
+        const result = await api.post('/admin/product-drafts/publish-selected', { ids });
+        if (!result.success || !result.data?.products?.length) throw new Error('Publication was not confirmed. Your product drafts are saved for retry.');
+        setPublishedProducts(result.data.products);
+        notify(`${result.data.products.length} product(s) published.`, 'success', 'Publish products');
+      } else notify(`${count} product draft${count > 1 ? 's' : ''} created. You can continue editing here.`, 'success', 'Create drafts');
       load(true);
     } catch (error) {
       notify(error.message, 'error', 'Create drafts');
@@ -531,12 +567,13 @@ function ReviewWorkspace({ jobId }) {
       <PageHeader title="Review Reel Products" note={job.sourceVideo?.originalFilename || 'Product reel'}>
         <a href="/admin/reel-import" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-charcoal"><ArrowLeft className="h-4 w-4" />Import history</a>
       </PageHeader>
+      {publishedProducts.length > 0 && <div role="status" className="admin-card p-5"><p className="font-bold text-emerald-800">Your products are published and ready to edit.</p><div className="mt-3 flex flex-wrap gap-3">{publishedProducts.map((product) => <a key={product._id} href={'/admin/products/edit?id=' + product._id} className="admin-btn-ghost">Edit {product.name}</a>)}</div></div>}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="Status" value={labelStatus(job.status)} />
         <Stat label="Extracted" value={job.statistics?.extractedFrames || 0} />
         <Stat label="Rejected" value={job.statistics?.rejectedFrames || 0} />
         <Stat label="Duplicates" value={job.statistics?.duplicateFrames || 0} />
-        <Stat label="Possible products" value={job.statistics?.detectedProducts || 0} />
+        <Stat label="Review groups" value={job.statistics?.detectedProducts || 0} />
       </div>
 
       {(active || ['failed', 'cancelled'].includes(job.status)) && (
@@ -586,11 +623,11 @@ function ReviewWorkspace({ jobId }) {
                     {analyzedCount > 0 && <span className="text-xs font-bold text-wine">{analyzedCount}/{candidates.length} analyzed</span>}
                   </div>
                   <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                    Uses several reel views to suggest the product name, category, colour, pattern, fabric, occasion, tags and description. Your corrections always stay in control.
+                    Reads product views, video text and audio to fill the name, category, description and stated details. Clear product prices are filled too. Review what is missing, then publish here.
                   </p>
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-500"><Info className="h-3.5 w-3.5" />Price, stock and actual available sizes stay manual so the catalog never invents commercial details.</p>
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-500"><Info className="h-3.5 w-3.5" />Stock stays manual. Prices, sizes and measurements are filled only when stated in the source.</p>
                   {capabilities?.smartSuggestionsEnabled === false && (
-                    <p className="mt-3 text-xs font-black text-amber-800">{capabilities.smartSuggestionsMessage || 'Smart suggestions are unavailable on the server. Manual review remains available.'}</p>
+                    <div className="mt-3 space-y-3"><p className="text-xs font-black text-amber-800">{capabilities.smartSuggestionsMessage || 'AI setup could not be checked. Try checking it again.'}</p><div className="flex flex-wrap gap-2"><a className="admin-btn-ghost" href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Get a Gemini API key</a><button type="button" className="admin-btn-ghost" disabled={checkingSetup} onClick={checkSetup}>{checkingSetup ? 'Checking…' : 'Check setup again'}</button></div></div>
                   )}
                 </div>
               </div>
@@ -610,8 +647,9 @@ function ReviewWorkspace({ jobId }) {
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={merge} disabled={selected.length < 2} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black disabled:opacity-40"><GitMerge className="h-4 w-4" />Merge</button>
               <button type="button" onClick={approveHighConfidence} className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-black">Approve high confidence</button>
-              <button type="button" onClick={saveAll} disabled={saving} className="h-10 rounded-xl border border-wine px-3 text-xs font-black text-wine">Save for later</button>
-              <button type="button" onClick={createDrafts} disabled={saving || !draftSelected.length} className="h-10 rounded-xl bg-wine px-4 text-xs font-black text-white disabled:opacity-50">{saving ? 'Saving…' : 'Create selected drafts'}</button>
+              <button type="button" onClick={saveAll} disabled={saving} className="h-10 rounded-xl border border-wine px-3 text-xs font-black text-wine">Save all reviews</button>
+              <button type="button" onClick={() => createDrafts(false)} disabled={saving || !draftSelected.length} className="h-10 rounded-xl border border-wine px-4 text-xs font-black text-wine disabled:opacity-50">Save for later</button>
+              <button type="button" onClick={() => createDrafts(true)} disabled={saving || !draftSelected.length} className="h-10 rounded-xl bg-wine px-4 text-xs font-black text-white disabled:opacity-50">{saving ? 'Saving…' : 'Publish selected products'}</button>
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
@@ -621,6 +659,7 @@ function ReviewWorkspace({ jobId }) {
                 candidate={candidate}
                 candidates={candidates}
                 categories={categories}
+                structure={structure}
                 form={forms[candidate._id || candidate.id] || candidateForm(candidate)}
                 smartEnabled={capabilities?.smartSuggestionsEnabled === true}
                 smartFilling={smartFilling.includes(candidate._id || candidate.id)}
@@ -643,7 +682,7 @@ function ReviewWorkspace({ jobId }) {
   );
 }
 
-function CandidateCard({ candidate, candidates, categories, form, smartEnabled, smartFilling, mergeSelected, draftSelected, onMergeSelect, onDraftSelect, onUpdate, onSave, onSmartFill, onSplit, onMove }) {
+function CandidateCard({ candidate, candidates, categories, structure, form, smartEnabled, smartFilling, mergeSelected, draftSelected, onMergeSelect, onDraftSelect, onUpdate, onSave, onSmartFill, onSplit, onMove }) {
   const id = candidate._id || candidate.id;
   const confidence = Math.round(Number(candidate.confidence?.overall || 0) * 100);
   const completion = candidateFormCompletion(form);
@@ -653,6 +692,7 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
   useEffect(() => {
     fetchSubcategories(api, form.category).then(setSubcategories);
   }, [form.category]);
+  if (candidate.savedDraft?.publishedProductId) return <article className="admin-card p-5"><h2 className="font-bold">{candidate.savedDraft.name}</h2><p className="my-3 text-sm text-emerald-700">Published product</p><a className="admin-btn-ghost" href={'/admin/products/edit?id=' + candidate.savedDraft.publishedProductId}>Edit product</a></article>;
   return (
     <article className="admin-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -662,7 +702,7 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
             <span>{formatDuration(candidate.sourceRange?.startSeconds)}–{formatDuration(candidate.sourceRange?.endSeconds)}</span>
             <span>·</span>
             <span>{completion.completed}/{completion.total} catalog details ready</span>
-            {analysisStatus === 'completed' && <span className="rounded-full bg-emerald-50 px-2 py-1 font-black text-emerald-700">Smart confidence {confidence}%</span>}
+            {analysisStatus === 'completed' && <span className="rounded-full bg-emerald-50 px-2 py-1 font-black text-emerald-700">{candidate.analysis?.source === 'gemini-reel-context' ? 'Details filled from reel' : `Smart confidence ${confidence}%`}</span>}
             {analysisStatus === 'failed' && <span className="rounded-full bg-amber-50 px-2 py-1 font-black text-amber-800">Needs another look</span>}
           </div>
         </div>
@@ -678,16 +718,22 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
         {(candidate.frames || []).map((frame) => (
           <div key={frame._id || frame.storageKey} className={`overflow-hidden rounded-xl border ${form.selectedFrameIds.includes(String(frame._id)) ? 'border-wine ring-2 ring-wine/10' : 'border-slate-200'}`}>
             <button type="button" onClick={() => onUpdate('selectedFrameIds', toggleValue(form.selectedFrameIds, String(frame._id)))} className="relative block w-full">
-              <img src={frame.url} alt={candidate.suggestions?.altText || `Candidate ${candidate.groupNumber}`} className="h-28 w-full object-cover" />
+              <img src={frame.url} alt={candidate.suggestions?.altText || `Candidate ${candidate.groupNumber}`} className="h-36 w-full bg-slate-50 object-contain" />
               <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">{Number(frame.timestampSeconds || 0).toFixed(1)}s</span>
               {form.selectedFrameIds.includes(String(frame._id)) && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-wine text-white"><Check className="h-3 w-3" /></span>}
             </button>
+            <div className="grid gap-1 p-2 text-[10px] font-semibold text-slate-600">
+              {frame.selectionVersion && <><span className="text-emerald-700">{frame.recommendedCover ? 'Suggested cover' : frame.recommended ? 'Recommended' : 'Alternative view'}</span><span>Clarity {Math.round((frame.qualityScore || 0) * 100)} / 100{frame.viewType && frame.viewType !== 'unknown' ? ' · ' + frame.viewType : ''}</span>{frame.qualityWarnings?.map((warning) => <span key={warning} className="text-amber-800">{warning}</span>)}</>}
+              <a href={frame.url} target="_blank" rel="noreferrer" className="flex min-h-9 items-center text-wine underline">View full photo</a>
+              <button type="button" aria-pressed={form.primaryFrameId === String(frame._id)} onClick={() => { if (!form.selectedFrameIds.includes(String(frame._id))) onUpdate('selectedFrameIds', [...form.selectedFrameIds, String(frame._id)]); onUpdate('primaryFrameId', String(frame._id)); }} className="min-h-9 rounded-lg border border-wine/20 text-wine">{form.primaryFrameId === String(frame._id) ? 'Cover photo' : 'Set as cover'}</button>
+            </div>
             <MoveFrame frame={frame} sourceId={id} candidates={candidates} onMove={onMove} />
           </div>
         ))}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fbf7f3] px-3 py-2.5">
         <p className="text-xs font-semibold text-slate-600">Choose the clearest views, then let Smart Fill compare them.</p>
+        {candidate.frames?.some((frame) => frame.selectionVersion) && <button type="button" className="min-h-10 rounded-xl border border-wine/20 bg-white px-3 text-xs font-black text-wine" onClick={() => { const recommended = candidate.frames.filter((frame) => frame.recommended !== false); onUpdate('selectedFrameIds', recommended.map((frame) => String(frame._id))); onUpdate('primaryFrameId', String((recommended.find((frame) => frame.recommendedCover) || recommended[0])?._id || '')); }}>Use recommended photos</button>}
         <button
           type="button"
           disabled={!smartEnabled || smartFilling}
@@ -705,6 +751,14 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
             <option value="">Please confirm</option>{categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
           </Select>
         </Labeled>
+        <Labeled label="Selling price" hint={candidate.suggestions?.fieldSources?.price ? 'From source' : 'Required'}><TextInput type="number" min="0" value={form.price} onChange={(event) => onUpdate('price', event.target.value)} placeholder="Enter if missing" className="w-full" /></Labeled>
+        <Labeled label="Stock" hint="Your inventory"><TextInput type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate('stock', event.target.value)} placeholder="Available quantity" className="w-full" /></Labeled>
+      </div>
+      {candidate.suggestions?.fieldSources?.price && <p className="social-import__price-source">Price from {({ speech: 'reel audio', on_screen: 'video text', caption: 'the caption' })[candidate.suggestions.fieldSources.price.source] || 'the source'}: “{candidate.suggestions.fieldSources.price.quote}”</p>}
+      {candidate.suggestions?.priceAmbiguous && <p className="mt-3 text-xs font-bold text-amber-800">The source has several products or an unclear price. Confirm the price for this product.</p>}
+      <div className="my-4"><ImportSizeFields form={form} onUpdate={onUpdate} categories={categories} structure={structure} /></div>
+      {structure?.attributes?.filter((item) => item.required).map((item) => <Labeled key={item.key} label={item.label} hint="Required"><TextInput value={form.attributeValues[item.key] || ''} onChange={(event) => onUpdate('attributeValues', { ...form.attributeValues, [item.key]: event.target.value })} /></Labeled>)}
+      <details className="social-import__additional"><summary className="cursor-pointer text-sm font-bold text-wine">Review all filled details & optional fields</summary><div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Labeled label="Subcategory">
           <Select value={form.subCategory || ''} onChange={(event) => onUpdate('subCategory', event.target.value)} className="w-full">
             <option value="">{subcategories.length ? 'Select subcategory' : 'No subcategories yet'}</option>
@@ -716,19 +770,10 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
         <Labeled label="Fabric" hint={analysisStatus === 'completed' ? confidenceHint(candidate.confidence?.fabric) : ''}><TextInput value={form.fabric} onChange={(event) => onUpdate('fabric', event.target.value)} placeholder="Confirm if visible" className="w-full" /></Labeled>
         <Labeled label="Occasion"><TextInput value={form.occasion} onChange={(event) => onUpdate('occasion', event.target.value)} placeholder="Festive, wedding" className="w-full" /></Labeled>
         <Labeled label="Tags"><TextInput value={form.tags} onChange={(event) => onUpdate('tags', event.target.value)} placeholder="festive, maroon" className="w-full" /></Labeled>
-        <Labeled label="Size behavior" hint="Confirm before draft">
-          <Select value={form.sizingMode} onChange={(event) => onUpdate('sizingMode', event.target.value)} className="w-full">
-            <option value="confirm">Confirm manually</option>
-            <option value="sized">Customer selects a size</option>
-            <option value="free-size">No size selection / free size</option>
-          </Select>
-        </Labeled>
-        {form.sizingMode !== 'free-size' && <Labeled label="Available sizes" hint="Manual"><TextInput value={form.sizes} onChange={(event) => onUpdate('sizes', event.target.value)} placeholder="S, M, L, XL" className="w-full" /></Labeled>}
-        {form.sizingMode === 'free-size' && <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">Size buttons will stay hidden for this garment. Change the size behavior if this suggestion is not correct.</div>}
-        <Labeled label="Selling price" hint="Manual"><TextInput type="number" min="0" value={form.price} onChange={(event) => onUpdate('price', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
-        <Labeled label="Stock" hint="Manual"><TextInput type="number" min="0" value={form.stock} onChange={(event) => onUpdate('stock', event.target.value)} placeholder="Enter manually" className="w-full" /></Labeled>
+        <Labeled label="MRP"><TextInput type="number" min="0" value={form.originalPrice} onChange={(event) => onUpdate('originalPrice', event.target.value)} placeholder="Optional" className="w-full" /></Labeled>
         <div className="sm:col-span-2"><Labeled label="Product description"><TextArea value={form.description} onChange={(event) => onUpdate('description', event.target.value)} placeholder="Describe the visible style, work and silhouette" className="w-full" maxLength={800} /></Labeled></div>
-      </div>
+        {structure?.attributes?.filter((item) => !item.required).map((item) => <Labeled key={item.key} label={item.label}><TextInput value={form.attributeValues[item.key] || ''} onChange={(event) => onUpdate('attributeValues', { ...form.attributeValues, [item.key]: event.target.value })} /></Labeled>)}
+      </div></details>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={onSave} className="inline-flex h-10 items-center gap-2 rounded-xl bg-wine px-4 text-xs font-black text-white"><Check className="h-4 w-4" />Save candidate</button>
         <button type="button" onClick={onSplit} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-black"><Scissors className="h-4 w-4" />Split by timestamp</button>
@@ -740,11 +785,13 @@ function CandidateCard({ candidate, candidates, categories, form, smartEnabled, 
 
 function MoveFrame({ frame, sourceId, candidates, onMove }) {
   const [target, setTarget] = useState('');
+  const targets = candidates.filter((item) => (item._id || item.id) !== sourceId && !['merged', 'draft_created'].includes(item.status));
+  if (!targets.length) return null;
   return (
     <div className="flex items-center gap-1 p-1">
       <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Move frame target" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-1 py-1 text-[9px] font-bold">
         <option value="">Move to…</option>
-        {candidates.filter((item) => (item._id || item.id) !== sourceId && !['merged', 'draft_created'].includes(item.status)).map((item) => <option key={item._id || item.id} value={item._id || item.id}>Candidate {item.groupNumber}</option>)}
+        {targets.map((item) => <option key={item._id || item.id} value={item._id || item.id}>Candidate {item.groupNumber}</option>)}
       </select>
       <button type="button" disabled={!target} onClick={() => { onMove(frame._id, target); setTarget(''); }} className="grid h-6 w-6 place-items-center rounded-lg bg-slate-100 disabled:opacity-30" aria-label="Move frame"><MoveRight className="h-3 w-3" /></button>
     </div>
@@ -760,10 +807,11 @@ function Labeled({ label, hint = '', children }) {
 }
 
 function candidateForm(candidate) {
-  const overrides = candidate.adminOverrides || {};
+  const draft = candidate.savedDraft;
+  const overrides = { ...(candidate.adminOverrides || {}), ...(draft ? { ...draft, primaryColor: draft.colors?.join(', ') || '', price: draft.sellingPrice ?? draft.price, category: String(draft.category?._id || draft.category || '') } : {}) };
   const suggestions = candidate.suggestions || {};
   return {
-    name: overrides.name || suggestions.name || '',
+    name: overrides.name && !/^(?:reel\s+)?product\s+\d+$/i.test(overrides.name) ? overrides.name : suggestions.name || overrides.name || '',
     category: overrides.category || suggestions.category || '',
     subCategory: overrides.subCategory || suggestions.subcategory || suggestions.subCategory || '',
     primaryColor: overrides.primaryColor || suggestions.primaryColor || '',
@@ -771,20 +819,23 @@ function candidateForm(candidate) {
     fabric: overrides.fabric || suggestions.fabric || '',
     occasion: Array.isArray(overrides.occasion || suggestions.occasion) ? (overrides.occasion || suggestions.occasion).join(', ') : overrides.occasion || suggestions.occasion || '',
     tags: Array.isArray(overrides.tags || suggestions.tags) ? (overrides.tags || suggestions.tags).join(', ') : overrides.tags || '',
-    sizes: Array.isArray(overrides.sizes) ? overrides.sizes.join(', ') : overrides.sizes || '',
-    sizingMode: overrides.sizingMode || suggestions.sizingMode || 'confirm',
+    sizes: Array.isArray(overrides.sizes) ? (overrides.sizes.length ? overrides.sizes : suggestions.sizes || []).join(', ') : overrides.sizes || suggestions.sizes?.join(', ') || '',
+    sizingMode: (overrides.sizingMode || suggestions.sizingMode || 'auto').replace('confirm', 'auto'),
     description: overrides.description || suggestions.description || suggestions.shortDescription || '',
-    price: overrides.price ?? overrides.sellingPrice ?? '',
+    price: Number(overrides.price ?? overrides.sellingPrice) > 0 ? overrides.price ?? overrides.sellingPrice : suggestions.price ?? '',
+    originalPrice: Number(overrides.originalPrice) > 0 ? overrides.originalPrice : suggestions.originalPrice ?? '',
+    sizeChart: overrides.sizeChart?.rows?.length ? overrides.sizeChart : suggestions.sizeChart || { unit: 'in', columns: [], rows: [] }, sizeChartProfile: overrides.sizeChartProfile || 'auto', attributeValues: { ...suggestions.attributeValues, ...overrides.attributeValues },
     stock: overrides.stock ?? '',
     status: candidate.status || 'suggested',
-    selectedFrameIds: (candidate.frames || []).filter((frame) => frame.selected).map((frame) => String(frame._id)),
+    selectedFrameIds: (candidate.frames || []).filter((frame) => draft?.images?.length ? draft.images.some((image) => image.url === frame.url) : frame.selected).map((frame) => String(frame._id)),
+    primaryFrameId: draft?.images?.some((image) => image.primary) ? String(candidate.frames?.find((frame) => frame.url === draft.images.find((image) => image.primary).url)?._id || '') : overrides.primaryFrameId || String((candidate.frames || []).find((frame) => frame.selected && frame.recommendedCover)?._id || (candidate.frames || []).find((frame) => frame.selected)?._id || ''),
   };
 }
 
 function mergeSmartCandidateForm(current, before, suggested) {
   const next = { ...current };
   Object.keys(suggested).forEach((field) => {
-    if (field === 'selectedFrameIds' || field === 'status') return;
+    if (field === 'selectedFrameIds' || field === 'primaryFrameId' || field === 'status') return;
     const currentValue = current?.[field];
     const previousValue = before?.[field];
     const unchanged = JSON.stringify(currentValue) === JSON.stringify(previousValue);

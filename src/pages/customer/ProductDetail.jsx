@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Share2, ShieldCheck, Star, ThumbsUp, Truck } from 'lucide-react';
-import SizeChartModal from '../../components/product/SizeChartModal';
+import LazyBoundary from '../../components/ui/LazyBoundary';
 import { ProductVisual } from '../../components/product/ProductCard';
 import ProductDetailPage from '../../components/product/ProductDetailPage';
-import ReviewModal from '../../components/product/ReviewModal';
 import Icon from '../../components/layout/Icon';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -18,6 +17,9 @@ import { trackEvent } from '../../utils/analytics';
 import SeoHead from '../../components/seo/SeoHead';
 import { parseProductKey } from '../../utils/routing';
 import { getSelectableSizes } from '../../utils/productSizing';
+
+const SizeChartModal = lazy(() => import('../../components/product/SizeChartModal'));
+const ReviewModal = lazy(() => import('../../components/product/ReviewModal'));
 
 export default function ProductDetail({ navigate, route = '' }) {
   const productKey = parseProductKey(route);
@@ -834,15 +836,15 @@ export default function ProductDetail({ navigate, route = '' }) {
         </section>
       </div>
 
-      <ReviewModal
+      {reviewModalOpen && <LazyBoundary><Suspense fallback={<p role="status" className="p-4 text-sm">Loading review form…</p>}><ReviewModal
         open={reviewModalOpen}
         product={product}
         existingReview={reviewEligibility?.existingReview}
         initialRating={reviewInitialRating}
         onClose={() => setReviewModalOpen(false)}
         onSubmit={saveReview}
-      />
-      <SizeChartModal
+      /></Suspense></LazyBoundary>}
+      {openSizeChart && <LazyBoundary><Suspense fallback={<p role="status" className="p-4 text-sm">Loading size guide…</p>}><SizeChartModal
         open={openSizeChart}
         onClose={() => setOpenSizeChart(false)}
         product={product}
@@ -851,7 +853,7 @@ export default function ProductDetail({ navigate, route = '' }) {
         selectedSize={size}
         onSelectSize={selectDesktopSize}
         isSizeAvailable={(item) => isSizeAvailable(product, item)}
-      />
+      /></Suspense></LazyBoundary>}
       {openGallery && mediaItems.length > 0 && (
         <div className="fixed inset-0 z-[90] bg-black md:bg-black/95" role="dialog" aria-modal="true" aria-label={`${product.name} image gallery`} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           <div className="flex h-full flex-col">
@@ -915,6 +917,7 @@ export default function ProductDetail({ navigate, route = '' }) {
 function DetailsCard({ product, returnPolicy }) {
   const selectableSizes = getSelectableSizes(product);
   const specifications = [
+    ...(Array.isArray(product.specifications) ? product.specifications : []).filter((item) => item?.label && item?.value).map((item) => [item.label, [item.value, item.unit].filter(Boolean).join(' ')]),
     ['Category', product.category],
     ['Subcategory', product.subCategory],
     ['Fabric', product.fabric],
@@ -1030,7 +1033,7 @@ function RailProduct({ product, navigate }) {
   return (
     <article className="w-40 shrink-0 md:w-52">
       <button type="button" onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f6efe8]">
-        {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-48 w-full object-cover md:h-64" /> : <ProductVisual product={product} compact />}
+        {image ? <img loading="lazy" decoding="async" src={normalizeImageUrl(image)} alt={product.name} className="h-48 w-full object-cover md:h-64" /> : <ProductVisual product={product} compact />}
       </button>
       <h3 className="product-brand mt-2 truncate">{product.brand || 'Samira Collection'}</h3>
       <p className="product-name truncate text-slate-500">{product.name}</p>

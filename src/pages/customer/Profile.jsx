@@ -3,15 +3,12 @@ import {
   BadgeCheck,
   Building2,
   ChevronRight,
-  CreditCard,
   FileText,
   Gift,
   Headphones,
   Heart,
   HelpCircle,
   Home,
-  LayoutDashboard,
-  LogOut,
   Mail,
   Bell,
   MapPin,
@@ -30,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { normalizeImageUrl } from '../../services/normalize';
 import { useGetAddressesQuery, useGetCouponsQuery, useGetOrdersQuery } from '../../store/apiSlice';
+import AccountSidebar from '../../components/layout/AccountSidebar';
 import './Profile.css';
 
 const accountLinks = [
@@ -39,18 +37,6 @@ const accountLinks = [
   { title: 'Addresses', subtitle: 'Save addresses for a hassle-free checkout', icon: MapPin, action: '/profile/addresses' },
   { title: 'Coupons', subtitle: 'Manage coupons for additional discounts', icon: ShieldCheck, action: '/products?discount=20' },
   { title: 'Profile Details', subtitle: 'Change your profile details', icon: FileText, action: '/profile/details' },
-];
-
-const desktopMenu = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/profile', active: true },
-  { label: 'Orders', icon: Package, path: '/orders' },
-  { label: 'Notifications', icon: Bell, path: '/notifications' },
-  { label: 'Wishlist', icon: Heart, path: '/wishlist' },
-  { label: 'Addresses', icon: MapPin, path: '/profile/addresses' },
-  { label: 'Coupons', icon: TicketPercent, path: '/products?discount=20' },
-  { label: 'Payments', icon: CreditCard, path: '/checkout' },
-  { label: 'Profile Details', icon: UserRound, path: '/profile/details' },
-  { label: 'Help & Support', icon: HelpCircle, path: '/contact' },
 ];
 
 const footerLinks = [
@@ -77,7 +63,6 @@ export default function Profile({ navigate }) {
   const { data: couponsData = [] } = useGetCouponsQuery(undefined, { skip: !user });
 
   const displayName = useMemo(() => user?.name || user?.fullName || user?.email || user?.phone || 'Account', [user]);
-  const initials = useMemo(() => getInitials(displayName), [displayName]);
   const orders = Array.isArray(ordersData) ? ordersData : [];
   const addresses = Array.isArray(addressesData) ? addressesData : [];
   const coupons = Array.isArray(couponsData) ? couponsData : [];
@@ -90,7 +75,6 @@ export default function Profile({ navigate }) {
         navigate={navigate}
         user={user}
         displayName={displayName}
-        initials={initials}
         orders={orders}
         recentOrders={recentOrders}
         ordersLoading={ordersLoading}
@@ -115,7 +99,6 @@ function DesktopAccountDashboard({
   navigate,
   user,
   displayName,
-  initials,
   orders,
   recentOrders,
   ordersLoading,
@@ -135,27 +118,7 @@ function DesktopAccountDashboard({
         </nav>
 
         <div className="sc-account__layout">
-          <aside className="sc-account__sidebar">
-            <div className="sc-account__profile-card">
-              <div className="sc-account__avatar">{initials}</div>
-              <h2>{displayName}</h2>
-              <p>{user?.phone || user?.email || 'Samaira member'}</p>
-              <button type="button" onClick={() => navigate('/profile/details')}>Edit Profile</button>
-            </div>
-
-            <nav className="sc-account__menu" aria-label="Account sections">
-              {desktopMenu.map(({ label, icon: Icon, path, active }) => (
-                <button key={label} type="button" className={active ? 'is-active' : ''} onClick={() => navigate(path)}>
-                  <Icon size={17} aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-              <button type="button" onClick={logout}>
-                <LogOut size={17} aria-hidden="true" />
-                Logout
-              </button>
-            </nav>
-          </aside>
+          <AccountSidebar user={user} navigate={navigate} logout={logout} />
 
           <main className="sc-account__main">
             <header className="sc-account__hero">
@@ -436,12 +399,6 @@ function EmptyState({ label, action, onClick }) {
       <button type="button" onClick={onClick}>{action}</button>
     </div>
   );
-}
-
-function getInitials(value = '') {
-  const parts = String(value).trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return 'SC';
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 }
 
 function getStatusMeta(status = '') {

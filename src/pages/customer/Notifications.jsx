@@ -1,102 +1,105 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCheck, ChevronLeft, Package } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCheck, ChevronRight, CreditCard, Headphones, Package, RefreshCw, RotateCcw, Truck } from 'lucide-react';
 import api from '../../services/api';
-import PageState from '../../components/ui/PageState';
+import { useAuth } from '../../context/AuthContext';
+import { useNotifications, useOpenNotification } from '../../context/NotificationContext';
+import AccountSidebar from '../../components/layout/AccountSidebar';
+import { notificationCategory, notificationDate, notificationDestination } from '../../utils/notifications';
+import './Profile.css';
+import '../../components/notifications/Notifications.css';
 
-export default function Notifications({ navigate }) {
-  const [items, setItems] = useState([]);
+const filters = [['', 'All updates'], ['orders', 'Orders'], ['returns', 'Returns'], ['payments', 'Payments'], ['support', 'Support']];
+const icons = { orders: Package, returns: RotateCcw, payments: CreditCard, support: Headphones, updates: Bell };
+export default function Notifications({ navigate, route = '/notifications' }) {
+  const { user, logout } = useAuth();
+  const { unreadCount, revision, changed, refresh } = useNotifications();
+  const openNotification = useOpenNotification(navigate);
+  const admin = route.startsWith('/admin');
+  const [data, setData] = useState({ items: [], total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const unread = useMemo(() => items.filter((item) => !item.readAt), [items]);
-
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.get('/notifications?limit=50');
-      setItems(Array.isArray(data) ? data : []);
-    } catch (requestError) {
-      setError(requestError.message || 'Unable to load notifications.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const [actionError, setActionError] = useState('');
+  const [category, setCategory] = useState('');
+  const [read, setRead] = useState('');
+  const [page, setPage] = useState(1);
+  const [reload, setReload] = useState(0);
+  const [busy, setBusy] = useState('');
+  const userId = user?._id || user?.id;
   useEffect(() => {
-    load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const markRead = async (item) => {
-    let next = item;
-    if (!item.readAt) {
-      try {
-        next = await api.patch(`/notifications/${item._id}/read`, {});
-        setItems((current) => current.map((entry) => (entry._id === item._id ? next : entry)));
-      } catch (requestError) {
-        setError(requestError.message || 'Unable to update this notification.');
-      }
-    }
-    if (next.metadata?.orderId) navigate(`/order-detail?id=${encodeURIComponent(next.metadata.orderId)}`);
-    else if (next.metadata?.returnId) navigate('/returns');
+    let active = true;
+    setLoading(true); setError('');
+    const query = new URLSearchParams({ page: String(page), limit: '20' });
+    if (category) query.set('category', category);
+    if (read) query.set('read', read);
+    if (!userId) { setData({ items: [], total: 0, totalPages: 1 }); setLoading(false); return undefined; }
+    api.get(`/notifications?${query}`, { silent: true }).then((result) => {
+      if (!active) return;
+      const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
+      setData(next);
+      if (page > next.totalPages) setPage(next.totalPages);
+    }).catch((err) => { if (active) setError(err.message || 'Unable to load notifications.'); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [userId, page, category, read, revision, reload]);
+  const groups = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    return data.items.reduce((result, item) => {
+      const time = new Date(item.createdAt).getTime();
+      const label = time >= today.getTime() ? 'Today' : time >= yesterday.getTime() ? 'Yesterday' : 'Earlier';
+      (result[label] ||= []).push(item); return result;
+    }, {});
+  }, [data.items]);
+  const markAll = async () => {
+    if (busy) return; setBusy('all'); setActionError('');
+    try { await api.patch('/notifications/read-all', {}); await changed(); setReload((value) => value + 1); }
+    catch (err) { setActionError(err.message || 'Unable to mark notifications as read.'); }
+    finally { setBusy(''); }
   };
-
-  const markAllRead = async () => {
-    if (!unread.length) return;
-    const results = await Promise.allSettled(unread.map((item) => api.patch(`/notifications/${item._id}/read`, {})));
-    const updates = new Map();
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') updates.set(unread[index]._id, result.value);
-    });
-    setItems((current) => current.map((item) => updates.get(item._id) || item));
-    if (updates.size !== unread.length) setError('Some notifications could not be marked as read.');
+  const toggleRead = async (item) => {
+    if (busy) return; setBusy(item._id); setActionError('');
+    try { await api.patch(`/notifications/${item._id}/read`, { read: !item.readAt }); await changed(); setReload((value) => value + 1); }
+    catch (err) { setActionError(err.message || 'Unable to update this notification.'); }
+    finally { setBusy(''); }
   };
-
-  return (
-    <section className="min-h-[70vh] bg-[#f7f7f8] px-3 py-4 md:bg-ivory md:px-6 md:py-10">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm md:mb-6 md:px-6">
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => navigate('/profile')} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200" aria-label="Back to profile">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <h1 className="text-xl font-black text-[#1f2a44] md:text-3xl">Notifications</h1>
-              <p className="mt-1 text-xs text-slate-500">{unread.length} unread update{unread.length === 1 ? '' : 's'}</p>
-            </div>
+  const open = async (item) => {
+    if (busy) return;
+    setBusy(item._id);
+    try { await openNotification(item); setReload((value) => value + 1); }
+    catch (err) { setActionError(err.message || 'Unable to open this notification.'); }
+    finally { setBusy(''); }
+  };
+  return <section className={`sc-notifications${admin ? ' sc-notifications--admin' : ''}`}>
+    <div className="sc-notifications__shell">
+      {!admin && <nav className="sc-notifications__breadcrumb" aria-label="Breadcrumb"><button onClick={() => navigate('/')}>Home</button><ChevronRight size={13} /><button onClick={() => navigate('/profile')}>My Account</button><ChevronRight size={13} /><span>Notifications</span></nav>}
+      <div className="sc-notifications__layout">{!admin && <AccountSidebar user={user} navigate={navigate} logout={logout} activePath="/notifications" />}
+        <div className="sc-notifications__main">
+          <header className="sc-notifications__heading"><button className="sc-notifications__back" onClick={() => navigate(admin ? '/admin' : '/profile')} aria-label={admin ? 'Back to dashboard' : 'Back to profile'}><ArrowLeft size={21} /></button>
+            <div><p className="sc-notifications__eyebrow">{admin ? 'STORE UPDATES' : 'MY ACCOUNT'}</p><h1>Notifications</h1><p>{unreadCount} unread update{unreadCount === 1 ? '' : 's'}</p></div>
+            <button className="sc-notifications__mark-all" disabled={!!busy || !unreadCount} onClick={markAll}><CheckCheck size={17} />{busy === 'all' ? 'Updating...' : 'Mark all read'}</button>
+          </header>
+          <div className="sc-notifications__toolbar"><div className="sc-notifications__filters" role="group" aria-label="Notification categories">{filters.map(([value, label]) => <button key={value} aria-pressed={category === value} onClick={() => { setCategory(value); setPage(1); }}>{label}</button>)}</div>
+            <div className="sc-notifications__read-filter"><label><input type="checkbox" checked={read === 'unread'} onChange={(event) => { setRead(event.target.checked ? 'unread' : ''); setPage(1); }} />Unread only</label><button aria-label="Refresh notifications" disabled={loading} onClick={() => { refresh(); setReload((value) => value + 1); }}><RefreshCw size={17} /></button></div>
           </div>
-          <button type="button" onClick={markAllRead} disabled={!unread.length} className="inline-flex h-10 items-center gap-2 rounded-xl border border-wine px-3 text-xs font-bold text-wine disabled:cursor-not-allowed disabled:opacity-40 md:px-4">
-            <CheckCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Mark all read</span>
-          </button>
+          {actionError && <p className="sc-notifications__error" role="alert">{actionError}</p>}
+          {!userId ? <div className="sc-notifications__state"><Bell size={36} /><h2>Sign in for your updates</h2><button onClick={() => navigate('/login?redirect=/notifications')}>Sign in</button></div>
+            : loading ? <div className="sc-notifications__state" role="status">Loading notifications...</div>
+              : error ? <div className="sc-notifications__state" role="alert"><h2>Unable to load notifications</h2><p>{error}</p><button onClick={() => setReload((value) => value + 1)}>Try again</button></div>
+                : !data.items.length ? <div className="sc-notifications__state"><Bell size={36} strokeWidth={1.4} /><h2>{category || read ? 'All caught up here' : 'No notifications yet'}</h2><p>{category || read ? 'There are no updates matching these filters.' : 'Order and return updates will appear here.'}</p>{(category || read) && <button onClick={() => { setCategory(''); setRead(''); setPage(1); }}>View all updates</button>}</div>
+                  : <>{Object.entries(groups).map(([label, items]) => <section className="sc-notifications__group" key={label} aria-label={label}><h2>{label}</h2><div className="sc-notifications__list">{items.map((item) => {
+                    const Icon = /SHIPPED|DELIVERY/.test(item.event || '') ? Truck : icons[notificationCategory(item)];
+                    const path = notificationDestination(item, user);
+                    return <article key={item._id} className={`sc-notification${item.readAt ? '' : ' is-unread'}`}>
+                      <button className="sc-notification__open" disabled={!!busy} onClick={() => open(item)}>
+                        <span className={`sc-notification__icon sc-notification__icon--${notificationCategory(item)}`}><Icon size={21} strokeWidth={1.7} /></span>
+                        <span className="sc-notification__body"><span className="sc-notification__title">{item.title || 'Account update'}{item.audience === 'ADMIN' && <span className="sc-notification__admin">Admin</span>}</span><span className="sc-notification__message">{item.message || item.event}</span><time dateTime={item.createdAt}>{notificationDate(item.createdAt)}</time>{path && <span className="sc-notification__link">{item.metadata?.returnId ? 'View request' : item.metadata?.orderId ? 'View order' : 'View details'}<ChevronRight size={13} /></span>}</span>
+                        {!item.readAt && <span className="sc-notification__dot" aria-label="Unread" />}
+                      </button>
+                      <button className="sc-notification__read" disabled={!!busy} aria-label={`${item.readAt ? 'Mark unread' : 'Mark read'}: ${item.title || 'Account update'}`} onClick={() => toggleRead(item)}>{item.readAt ? 'Mark unread' : 'Mark read'}</button>
+                    </article>;
+                  })}</div></section>)}
+                  {data.totalPages > 1 && <nav className="sc-notifications__pages" aria-label="Notification pages"><button disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>{page} / {data.totalPages}</span><button disabled={page >= data.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></nav>}</>}
         </div>
-
-        {error ? <p className="mb-4 rounded-xl bg-rose/10 px-4 py-3 text-sm font-semibold text-wine">{error}</p> : null}
-        {loading ? <PageState loading loadingLabel="Loading notifications..." /> : null}
-        {!loading && !items.length ? <PageState empty emptyTitle="No notifications yet" emptyNote="Order and return updates will appear here." /> : null}
-        {!loading && items.length ? (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            {items.map((item) => (
-              <button key={item._id} type="button" onClick={() => markRead(item)} className={`flex w-full items-start gap-3 border-b border-slate-100 px-4 py-4 text-left last:border-b-0 md:px-6 ${item.readAt ? 'bg-white' : 'bg-[#fff5f8]'}`}>
-                <span className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full ${item.readAt ? 'bg-slate-100 text-slate-500' : 'bg-rose/10 text-wine'}`}>
-                  {item.metadata?.orderId ? <Package className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-[#1f2a44]">{item.title || 'Account update'}</span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-600">{item.message || item.event}</span>
-                  <span className="mt-2 block text-[10px] font-medium text-slate-400">{formatNotificationDate(item.createdAt)}</span>
-                </span>
-                {!item.readAt ? <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-rose" aria-label="Unread" /> : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
-    </section>
-  );
-}
-
-function formatNotificationDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    </div>
+  </section>;
 }

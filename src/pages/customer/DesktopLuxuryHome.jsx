@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, memo, useMemo, useRef, useState } from 'react';
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -16,8 +16,10 @@ import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
 import { getHomepageSection } from '../../config/websiteCustomization';
-import QuickViewModal from '../../components/product/QuickViewModal';
+import LazyBoundary from '../../components/ui/LazyBoundary';
 import styles from './DesktopLuxuryHome.module.css';
+
+const QuickViewModal = lazy(() => import('../../components/product/QuickViewModal'));
 
 const services = [
   { title: 'Secure Payments', text: '100% secure & trusted', icon: IconCreditCard },
@@ -64,16 +66,17 @@ export default function DesktopLuxuryHome({
     ? normalizeImageUrl(activeHero.image)
     : getProductImage(productsWithImages[0]);
   const editorialProducts = productsWithImages.slice(0, 3);
-  const arrivals = uniqueProducts([
+  const hasSelection = (id) => Boolean(websiteConfig?.homepage?.sectionProductIds?.[id]?.length);
+  const arrivals = uniqueProducts(hasSelection('newArrivals') ? newArrivalProducts : [
     ...newArrivalProducts,
     ...featuredProducts,
     ...trendingProducts,
     ...catalog,
   ]).filter((product) => getProductImage(product));
-  const bestSellers = uniqueProducts(bestSellerProducts.length ? bestSellerProducts : catalog.filter((product) => product.isBestSeller))
+  const bestSellers = uniqueProducts(hasSelection('bestSellers') || bestSellerProducts.length ? bestSellerProducts : catalog.filter((product) => product.isBestSeller))
     .filter((product) => getProductImage(product)).slice(0, 12);
   const trendingNow = uniqueProducts(
-    catalog.filter((product) => product.showInTrending),
+    hasSelection('trending') ? trendingProducts : catalog.filter((product) => product.showInTrending),
   ).filter((product) => getProductImage(product)).slice(0, 12);
   const latestArrivals = arrivals.slice(0, 12);
   const saleBanner = banners.find((banner) => ['Sale', 'Offer'].includes(banner.type) && banner.image);
@@ -103,7 +106,7 @@ export default function DesktopLuxuryHome({
             </div>
           </div>
           <div className={styles.heroVisual}>
-            {heroImage ? <img src={heroImage} alt={activeHero.title || 'Samira festive collection'} /> : <div className={styles.imageFallback}>Samira Collection</div>}
+            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={activeHero.title || 'Samira festive collection'} /> : <div className={styles.imageFallback}>Samira Collection</div>}
           </div>
         </div>
         <button type="button" className={`${styles.heroArrow} ${styles.heroArrowLeft}`} onClick={() => moveHero(-1)} aria-label="Previous hero slide"><IconChevronLeft /></button>
@@ -244,7 +247,7 @@ function CategorySection({ categories, products, navigate, section }) {
           return (
             <button key={categoryId} type="button" className={styles.categoryItem} onClick={() => navigate(`/products?category=${encodeURIComponent(categoryId)}`)}>
               <span className={styles.categoryImageWrap}>
-                {image ? <img src={image} alt={category.name} /> : <span className={styles.imageFallback}>{String(category.name || 'SC').slice(0, 2)}</span>}
+                {image ? <img loading="lazy" decoding="async" src={image} alt={category.name} /> : <span className={styles.imageFallback}>{String(category.name || 'SC').slice(0, 2)}</span>}
               </span>
               <strong>{category.name}</strong>
             </button>
@@ -293,7 +296,7 @@ function EditorialCard({ className, product, eyebrow, text, action, navigate, ac
   const image = imageOverride ? normalizeImageUrl(imageOverride) : getProductImage(product);
   return (
     <article className={className}>
-      {image ? <img src={image} alt={product?.name || eyebrow} /> : <div className={styles.imageFallback}>Samira Collection</div>}
+      {image ? <img loading="lazy" decoding="async" src={image} alt={product?.name || eyebrow} /> : <div className={styles.imageFallback}>Samira Collection</div>}
       <div className={styles.editorialOverlay} />
       <div className={styles.editorialCopy}>
         <h3>{eyebrow}</h3>
@@ -340,13 +343,13 @@ function ProductSection({ eyebrow, title, subtitle, products = [], navigate, vie
   );
 }
 
-function LuxuryProductCard({ product, navigate, large }) {
+const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, large }) {
   const [imageIndex, setImageIndex] = useState(0);
   const [quickOpen, setQuickOpen] = useState(false);
   const cart = useCart();
   const wishlist = useWishlist();
   const productId = getProductId(product);
-  const productImages = getProductImages(product);
+  const productImages = useMemo(() => getProductImages(product), [product]);
   const image = productImages[imageIndex] || getProductImage(product);
   const price = Number(product.sellingPrice ?? product.price ?? 0);
   const originalPrice = Number(product.originalPrice ?? price);
@@ -371,7 +374,7 @@ function LuxuryProductCard({ product, navigate, large }) {
   return (
     <article className={`${styles.productCard} ${large ? styles.productCardLarge : ''}`} onClick={() => navigate(`/product?id=${encodeURIComponent(productId)}`)} data-theme-product-card>
       <div className={styles.productImageWrap} data-theme-product-media>
-        <img src={image} alt={product.name} />
+        <img loading="lazy" decoding="async" src={image} alt={product.name} />
         {(product.isNewArrival || product.isBestSeller) && <span className={styles.productBadge}>{product.isBestSeller ? 'Bestseller' : 'New'}</span>}
         <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
         <button type="button" className={styles.cartButton} onClick={addToCart} aria-label="Add to cart" data-card-field="cart"><IconShoppingBag /></button>
@@ -408,10 +411,10 @@ function LuxuryProductCard({ product, navigate, large }) {
         <span>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)}</span>
         <small>({product.numReviews || product.rating || 0})</small>
       </div>
-      {quickOpen && <QuickViewModal product={product} onClose={() => setQuickOpen(false)} onOpenFull={() => { setQuickOpen(false); navigate(`/product?id=${encodeURIComponent(productId)}`); }} />}
+      {quickOpen && <LazyBoundary><Suspense fallback={<p role="status" className="p-3 text-sm text-slate-600">Loading quick view…</p>}><QuickViewModal product={product} onClose={() => setQuickOpen(false)} onOpenFull={() => { setQuickOpen(false); navigate(`/product?id=${encodeURIComponent(productId)}`); }} /></Suspense></LazyBoundary>}
     </article>
   );
-}
+});
 
 function SaleBanner({ banner, fallbackProduct, navigate, section }) {
   const image = section?.image ? normalizeImageUrl(section.image) : banner?.image ? normalizeImageUrl(banner.image) : getProductImage(fallbackProduct);
@@ -419,7 +422,7 @@ function SaleBanner({ banner, fallbackProduct, navigate, section }) {
     <section className={`${styles.luxuryContainer} ${styles.saleBanner}`}>
       <div className={styles.saleCopy}><span>Samira Collection</span><h2>{section?.heading || banner?.title || 'Season Sale'}</h2><p>{section?.description || 'Discover current offers'}</p></div>
       <button type="button" className="site-theme-button" onClick={() => navigate(section?.buttonLink || banner?.link || '/products?discount=20')}>{section?.buttonText || 'Shop Sale'}</button>
-      <div className={styles.saleVisual}>{image && <img src={image} alt={banner?.title || 'Festive sale'} />}</div>
+      <div className={styles.saleVisual}>{image && <img loading="lazy" decoding="async" src={image} alt={banner?.title || 'Festive sale'} />}</div>
     </section>
   );
 }
@@ -511,7 +514,7 @@ function ThemedDesktopSection({ config, id, children }) {
   const section = getHomepageSection(config, id);
   if (!section?.visible) return null;
   const background = normalizeImageUrl(section.backgroundImage);
-  return <div className="themed-home-section" style={{ '--home-section-order': section.order, ...(background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>{children}</div>;
+  return <div className="themed-home-section" data-section-background={Boolean(background)} style={{ '--home-section-order': section.order, ...(background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>{children}</div>;
 }
 
 function uniqueProducts(products) {

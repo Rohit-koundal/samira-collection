@@ -43,13 +43,13 @@ async function request(path, options = {}) {
   const body = options.body ? JSON.parse(options.body) : undefined;
   const endpoint = method === 'GET' ? samiraApi.endpoints.request : samiraApi.endpoints.mutate;
   const action = method === 'GET'
-    ? endpoint.initiate({ path }, {
+    ? endpoint.initiate({ path, silent: options.silent }, {
       forceRefetch: options.forceRefetch !== false,
       subscribe: false,
     })
     : endpoint.initiate({ path, method, body });
   const promise = store.dispatch(action);
-  startMobileLoader();
+  if (!options.silent) startMobileLoader();
 
   try {
     const result = await promise.unwrap();
@@ -57,7 +57,7 @@ async function request(path, options = {}) {
   } catch (error) {
     throw toCustomerError(error, path);
   } finally {
-    stopMobileLoader();
+    if (!options.silent) stopMobileLoader();
     if (method === 'GET') promise?.unsubscribe?.();
   }
 }
@@ -86,7 +86,7 @@ async function prepareUploadFiles(files, fieldName) {
 }
 
 const api = {
-  get: (path) => request(path),
+  get: (path, options = {}) => request(path, options),
   post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),

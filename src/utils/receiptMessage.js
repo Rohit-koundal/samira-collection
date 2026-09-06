@@ -1,30 +1,31 @@
 import { normalizeIndianPhone } from './phoneFormatter';
+import { invoiceMoney, receiptView } from './receiptData';
 
 export function buildReceiptMessage(receipt) {
+  const view = receiptView(receipt);
   const lines = [
-    `Hello, your ${receipt.storeDetails?.storeName || 'Samira Collection'} order has been placed successfully.`,
+    `${view.storeName} - Order summary`,
     '',
     `Order ID: #${String(receipt.orderId).slice(-8).toUpperCase()}`,
-    `Order Date: ${new Date(receipt.orderDate).toLocaleString('en-IN')}`,
+    `Invoice: ${view.number}`,
+    `Order Date: ${view.orderDate}`,
     `Customer: ${receipt.customer?.name || receipt.shippingAddress?.fullName || '-'}`,
-    `Payment Method: ${receipt.paymentMethod}`,
-    `Payment Status: ${receipt.paymentStatus}`,
+    `Payment Method: ${view.paymentMethod}`,
+    `Payment Status: ${view.paymentStatus}`,
     `Order Status: ${receipt.orderStatus}`,
     '',
     'Items:',
-    ...receipt.items.map((item, index) => `${index + 1}. ${item.name} - Size: ${item.size || '-'}, Qty: ${item.quantity}, Amount: Rs. ${item.price * item.quantity}`),
+    ...view.items.map((item) => `${item.number}. ${item.name}${item.variant ? ` - ${item.variant}` : ''}, Qty: ${item.quantity}, Amount: ${invoiceMoney(item.total)}`),
     '',
-    `Total MRP: Rs. ${receipt.totalMRP || 0}`,
-    `Product Discount: Rs. ${receipt.productDiscount || 0}`,
-    `Coupon Discount: Rs. ${receipt.couponDiscount || 0}`,
-    `Delivery Charge: Rs. ${receipt.deliveryCharge || 0}`,
-    `COD Charge: Rs. ${receipt.codCharge || 0}`,
-    `Final Amount: Rs. ${receipt.finalAmount || 0}`,
+    ...view.totals.map(([name, value]) => `${name}: ${name === 'Delivery' && value === 0 ? 'FREE' : invoiceMoney(value)}`),
+    `Invoice Total: ${invoiceMoney(view.total)}`,
+    ...(view.taxNote ? [view.taxNote] : []),
+    ...(view.paymentNote ? [view.paymentNote] : []),
     '',
     'Delivery Address:',
     formatAddress(receipt.shippingAddress),
     '',
-    'Thank you for shopping with Samira Collection.',
+    `Thank you for shopping with ${view.storeName}.`,
   ];
   return lines.join('\n');
 }

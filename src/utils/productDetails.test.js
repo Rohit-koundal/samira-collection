@@ -1,6 +1,10 @@
 import { buildProductDetails, hasMeaningfulProductCopy, parseDescription } from './productDetails';
 
 describe('product detail formatting', () => {
+  test('displays API-configured specification labels, values and units', () => {
+    const details = buildProductDetails({ specifications: [{ key: 'ram', label: 'RAM', value: '8', unit: 'GB' }] });
+    expect(details.specifications).toContainEqual({ label: 'RAM', value: '8 GB' });
+  });
   test('separates narrative copy from labelled API specifications', () => {
     const result = parseDescription(`An elegant style for evening occasions.\n\nDesigned with a graceful silhouette.\n\nProduct Details:\n• Color: Ivory White\n• Work: Thread embroidery\n• Wash Care: Dry clean only`);
 

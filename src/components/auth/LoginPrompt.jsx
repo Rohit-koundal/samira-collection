@@ -3,31 +3,7 @@ import { Button, Card, CardContent, Dialog, DialogContent } from '../ui';
 import { cn } from '../../lib/utils';
 import { clearOtpState } from '../../utils/loginOtpStorage';
 
-const LOGIN_PROMPT_KEY = 'samira_login_prompt_dismissed';
-
-export function clearLoginPromptDismissed() {
-  try {
-    localStorage.removeItem(LOGIN_PROMPT_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
-export function markLoginPromptDismissed() {
-  try {
-    localStorage.setItem(LOGIN_PROMPT_KEY, '1');
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
-export function isLoginPromptDismissed() {
-  try {
-    return localStorage.getItem(LOGIN_PROMPT_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+export { clearLoginPromptDismissed, markLoginPromptDismissed, isLoginPromptDismissed } from '../../utils/loginPromptStorage';
 
 export default function LoginPrompt({ open, onClose, onContinue }) {
   const [countryCode] = useState('+91');

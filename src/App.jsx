@@ -1,3 +1,4 @@
+import { NotificationProvider } from './context/NotificationContext';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { AuthProvider } from './context/AuthContext';
@@ -8,19 +9,26 @@ import MobileHeader from './components/layout/MobileHeader';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/layout/ProtectedRoute';
-import AdminRoute from './components/layout/AdminRoute';
-import SellerRoute from './components/layout/SellerRoute';
+import MasterRoute from './components/layout/MasterRoute';
+import LazyBoundary from './components/ui/LazyBoundary';
 import { StorefrontProvider, useStorefront } from './context/StorefrontContext';
 import { WebsiteCustomizationProvider, useWebsiteCustomization } from './context/WebsiteCustomizationContext';
+import { isWebsitePreview, websiteDataAttributes } from './config/websiteDesigner';
 import { buildWebsiteCssVariables } from './config/websiteCustomization';
 import { reelProductImportEnabled } from './config/features';
-import LoginPrompt, { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './components/auth/LoginPrompt';
+import { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './utils/loginPromptStorage';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
 import { useAuth } from './context/AuthContext';
 import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
 import { createStoragePlan } from './utils/userStorage';
 import { boutiquePath, consumeLegacyHash, pushAppRoute, readAppRoute, ROUTE_CHANGE_EVENT } from './utils/routing';
 
+const AdminRoute = lazy(() => import('./components/layout/AdminRoute'));
+const SellerRoute = lazy(() => import('./components/layout/SellerRoute'));
+const LoginPrompt = lazy(() => import('./components/auth/LoginPrompt'));
+const MasterConfiguration = lazy(() => import('./pages/admin/MasterConfiguration'));
+const StoreContent = lazy(() => import('./pages/admin/StoreContent'));
+const WebsitePreview = lazy(() => import('./pages/admin/WebsitePreview'));
 const Home = lazy(() => import('./pages/customer/Home'));
 const Products = lazy(() => import('./pages/customer/Products'));
 const ProductDetail = lazy(() => import('./pages/customer/ProductDetail'));
@@ -76,6 +84,7 @@ const Support = lazy(() => import('./pages/admin/Support'));
 const Subscribers = lazy(() => import('./pages/admin/Subscribers'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const ReelProductImport = lazy(() => import('./pages/admin/ReelProductImport'));
+const SocialProductImport = lazy(() => import('./pages/admin/SocialProductImport'));
 
 const customerRoutes = {
   '/': Home,
@@ -126,6 +135,7 @@ const sellerRoutes = {
 
 const adminRoutes = {
   '/admin': Dashboard,
+  '/admin/notifications': Notifications,
   '/admin/products': AdminProducts,
   '/admin/product-drafts': ProductDrafts,
   '/admin/products/add': AddProduct,
@@ -146,8 +156,10 @@ const adminRoutes = {
   '/admin/support': Support,
   '/admin/subscribers': Subscribers,
   '/admin/audit': AuditLogs,
+  '/admin/social-import': SocialProductImport,
   '/admin/settings': Settings,
   '/admin/customization': WebsiteCustomizer,
+  '/admin/store-content': StoreContent,
   ...(reelProductImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
 };
 
@@ -210,11 +222,11 @@ export default function App() {
   return (
     <MantineProvider theme={samiraTheme}>
       <WebsiteCustomizationProvider>
-        <AuthProvider navigate={navigate}>
-          <StorefrontProvider route={route}>
+        {isWebsitePreview() ? <Suspense fallback={<RouteFallback />}><WebsitePreview /></Suspense> : <AuthProvider navigate={navigate}>
+          <NotificationProvider navigate={navigate}><StorefrontProvider route={route}>
             <AppShell route={route} navigate={navigate} />
-          </StorefrontProvider>
-        </AuthProvider>
+          </StorefrontProvider></NotificationProvider>
+        </AuthProvider>}
       </WebsiteCustomizationProvider>
     </MantineProvider>
   );
@@ -223,7 +235,8 @@ export default function App() {
 function AppShell({ route, navigate }) {
   const routePath = route.split('?')[0];
   const logicalPath = boutiquePath(routePath);
-  const isAdmin = routePath.startsWith('/admin');
+  const isMaster = routePath === '/master' || routePath.startsWith('/master/');
+  const isAdmin = routePath.startsWith('/admin') || isMaster;
   const isSeller = routePath.startsWith('/seller');
   const { user } = useAuth();
   const { isHostStore } = useStorefront();
@@ -265,6 +278,7 @@ function AppShell({ route, navigate }) {
   const Page = useMemo(() => {
     // Legacy admin-login links use the same mobile + OTP flow as every account.
     if (routePath === '/admin/login') return AdminLogin;
+    if (isMaster) return MasterConfiguration;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
     if (isSeller) return sellerRoutes[routePath] || SellerDashboard;
     if (logicalPath.startsWith('/store/')) {
@@ -278,11 +292,11 @@ function AppShell({ route, navigate }) {
     if (routePath.startsWith('/products/') && routePath.split('/').filter(Boolean).length >= 2) return ProductDetail;
     if (isHostStore && routePath === '/') return StoreHome;
     return customerRoutes[routePath] || Home;
-  }, [isAdmin, isHostStore, isSeller, logicalPath, routePath]);
+  }, [isAdmin, isMaster, isHostStore, isSeller, logicalPath, routePath]);
   const page = (
-    <Suspense fallback={<RouteFallback />}>
+    <LazyBoundary resetKey={route}><Suspense fallback={<RouteFallback />}>
       <Page navigate={navigate} route={route} />
-    </Suspense>
+    </Suspense></LazyBoundary>
   );
 
   useEffect(() => {
@@ -364,17 +378,7 @@ function AppShell({ route, navigate }) {
     <div
       className={`min-h-screen bg-ivory text-charcoal ${!isAdmin && !isSeller ? 'site-storefront' : ''}`}
       style={!isAdmin && !isSeller ? websiteStyle : undefined}
-      data-layout={!isAdmin && !isSeller ? websiteConfig.layout.mode : undefined}
-      data-button-style={!isAdmin && !isSeller ? websiteConfig.buttons.style : undefined}
-      data-button-hover={!isAdmin && !isSeller ? websiteConfig.buttons.hoverEffect : undefined}
-      data-card-title={!isAdmin && !isSeller ? websiteConfig.productCards.showTitle : undefined}
-      data-card-price={!isAdmin && !isSeller ? websiteConfig.productCards.showPrice : undefined}
-      data-card-discount={!isAdmin && !isSeller ? websiteConfig.productCards.showDiscount : undefined}
-      data-card-rating={!isAdmin && !isSeller ? websiteConfig.productCards.showRating : undefined}
-      data-card-wishlist={!isAdmin && !isSeller ? websiteConfig.productCards.showWishlist : undefined}
-      data-card-cart={!isAdmin && !isSeller ? websiteConfig.productCards.showAddToCart : undefined}
-      data-card-quick={!isAdmin && !isSeller ? websiteConfig.productCards.quickView : undefined}
-      data-card-layout={!isAdmin && !isSeller ? websiteConfig.productCards.layout : undefined}
+      {...(!isAdmin && !isSeller ? websiteDataAttributes(websiteConfig) : {})}
     >
       <CartProvider key={cartStoragePlan.storageName} storageName={cartStoragePlan.storageName} legacyStorageNames={cartStoragePlan.legacyStorageNames}>
         <WishlistProvider key={wishlistStoragePlan.storageName} storageName={wishlistStoragePlan.storageName} legacyStorageNames={wishlistStoragePlan.legacyStorageNames}>
@@ -382,15 +386,15 @@ function AppShell({ route, navigate }) {
             routePath === '/admin/login' ? (
               page
             ) : (
-              <AdminRoute>
-                {page}
-              </AdminRoute>
+              <LazyBoundary resetKey={route}><Suspense fallback={<RouteFallback />}><AdminRoute>
+                {isMaster || routePath === '/admin/customization' ? <MasterRoute>{page}</MasterRoute> : page}
+              </AdminRoute></Suspense></LazyBoundary>
             )
           ) : isSeller ? (
             routePath === '/seller/onboarding' ? (
               <ProtectedRoute>{page}</ProtectedRoute>
             ) : (
-              <SellerRoute>{page}</SellerRoute>
+              <LazyBoundary resetKey={route}><Suspense fallback={<RouteFallback />}><SellerRoute>{page}</SellerRoute></Suspense></LazyBoundary>
             )
           ) : shouldShowStandaloneAuth ? (
             authContent
@@ -404,7 +408,8 @@ function AppShell({ route, navigate }) {
               </main>
               {showShell && <Footer navigate={navigate} />}
               {showShell && !hideMobileBottomNavRoutes.includes(routePath) && <MobileBottomNav active={routePath} navigate={navigate} />}
-              {showShell && (
+              {showShell && showLoginPrompt && (
+                <LazyBoundary resetKey={route}><Suspense fallback={null}>
                 <LoginPrompt
                   open={showLoginPrompt}
                   onClose={closeLoginPrompt}
@@ -418,6 +423,7 @@ function AppShell({ route, navigate }) {
                     navigate(`/login?${[redirectQuery, phoneQuery, autoSendQuery, consentQuery].filter(Boolean).join('&')}`);
                   }}
                 />
+                </Suspense></LazyBoundary>
               )}
             </>
           )}

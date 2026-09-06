@@ -1,51 +1,31 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, CardContent } from '../../components/ui';
 import api from '../../services/api';
+import { OrderItem, OrderShell, OrderState } from '../../components/order/OrderUi';
+import { orderDate } from '../../utils/orderPresentation';
 
 export default function MyReturns({ navigate }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
-
+  const [reload, setReload] = useState(0);
   useEffect(() => {
-    setLoading(true);
-    setError('');
-    api.get('/returns/my-requests')
-      .then(setRequests)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [reloadKey]);
-
-  return (
-    <section className="container-page py-6 md:py-10">
-      <h1 className="page-title md:text-3xl">Returns & exchanges</h1>
-      <p className="body-text mt-2 text-slate-500">Track requests you have submitted after delivery.</p>
-      {loading && <Card className="mt-5"><CardContent className="p-6 text-center">Loading requests...</CardContent></Card>}
-      {error && <Card className="mt-5"><CardContent className="p-6 text-center text-rose"><p>{error}</p><Button className="mt-4" onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></CardContent></Card>}
-      {!loading && !requests.length && (
-        <Card className="mt-5">
-          <CardContent className="p-6 text-center">
-            <p className="font-black">No return requests yet.</p>
-            <Button className="mt-4" onClick={() => navigate('/orders')}>View orders</Button>
-          </CardContent>
-        </Card>
-      )}
-      <div className="mt-5 space-y-3">
-        {requests.map((item) => (
-          <Card key={item._id}>
-            <CardContent className="p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-black">{item.product?.name || 'Product'}</p>
-                  <p className="small-text mt-1 text-slate-500">{item.type} · {item.reason}</p>
-                </div>
-                <span className="rounded-full bg-wine/10 px-3 py-1 text-xs font-bold uppercase text-wine">{item.status}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </section>
-  );
+    let active = true;
+    setLoading(true); setError('');
+    api.get('/returns/my-requests').then((data) => { if (active) setRequests(data); })
+      .catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [reload]);
+  return <OrderShell title="Returns & exchanges" breadcrumb="Returns & exchanges" detail navigate={navigate}>
+    {loading ? <OrderState loading /> : error ? <OrderState title="Unable to load requests" error={error} retry={() => setReload((value) => value + 1)} />
+      : !requests.length ? <OrderState title="No requests yet"><p>Eligible items can be returned or exchanged from their order details.</p><button className="sc-orders__button" onClick={() => navigate('/orders')}>View orders</button></OrderState>
+        : <div className="sc-orders__list">{requests.map((request) => <article className="sc-order-panel" key={request._id}>
+          <header><h2>{request.type === 'exchange' ? 'Exchange' : 'Return'} request</h2><span className="sc-order-status sc-order-status--return">{request.status}</span></header>
+          <OrderItem item={{ name: request.product?.name || 'Ordered product', image: request.product?.images?.[0]?.url || request.product?.images?.[0] || '', size: request.size, color: request.color, quantity: request.quantity }} />
+          <p>{request.reason}</p><p className="sc-orders__muted">Requested {orderDate(request.createdAt)} ? #{String(request._id).slice(-8).toUpperCase()}</p>
+          {request.exchangeSize && <p className="sc-orders__muted">Replacement: {request.exchangeSize} {request.exchangeColor}</p>}
+          {request.pickupScheduledAt && <p className="sc-orders__muted">Pickup scheduled {orderDate(request.pickupScheduledAt)}</p>}
+          {request.adminComment && <p className="sc-orders__muted">{request.adminComment}</p>}
+          <button className="sc-orders__text" onClick={() => navigate(`/order-detail?id=${request.order?._id || request.order}`)}>View order & request details ?</button>
+        </article>)}</div>}
+  </OrderShell>;
 }

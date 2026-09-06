@@ -1,4 +1,20 @@
-import { parseProductKey, productHref } from './routing';
+import { BEFORE_ROUTE_CHANGE_EVENT, boutiquePath, parseProductKey, productHref, pushAppRoute } from './routing';
+
+test('designer navigation guard cancels a route change without changing the URL', () => {
+  window.history.replaceState(null, '', '/admin/customization');
+  const guard = (event) => event.preventDefault();
+  window.addEventListener(BEFORE_ROUTE_CHANGE_EVENT, guard);
+  pushAppRoute('/products');
+  expect(window.location.pathname).toBe('/admin/customization');
+  window.removeEventListener(BEFORE_ROUTE_CHANGE_EVENT, guard);
+  pushAppRoute('/products');
+  expect(window.location.pathname).toBe('/products');
+  window.history.replaceState(null, '', '/');
+});
+
+test('the preview route is never interpreted as a boutique slug', () => {
+  expect(boutiquePath('/website-preview')).toBe('/website-preview');
+});
 
 describe('product routes', () => {
   const id = '6a33b378573544bac1ccd9b1';

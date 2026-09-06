@@ -1,5 +1,3 @@
-import imageCompression from 'browser-image-compression';
-
 const supportedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
 const DEFAULT_MAX_WIDTH_OR_HEIGHT = 1600;
@@ -40,6 +38,8 @@ export async function compressImageFile(file, options = {}) {
   }
 
   try {
+    // Validation and already-small WebP uploads do not need the compressor.
+    const { default: imageCompression } = await import('browser-image-compression');
     const compressed = await imageCompression(file, {
       maxSizeMB: targetMaxSizeMb,
       maxWidthOrHeight,

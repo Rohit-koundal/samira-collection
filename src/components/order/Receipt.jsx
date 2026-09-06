@@ -1,63 +1,26 @@
 import logo from '../../assets/samira-collection-logo.png';
-import { formatAddress } from '../../utils/receiptMessage';
+import { invoiceMoney, receiptView } from '../../utils/receiptData';
+import './Receipt.css';
 
 export default function Receipt({ receipt }) {
-  return (
-    <section id="samira-receipt" className="rounded-xl bg-white p-4 shadow-sm print:shadow-none md:rounded-3xl md:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="Samira Collection" className="h-14 rounded-xl border border-slate-100 bg-white p-1" />
-          <div>
-            <h2 className="text-xl font-black md:text-2xl">{receipt.storeDetails?.legalBusinessName || receipt.storeDetails?.storeName || 'Samira Collection'}</h2>
-            <p className="text-xs font-bold text-slate-500">{receipt.storeDetails?.gstin ? `GSTIN ${receipt.storeDetails.gstin}` : receipt.storeDetails?.contactPhone || receipt.storeDetails?.whatsappNumber || ''}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Invoice</p>
-          <p className="font-black">{receipt.invoiceNumber || `#${String(receipt.orderId).slice(-8).toUpperCase()}`}</p>
-          <p className="text-xs font-semibold text-slate-500">{new Date(receipt.orderDate).toLocaleString('en-IN')}</p>
-        </div>
-      </div>
-      <div className="grid gap-4 py-5 md:grid-cols-2">
-        <Info title="Customer" lines={[receipt.customer?.name || receipt.shippingAddress?.fullName, receipt.customer?.email, receipt.shippingAddress?.mobile || receipt.shippingAddress?.phone]} />
-        <Info title="Delivery Address" lines={[formatAddress(receipt.shippingAddress)]} />
-        {receipt.billingAddress ? <Info title="Billing Address" lines={[formatAddress(receipt.billingAddress)]} /> : null}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-left text-sm md:min-w-[620px]">
-          <thead className="bg-[#f7f2eb] text-xs uppercase tracking-[0.14em] text-slate-500"><tr><th className="p-3">Product</th><th className="p-3">Size/Color</th><th className="p-3">Qty</th><th className="p-3">Price</th><th className="p-3">Total</th></tr></thead>
-          <tbody>{receipt.items.map((item, index) => <tr key={`${item.name}-${index}`} className="border-b border-slate-100"><td className="p-3 font-bold">{item.name}</td><td className="p-3">{item.size || '-'} / {item.color || '-'}</td><td className="p-3">{item.quantity}</td><td className="p-3">Rs. {item.price}</td><td className="p-3 font-black">Rs. {item.price * item.quantity}</td></tr>)}</tbody>
-        </table>
-      </div>
-      <div className="ml-auto mt-5 max-w-sm space-y-2 text-sm font-semibold">
-        <Row label="Total MRP" value={`Rs. ${receipt.totalMRP || 0}`} />
-        <Row label="Product Discount" value={`- Rs. ${receipt.productDiscount || 0}`} />
-        <Row label="Coupon Discount" value={`- Rs. ${receipt.couponDiscount || 0}`} />
-        <Row label="Delivery Charge" value={receipt.deliveryCharge ? `Rs. ${receipt.deliveryCharge}` : 'FREE'} />
-        <Row label="COD Charge" value={`Rs. ${receipt.codCharge || 0}`} />
-        <div className="flex justify-between border-t border-slate-100 pt-3 text-lg font-black"><span>Final Amount</span><span>Rs. {receipt.finalAmount || 0}</span></div>
-      </div>
-      <div className="mt-5 grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 text-sm md:grid-cols-3">
-        <Info title="Payment" lines={[`${receipt.paymentMethod || 'Online'} via ${receipt.paymentProvider || 'Razorpay'}`, receipt.paymentStatus]} />
-        <Info title="Order Status" lines={[receipt.orderStatus, receipt.shipment?.trackingNumber ? `${receipt.shipment.courierName || 'Courier'} ${receipt.shipment.trackingNumber}` : 'Expected delivery: 5-7 days']} />
-        <Info title="Policy" lines={[receipt.policies?.returnPolicy || 'Return/exchange as per policy.']} />
-      </div>
-      <p className="mt-5 text-center text-sm font-black text-wine">Thank you for shopping with Samira Collection.</p>
-    </section>
-  );
-}
-
-function Info({ title, lines = [] }) {
-  return (
-    <div>
-      <h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>
-      {lines.filter(Boolean).map((line, index) => (
-        <p key={`${title}-${index}`} className="mt-1 text-sm font-semibold text-slate-700">{line}</p>
-      ))}
+  const view = receiptView(receipt);
+  return <article id="samira-receipt" className="sc-invoice" aria-label={`Invoice ${view.number}`}>
+    <div className="sc-invoice__header">
+      <div className="sc-invoice__brand"><img src={logo} alt={view.storeName} /><div><h2>{view.sellerName}</h2>{view.sellerAddress.map((value, index) => <p key={index}>{value}</p>)}{view.sellerContact.map((value) => <p key={value}>{value}</p>)}{view.gstin && <p className="sc-invoice__gst">GSTIN: {view.gstin}</p>}</div></div>
+      <div className="sc-invoice__identity"><p>Invoice</p><strong>{view.number}</strong><span>Issued {view.date}</span></div>
     </div>
-  );
+    <div className="sc-invoice__addresses"><Address title="Bill to" lines={[...view.billing, ...(view.customerEmail ? [view.customerEmail] : [])]} /><Address title="Ship to" lines={view.shipping} /></div>
+    <div className="sc-invoice__reference"><span>Order: {view.orderId || view.number}</span><span>Ordered {view.orderDate}</span></div>
+    <table className="sc-invoice__items"><caption className="sr-only">Invoice items, quantities and amounts in Indian rupees</caption><thead><tr><th scope="col">#</th><th scope="col">Item / Description</th><th scope="col">Qty</th><th scope="col">Unit price</th><th scope="col">Amount</th></tr></thead>
+      <tbody>{view.items.map((item) => <tr key={item.number}><td>{item.number}</td><td><strong>{item.name}</strong>{item.variant && <span>{item.variant}</span>}{item.sku && <span>SKU: {item.sku}</span>}</td><td data-label="Qty">{item.quantity}</td><td data-label="Unit price">{invoiceMoney(item.price)}</td><td data-label="Amount"><strong>{invoiceMoney(item.total)}</strong></td></tr>)}</tbody>
+    </table>
+    <p className="sc-invoice__item-note">{view.items.length} item{view.items.length === 1 ? '' : 's'} · {view.quantity} unit{view.quantity === 1 ? '' : 's'} · All amounts in INR. Unit prices include product savings.</p>
+    <div className="sc-invoice__summary"><section className="sc-invoice__payment"><h3>Payment information</h3><strong>{view.paymentMethod}</strong><p>Status: <span className={view.paymentStatus === 'Paid' ? 'is-paid' : ''}>{view.paymentStatus}</span></p>{view.paymentProvider && <p>Provider: {view.paymentProvider}</p>}{view.transactionId && <p>Transaction: {view.transactionId}</p>}{view.paymentNote && <p className="sc-invoice__muted">{view.paymentNote}</p>}<p className="sc-invoice__order-status">Order status: <strong>{view.orderStatus}</strong></p>{view.tracking && <p>Tracking: {view.tracking}</p>}</section>
+      <div><dl className="sc-invoice__totals">{view.totals.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{name === 'Delivery' && value === 0 ? 'FREE' : invoiceMoney(value)}</dd></div>)}<div className="sc-invoice__grand-total"><dt>Invoice total</dt><dd>{invoiceMoney(view.total)}</dd></div></dl>{view.taxNote && <p className="sc-invoice__tax">{view.taxNote}</p>}<p className="sc-invoice__words">{view.totalWords}</p></div>
+    </div>
+    <div className="sc-invoice__notes"><h3>Returns & support</h3><p>{view.policy}</p><strong>Thank you for shopping with {view.storeName}.</strong><p>Computer-generated invoice. Please retain a copy for your records.</p></div>
+  </article>;
 }
-
-function Row({ label, value }) {
-  return <div className="flex justify-between"><span>{label}</span><span>{value}</span></div>;
+function Address({ title, lines }) {
+  return <section><h3>{title}</h3>{lines.map((value, index) => <p key={index}>{value}</p>)}</section>;
 }

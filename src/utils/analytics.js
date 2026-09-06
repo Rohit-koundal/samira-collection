@@ -1,7 +1,9 @@
 import api from '../services/api';
 import { getOrCreateSessionId, readAttribution } from './attribution';
+import { isWebsitePreview } from '../config/websiteDesigner';
 
 export function trackEvent(name, extra = {}) {
+  if (isWebsitePreview()) return;
   const attribution = readAttribution();
   const payload = {
     name,

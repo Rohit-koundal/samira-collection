@@ -6,7 +6,7 @@ import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 import { findProductVariant, hasManagedVariants, variantStock } from '../utils/variants';
 import { trackEvent } from '../utils/analytics';
 
-const CartContext = createContext(null);
+export const CartContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_cart', null);
 
 export function CartProvider({ children, storageName: storageNameProp, legacyStorageNames = [] }) {

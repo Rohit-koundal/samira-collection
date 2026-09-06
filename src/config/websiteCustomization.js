@@ -40,7 +40,16 @@ export const DEFAULT_WEBSITE_CONFIG = {
     copyrightText: '© Samira Collection. All rights reserved.',
   },
   layout: { mode: 'full', maxWidth: 1520, sectionSpacing: 72, gridGap: 20, productsPerRow: { desktop: 4, tablet: 3, mobile: 2 } },
-  theme: { preset: 'default' },
+  mobile: {
+    enabled: false,
+    headerBackground: '#ffffff', headerText: '#334155',
+    pageBackground: '#fcfaf7', gridGap: 12, cardRadius: 14, imageRatio: 'original',
+    columns: 2, useDesktopCatalog: false,
+    sections: ['hero', 'services', 'categories', 'sale', 'promotional', 'trending', 'newArrivals', 'ethnicSets', 'accessories']
+      .map((id, index) => ({ id, visible: true, order: index * 10, heading: '' })),
+  },
+  tablet: { enabled: false, columns: 3, gridGap: 16 },
+  theme: { preset: 'default', enhancedStyles: false },
 };
 
 function clone(value) {
@@ -49,7 +58,11 @@ function clone(value) {
 
 function mergeKnown(base, incoming) {
   if (Array.isArray(base)) return Array.isArray(incoming) ? clone(incoming) : clone(base);
-  if (!base || typeof base !== 'object') return incoming === undefined || incoming === null ? base : incoming;
+  if (!base || typeof base !== 'object') {
+    if (typeof base === 'boolean') return typeof incoming === 'boolean' ? incoming : base;
+    if (typeof base === 'number') return typeof incoming === 'number' && Number.isFinite(incoming) ? incoming : base;
+    return typeof incoming === 'string' ? incoming.slice(0, 5000) : base;
+  }
   const source = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, mergeKnown(value, source[key])]));
 }
@@ -62,14 +75,23 @@ export function mergeWebsiteConfig(config = {}) {
   // after an admin saves the v2 theme, the switch remains configurable.
   if (sourceVersion < 2) merged.header.sticky = true;
   merged.schemaVersion = 2;
-  const incoming = new Map((config?.homepage?.sections || []).map((section) => [section.id, section]));
-  merged.homepage.sections = HOME_SECTION_DEFAULTS.map((section) => ({ ...section, ...(incoming.get(section.id) || {}) }))
+  const incoming = new Map((Array.isArray(config?.homepage?.sections) ? config.homepage.sections : []).filter(Boolean).map((section) => [section.id, section]));
+  merged.homepage.sections = HOME_SECTION_DEFAULTS.map((section) => mergeKnown(section, incoming.get(section.id)))
     .sort((a, b) => Number(a.order) - Number(b.order));
+  const mobileSections = new Map((Array.isArray(config?.mobile?.sections) ? config.mobile.sections : []).filter(Boolean).map((section) => [section.id, section]));
+  merged.mobile.sections = DEFAULT_WEBSITE_CONFIG.mobile.sections.map((section) => mergeKnown(section, mobileSections.get(section.id))).sort((a, b) => a.order - b.order);
   return merged;
 }
 
 export function getHomepageSection(config, id) {
-  return mergeWebsiteConfig(config).homepage.sections.find((section) => section.id === id);
+  // Section rendering must not normalize/copy the entire theme for every title,
+  // button and wrapper. Keep the same default/type handling for partial configs.
+  const fallback = HOME_SECTION_DEFAULTS.find((section) => section.id === id);
+  if (!fallback) return undefined;
+  const sections = Array.isArray(config?.homepage?.sections) ? config.homepage.sections : [];
+  // The last occurrence wins, matching mergeWebsiteConfig's Map semantics.
+  const incoming = sections.reduce((match, section) => section?.id === id ? section : match, undefined);
+  return mergeKnown(fallback, incoming);
 }
 
 const fontStacks = {
@@ -99,6 +121,8 @@ export function buildWebsiteCssVariables(input) {
     '--site-body-font': fontStacks[config.typography.bodyFont] || fontStacks.Inter,
     '--site-button-font': fontStacks[config.typography.buttonFont] || fontStacks.Inter,
     '--site-heading-scale': config.typography.headingScale,
+    '--designer-heading-scale': config.theme.enhancedStyles ? config.typography.headingScale : 1,
+    '--designer-body-scale': config.theme.enhancedStyles ? config.typography.bodyScale : 1,
     '--site-body-scale': config.typography.bodyScale,
     '--site-heading-weight': config.typography.headingWeight,
     '--site-body-weight': config.typography.bodyWeight,
@@ -111,11 +135,21 @@ export function buildWebsiteCssVariables(input) {
     '--site-content-max': `${config.layout.maxWidth}px`,
     '--site-section-spacing': `${config.layout.sectionSpacing}px`,
     '--site-grid-gap': `${config.layout.gridGap}px`,
+    '--designer-grid-gap': config.theme.enhancedStyles ? `${config.layout.gridGap}px` : undefined,
     '--site-card-radius': `${config.productCards.borderRadius}px`,
     '--site-card-ratio': config.productCards.imageRatio,
     '--site-card-shadow': shadows[config.productCards.shadow] || shadows.soft,
     '--site-products-desktop': config.layout.productsPerRow.desktop,
     '--site-products-tablet': config.layout.productsPerRow.tablet,
     '--site-products-mobile': config.layout.productsPerRow.mobile,
+    '--site-mobile-bg': config.mobile.pageBackground,
+    '--site-mobile-header-bg': config.mobile.headerBackground,
+    '--site-mobile-header-text': config.mobile.headerText,
+    '--site-mobile-gap': `${config.mobile.gridGap}px`,
+    '--site-mobile-radius': `${config.mobile.cardRadius}px`,
+    '--site-mobile-ratio': config.mobile.imageRatio === 'original' ? undefined : config.mobile.imageRatio,
+    '--site-mobile-columns': config.mobile.columns,
+    '--site-tablet-columns': config.tablet.columns,
+    '--site-tablet-gap': `${config.tablet.gridGap}px`,
   };
 }

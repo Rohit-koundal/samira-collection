@@ -1,208 +1,203 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Card, CardContent, CardTitle, Select, TextInput } from '../../components/ui';
-import { ArrowLeft, ChevronRight, Plus, Home, BriefcaseBusiness, MapPinned, UserRound, Phone, Building2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, CardContent, CardTitle, Select, TextInput } from '../../components/ui';
+import { ArrowLeft, ChevronRight, Plus, Home, BriefcaseBusiness, MapPinned, UserRound, Phone, Building2, Check, MapPin, Trash2 } from 'lucide-react';
+import AccountSidebar from '../../components/layout/AccountSidebar';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import { districtsForState, INDIAN_STATES, pincodeForDistrict } from '../../data/indiaLocations';
+import { districtsForState, INDIAN_STATES } from '../../data/indiaLocations';
 import { lookupPincode } from '../../utils/indiaPincode';
 import { digitsOnly, isValidIndianMobile, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
+import './Profile.css';
+import './AddressManagement.css';
 
 const emptyAddress = {
-  fullName: '',
-  mobile: '',
-  alternateMobile: '',
-  pincode: '',
-  state: '',
-  city: '',
-  houseNo: '',
-  area: '',
-  landmark: '',
-  addressType: 'Home',
-  isDefault: false,
+  fullName: '', mobile: '', alternateMobile: '', pincode: '', state: '', city: '',
+  houseNo: '', area: '', landmark: '', addressType: 'Home', isDefault: false,
 };
 
 export default function AddressManagement({ route = '/profile/addresses', navigate }) {
+  const { user, logout } = useAuth();
   const routePath = route.split('?')[0];
-  const searchParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
-  const editorId = searchParams.get('id') || '';
-  const isEditor = routePath === '/profile/addresses/new' || routePath === '/profile/addresses/edit';
-
+  const editorId = new URLSearchParams(route.split('?')[1] || '').get('id') || '';
+  const editing = routePath === '/profile/addresses/edit';
+  const isEditor = editing || routePath === '/profile/addresses/new';
   const [addresses, setAddresses] = useState([]);
   const [form, setForm] = useState(emptyAddress);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState('');
+  const [removing, setRemoving] = useState(null);
+  const [notice, setNotice] = useState('');
+  const selected = addresses.find((address) => address._id === editorId);
 
-  const load = () =>
-    api
-      .get('/user/addresses')
-      .then((data) => {
-        setAddresses(Array.isArray(data) ? data : []);
-      })
-      .catch((error) => setMessage(error.message));
-
-  useEffect(() => {
-    load();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await api.get('/user/addresses');
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!isEditor) return;
-    if (routePath === '/profile/addresses/new') {
-      setForm(emptyAddress);
-      setMessage('');
-      return;
-    }
+    setMessage('');
+    setForm(editing && selected ? {
+      ...emptyAddress, ...selected,
+      mobile: selected.mobile || selected.phone || '',
+      houseNo: selected.houseNo || selected.houseNumber || '',
+    } : { ...emptyAddress });
+  }, [editing, isEditor, selected]);
 
-    const selected = addresses.find((item) => item._id === editorId);
-    if (selected) {
-      setForm({
-        ...emptyAddress,
-        ...selected,
-        mobile: selected.mobile || selected.phone,
-        houseNo: selected.houseNo || selected.houseNumber,
-      });
-      setMessage('');
-    }
-  }, [addresses, editorId, isEditor, routePath]);
-
-  const sortedAddresses = useMemo(() => {
-    const list = [...addresses];
-    return list.sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault));
-  }, [addresses]);
-
+  const goBack = () => navigate('/profile/addresses');
+  const openNewAddress = () => { setMessage(''); navigate('/profile/addresses/new'); };
   const save = async (event) => {
     event.preventDefault();
+    if (saving || (editing && !selected)) return;
     setMessage('');
-    if (!isValidIndianMobile(form.mobile)) {
-      setMessage(PHONE_VALIDATION_MESSAGE);
-      return;
+    if (!isValidIndianMobile(form.mobile)) { setMessage(PHONE_VALIDATION_MESSAGE); return; }
+    if (form.alternateMobile && !isValidIndianMobile(form.alternateMobile)) {
+      setMessage('Enter a valid 10-digit alternate mobile number.'); return;
+    }
+    if (!/^[1-9]\d{5}$/.test(form.pincode)) { setMessage('Enter a valid 6-digit pincode.'); return; }
+    if (['fullName', 'state', 'city', 'houseNo', 'area'].some((key) => !String(form[key] || '').trim())) {
+      setMessage('Please complete all required address fields.'); return;
     }
     setSaving(true);
     try {
-      if (routePath === '/profile/addresses/edit' && editorId) {
-        await api.put(`/user/addresses/${editorId}`, form);
-      } else {
-        await api.post('/user/addresses', form);
-      }
-      load();
-      navigate?.('/profile/addresses');
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setSaving(false);
-    }
+      const payload = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
+      const updated = editing
+        ? await api.put(`/user/addresses/${editorId}`, payload)
+        : await api.post('/user/addresses', payload);
+      setAddresses(updated);
+      setNotice(editing ? 'Address updated.' : 'New address saved.');
+      goBack();
+    } catch (error) { setMessage(error.message); }
+    finally { setSaving(false); }
   };
 
-  const edit = (address) => {
-    navigate?.(`/profile/addresses/edit?id=${address._id}`);
-  };
-
-  const remove = async (address) => {
-    setMessage('');
+  const makeDefault = async (address) => {
+    if (busyId) return;
+    setBusyId(address._id); setMessage(''); setNotice('');
     try {
-      await api.delete(`/user/addresses/${address._id}`);
-      load();
-    } catch (error) {
-      setMessage(error.message);
-    }
+      setAddresses(await api.patch(`/user/addresses/${address._id}/default`, {}));
+      setNotice('Default delivery address updated.');
+    } catch (error) { setMessage(error.message); }
+    finally { setBusyId(''); }
   };
-
-  const openNewAddress = () => {
-    navigate?.('/profile/addresses/new');
+  const remove = async () => {
+    if (busyId) return;
+    setBusyId(removing._id); setMessage(''); setNotice('');
+    try {
+      setAddresses(await api.delete(`/user/addresses/${removing._id}`));
+      setRemoving(null);
+      setNotice('Address removed.');
+    } catch (error) { setMessage(error.message); }
+    finally { setBusyId(''); }
   };
-
-  const goBack = () => navigate?.('/profile/addresses');
 
   return (
-    <section className={`${isEditor ? 'min-h-[100dvh]' : 'min-h-0'} bg-[#fffaf2] pb-4 md:py-6`}>
-      <div className="mx-auto w-full max-w-[470px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:max-w-none md:bg-transparent md:shadow-none">
-        {isEditor ? (
-          <div className="bg-white">
-            <AddressForm
-              form={form}
-              setForm={setForm}
-              onSubmit={save}
-              message={message}
-              editing={routePath === '/profile/addresses/edit'}
-              onCancel={goBack}
-              saving={saving}
-            />
+    <section className="sc-addresses">
+      <div className="sc-account__shell">
+        <nav className="sc-account__breadcrumb sc-addresses__breadcrumb" aria-label="Breadcrumb">
+          <button type="button" onClick={() => navigate('/')}>Home</button><ChevronRight size={13} />
+          <button type="button" onClick={() => navigate('/profile')}>My Account</button><ChevronRight size={13} />
+          <span aria-current="page">Saved Addresses</span>
+        </nav>
+        <div className="sc-account__layout">
+          <AccountSidebar user={user} navigate={navigate} logout={logout} activePath="/profile/addresses" />
+          <div className="sc-addresses__main">
+            <header className="sc-addresses__heading">
+              <div><p className="sc-addresses__eyebrow">MY ACCOUNT</p><h1>Saved Addresses</h1>
+                <p>Keep your delivery details ready for your next order.</p></div>
+              <button type="button" className="sc-addresses__primary" onClick={openNewAddress} disabled={loading || !!loadError || !!busyId}>
+                <Plus size={17} />Add New Address
+              </button>
+            </header>
+            {notice && <p role="status" className="sc-addresses__notice"><Check size={16} />{notice}</p>}
+            {message && !isEditor && !removing && <p role="alert" className="sc-addresses__error">{message}</p>}
+            {loading ? <div role="status" className="sc-addresses__empty">Loading your addresses?</div>
+              : loadError ? <div role="alert" className="sc-addresses__empty"><p>{loadError}</p><button type="button" className="sc-addresses__secondary" onClick={load}>Try again</button></div>
+                : !addresses.length ? <div className="sc-addresses__empty">
+                  <span className="sc-addresses__empty-icon"><MapPin size={32} strokeWidth={1.5} /></span>
+                  <h2>A place for your next delivery</h2><p>Add your home or work address for a quicker checkout.</p>
+                  <button type="button" className="sc-addresses__primary" onClick={openNewAddress}><Plus size={17} />Add your first address</button>
+                </div> : <>
+                  {[['Default address', addresses.filter((address) => address.isDefault)], ['Other addresses', addresses.filter((address) => !address.isDefault)]].map(([title, list]) => list.length > 0 && (
+                    <section className="sc-addresses__group" key={title} aria-label={title}>
+                      <h2>{title}<span>{list.length}</span></h2>
+                      <div className="sc-addresses__cards">{list.map((address) => <AddressCard key={address._id} address={address}
+                        disabled={!!busyId} busy={busyId === address._id} onDefault={makeDefault}
+                        onEdit={() => navigate(`/profile/addresses/edit?id=${address._id}`)}
+                        onRemove={() => { setMessage(''); setRemoving(address); }} />)}</div>
+                    </section>
+                  ))}
+                  <button type="button" className="sc-addresses__add" onClick={openNewAddress} disabled={!!busyId}><Plus size={18} />Add another address</button>
+                  <p className="sc-addresses__hint">Your default address is selected first at checkout. You can choose a different address before placing an order.</p>
+                </>}
           </div>
-        ) : (
-          <div className="bg-white">
-            <button
-              type="button"
-              onClick={openNewAddress}
-              className="flex w-full items-center gap-2 border-b border-slate-200 px-4 py-4 text-left text-[15px] font-bold uppercase tracking-[0.02em] text-[#4a67d6]"
-            >
-              <Plus className="h-4 w-4" />
-              Add New Address
-            </button>
-
-            <div className="bg-[#f6f6f8] px-4 py-3">
-              <p className="text-[12px] font-bold uppercase tracking-[0.04em] text-black">Default Address</p>
-            </div>
-
-            <div className="divide-y divide-slate-100 bg-white">
-              {sortedAddresses.length ? (
-                sortedAddresses.map((address) => (
-                  <AddressCard key={address._id} address={address} onEdit={edit} onRemove={remove} />
-                ))
-              ) : (
-                <div className="px-4 py-8 text-center text-[13px] text-slate-400">
-                  No saved addresses yet.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
+      {isEditor && <AddressDialog label={editing ? 'Edit address' : 'Add new address'} onClose={goBack} busy={saving}>
+        {loading ? <p role="status" className="sc-addresses__empty">Loading your address?</p>
+          : loadError ? <div className="sc-addresses__empty" role="alert"><p>{loadError}</p><button type="button" onClick={load}>Try again</button><button type="button" onClick={goBack}>Back to addresses</button></div>
+            : editing && !selected ? <div className="sc-addresses__empty"><h2>Address not found</h2><p>This address may have been removed.</p><button type="button" className="sc-addresses__secondary" onClick={goBack}>Back to addresses</button></div>
+              : <AddressForm form={form} setForm={setForm} onSubmit={save} message={message} editing={editing} onCancel={goBack} saving={saving} />}
+      </AddressDialog>}
+      {removing && <AddressDialog label="Remove address" onClose={() => { setRemoving(null); setMessage(''); }} busy={!!busyId} compact>
+        <div className="sc-addresses__confirm">
+          <Trash2 size={25} /><h2>Remove this address?</h2><p>{removing.fullName}</p>
+          <p>{buildAddressLines(removing).join(', ')}</p>
+          {removing.isDefault && addresses.length > 1 && <p>Another saved address will become your default.</p>}
+          {message && <p role="alert" className="sc-addresses__error">{message}</p>}
+          <div className="sc-addresses__confirm-actions">
+            <button type="button" className="sc-addresses__secondary" disabled={!!busyId} onClick={() => { setRemoving(null); setMessage(''); }}>Cancel</button>
+            <button type="button" className="sc-addresses__primary" disabled={!!busyId} onClick={remove}>{busyId ? 'Removing?' : 'Remove address'}</button>
+          </div>
+        </div>
+      </AddressDialog>}
     </section>
   );
 }
 
-function AddressCard({ address, onEdit, onRemove }) {
-  const formattedLines = buildAddressLines(address);
-  const isDefault = !!address.isDefault;
+function AddressDialog({ label, onClose, busy, compact, children }) {
+  const dialog = useRef(null);
+  useEffect(() => {
+    const node = dialog.current;
+    const previousFocus = document.activeElement;
+    const overflow = document.body.style.overflow;
+    node.showModal();
+    document.body.style.overflow = 'hidden';
+    return () => { node.close(); document.body.style.overflow = overflow; previousFocus?.focus(); };
+  }, []);
+  return <dialog ref={dialog} className={`sc-address-dialog${compact ? ' sc-address-dialog--compact' : ''}`} aria-label={label}
+    onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>{children}</dialog>;
+}
 
-  return (
-    <div className="px-4 py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-bold text-[#2f3851]">{address.fullName}</h2>
-            {isDefault && (
-              <Badge className="rounded-full bg-[#f3f4f6] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">
-                Home
-              </Badge>
-            )}
-          </div>
-          <div className="mt-3 space-y-0.5 text-[13px] leading-[1.35] text-slate-600">
-            {formattedLines.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </div>
-          <p className="mt-3 text-[13px] text-slate-600">Mobile: {address.mobile || address.phone}</p>
-        </div>
-        {!isDefault && <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-300" />}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 border-t border-slate-200">
-        <button
-          type="button"
-          onClick={() => onEdit(address)}
-          className="h-12 border-r border-slate-200 text-[13px] font-bold uppercase tracking-[0.06em] text-[#4a67d6]"
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => onRemove(address)}
-          className="h-12 text-[13px] font-bold uppercase tracking-[0.06em] text-[#4a67d6]"
-        >
-          Remove
-        </button>
-      </div>
+function AddressCard({ address, onEdit, onRemove, onDefault, disabled, busy }) {
+  const AddressIcon = address.addressType === 'Work' ? BriefcaseBusiness : Home;
+  return <article className={`sc-address-card${address.isDefault ? ' is-default' : ''}`} aria-label={`Address for ${address.fullName}`}>
+    <div className="sc-address-card__content">
+      <div className="sc-address-card__top"><h3>{address.fullName}</h3><span className="sc-address-card__type"><AddressIcon size={13} />{address.addressType || 'Home'}</span></div>
+      <address>{buildAddressLines(address).map((line, index) => <span key={index}>{line}</span>)}</address>
+      {address.landmark && <p className="sc-address-card__landmark">Landmark: {address.landmark}</p>}
+      <p className="sc-address-card__phone">Mobile: <strong>{address.mobile || address.phone}</strong></p>
+      {address.alternateMobile && <p className="sc-address-card__landmark">Alternate: {address.alternateMobile}</p>}
+      {address.isDefault && <p className="sc-address-card__default"><Check size={14} />Default delivery address</p>}
     </div>
-  );
+    <div className="sc-address-card__actions">
+      <button type="button" disabled={disabled} onClick={onEdit}>Edit</button>
+      <button type="button" disabled={disabled} onClick={onRemove}>Remove</button>
+      {!address.isDefault && <button type="button" disabled={disabled} onClick={() => onDefault(address)}>{busy ? 'Updating?' : 'Make default'}</button>}
+    </div>
+  </article>;
 }
 
 export function AddressForm({ form, setForm, onSubmit, message, editing, onCancel, saving = false }) {
@@ -221,9 +216,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
   };
 
   const selectDistrict = (district) => {
-    const pin = pincodeForDistrict(form.state, district);
-    autoPinRef.current = pin;
-    setForm((current) => ({ ...current, city: district, pincode: pin || current.pincode }));
+    setForm((current) => ({ ...current, city: district }));
   };
 
   useEffect(() => {
@@ -242,11 +235,11 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
         }));
       });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); lookupToken.current += 1; };
   }, [form.pincode, setForm]);
 
   return (
-    <Card as="form" onSubmit={onSubmit} className="overflow-hidden border-0 bg-[#fffaf2] shadow-none">
+    <Card as="form" onSubmit={onSubmit} className="sc-address-form overflow-hidden border-0 bg-[#fffaf2] shadow-none">
       <div className="flex items-center justify-between border-b border-[#ead8cb] bg-[#fffaf2] px-2 py-2">
         <button
           type="button"
@@ -267,7 +260,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
         <div className="space-y-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b88945]">Contact details</p>
           <LabeledField icon={UserRound} label="Full name">
-            <TextInput value={form.fullName || ''} onChange={(event) => update('fullName', event.target.value)} placeholder="Name as on the parcel" disabled={saving} required />
+            <TextInput autoComplete="name" value={form.fullName || ''} onChange={(event) => update('fullName', event.target.value)} placeholder="Name as on the parcel" disabled={saving} required />
           </LabeledField>
           <LabeledField icon={Phone} label="Mobile number">
             <TextInput
@@ -277,7 +270,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
               inputMode="numeric"
               autoComplete="tel"
               maxLength={10}
-              pattern="[0-9]*"
+              pattern="[6-9][0-9]{9}"
               disabled={saving}
               required
             />
@@ -285,6 +278,10 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           {form.mobile && !isValidIndianMobile(form.mobile) ? (
             <p className="text-[11px] font-medium text-[#c81e4a]">{PHONE_VALIDATION_MESSAGE}</p>
           ) : null}
+          <LabeledField icon={Phone} label="Alternate mobile (optional)">
+            <TextInput value={form.alternateMobile || ''} onChange={(event) => update('alternateMobile', digitsOnly(event.target.value, 10))}
+              placeholder="Alternate 10-digit mobile number" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" disabled={saving} />
+          </LabeledField>
         </div>
 
         <div className="space-y-3 border-t border-[#ead8cb] pt-5">
@@ -310,12 +307,15 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
               value={form.pincode || ''}
               onChange={(event) => update('pincode', event.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="6-digit pincode"
+              autoComplete="postal-code"
               inputMode="numeric"
+              pattern="[1-9][0-9]{5}"
+              maxLength={6}
               disabled={saving}
               required
             />
           </LabeledField>
-          <p className="text-[11px] leading-5 text-slate-500">Choose a district to fill its pincode, or type a pincode to fill state and district.</p>
+          <p className="text-[11px] leading-5 text-slate-500">Enter your exact delivery pincode to fill state and district. You can also select them manually.</p>
           <LabeledField icon={Home} label="House / flat / block">
             <TextInput value={form.houseNo || ''} onChange={(event) => update('houseNo', event.target.value)} placeholder="House no., tower or block" disabled={saving} required />
           </LabeledField>
@@ -332,7 +332,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           <div className="grid grid-cols-2 gap-3">
             {[
               { value: 'Home', label: 'Home', desc: 'Personal deliveries', icon: Home },
-              { value: 'Work', label: 'Office', desc: 'Work deliveries', icon: BriefcaseBusiness },
+              { value: 'Work', label: 'Work', desc: 'Office deliveries', icon: BriefcaseBusiness },
             ].map((option) => {
               const active = form.addressType === option.value;
               const Icon = option.icon;
@@ -340,6 +340,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
                 <button
                   key={option.value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => update('addressType', option.value)}
                   disabled={saving}
                   className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
@@ -363,7 +364,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           </label>
         </div>
 
-        {message && <p className="error-text font-semibold text-[#6d1f34]">{message}</p>}
+        {message && <p role="alert" className="error-text font-semibold text-[#6d1f34]">{message}</p>}
 
         <div className="grid grid-cols-2 gap-3 border-t border-[#ead8cb] pt-5">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={saving} className="h-11 rounded-xl border border-[#ead8cb] bg-white text-[#3f2a22]">

@@ -1,3 +1,4 @@
+import NotificationBell from '../notifications/NotificationBell';
 import { useEffect, useMemo, useState } from 'react';
 import { Flower2, Heart, HelpCircle, Search, ShoppingBag, Shield, Truck, UserRound } from 'lucide-react';
 import logoFallback from '../../assets/samira-collection-logo.png';
@@ -49,7 +50,7 @@ export default function Navbar({
   const wishlistCount = Number.isFinite(Number(wishlistCountProp)) ? Number(wishlistCountProp) : Number(wishlist?.items?.length || 0);
   const go = onNavigate || navigate || (() => {});
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : user?.role === 'admin';
-  const showAdminPill = isAdmin && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin';
+  const showAdminPill = isAdmin && user?.availableModes?.includes('admin');
 
   useEffect(() => {
     setSearchTerm(searchValue);
@@ -127,7 +128,7 @@ export default function Navbar({
 
           <div className="sc-navbar__controls">
             {showAdminPill ? (
-              <button type="button" className="sc-navbar__admin-pill" onClick={() => switchMode('admin')}>
+              <button type="button" className="sc-navbar__admin-pill" onClick={() => user?.activeMode === 'admin' ? go('/admin') : switchMode('admin')}>
                 <Shield className="h-3.5 w-3.5" strokeWidth={2.1} aria-hidden="true" />
                 Admin
               </button>
@@ -157,6 +158,7 @@ export default function Navbar({
             </div>
 
             <div className="sc-navbar__actions">
+              <NotificationBell navigate={go} desktop />
               <button
                 type="button"
                 className="sc-navbar__action"

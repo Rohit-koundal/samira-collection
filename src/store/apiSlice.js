@@ -4,10 +4,12 @@ import { compressImageFile, isSupportedImageFile } from '../services/imageCompre
 import { logout, setCredentials } from './authSlice';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 import { getOrCreateSessionId } from '../utils/attribution';
+import { isWebsitePreview } from '../config/websiteDesigner';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
   prepareHeaders: (headers, { getState }) => {
+    if (isWebsitePreview()) return headers;
     const token = getState().auth.token || localStorage.getItem('samira_token');
     if (token) headers.set('authorization', `Bearer ${token}`);
     try {
@@ -36,7 +38,14 @@ function isCredentialAuthRequest(args) {
 }
 
 async function baseQueryWithRefresh(args, api, extraOptions) {
-  startMobileLoader();
+  const silent = typeof args === 'object' && args.silent;
+  if (typeof args === 'object') { const { silent: _silent, ...requestArgs } = args; args = requestArgs; }
+  if (isWebsitePreview()) {
+    const method = typeof args === 'string' ? 'GET' : (args.method || 'GET').toUpperCase();
+    if (method !== 'GET') return { error: { status: 403, data: { message: 'Storefront preview is read-only.' } } };
+    return rawBaseQuery(args, api, extraOptions);
+  }
+  if (!silent) startMobileLoader();
   try {
     let result = await rawBaseQuery(args, api, extraOptions);
 
@@ -65,7 +74,7 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
 
     return result;
   } finally {
-    stopMobileLoader();
+    if (!silent) stopMobileLoader();
   }
 }
 
@@ -76,11 +85,11 @@ function params(query) {
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Reviews', 'Returns', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization', 'ReelImports'],
+  tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Returns', 'Reviews', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization', 'ReelImports'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
-      query: ({ path, query }) => ({ url: path, ...params(query) }),
+      query: ({ path, query, silent }) => ({ url: path, ...params(query), silent }),
       providesTags: (_result, _error, arg) => tagsForPath(arg.path),
     }),
     mutate: builder.mutation({
@@ -184,6 +193,7 @@ export const samiraApi = createApi({
 });
 
 function tagsForPath(path = '', mutation = false) {
+  if (path.includes('/admin/social-imports')) return mutation && path.endsWith('/draft') ? ['ProductDrafts'] : [];
   if (path.includes('/admin/reel-imports')) return ['ReelImports'];
   if (path.includes('/admin/customization') || path.includes('/website-config')) return ['WebsiteCustomization'];
   if (path.includes('/auth/')) return ['Auth'];
@@ -208,7 +218,7 @@ function tagsForPath(path = '', mutation = false) {
   if (path.includes('/orders')) return mutation ? ['Orders', 'Cart', 'Products', 'AdminDashboard'] : ['Orders'];
   if (path.includes('/payments')) return ['Payments', 'Orders'];
   if (path.includes('/reviews')) return ['Reviews'];
-  if (path.includes('/returns')) return ['Returns'];
+  if (path.includes('/returns')) return mutation ? ['Returns', 'Orders'] : ['Returns'];
   if (path.includes('/contact')) return mutation ? ['Contact'] : ['Contact'];
   if (path.includes('/newsletter')) return mutation ? ['Newsletter'] : ['Newsletter'];
   if (path.includes('/notifications')) return ['Notifications'];

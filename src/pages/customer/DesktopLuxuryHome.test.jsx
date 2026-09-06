@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DesktopLuxuryHome from './DesktopLuxuryHome';
 import api from '../../services/api';
+import { mergeWebsiteConfig } from '../../config/websiteCustomization';
 
 jest.mock('../../context/CartContext', () => ({
   useCart: () => ({ addToCart: jest.fn() }),
@@ -42,5 +43,16 @@ describe('desktop home workflows', () => {
       source: 'homepage',
     }));
     expect(await screen.findByText('Thanks for subscribing.')).toBeInTheDocument();
+  });
+
+  test.each(['trending', 'newArrivals'])('manual %s selection does not get replaced by automatic products', (id) => {
+    const config = mergeWebsiteConfig();
+    config.homepage.sections = config.homepage.sections.map((section) => ({ ...section, visible: section.id === id }));
+    config.homepage.sectionProductIds[id] = ['chosen'];
+    const chosen = { id: 'chosen', name: 'Chosen product', images: ['/uploads/chosen.png'], price: 100 };
+    const automatic = { id: 'automatic', name: 'Automatic product', images: ['/uploads/automatic.png'], price: 200, showInTrending: true };
+    render(<DesktopLuxuryHome websiteConfig={config} navigate={jest.fn()} catalog={[automatic]} trendingProducts={[chosen]} newArrivalProducts={[chosen]} />);
+    expect(screen.getByText('Chosen product')).toBeInTheDocument();
+    expect(screen.queryByText('Automatic product')).not.toBeInTheDocument();
   });
 });

@@ -57,6 +57,14 @@ backend/routes/*
 !backend/tests/
 backend/tests/*
 !backend/tests/websiteCustomization.test.js
+!backend/tests/addresses.unit.test.js
+!backend/tests/databaseDns.unit.test.js
+!backend/tests/customerOrders.unit.test.js
+!backend/tests/notifications.unit.test.js
+!backend/controllers/notificationController.js
+!backend/controllers/contactController.js
+!backend/models/Notification.js
+!backend/routes/notificationRoutes.js
 !backend/modules/
 !backend/modules/**
 !backend/queues/
@@ -68,9 +76,19 @@ backend/services/*
 !backend/services/r2Upload.js
 !backend/services/videoMetadata.service.js
 !backend/services/localReelProcessor.service.js
+!backend/services/productFrameSelection.service.js
+!backend/services/productFrameVision.service.js
+!backend/tests/productFrameSelection.test.js
+!backend/tests/productFrameVision.test.js
+!backend/tests/localReelQuality.test.js
+!backend/utils/imageUtils.js
 !backend/services/reelImportProgress.service.js
 !backend/services/productSizingService.js
 !backend/services/paymentSettingsService.js
+!backend/services/returnEligibilityService.js
+!backend/services/orderSnapshotService.js
+!backend/services/notificationService.js
+!backend/services/shippingService.js
 !backend/services/quickAddVision.service.js
 !backend/services/reelCandidateVision.service.js
 !backend/workers/
@@ -82,6 +100,46 @@ backend/services/*
 !backend/tests/reelImportProgress.unit.test.js
 !backend/tests/paymentSettings.test.js
 !backend/tests/reelCandidateVision.unit.test.js
+# Audit trail implementation (no runtime secrets)
+!backend/models/AuditLog.js
+!backend/models/SocialProductImport.js
+!backend/server.js
+!backend/controllers/auditController.js
+!backend/controllers/couponController.js
+!backend/controllers/orderController.js
+!backend/controllers/paymentController.js
+!backend/routes/auditAdminRoutes.js
+!backend/routes/sellerRoutes.js
+!backend/services/auditService.js
+!backend/services/auditQuery.js
+!backend/middleware/
+backend/middleware/*
+!backend/middleware/auditMiddleware.js
+!backend/utils/
+backend/utils/*
+!backend/utils/auditData.js
+!backend/tests/audit.unit.test.js
+!backend/tests/audit.integration.test.js
+!backend/tests/socialImport.unit.test.js
+!backend/tests/socialImport.integration.test.js
+!backend/tests/auditWorkflow.unit.test.js
+# Master owner configuration and its regression tests (never runtime secrets)
+!backend/config/masterOwner.js
+!backend/config/industryPresets.js
+!backend/controllers/masterController.js
+!backend/controllers/storeContentController.js
+!backend/controllers/productDraftController.js
+!backend/controllers/storeController.js
+!backend/models/MasterConfiguration.js
+!backend/models/IndustryPreset.js
+!backend/routes/masterRoutes.js
+!backend/routes/storeContentRoutes.js
+!backend/routes/storeRoutes.js
+!backend/services/masterConfigurationService.js
+!backend/services/clientHandoverService.js
+!backend/tests/masterOwner.unit.test.js
+!backend/tests/websiteCustomization.unit.test.js
+!backend/tests/websiteDesignerPerformance.unit.test.js
 build/
 build
 # Compiled binary addons (https://nodejs.org/api/addons.html)
@@ -195,3 +253,8 @@ vite.config.ts.timestamp-*
 
 
 .DS_Store
+.tmp/
+/tmp/pdfs/
+!backend/services/productImportContext.service.js
+!backend/services/reelCandidateVision.service.js
+!backend/tests/productImportContext.test.js

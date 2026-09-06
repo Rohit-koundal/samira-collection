@@ -253,6 +253,7 @@ export default function QuickAddProduct() {
   return (
     <section className="space-y-5">
       <PageHeader title="Quick Add Product" note="Upload a photo. The system looks at the garment and fills name, category, colors and details. You add price and stock.">
+        <a href="/admin/social-import" className="admin-btn-ghost">Import Instagram / Facebook link</a>
         <a href="/admin/products/add" className="admin-btn-ghost">Open Advanced Add Product</a>
       </PageHeader>
 

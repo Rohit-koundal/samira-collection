@@ -140,7 +140,7 @@ function currentAdminLocation() {
 
   const target = `${window.location.pathname || '/admin'}${window.location.search || ''}`;
   if (
-    !target.startsWith('/admin')
+    (!target.startsWith('/admin') && !target.startsWith('/master'))
     || target.startsWith('//')
     || target.startsWith('/admin/login')
   ) {

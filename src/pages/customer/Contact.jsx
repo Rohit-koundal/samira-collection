@@ -56,6 +56,13 @@ export default function Contact({ route = '/contact' }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
 
   useEffect(() => {
+    const orderId = new URLSearchParams(route.split('?')[1] || '').get('order');
+    if (orderId && /^[a-f\d]{24}$/i.test(orderId)) {
+      setForm((current) => ({ ...current, subject: `Help with order #${orderId}`, message: `Order ID: ${orderId}\n\n` }));
+    }
+  }, [route]);
+
+  useEffect(() => {
     api.get('/settings')
       .then(setSettings)
       .catch((err) => setError(err.message))

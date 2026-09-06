@@ -3,11 +3,12 @@ export const RESERVED_PATHS = new Set([
   'login', 'register', 'profile', 'orders', 'order-detail', 'order-success',
   'payment-failed', 'contact', 'privacy-policy', 'terms', 'return-policy',
   'shipping-policy', 'cancellation-policy', 'size-guide', 'faqs', 'our-story',
-  'returns', 'notifications', 'seller', 'admin', 'store', 'share', 'api', 'health', 'uploads',
-  'robots.txt', 'sitemap.xml',
+  'returns', 'notifications', 'seller', 'admin', 'master', 'store', 'share', 'api', 'health', 'uploads',
+  'robots.txt', 'sitemap.xml', 'website-preview',
 ]);
 
 export const ROUTE_CHANGE_EVENT = 'samira:routechange';
+export const BEFORE_ROUTE_CHANGE_EVENT = 'samira:before-routechange';
 
 export function notifyRouteChange() {
   if (typeof window === 'undefined') return;
@@ -41,6 +42,7 @@ export function pushAppRoute(path) {
   const next = rawSearch ? `${pathname}?${rawSearch}` : pathname;
   const current = `${normalizePathname(window.location.pathname)}${window.location.search}` || '/';
   if (current === next) return;
+  if (!window.dispatchEvent(new CustomEvent(BEFORE_ROUTE_CHANGE_EVENT, { cancelable: true, detail: { current, next } }))) return;
   window.history.pushState(null, '', next);
   notifyRouteChange();
 }

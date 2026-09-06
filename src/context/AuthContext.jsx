@@ -5,7 +5,7 @@ import api from '../services/api';
 import { samiraApi } from '../store/apiSlice';
 import { logout as logoutAction, selectUser, setCredentials, setUser as setUserAction } from '../store/authSlice';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 export function AuthProvider({ children, navigate }) {
   const dispatch = useDispatch();
@@ -49,8 +49,12 @@ export function AuthProvider({ children, navigate }) {
       const profile = await api.get('/auth/me');
       dispatch(setUserAction(profile));
       return profile;
-    } catch {
-      dispatch(logoutAction());
+    } catch (error) {
+      // A temporary profile fetch failure must not erase a saved session.
+      if (error.status === 401 || error.status === 403) {
+        dispatch(logoutAction());
+        dispatch(samiraApi.util.resetApiState());
+      }
       return null;
     }
   }, [dispatch]);
@@ -86,7 +90,7 @@ export function AuthProvider({ children, navigate }) {
     let data = await api.post('/auth/verify-otp', { phone, otp });
     persist(data);
 
-    const isAdminDestination = String(redirectTo || '').startsWith('/admin')
+    const isAdminDestination = (String(redirectTo || '').startsWith('/admin') || String(redirectTo || '').startsWith('/master'))
       && !String(redirectTo || '').startsWith('//');
     if (isAdminDestination && data.user?.role === 'admin' && data.user?.activeMode !== 'admin') {
       try {

@@ -25,7 +25,7 @@ export function ProductVisual({ product, compact = false, showMeta = true }) {
   if (image && !imageFailed) {
     return (
       <div className={`relative overflow-hidden bg-[#f6efe8] ${frameClass}`}>
-        <img src={normalizeImageUrl(image)} alt={product.name} onError={() => setImageFailed(true)} className="h-full w-full object-cover object-center" />
+        <img loading="lazy" decoding="async" src={normalizeImageUrl(image)} alt={product.name} onError={() => setImageFailed(true)} className="h-full w-full object-cover object-center" />
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function ProductCard({ product, navigate }) {
   ].filter(Boolean);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-[18px] border border-[#eadfd5] bg-white shadow-[0_10px_26px_rgba(23,22,26,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(23,22,26,0.1)]">
+    <article data-mobile-catalog-card className="flex h-full flex-col overflow-hidden rounded-[18px] border border-[#eadfd5] bg-white shadow-[0_10px_26px_rgba(23,22,26,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(23,22,26,0.1)]">
       <ProductImageCarousel product={product} onOpen={openProduct}>
         {badges.length > 0 && (
           <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">

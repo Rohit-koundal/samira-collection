@@ -20,7 +20,8 @@ export function buildProductDetails(product = {}) {
   const rows = [];
   const usedLabels = new Set();
 
-  [...explicit, ...parsed.specifications].forEach(([label, value]) => {
+  const configured = (Array.isArray(product.specifications) ? product.specifications : []).filter((item) => item?.label && item?.value).map((item) => [item.label, [item.value, item.unit].filter(Boolean).join(' ')]);
+  [...explicit, ...configured, ...parsed.specifications].forEach(([label, value]) => {
     const cleanLabel = cleanText(label);
     const cleanValue = cleanText(value);
     const key = normalizeLabel(cleanLabel);

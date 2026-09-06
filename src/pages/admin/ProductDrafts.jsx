@@ -25,8 +25,13 @@ import {
   SIZE_CHART_PROFILES,
 } from '../../utils/productSizing';
 
-export default function ProductDrafts() {
+export default function ProductDrafts({ route = '/admin/product-drafts' }) {
+  const focusedDraftId = new URLSearchParams(route.split('?')[1] || '').get('draftId') || '';
   const [categories, setCategories] = useState([]);
+  const [structure, setStructure] = useState(null);
+  const [structureError, setStructureError] = useState('');
+  const loadStructure = () => api.get('/catalog-configuration').then((value) => { setStructure(value); setStructureError(''); }).catch((error) => setStructureError(error.message));
+  useEffect(() => { loadStructure(); }, []);
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState([]);
   const [files, setFiles] = useState([]);
@@ -38,6 +43,7 @@ export default function ProductDrafts() {
   const [publishSelectedDrafts] = usePublishSelectedDraftsMutation();
 
   const drafts = useMemo(() => draftResponse?.data || [], [draftResponse]);
+  const visibleDrafts = focusedDraftId ? drafts.filter((draft) => String(draft._id || draft.id) === focusedDraftId) : drafts;
 
   useEffect(() => {
     setSelected((current) => current.filter((id) => drafts.some((draft) => (draft._id || draft.id) === id)));
@@ -73,7 +79,7 @@ export default function ProductDrafts() {
     try {
       await updateProductDraft({
         id: draft._id || draft.id,
-        body: normalizeDraftBody(draft, categories),
+        body: normalizeDraftBody(draft, categories, structure),
       }).unwrap();
       showFeedback('Draft saved successfully.', 'success');
     } catch (error) {
@@ -89,6 +95,7 @@ export default function ProductDrafts() {
 
   const publishSelected = async () => {
     if (!selected.length) return showFeedback('Select at least one draft to publish.', 'warning');
+    if (!structure) return showFeedback('Load product configuration before publishing.', 'error');
     try {
       await publishSelectedDrafts({ ids: selected }).unwrap();
       setSelected([]);
@@ -103,8 +110,11 @@ export default function ProductDrafts() {
       <PageHeader
         title="Product Drafts"
         note="Bulk upload images, create draft cards, edit fields, and publish when ready."
-      />
+      ><a href="/admin/social-import" className="admin-btn-ghost">Import Instagram / Facebook link</a></PageHeader>
 
+      {focusedDraftId && <p className="admin-note">Showing your imported draft. <a className="text-wine underline" href="/admin/product-drafts">View all drafts</a></p>}
+
+      {structureError && <p role="alert" className="admin-card p-4">{structureError} <button type="button" onClick={loadStructure}>Retry product configuration</button></p>}
       <div className="admin-card p-4 md:p-5">
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
           <label className="grid gap-2">
@@ -151,15 +161,16 @@ export default function ProductDrafts() {
       <div className="admin-card overflow-hidden">
         {isLoading || isFetching ? (
           <Loader label="Loading drafts..." />
-        ) : !drafts.length ? (
+        ) : !visibleDrafts.length ? (
           <div className="p-5"><EmptyState title="No product drafts found" note="Upload product images to create draft records." /></div>
         ) : (
           <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
-            {drafts.map((draft) => (
+            {visibleDrafts.map((draft) => (
               <DraftCard
                 key={draft._id || draft.id}
                 draft={draft}
                 categories={categories}
+                structure={structure}
                 selected={selected.includes(draft._id || draft.id)}
                 onSelect={() => setSelected((current) => current.includes(draft._id || draft.id) ? current.filter((id) => id !== (draft._id || draft.id)) : [...current, draft._id || draft.id])}
                 onSave={saveDraft}
@@ -173,7 +184,7 @@ export default function ProductDrafts() {
   );
 }
 
-function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) {
+function DraftCard({ draft, structure, categories, selected, onSelect, onSave, onDelete }) {
   const [form, setForm] = useState(() => ({
     ...draft,
     sizes: Array.isArray(draft.sizes) ? draft.sizes.join(', ') : '',
@@ -206,7 +217,7 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
-  const sizingProduct = { ...form, category: categoryName };
+  const sizingProduct = { ...form, category: categoryName, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
   const sizingMode = resolveSizingMode(sizingProduct);
   const profile = inferSizeChartProfile(sizingProduct);
   const sizes = getSelectableSizes(sizingProduct);
@@ -235,11 +246,17 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+      {draft.status === 'published' && draft.publishedProductId && <a href={'/admin/products/edit?id=' + encodeURIComponent(draft.publishedProductId)} className="admin-btn-ghost mt-3 w-full">Edit published product</a>}
       <div className="mt-3 overflow-hidden rounded-2xl bg-[#f7efe8]">
-        <img src={normalizeImageUrl(draft.image || draft.images?.[0]?.url || '/uploads/placeholder.jpg')} alt={draft.name || 'Draft'} className="h-44 w-full object-cover" />
+        <img src={normalizeImageUrl(form.image || form.images?.[0]?.url || '/uploads/placeholder.jpg')} alt={form.name || 'Draft'} className="h-44 w-full object-cover" />
       </div>
       <div className="mt-4 space-y-3">
         <TextInput value={form.name || ''} onChange={(event) => update('name', event.target.value)} placeholder="Product name" />
+        {['social-import', 'reel-import'].includes(draft.sourceType) && <>
+          {draft.sourceUrl && <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-wine underline">Original {draft.sourcePlatform === 'facebook' ? 'Facebook' : 'Instagram'} post</a>}
+          <div className="grid grid-cols-4 gap-2">{(form.images || []).map((image, index) => <button key={image.url} type="button" onClick={() => setForm((value) => ({ ...value, image: image.url, images: value.images.map((item) => ({ ...item, primary: item.url === image.url })) }))} aria-label={'Set imported photo ' + (index + 1) + ' as cover'} aria-pressed={image.primary} className={'overflow-hidden rounded-lg border-2 ' + (image.primary ? 'border-wine' : 'border-transparent')}><img src={normalizeImageUrl(image.url)} alt={'Imported product photo ' + (index + 1)} className="aspect-[3/4] w-full object-cover" loading="lazy" /></button>)}</div>
+          <label className="grid gap-1 text-xs font-bold">Description<textarea rows={4} maxLength={6000} value={form.description || ''} onChange={(event) => update('description', event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm font-normal" /></label>
+        </>}
         <Select value={form.category?._id || form.category || ''} onChange={(event) => update('category', event.target.value)}>
           <option value="">Select category</option>
           {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
@@ -257,11 +274,11 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
           <TextInput type="number" value={form.stock || ''} onChange={(event) => update('stock', event.target.value)} placeholder="Stock" />
           {sizingMode === 'sized' ? <TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="Sizes: S, M, L" /> : <div className="grid place-items-center rounded-xl bg-emerald-50 px-2 text-center text-[10px] font-black text-emerald-700">No size selection</div>}
         </div>
-        <Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}>
+        {structure?.features?.sizing !== false && <Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}>
           <option value="auto">Automatic sizing</option>
           <option value="sized">Selectable sizes</option>
           <option value="free-size">No size selection / free size</option>
-        </Select>
+        </Select>}
         {sizingMode === 'sized' ? (
           <details className="rounded-xl border border-[#eadfd5] bg-white">
             <summary className="cursor-pointer px-3 py-3 text-xs font-black text-charcoal">Edit garment size chart</summary>
@@ -284,6 +301,7 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
             </div>
           </details>
         ) : null}
+        {structure?.attributes?.map((attribute) => <label key={attribute.key} className="grid gap-1 text-xs font-bold">{attribute.label}{attribute.unit ? ' (' + attribute.unit + ')' : ''}{attribute.required ? ' *' : ''}<TextInput value={form.attributeValues?.[attribute.key] ?? ''} maxLength={500} onChange={(event) => update('attributeValues', { ...form.attributeValues, [attribute.key]: event.target.value })} /></label>)}
         <TextInput value={form.colors || ''} onChange={(event) => update('colors', event.target.value)} placeholder="Colors" />
         <TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} placeholder="Fabric" />
         <TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} placeholder="Occasion" />
@@ -297,9 +315,9 @@ function DraftCard({ draft, categories, selected, onSelect, onSave, onDelete }) 
   );
 }
 
-function normalizeDraftBody(form, categories = []) {
+function normalizeDraftBody(form, categories = [], structure) {
   const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
-  const sizingProduct = { ...form, category: categoryName };
+  const sizingProduct = { ...form, category: categoryName, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
   const sizingMode = resolveSizingMode(sizingProduct);
   return {
     ...form,
@@ -311,8 +329,8 @@ function normalizeDraftBody(form, categories = []) {
     sellingPrice: Number(form.sellingPrice || form.price || 0),
     stock: Number(form.stock || 0),
     sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
-    sizingMode: form.sizingMode || 'auto',
-    sizeChartProfile: form.sizeChartProfile || 'auto',
+    sizingMode: sizingProduct.sizingMode || 'auto',
+    sizeChartProfile: sizingProduct.sizeChartProfile || 'auto',
     sizeChart: buildSizeChartPayload(sizingProduct),
     sizeFitNotes: form.sizeFitNotes || '',
   };

@@ -45,6 +45,7 @@ const emptyProduct = {
   fabric: '',
   occasion: '',
   description: '',
+  attributeValues: {},
   images: [],
   videos: [],
   highlights: [],
@@ -73,6 +74,8 @@ export default function ProductForm({
   uploadPrefix = '/admin/uploads',
   cancelPath = '/admin/products',
 }) {
+  const [structure, setStructure] = useState(null);
+  const [structureError, setStructureError] = useState('');
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId) || emptyProduct)));
@@ -120,6 +123,15 @@ export default function ProductForm({
   });
   const [assistantPreviewOpen, setAssistantPreviewOpen] = useState(false);
   const draftKey = getDraftKey(productId);
+  const reloadStructure = () => { setStructureError(''); return api.get('/catalog-configuration').then(setStructure).catch((error) => setStructureError(error.message)); };
+  useEffect(() => {
+    let alive = true;
+    api.get('/catalog-configuration').then((value) => { if (alive) setStructure(value); }).catch((error) => { if (alive) setStructureError(error.message); });
+    return () => { alive = false; };
+  }, []);
+  const productForSizing = (source) => structure?.features?.sizing === false
+    ? { ...withCategoryName(source, categories), sizingMode: 'free-size', sizeChartProfile: 'free-size' }
+    : withCategoryName(source, categories);
 
   useEffect(() => {
     let alive = true;
@@ -288,7 +300,8 @@ export default function ProductForm({
 
   const submit = async (event) => {
     event.preventDefault();
-    const sizingProduct = withCategoryName(form, categories);
+    if (!structure) { setMessage('Load the store product configuration before saving.'); return; }
+    const sizingProduct = productForSizing(form);
     const nextErrors = validate(form, sizingProduct);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -308,8 +321,8 @@ export default function ProductForm({
         originalPrice,
         lowStockAlert: Number(form.lowStockAlert),
         sizes: sizingMode === 'sized' ? selectableSizes : [],
-        sizingMode: form.sizingMode || 'auto',
-        sizeChartProfile: form.sizeChartProfile || 'auto',
+        sizingMode: structure.features.sizing ? form.sizingMode || 'auto' : 'free-size',
+        sizeChartProfile: structure.features.sizing ? form.sizeChartProfile || 'auto' : 'free-size',
         sizeChart: buildSizeChartPayload(sizingProduct),
         colors: splitList(form.colors),
         tags: splitList(form.tags),
@@ -334,7 +347,7 @@ export default function ProductForm({
   };
 
   const previewImage = (form.images || []).find((image) => image?.primary)?.url || form.images?.[0]?.url || '';
-  const sizingProduct = withCategoryName(form, categories);
+  const sizingProduct = productForSizing(form);
   const effectiveSizingMode = resolveSizingMode(sizingProduct);
   const inferredSizeProfile = inferSizeChartProfile(sizingProduct);
   const sizeChartColumns = getSizeChartColumns(sizingProduct);
@@ -381,6 +394,10 @@ export default function ProductForm({
         </div>
       </div>
 
+      {structureError && <div role="alert" className="admin-form-hint"><p>{structureError}</p><button type="button" onClick={reloadStructure}>Retry product configuration</button></div>}
+      {structure?.attributes?.length > 0 && <Section id="product-specifications" title="Product specifications" note="Enter values for your store’s configured attributes. Their definitions are managed by your website provider.">
+        {structure.attributes.map((attribute) => <Input key={attribute.key} label={attribute.label + (attribute.unit ? ' (' + attribute.unit + ')' : '')} value={form.attributeValues?.[attribute.key] || ''} required={attribute.required} onChange={(value) => setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } }))} />)}
+      </Section>}
       <Section id="product-basics" step="01" title="Basic Information" note="Name, SKU and the story customers will read.">
         <Input label="Product name" value={form.name} onChange={(value) => update('name', value)} error={errors.name} placeholder="Royal Zari Silk Saree" required />
         <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="leave blank for auto slug" />
@@ -469,13 +486,13 @@ export default function ProductForm({
         <div className="lg:col-span-2">
           <div className="admin-form-hint mb-3">
             <h3>Product images</h3>
-            <p>Click the upload box or drag images here. Upload 1 to 8 clear photos. JPG, JPEG, PNG or WEBP. Max 2MB each.</p>
+            <p>Click the upload box or drag images here. Keep up to 20 clear product photos; add up to 8 at a time. JPG, JPEG, PNG or WEBP. Max 2MB each.</p>
           </div>
           <ImageUploader
             label="Choose Product Images"
             helpText="Uploaded images are saved on the backend and only image URLs are stored in MongoDB."
             multiple
-            maxFiles={8}
+            maxFiles={20}
             uploadContext="products"
             uploadPath={uploadPrefix}
             compressAboveMb={2}
@@ -484,7 +501,7 @@ export default function ProductForm({
             value={form.images}
             onChange={(images) => update('images', images)}
           />
-          <p className="mt-2 text-xs font-semibold text-slate-500">{form.images.length}/8 images uploaded. Mark one image as Main for product listing.</p>
+          <p className="mt-2 text-xs font-semibold text-slate-500">{form.images.length}/20 images saved. Mark one image as Main for product listing.</p>
           {errors.images && <p className="admin-field__error mt-2">{errors.images}</p>}
         </div>
         <div className="lg:col-span-2">
@@ -504,7 +521,7 @@ export default function ProductForm({
           />
           <p className="mt-2 text-xs font-semibold text-slate-500">{form.videos.length}/2 videos uploaded.</p>
         </div>
-        <label className="admin-field">
+        {structure?.features?.sizing !== false && <><label className="admin-field">
           <span>Customer sizing</span>
           <select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)} className="admin-field__control">
             <option value="auto">Automatic from product category</option>
@@ -527,12 +544,13 @@ export default function ProductForm({
             {Object.entries(SIZE_CHART_PROFILES).map(([value, profile]) => <option key={value} value={value}>{profile.label}</option>)}
           </select>
         </label>
+        </>}
         {effectiveSizingMode === 'sized' ? (
           <Input label="Selectable sizes" value={form.sizes} onChange={(value) => update('sizes', value)} error={errors.sizes} placeholder="XS, S, M, L, XL, XXL" />
         ) : (
           <div className="admin-form-hint lg:col-span-2">
             <h3>No size chart required</h3>
-            <p>Sarees and other one-size products will not show S, M, L or XL buttons on the product page. Customers can add the product directly.</p>
+            <p>This product does not require garment sizing. Customers can add it without choosing S, M, L or XL.</p>
           </div>
         )}
         <Input label="Colors" value={form.colors} onChange={(value) => update('colors', value)} placeholder="Pink, Maroon, Gold" />
@@ -598,7 +616,7 @@ export default function ProductForm({
         ) : null}
       </Section>
 
-      <Section step="04" title="Smart Product Assistant" note="Optional. Fill empty fields from a few basic details.">
+      {structure?.industry !== 'fashion' ? null : <Section step="04" title="Smart Product Assistant" note="Optional. Fill empty fields from a few basic details.">
         <div className="admin-form-hint lg:col-span-2">
           <h3>Generate title, description, tags and SEO</h3>
           <p>Use any details you know. Existing manual values stay unless you choose to replace them.</p>
@@ -716,7 +734,7 @@ export default function ProductForm({
             Preview Suggestions
           </button>
         </div>
-      </Section>
+      </Section>}
 
       <Section step="05" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
@@ -927,6 +945,7 @@ function prepareImages(images) {
     url: image.url,
     publicId: image.publicId,
     primary: Boolean(image.primary),
+    ...(image.sourceFrame ? { sourceFrame: image.sourceFrame } : {}),
   }));
 }
 

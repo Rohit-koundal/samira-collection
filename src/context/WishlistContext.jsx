@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 import { trackEvent } from '../utils/analytics';
 
-const WishlistContext = createContext(null);
+export const WishlistContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_wishlist', null);
 
 export function WishlistProvider({ children }) {

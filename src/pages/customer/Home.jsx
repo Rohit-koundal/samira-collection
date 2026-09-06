@@ -1,7 +1,7 @@
+import { lazy, Suspense, useMemo } from 'react';
 import { ChevronRight, Gem, RotateCcw, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { useMediaQuery } from '@mantine/hooks';
 import Icon from '../../components/layout/Icon';
-import DesktopLuxuryHome from './DesktopLuxuryHome';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import PageState from '../../components/ui/PageState';
@@ -10,6 +10,8 @@ import { useGetBannersQuery, useGetCategoriesQuery, useGetFeaturedReviewsQuery, 
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 import { getHomepageSection } from '../../config/websiteCustomization';
 
+const DesktopLuxuryHome = lazy(() => import('./DesktopLuxuryHome'));
+const emptyList = [];
 const serviceHighlights = [
   { icon: Truck, title: 'Free Shipping', subtitle: 'On all orders' },
   { icon: Gem, title: 'Premium Quality', subtitle: 'Finest picks' },
@@ -19,41 +21,49 @@ const serviceHighlights = [
 
 export default function Home({ navigate }) {
   const isDesktop = useMediaQuery('(min-width: 1024px)', false, { getInitialValueInEffect: false });
+  const isTablet = useMediaQuery('(min-width: 768px)', false, { getInitialValueInEffect: false });
   const { config: websiteConfig } = useWebsiteCustomization();
-  const { data: productData = [], isLoading, isError, refetch } = useGetProductsQuery();
-  const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: banners = [] } = useGetBannersQuery();
+  const mobileCustom = websiteConfig.mobile.enabled && !isTablet;
+  const mobileSection = (id) => mobileCustom ? websiteConfig.mobile.sections.find((section) => section.id === id) : null;
+  const { data: productData = emptyList, isLoading, isError, refetch } = useGetProductsQuery();
+  const { data: categories = emptyList } = useGetCategoriesQuery();
+  const { data: banners = emptyList } = useGetBannersQuery();
   const reviewsSection = getHomepageSection(websiteConfig, 'reviews');
-  const { data: customerReviews = [] } = useGetFeaturedReviewsQuery(undefined, { skip: !isDesktop || !reviewsSection.visible });
-  const catalog = normalizeProducts(productData || []);
+  const { data: customerReviews = emptyList } = useGetFeaturedReviewsQuery(undefined, { skip: !isDesktop || !reviewsSection.visible });
+  const catalog = useMemo(() => normalizeProducts(productData || emptyList), [productData]);
   const heroBanners = banners.filter((banner) => banner.type === 'Hero');
   const promoBanner = banners.find((banner) => ['Offer', 'Category', 'Sale', 'Hero'].includes(banner.type));
 
-  const featuredProducts = catalog.filter((product) => product.isFeatured || product.showOnHomepage).slice(0, 12);
-  const trendingProducts = catalog.filter((product) => product.showInTrending).slice(0, 12);
-  const newArrivalProducts = catalog.filter((product) => product.isNewArrival).slice(0, 12);
-  const bestSellerProducts = catalog.filter((product) => product.isBestSeller).slice(0, 12);
-  const instagramProducts = catalog.filter((product) => getPrimaryImageUrl(product.images)).slice(0, 12);
-  const ethnicSetProducts = catalog.filter((product) => matchesCollection(product, ['ethnic', 'set', 'suit', 'kurti', 'lehenga', 'saree'])).slice(0, 12);
-  const accessoryProducts = catalog.filter((product) => matchesCollection(product, ['accessory', 'accessories', 'jewellery', 'jewelry', 'earring', 'necklace', 'bracelet', 'bag'])).slice(0, 12);
-  const selectConfiguredProducts = (sectionId, fallback) => {
-    const ids = websiteConfig.homepage.sectionProductIds?.[sectionId] || [];
-    if (!ids.length) return fallback;
-    const map = new Map(catalog.map((product) => [String(product._id || product.id || product.slug), product]));
-    return ids.map((id) => map.get(String(id))).filter(Boolean).slice(0, 12);
-  };
+  const collections = useMemo(() => ({
+    featured: catalog.filter((product) => product.isFeatured || product.showOnHomepage).slice(0, 12),
+    trending: catalog.filter((product) => product.showInTrending).slice(0, 12),
+    newArrivals: catalog.filter((product) => product.isNewArrival).slice(0, 12),
+    bestSellers: catalog.filter((product) => product.isBestSeller).slice(0, 12),
+    instagram: catalog.filter((product) => getPrimaryImageUrl(product.images)).slice(0, 12),
+    ethnicSets: catalog.filter((product) => matchesCollection(product, ['ethnic', 'set', 'suit', 'kurti', 'lehenga', 'saree'])).slice(0, 12),
+    accessories: catalog.filter((product) => matchesCollection(product, ['accessory', 'accessories', 'jewellery', 'jewelry', 'earring', 'necklace', 'bracelet', 'bag'])).slice(0, 12),
+  }), [catalog]);
+  const { featured: featuredProducts, trending: trendingProducts, newArrivals: newArrivalProducts,
+    instagram: instagramProducts, ethnicSets: ethnicSetProducts, accessories: accessoryProducts } = collections;
+  const catalogById = useMemo(() => new Map(catalog.map((product) => [String(product._id || product.id || product.slug), product])), [catalog]);
+  const configured = useMemo(() => Object.fromEntries(
+    Object.entries(websiteConfig.homepage.sectionProductIds || {}).map(([id, ids]) =>
+      [id, ids.length ? ids.map((productId) => catalogById.get(String(productId))).filter(Boolean).slice(0, 12) : null]),
+  ), [catalogById, websiteConfig.homepage.sectionProductIds]);
+  const selectConfiguredProducts = (id, fallback) => configured[id] || fallback;
   const desktopFeaturedProducts = selectConfiguredProducts('featured', featuredProducts);
   const desktopTrendingProducts = selectConfiguredProducts('trending', trendingProducts);
   const desktopNewArrivalProducts = selectConfiguredProducts('newArrivals', newArrivalProducts);
-  const desktopBestSellerProducts = selectConfiguredProducts('bestSellers', bestSellerProducts);
+  const desktopBestSellerProducts = selectConfiguredProducts('bestSellers', collections.bestSellers);
   const desktopEthnicSetProducts = selectConfiguredProducts('ethnicSets', ethnicSetProducts);
   const desktopAccessoryProducts = selectConfiguredProducts('accessories', accessoryProducts);
-  const categoryOverrides = new Map((websiteConfig.homepage.categoryImages || []).map((item) => [String(item.categoryId), item.image]));
-  const categoryIds = websiteConfig.homepage.featuredCategoryIds || [];
-  const themedCategories = (categoryIds.length
-    ? categoryIds.map((id) => categories.find((category) => String(category._id || category.id || category.slug) === String(id))).filter(Boolean)
-    : categories
-  ).map((category) => ({ ...category, image: categoryOverrides.get(String(category._id || category.id || category.slug)) || category.image }));
+  const themedCategories = useMemo(() => {
+    const overrides = new Map((websiteConfig.homepage.categoryImages || []).map((item) => [String(item.categoryId), item.image]));
+    const ids = websiteConfig.homepage.featuredCategoryIds || [];
+    const byId = new Map(categories.map((category) => [String(category._id || category.id || category.slug), category]));
+    return (ids.length ? ids.map((id) => byId.get(String(id))).filter(Boolean) : categories)
+      .map((category) => ({ ...category, image: overrides.get(String(category._id || category.id || category.slug)) || category.image }));
+  }, [categories, websiteConfig.homepage.categoryImages, websiteConfig.homepage.featuredCategoryIds]);
 
   if (isLoading && !catalog.length) {
     return <section className="container-page py-10"><PageState loading loadingLabel="Loading the collection..." /></section>;
@@ -65,45 +75,30 @@ export default function Home({ navigate }) {
 
   return (
     <>
-      {!isDesktop && <div className="bg-[#fcfaf7]">
-        <MobileHero banner={heroBanners[0] || promoBanner} navigate={navigate} />
-        <MobileServices />
-        <MobileCategoryScroller categories={categories} navigate={navigate} />
-        <MobileOfferStrip navigate={navigate} />
-        <MobileEditorialBanners banners={banners.filter((banner) => ['Offer', 'Category', 'Sale'].includes(banner.type))} navigate={navigate} />
-        <MobileProductSection
-          eyebrow="Trending Now"
-          title="Fast-moving styles"
-          products={trendingProducts.length ? trendingProducts : featuredProducts}
-          navigate={navigate}
-          viewAllPath="/products?trending=true&collection=trending-now"
-        />
-        <MobileProductSection
-          eyebrow="New Arrivals"
-          title="Fresh drops this week"
-          products={newArrivalProducts.length ? newArrivalProducts : featuredProducts}
-          navigate={navigate}
-          viewAllPath="/products?newArrival=true&collection=new-arrivals"
-        />
-        <MobileProductSection
-          eyebrow="Ethnic Sets"
-          title="Complete occasion-ready looks"
-          products={ethnicSetProducts}
-          navigate={navigate}
-          viewAllPath="/products?search=Set"
-          emptyMessage="No ethnic sets are published yet. Browse the complete collection while new sets are added."
-        />
-        <MobileProductSection
-          eyebrow="Accessories"
-          title="Finishing touches"
-          products={accessoryProducts}
-          navigate={navigate}
-          viewAllPath="/products?search=Accessory"
-          emptyMessage="No accessories are published yet. Browse the complete collection while accessories are added."
-        />
+      {!isDesktop && <div className={`mobile-home bg-[#fcfaf7] ${mobileCustom ? 'mobile-home--custom' : ''}`}>
+        {[
+          ['hero', <MobileHero banner={heroBanners[0] || promoBanner} heading={mobileSection('hero')?.heading} navigate={navigate} />],
+          ['services', <MobileServices />],
+          ['categories', <MobileCategoryScroller categories={mobileCustom && websiteConfig.mobile.useDesktopCatalog ? themedCategories : categories} navigate={navigate} />],
+          ['sale', <MobileOfferStrip navigate={navigate} />],
+          ['promotional', <MobileEditorialBanners banners={banners.filter((banner) => ['Offer', 'Category', 'Sale'].includes(banner.type))} navigate={navigate} />],
+          ...[
+            ['trending', 'Trending Now', 'Fast-moving styles', trendingProducts.length ? trendingProducts : featuredProducts, '/products?trending=true&collection=trending-now'],
+            ['newArrivals', 'New Arrivals', 'Fresh drops this week', newArrivalProducts.length ? newArrivalProducts : featuredProducts, '/products?newArrival=true&collection=new-arrivals'],
+            ['ethnicSets', 'Ethnic Sets', 'Complete occasion-ready looks', ethnicSetProducts, '/products?search=Set'],
+            ['accessories', 'Accessories', 'Finishing touches', accessoryProducts, '/products?search=Accessory'],
+          ].map(([id, eyebrow, title, products, viewAllPath]) => [id, <MobileProductSection
+            eyebrow={mobileSection(id)?.heading || eyebrow} title={title}
+            products={mobileCustom && websiteConfig.mobile.useDesktopCatalog ? selectConfiguredProducts(id, products) : products}
+            navigate={navigate} viewAllPath={viewAllPath}
+            emptyMessage={id === 'ethnicSets' ? 'No ethnic sets are published yet. Browse the complete collection while new sets are added.' : id === 'accessories' ? 'No accessories are published yet. Browse the complete collection while accessories are added.' : ''}
+          />]),
+        ].filter(([id]) => mobileSection(id)?.visible !== false)
+          .map(([id, content]) => <MobileSection key={id} section={mobileSection(id)}>{content}</MobileSection>)}
       </div>}
 
       {isDesktop && (
+        <Suspense fallback={<section className="container-page min-h-[560px] py-10"><PageState loading loadingLabel="Loading the collection..." /></section>}>
         <DesktopLuxuryHome
           navigate={navigate}
           categories={themedCategories}
@@ -119,12 +114,17 @@ export default function Home({ navigate }) {
           websiteConfig={websiteConfig}
           customerReviews={customerReviews}
         />
+        </Suspense>
       )}
     </>
   );
 }
 
-function MobileHero({ banner, navigate }) {
+function MobileSection({ section, children }) {
+  return section ? <div style={{ order: section.order }}>{children}</div> : children;
+}
+
+function MobileHero({ banner, heading, navigate }) {
   return (
     <section className="px-3 pb-4 pt-3">
       <button
@@ -143,7 +143,7 @@ function MobileHero({ banner, navigate }) {
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#9d3154]">New festive collection</p>
             <h1 className="mt-2 text-[20px] font-semibold leading-[1.12] text-[#6d1f34]">
-              {banner?.title || 'Celebrate in Style'}
+              {heading || banner?.title || 'Celebrate in Style'}
             </h1>
             <p className="mt-1.5 max-w-[190px] text-[12px] leading-[1.35] text-[#6a5761]">
               {banner?.subtitle || 'Elegant sarees, suits & kurtis for every occasion.'}
@@ -161,7 +161,7 @@ function MobileHero({ banner, navigate }) {
             <div className="absolute inset-0 rounded-[18px] bg-white/60 blur-[2px]" />
             <div className="relative h-full w-full overflow-hidden rounded-[24px] bg-white/80">
               {banner?.image ? (
-                <img src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} className="h-full w-full object-cover object-top" />
+                <img src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} loading="eager" fetchPriority="high" decoding="async" className="h-full w-full object-cover object-top" />
               ) : (
                 <div className="flex h-full items-center justify-center bg-gradient-to-b from-[#f8e2d7] to-[#f6cfd2] text-[11px] font-semibold text-[#7a1f36]">
                   Samira Collection
@@ -219,7 +219,7 @@ function MobileCategoryScroller({ categories, navigate }) {
             >
               <div className="mx-auto flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-full bg-[#f6e8df] ring-1 ring-[#f0dfd3]">
                 {category.image ? (
-                  <img src={normalizeImageUrl(category.image)} alt={category.name} className="h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={normalizeImageUrl(category.image)} alt={category.name} className="h-full w-full object-cover" />
                 ) : (
                   <span className="text-[11px] font-bold uppercase tracking-[0.04em] text-[#7a1f36]">{category.name?.slice(0, 2)}</span>
                 )}
@@ -281,7 +281,7 @@ function MobileEditorialBanners({ banners, navigate }) {
           >
             <div className="aspect-[0.92]">
               {banner.image ? (
-                <img src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} className="h-full w-full object-cover" />
+                <img loading="lazy" decoding="async" src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full items-end bg-gradient-to-br from-[#f7e8de] to-[#ecd2c4] p-3">
                   <span className="text-[11px] font-semibold text-[#6d1f34]">{banner.title || 'Samira edit'}</span>
@@ -332,7 +332,7 @@ function matchesCollection(product, terms) {
 
 function MobileCompactProductGrid({ products, navigate, title }) {
   return (
-    <div className="hide-scrollbar -mx-0.5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
+    <div className="mobile-home-product-grid hide-scrollbar -mx-0.5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
       {products.map((product) => (
         <MobileCompactProductCard key={product.id} product={product} navigate={navigate} sectionTitle={title} />
       ))}
@@ -357,7 +357,7 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
         : null;
 
   return (
-    <article className="min-w-0 shrink-0 snap-start basis-[calc(50%-6px)]">
+    <article data-mobile-product-card className="min-w-0 shrink-0 snap-start basis-[calc(50%-6px)]">
       <div
         role="button"
         tabIndex={0}
@@ -371,9 +371,9 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
         className="block w-full cursor-pointer text-left"
       >
         <div className="relative overflow-hidden rounded-[14px] bg-[#f6e8df] shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
-          <div className="aspect-[0.92]">
+          <div data-mobile-product-media className="aspect-[0.92]">
             {image ? (
-              <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
+              <img loading="lazy" decoding="async" src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f8e2d7] to-[#f5d0d5] text-[12px] font-semibold text-[#7a1f36]">
                 Samira

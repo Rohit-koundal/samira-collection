@@ -1,15 +1,18 @@
 import { useMemo } from 'react';
-import { ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap, Palette } from 'lucide-react';
+import { Bell, ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap, Palette } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/samira-collection-logo.png';
 import useAppPath from '../../hooks/useAppPath';
 import { reelProductImportEnabled } from '../../config/features';
 
 export const ADMIN_LINKS = [
   ['Dashboard', '/admin'],
+  ['Notifications', '/admin/notifications'],
   ['Products', '/admin/products'],
   ['Add Product', '/admin/products/add'],
   ['Quick Add', '/admin/products/quick-add'],
   ['Product Drafts', '/admin/product-drafts'],
+  ['Import social link', '/admin/social-import'],
   ...(reelProductImportEnabled ? [['Reel Product Import', '/admin/reel-import']] : []),
   ['Categories', '/admin/categories'],
   ['Variant Groups', '/admin/variant-groups'],
@@ -25,6 +28,8 @@ export const ADMIN_LINKS = [
   ['Subscribers', '/admin/subscribers'],
   ['Audit log', '/admin/audit'],
   ['Website Designer', '/admin/customization'],
+  ['Store content', '/admin/store-content'],
+  ['Master configuration', '/master'],
   ['Settings', '/admin/settings'],
 ];
 
@@ -53,15 +58,17 @@ export function matchAdminHref(path = '/admin') {
 }
 
 export default function AdminSidebar({ open = false, onClose = () => {}, onOpen = () => {} }) {
+  const { user } = useAuth();
+  const master = user?.systemRole === 'MASTER_OWNER' && !user?.offlineSession;
   const currentPath = useAppPath();
   const activeHref = matchAdminHref(currentPath);
 
-  const items = useMemo(() => ADMIN_LINKS.map(([label, path]) => ({
+  const items = useMemo(() => ADMIN_LINKS.filter(([, path]) => master || !['/master', '/admin/customization'].includes(path)).map(([label, path]) => ({
     label,
     path,
     active: path === activeHref,
     icon: iconForLabel(label),
-  })), [activeHref]);
+  })), [activeHref, master]);
 
   const sidebar = (
     <aside className="admin-sidebar">
@@ -121,11 +128,13 @@ export default function AdminSidebar({ open = false, onClose = () => {}, onOpen 
 
 function iconForLabel(label) {
   const map = {
+    Notifications: <Bell className="h-4 w-4" />,
     Dashboard: <LayoutDashboard className="h-4 w-4" />,
     Products: <Package className="h-4 w-4" />,
     'Add Product': <PlusCircle className="h-4 w-4" />,
     'Quick Add': <Zap className="h-4 w-4" />,
     'Product Drafts': <FilePlus2 className="h-4 w-4" />,
+    'Import social link': <Package className="h-4 w-4" />,
     'Reel Product Import': <Video className="h-4 w-4" />,
     Categories: <Tags className="h-4 w-4" />,
     'Variant Groups': <GitBranch className="h-4 w-4" />,

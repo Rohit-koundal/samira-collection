@@ -35,6 +35,7 @@ export default function ImageUploader({
     setRecentUploads([]);
     const incoming = Array.from(selected);
     if (!incoming.length) return;
+    if (incoming.length > 8) return setError('Choose up to 8 new images at a time. Your existing photos are kept.');
     if (files.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
 
     setUploading(true);
@@ -88,7 +89,8 @@ export default function ImageUploader({
 
   const remove = (index) => {
     const next = files.filter((_, itemIndex) => itemIndex !== index);
-    onChange(next.map((item, itemIndex) => ({ ...item, primary: itemIndex === 0 ? true : item.primary })));
+    const existingPrimary = next.findIndex((item) => item.primary);
+    onChange(next.map((item, itemIndex) => ({ ...item, primary: itemIndex === (existingPrimary >= 0 ? existingPrimary : 0) })));
   };
 
   const markPrimary = (index) => onChange(files.map((item, itemIndex) => ({ ...item, primary: itemIndex === index })));
@@ -122,7 +124,7 @@ export default function ImageUploader({
           </div>
         </div>
       )}
-      <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} onChange={(event) => addFiles(event.target.files)} className="hidden" />
+      <input ref={inputRef} aria-label={label} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} onChange={(event) => addFiles(event.target.files)} className="hidden" />
       {error && <p className="text-sm font-bold text-rose">{error}</p>}
       {recentUploads.length > 0 && (
         <div className="space-y-2 rounded-xl bg-white p-3 shadow-sm">
@@ -143,6 +145,7 @@ export default function ImageUploader({
           <div key={`${file.url}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
             <img src={normalizeImageUrl(file.url)} alt={file.originalName || file.name || 'Upload preview'} className="h-28 w-full object-cover" />
             {file.primary && <span className="absolute left-2 top-2 rounded-full bg-wine px-2 py-1 text-[10px] font-black text-white">Primary</span>}
+            {file.sourceFrame && <div className="grid gap-2 p-2 text-xs text-slate-600"><a href={normalizeImageUrl(file.url)} target="_blank" rel="noreferrer" className="flex min-h-9 items-center text-wine underline">View full photo</a><label className="grid gap-1"><span>Product view</span><select aria-label={'Product view for image ' + (index + 1)} value={file.sourceFrame.viewType || 'unknown'} onChange={(event) => onChange(files.map((item, itemIndex) => itemIndex === index ? { ...item, sourceFrame: { ...item.sourceFrame, viewType: event.target.value } } : item))} className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2"><option value="unknown">Unspecified</option><option value="front">Front</option><option value="back">Back</option><option value="side">Side</option><option value="detail">Detail</option></select></label></div>}
             {showPrimaryControl ? (
               <div className="grid grid-cols-2">
                 <button type="button" onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import PageHeader from '../../components/admin/PageHeader';
 import DataTable from '../../components/admin/DataTable';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
@@ -8,25 +8,30 @@ import api from '../../services/api';
 
 const statuses = ['NEW', 'READ', 'REPLIED', 'CLOSED'];
 
-export default function Support() {
+export default function Support({ route = '' }) {
   const [messages, setMessages] = useState([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => new URLSearchParams(route.split('?')[1] || '').get('search') || '');
+  const loadSequence = useRef(0);
+  useEffect(() => setQuery(new URLSearchParams(route.split('?')[1] || '').get('search') || ''), [route]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const messageId = /^[a-f\d]{24}$/i.test(query.trim()) ? query.trim() : '';
 
-  const load = () => {
+  const load = useCallback(() => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
-    api.get('/admin/contact').then((items) => {
+    api.get(`/admin/contact${messageId ? `?id=${messageId}` : ''}`).then((items) => {
+      if (sequence !== loadSequence.current) return;
       setMessages(items || []);
       setMessage('');
-    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
-  };
+    }).catch((error) => { if (sequence === loadSequence.current) setMessage(error.message); }).finally(() => { if (sequence === loadSequence.current) setLoading(false); });
+  }, [messageId]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); return () => { loadSequence.current += 1; }; }, [load]);
 
   const filtered = messages.filter((item) => {
-    const haystack = [item.name, item.email, item.subject, item.message].join(' ').toLowerCase();
+    const haystack = [item._id, item.name, item.email, item.subject, item.message].join(' ').toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!status || item.status === status);
   });
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
@@ -8,21 +8,27 @@ import api from '../../services/api';
 
 const statuses = ['Requested', 'Approved', 'Rejected', 'Pickup Scheduled', 'Received', 'Exchanged', 'Refunded', 'Closed'];
 
-export default function Returns() {
+export default function Returns({ route = '' }) {
   const [requests, setRequests] = useState([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => new URLSearchParams(route.split('?')[1] || '').get('search') || '');
+  const loadSequence = useRef(0);
+  useEffect(() => setQuery(new URLSearchParams(route.split('?')[1] || '').get('search') || ''), [route]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const requestId = /^[a-f\d]{24}$/i.test(query.trim()) ? query.trim() : '';
   const load = useCallback(() => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
-    api.get('/admin/returns').then((items) => {
+    api.get(`/admin/returns${requestId ? `?id=${requestId}` : ''}`).then((items) => {
+      if (sequence !== loadSequence.current) return;
       setRequests(items || []);
       setMessage('');
-    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
-  }, []);
+    }).catch((error) => { if (sequence === loadSequence.current) setMessage(error.message); }).finally(() => { if (sequence === loadSequence.current) setLoading(false); });
+  }, [requestId]);
   useEffect(() => {
     load();
+    return () => { loadSequence.current += 1; };
   }, [load]);
 
   const filtered = useMemo(() => {

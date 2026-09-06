@@ -11,13 +11,21 @@ export default function ProductImageCarousel({
 }) {
   const images = useMemo(() => normalizeImageEntries(product?.images || []), [product?.images]);
   const hasMultiple = images.length > 1;
-  const [index, setIndex] = useState(0);
+  const galleryKey = images.map((image) => image.url).join('\n');
+  const [selection, setSelection] = useState({ key: '', index: 0, visited: [0] });
+  const current = selection.key === galleryKey ? selection : { index: 0, visited: [0] };
+  const index = current.index;
+  const visited = current.visited;
   const pointerState = useRef({ startX: 0, startY: 0, deltaX: 0, deltaY: 0, swiping: false, pointerId: null });
 
   const goTo = (nextIndex) => {
     if (!images.length) return;
     const total = images.length;
-    setIndex((nextIndex + total) % total);
+    const next = (nextIndex + total) % total;
+    setSelection((previous) => ({
+      key: galleryKey, index: next,
+      visited: [...new Set([...(previous.key === galleryKey ? previous.visited : [0]), next])],
+    }));
   };
 
   const handleTouchStart = (event) => {
@@ -129,13 +137,14 @@ export default function ProductImageCarousel({
           >
             {images.map((image, imageIndex) => (
               <div key={`${image.url}-${imageIndex}`} className="h-full w-full shrink-0">
-                <img
+                {visited.includes(imageIndex) && <img
                   src={normalizeImageUrl(image.url)}
                   alt={product?.name || 'Product'}
                   className="h-full w-full object-cover object-center"
                   loading="lazy"
+                  decoding="async"
                   draggable="false"
-                />
+                />}
               </div>
             ))}
           </div>

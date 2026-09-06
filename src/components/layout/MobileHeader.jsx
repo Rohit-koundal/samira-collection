@@ -1,3 +1,5 @@
+import NotificationBell from '../notifications/NotificationBell';
+import { useNotifications } from '../../context/NotificationContext';
 import { useEffect, useState } from 'react';
 import Icon from './Icon';
 import { useCart } from '../../context/CartContext';
@@ -5,6 +7,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   ChevronRight,
+  Bell,
   Grid2x2,
   Headphones,
   Heart,
@@ -33,6 +36,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
+  const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
@@ -62,12 +66,13 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
-        <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_132px] items-center gap-1 px-3 pt-1">
+      <header data-mobile-header className="sticky top-0 z-50 overflow-hidden border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
+        <div className="grid h-[58px] grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-1 px-3 pt-1">
           <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5.5 w-5.5" />
           </button>
           <div className="col-start-3 flex shrink-0 justify-end gap-1">
+            <NotificationBell navigate={navigate} />
             <button onClick={() => setSearchOpen(true)} className="grid h-11 w-10 place-items-center text-slate-700" aria-label="Search products">
               <Search className="h-5.5 w-5.5" strokeWidth={1.9} />
             </button>
@@ -153,6 +158,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
               <DrawerSection title="My account">
                 <DrawerLink icon={Package} label="My Orders" onClick={() => go('/orders')} />
+                <DrawerLink icon={Bell} label="Notifications" badge={unreadCount > 99 ? '99+' : unreadCount || ''} onClick={() => go('/notifications')} />
                 <DrawerLink icon={Heart} label="Wishlist" badge={wishlist.items.length || ''} onClick={() => go('/wishlist')} />
                 <DrawerLink icon={ShoppingBag} label="My Cart" badge={cart.itemCount || ''} onClick={() => go('/cart')} />
                 <DrawerLink icon={MapPin} label="Saved Addresses" onClick={() => go('/profile/addresses')} />
@@ -163,14 +169,14 @@ export default function MobileHeader({ navigate, route = '/' }) {
                 <DrawerLink icon={Headphones} label="Help & Support" onClick={() => go('/contact')} />
               </DrawerSection>
 
-              {user?.role === 'admin' && user?.availableModes?.includes('admin') && user?.activeMode !== 'admin' && (
+              {user?.role === 'admin' && user?.availableModes?.includes('admin') && (
                 <div className="border-t border-slate-100 px-5 py-4">
                   <button
                     type="button"
-                    onClick={() => { setOpen(false); switchMode('admin'); }}
+                    onClick={() => { setOpen(false); if (user.activeMode === 'admin') navigate('/admin'); else switchMode('admin'); }}
                     className="h-11 w-full rounded-xl bg-wine px-4 text-[12px] font-black text-white shadow-sm"
                   >
-                    Switch to Admin
+                    {user.activeMode === 'admin' ? 'Admin Dashboard' : 'Switch to Admin'}
                   </button>
                 </div>
               )}

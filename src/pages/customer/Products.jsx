@@ -98,7 +98,7 @@ export default function Products({ navigate, route = '/products' }) {
           allProducts={catalog}
         />
       ) : null}
-      <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
+      <div className="mb-3 flex items-center justify-between gap-2 lg:hidden">
         <div>
           <p className="text-[13px] font-bold text-[#1f2a44]">{collectionLabel}</p>
           <p className="mt-0.5 text-[11px] text-slate-500">{loading ? '' : `${visibleProducts.length} styles available`}</p>
@@ -120,7 +120,7 @@ export default function Products({ navigate, route = '/products' }) {
           </button>
         </div>
       </div>
-      <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto md:hidden">
+      <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto lg:hidden">
         <button
           type="button"
           onClick={() => {
@@ -146,7 +146,7 @@ export default function Products({ navigate, route = '/products' }) {
           );
         })}
       </div>
-      <div className="md:hidden">
+      <div className="lg:hidden">
         {error ? <div className="rounded-2xl bg-white p-8 text-center font-bold text-rose"><p>Store data service is temporarily unavailable.</p><button type="button" className="mt-4 h-11 rounded-xl bg-wine px-5 text-sm font-black text-white" onClick={refetch}>Try again</button></div> : loading ? null : <ProductGrid products={visibleProducts} navigate={navigate} />}
       </div>
       <MobileFilterSheet

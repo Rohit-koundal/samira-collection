@@ -217,6 +217,7 @@ export default function Products({ route = '/admin/products' }) {
   return (
     <section className="space-y-5">
       <PageHeader title="Products" note="Manage catalog, pricing, stock, visibility and featured collections.">
+        <a href="/admin/social-import" className="admin-btn-ghost">Import social link</a>
         <a href="/admin/products/quick-add" className="admin-btn-ghost">
           <Plus className="h-4 w-4" />
           Quick Add

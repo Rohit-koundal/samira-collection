@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
@@ -6,6 +7,8 @@ import StatusBadge from '../../components/admin/StatusBadge';
 import api from '../../services/api';
 
 export default function Customers() {
+  const { user } = useAuth();
+  const master = user?.systemRole === 'MASTER_OWNER' && !user?.offlineSession;
   const [customers, setCustomers] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -63,7 +66,7 @@ export default function Customers() {
           <td className="px-4 py-4">{customer.availableModes?.join(', ') || 'customer'}</td>
           <td className="px-4 py-4"><StatusBadge value={customer.isBlocked ? 'Blocked' : 'Active'} /></td>
           <td className="px-4 py-4">{new Date(customer.createdAt).toLocaleDateString('en-IN')}</td>
-          <td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button onClick={() => toggle(customer)} className="admin-table-action-link">{customer.isBlocked ? 'Unblock' : 'Block'}</button>{customer.role === 'admin' ? <button onClick={() => demote(customer)} className="admin-table-action-link is-danger">Demote</button> : <button onClick={() => promote(customer)} className="admin-table-action-link is-success">Promote</button>}</div></td>
+          <td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button onClick={() => toggle(customer)} className="admin-table-action-link">{customer.isBlocked ? 'Unblock' : 'Block'}</button>{master && customer.systemRole !== 'MASTER_OWNER' && (customer.role === 'admin' ? <button onClick={() => demote(customer)} className="admin-table-action-link is-danger">Demote</button> : <button onClick={() => promote(customer)} className="admin-table-action-link is-success">Promote</button>)}</div></td>
         </tr>
       ))} />
     </section>

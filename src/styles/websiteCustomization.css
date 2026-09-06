@@ -1,6 +1,22 @@
-/* Storefront theme rules are intentionally desktop-only. The established mobile
-   storefront keeps its original composition, sizing, typography and controls. */
+/* Desktop appearance and opt-in handheld overrides are deliberately isolated.
+   Legacy themes preserve the established mobile and tablet composition. */
 @media (min-width: 1024px) {
+  .site-storefront[data-desktop-enhanced="true"] .themed-home-flow--desktop {
+    --samira-primary: var(--site-primary);
+    --samira-primary-dark: var(--site-primary);
+    --samira-cream: var(--site-background);
+    --samira-cream-2: var(--site-secondary);
+    --samira-card: var(--site-surface);
+    --samira-gold: var(--site-accent);
+    --samira-text: var(--site-text);
+    --samira-muted: var(--site-muted);
+  }
+  .site-storefront[data-desktop-enhanced="true"] .sc-plp,
+  .site-storefront[data-desktop-enhanced="true"] .sc-plp__panel { background: var(--site-background); }
+  .site-storefront[data-desktop-enhanced="true"] [data-theme-product-card] { background: var(--site-surface); color: var(--site-text); }
+  .site-storefront[data-desktop-enhanced="true"] .sc-navbar__link { color: var(--site-header-text); }
+  .site-storefront[data-desktop-enhanced="true"] .sc-navbar__link--active { color: var(--site-primary); }
+  .site-storefront[data-desktop-enhanced="true"] .sc-navbar__link::after { background: linear-gradient(90deg, var(--site-accent), var(--site-primary)); }
   .site-storefront {
     background: var(--site-background, #fffaf2);
     color: var(--site-text, #17161a);
@@ -83,9 +99,53 @@
 
   .themed-home-flow--desktop { display: flex; flex-direction: column; }
   .themed-home-section { order: var(--home-section-order, 0); }
+  .themed-home-section[data-section-background="true"] > section { background: transparent !important; }
 
   .site-storefront .sc-plp__grid {
     grid-template-columns: repeat(var(--site-products-desktop), minmax(0, 1fr)) !important;
     gap: var(--site-grid-gap) !important;
   }
+}
+
+@media (max-width: 767px) {
+  .site-storefront[data-mobile-custom="true"] .mobile-home { background: var(--site-mobile-bg); }
+  .site-storefront[data-mobile-custom="true"] .mobile-home--custom { display: flex; flex-direction: column; }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-header] { background: var(--site-mobile-header-bg); color: var(--site-mobile-header-text); }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-header] button { color: inherit; }
+  .site-storefront[data-mobile-custom="true"] .mobile-home-product-grid { gap: var(--site-mobile-gap); }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] {
+    flex-basis: calc((100% - (var(--site-mobile-columns) - 1) * var(--site-mobile-gap)) / var(--site-mobile-columns));
+  }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] [data-mobile-product-media] { aspect-ratio: var(--site-mobile-ratio, .92); }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] [role="button"] > div { border-radius: var(--site-mobile-radius); }
+  .site-storefront[data-mobile-custom="true"] .sc-plp__grid {
+    grid-template-columns: repeat(var(--site-mobile-columns), minmax(0, 1fr)) !important;
+    gap: var(--site-mobile-gap) !important;
+  }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-product-grid] {
+    grid-template-columns: repeat(var(--site-mobile-columns), minmax(0, 1fr)) !important;
+    gap: var(--site-mobile-gap) !important;
+  }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-catalog-card],
+  .site-storefront[data-mobile-custom="true"] [data-mobile-catalog-card] > [role="button"] { border-radius: var(--site-mobile-radius); }
+  .site-storefront[data-mobile-custom="true"] .sc-product-card,
+  .site-storefront[data-mobile-custom="true"] .sc-product-card__media { border-radius: var(--site-mobile-radius); }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .site-storefront[data-tablet-custom="true"] [data-mobile-product-grid] {
+    grid-template-columns: repeat(var(--site-tablet-columns), minmax(0, 1fr)) !important;
+    gap: var(--site-tablet-gap) !important;
+  }
+  .site-storefront[data-tablet-custom="true"] .sc-plp__grid {
+    grid-template-columns: repeat(var(--site-tablet-columns), minmax(0, 1fr)) !important;
+    gap: var(--site-tablet-gap) !important;
+  }
+  .site-storefront[data-tablet-custom="true"] .mobile-home-product-grid { gap: var(--site-tablet-gap); }
+  .site-storefront[data-tablet-custom="true"] [data-mobile-product-card] {
+    flex-basis: calc((100% - (var(--site-tablet-columns) - 1) * var(--site-tablet-gap)) / var(--site-tablet-columns));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-storefront .site-theme-button { transition: none; transform: none !important; }
 }

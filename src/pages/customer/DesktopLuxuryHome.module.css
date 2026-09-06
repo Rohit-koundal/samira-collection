@@ -51,7 +51,7 @@
   justify-content: center;
   background: linear-gradient(90deg, #5a071f 0%, var(--samira-primary) 50%, #5a071f 100%);
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 700;
   letter-spacing: 1.6px;
   text-transform: uppercase;
@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: calc(10px * var(--designer-body-scale, 1));
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -145,7 +145,7 @@
   border: 0;
   background: transparent;
   color: #111;
-  font-size: 12px;
+  font-size: calc(12px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 0.35px;
   text-transform: uppercase;
@@ -181,7 +181,7 @@
   outline: none;
   background: #f8eee7;
   color: var(--samira-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
 }
 
 .searchBox input:focus {
@@ -209,7 +209,7 @@
   border-radius: 999px;
   background: var(--samira-primary);
   color: #fff;
-  font-size: 12px;
+  font-size: calc(12px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -250,13 +250,13 @@
   border-radius: 999px;
   background: #ff3e6c;
   color: #fff;
-  font-size: 10px;
+  font-size: calc(10px * var(--designer-body-scale, 1));
   font-weight: 800;
   line-height: 1;
 }
 
 .iconLabel {
-  font-size: 9px;
+  font-size: calc(9px * var(--designer-body-scale, 1));
   font-weight: 600;
 }
 
@@ -286,7 +286,7 @@
 .heroEyebrow {
   margin: 0 0 13px;
   color: #c87918;
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 2.4px;
   text-transform: uppercase;
@@ -296,7 +296,7 @@
   margin: 0;
   color: #111;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: clamp(50px, 3.45vw, 60px);
+  font-size: calc(clamp(50px, 3.45vw, 60px) * var(--designer-heading-scale, 1));
   font-weight: 800;
   letter-spacing: -0.5px;
   line-height: 1.02;
@@ -311,7 +311,7 @@
   max-width: 470px;
   margin: 17px 0 0;
   color: #292326;
-  font-size: 15px;
+  font-size: calc(15px * var(--designer-body-scale, 1));
   line-height: 1.7;
 }
 
@@ -326,7 +326,7 @@
   height: 46px;
   padding: 0 25px;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: calc(12px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -377,14 +377,14 @@
 }
 
 .trustPoint strong {
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
 }
 
 .trustPoint small {
   margin-top: 2px;
   color: var(--samira-muted);
-  font-size: 9px;
+  font-size: calc(9px * var(--designer-body-scale, 1));
 }
 
 .heroVisual {
@@ -497,7 +497,7 @@
 .sectionTitleDecorated h2 {
   margin: 0;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 26px;
+  font-size: calc(26px * var(--designer-heading-scale, 1));
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -505,7 +505,7 @@
 .categorySection > p {
   margin: 4px 0 0;
   color: #3a3a3a;
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
 }
 
 .categoryGrid {
@@ -551,7 +551,7 @@
   display: block;
   margin-top: 10px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -627,18 +627,18 @@
 .editorialCopy h3 {
   margin: 0;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 18px;
+  font-size: calc(18px * var(--designer-heading-scale, 1));
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .featureCardSmall .editorialCopy h3 {
-  font-size: 14px;
+  font-size: calc(14px * var(--designer-heading-scale, 1));
 }
 
 .editorialCopy p {
   margin: 7px 0 11px;
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   line-height: 1.55;
 }
 
@@ -649,7 +649,7 @@
   border-radius: 4px;
   background: var(--samira-primary);
   color: #fff;
-  font-size: 10px;
+  font-size: calc(10px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 0.25px;
   text-transform: uppercase;
@@ -687,7 +687,7 @@
 
 .productSectionHeader span {
   color: var(--samira-primary);
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 1.7px;
   text-transform: uppercase;
@@ -696,7 +696,7 @@
 .productSectionHeader h2 {
   margin: 1px 0 0;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 30px;
+  font-size: calc(30px * var(--designer-heading-scale, 1));
   font-weight: 700;
   line-height: 1.05;
 }
@@ -704,7 +704,7 @@
 .productSectionHeader p {
   margin: 4px 0 0;
   color: var(--samira-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--designer-body-scale, 1));
 }
 
 .sectionControls {
@@ -737,7 +737,7 @@
   border-radius: 5px;
   background: transparent;
   color: var(--samira-primary);
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -745,7 +745,7 @@
   --product-gap: var(--site-grid-gap, 28px);
   display: grid;
   margin-top: 20px;
-  grid-auto-columns: calc((100% - (var(--product-gap) * 3)) / var(--site-products-desktop, 4));
+  grid-auto-columns: calc((100% - (var(--product-gap) * (var(--site-products-desktop, 4) - 1))) / var(--site-products-desktop, 4));
   grid-auto-flow: column;
   grid-template-rows: 1fr;
   gap: var(--product-gap);
@@ -784,7 +784,7 @@
 
 .emptyCollection p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
 }
 
 .emptyCollection button {
@@ -793,13 +793,13 @@
   border: 1px solid var(--samira-primary);
   border-radius: 5px;
   color: var(--samira-primary);
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .productGridCompact {
-  --product-gap: 14px;
+  --product-gap: var(--designer-grid-gap, 14px);
   margin-top: 13px;
 }
 
@@ -830,7 +830,7 @@
   margin: 10px 0 0;
   overflow: hidden;
   color: var(--samira-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-heading-scale, 1));
   font-weight: 700;
   line-height: 1.35;
   -webkit-box-orient: vertical;
@@ -839,14 +839,14 @@
 
 .productCardLarge h3 {
   margin-top: 14px;
-  font-size: 15px;
+  font-size: calc(15px * var(--designer-heading-scale, 1));
 }
 
 .productCategory {
   margin: 2px 0 0;
   overflow: hidden;
   color: var(--samira-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -859,7 +859,7 @@
   border-radius: 5px;
   background: #18a866;
   color: #fff;
-  font-size: 9px;
+  font-size: calc(9px * var(--designer-body-scale, 1));
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -950,9 +950,9 @@
   white-space: nowrap;
 }
 
-.priceRow strong { font-size: 13px; font-weight: 800; }
-.priceRow del { color: #999; font-size: 10px; }
-.priceRow span { color: #ff3e6c; font-size: 10px; font-weight: 700; }
+.priceRow strong { font-size: calc(13px * var(--designer-body-scale, 1)); font-weight: 800; }
+.priceRow del { color: #999; font-size: calc(10px * var(--designer-body-scale, 1)); }
+.priceRow span { color: #ff3e6c; font-size: calc(10px * var(--designer-body-scale, 1)); font-weight: 700; }
 
 .ratingRow {
   display: flex;
@@ -967,7 +967,7 @@
 }
 
 .ratingRow svg { width: 10px; height: 10px; }
-.ratingRow small { color: var(--samira-muted); font-size: 10px; }
+.ratingRow small { color: var(--samira-muted); font-size: calc(10px * var(--designer-body-scale, 1)); }
 
 .saleBanner {
   position: relative;
@@ -988,7 +988,7 @@
 
 .saleCopy span {
   color: #e6bd79;
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -997,7 +997,7 @@
 .saleCopy h2 {
   margin: 0;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 32px;
+  font-size: calc(32px * var(--designer-heading-scale, 1));
   font-weight: 600;
   line-height: 1;
 }
@@ -1005,7 +1005,7 @@
 .saleCopy p {
   margin: 2px 0 0;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
 }
 
 .saleBanner > button {
@@ -1017,7 +1017,7 @@
   border-radius: 5px;
   background: transparent;
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--designer-body-scale, 1));
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -1069,8 +1069,8 @@
 .serviceItem svg { width: 20px; }
 .serviceItem strong,
 .serviceItem small { display: block; }
-.serviceItem strong { font-size: 11px; font-weight: 800; text-transform: uppercase; }
-.serviceItem small { margin-top: 3px; color: var(--samira-muted); font-size: 11px; }
+.serviceItem strong { font-size: calc(11px * var(--designer-body-scale, 1)); font-weight: 800; text-transform: uppercase; }
+.serviceItem small { margin-top: 3px; color: var(--samira-muted); font-size: calc(11px * var(--designer-body-scale, 1)); }
 
 .bestSellers {
   margin-top: var(--site-section-spacing, 72px);
@@ -1095,7 +1095,7 @@
 .testimonialIntro > span,
 .newsletterSection span {
   color: var(--samira-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--designer-body-scale, 1));
   font-weight: 800;
   letter-spacing: 1.8px;
   text-transform: uppercase;
@@ -1105,14 +1105,14 @@
 .newsletterSection h2 {
   margin: 8px 0 0;
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 36px;
+  font-size: calc(36px * var(--designer-heading-scale, 1));
   line-height: 1.08;
 }
 
 .testimonialIntro p {
   margin: 14px 0 0;
   color: var(--samira-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--designer-body-scale, 1));
   line-height: 1.7;
 }
 
@@ -1125,7 +1125,7 @@
 }
 
 .testimonialRating svg { width: 15px; }
-.testimonialRating strong { margin-left: 7px; color: var(--samira-text); font-size: 13px; }
+.testimonialRating strong { margin-left: 7px; color: var(--samira-text); font-size: calc(13px * var(--designer-body-scale, 1)); }
 
 .reviewGrid {
   display: grid;
@@ -1142,11 +1142,11 @@
 
 .reviewCard > div { display: flex; color: #d69221; }
 .reviewCard svg { width: 13px; }
-.reviewCard p { min-height: 92px; margin: 16px 0; color: #4a4346; font-family: "Playfair Display", Georgia, serif; font-size: 15px; line-height: 1.65; }
+.reviewCard p { min-height: 92px; margin: 16px 0; color: #4a4346; font-family: "Playfair Display", Georgia, serif; font-size: calc(15px * var(--designer-body-scale, 1)); line-height: 1.65; }
 .reviewCard strong,
 .reviewCard small { display: block; }
-.reviewCard strong { font-size: 13px; }
-.reviewCard small { margin-top: 3px; color: var(--samira-muted); font-size: 11px; }
+.reviewCard strong { font-size: calc(13px * var(--designer-body-scale, 1)); }
+.reviewCard small { margin-top: 3px; color: var(--samira-muted); font-size: calc(11px * var(--designer-body-scale, 1)); }
 
 .newsletterSection {
   display: flex;
@@ -1163,11 +1163,11 @@
 }
 
 .newsletterSection span { color: #e6bd79; }
-.newsletterSection h2 { color: #fff; font-size: 38px; }
-.newsletterSection p { margin: 10px 0 0; color: rgba(255, 255, 255, 0.74); font-size: 13px; }
+.newsletterSection h2 { color: #fff; font-size: calc(38px * var(--designer-heading-scale, 1)); }
+.newsletterSection p { margin: 10px 0 0; color: rgba(255, 255, 255, 0.74); font-size: calc(13px * var(--designer-body-scale, 1)); }
 .newsletterSection form { display: flex; width: min(540px, 46%); }
-.newsletterSection input { width: 100%; height: 50px; padding: 0 20px; border: 0; border-radius: 6px 0 0 6px; outline: none; background: #fff; color: var(--samira-text); font-size: 14px; }
-.newsletterSection button { height: 50px; padding: 0 28px; border: 1px solid #fff; border-radius: 0 6px 6px 0; background: var(--samira-gold); color: var(--samira-primary-dark); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.newsletterSection input { width: 100%; height: 50px; padding: 0 20px; border: 0; border-radius: 6px 0 0 6px; outline: none; background: #fff; color: var(--samira-text); font-size: calc(14px * var(--designer-body-scale, 1)); }
+.newsletterSection button { height: 50px; padding: 0 28px; border: 1px solid #fff; border-radius: 0 6px 6px 0; background: var(--samira-gold); color: var(--samira-primary-dark); font-size: calc(12px * var(--designer-body-scale, 1)); font-weight: 800; text-transform: uppercase; }
 
 .footer {
   margin-top: 80px;
@@ -1183,36 +1183,36 @@
 }
 
 .footerBrand > img { display: block; width: 150px; height: auto; padding: 5px; border-radius: 8px; background: #fff; object-fit: contain; }
-.footerBrand p { max-width: 310px; margin: 18px 0 0; color: rgba(255, 255, 255, 0.72); font-size: 12px; line-height: 1.8; }
+.footerBrand p { max-width: 310px; margin: 18px 0 0; color: rgba(255, 255, 255, 0.72); font-size: calc(12px * var(--designer-body-scale, 1)); line-height: 1.8; }
 .socialLinks { display: flex; gap: 12px; margin-top: 20px; }
 .socialLinks svg { width: 18px; }
 
 .footerColumn h3,
-.footerContact h3 { margin: 0 0 18px; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 1.3px; text-transform: uppercase; }
-.footerColumn button { display: block; margin: 0 0 10px; padding: 0; border: 0; background: transparent; color: rgba(255, 255, 255, 0.72); font-size: 12px; text-align: left; }
-.footerContact p { margin: 0 0 9px; color: rgba(255, 255, 255, 0.72); font-size: 12px; }
+.footerContact h3 { margin: 0 0 18px; color: #fff; font-size: calc(12px * var(--designer-heading-scale, 1)); font-weight: 800; letter-spacing: 1.3px; text-transform: uppercase; }
+.footerColumn button { display: block; margin: 0 0 10px; padding: 0; border: 0; background: transparent; color: rgba(255, 255, 255, 0.72); font-size: calc(12px * var(--designer-body-scale, 1)); text-align: left; }
+.footerContact p { margin: 0 0 9px; color: rgba(255, 255, 255, 0.72); font-size: calc(12px * var(--designer-body-scale, 1)); }
 .paymentBadges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
-.paymentBadges span { padding: 5px 8px; border-radius: 4px; background: #fff; color: var(--samira-primary); font-size: 9px; font-weight: 800; }
+.paymentBadges span { padding: 5px 8px; border-radius: 4px; background: #fff; color: var(--samira-primary); font-size: calc(9px * var(--designer-body-scale, 1)); font-weight: 800; }
 .appButtons { display: flex; gap: 7px; margin-top: 14px; }
-.appButtons button { padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 5px; background: #171217; color: #fff; font-size: 10px; }
-.footerBottom { display: flex; margin-top: 42px; padding-top: 22px; justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.62); font-size: 11px; }
+.appButtons button { padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 5px; background: #171217; color: #fff; font-size: calc(10px * var(--designer-body-scale, 1)); }
+.footerBottom { display: flex; margin-top: 42px; padding-top: 22px; justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.62); font-size: calc(11px * var(--designer-body-scale, 1)); }
 
 @media (min-width: 1200px) and (max-width: 1450px) {
   .navbarInner { grid-template-columns: auto minmax(10px, 1fr) auto minmax(10px, 1fr) auto; }
   .logoButton,
   .logoButton img { width: 116px; }
   .menu { gap: 10px; }
-  .menuLink { font-size: 10px; letter-spacing: 0.15px; }
+  .menuLink { font-size: calc(10px * var(--designer-body-scale, 1)); letter-spacing: 0.15px; }
   .searchBox { width: 200px; flex-basis: 200px; }
-  .adminButton { height: 40px; padding-inline: 13px; font-size: 9px; }
+  .adminButton { height: 40px; padding-inline: 13px; font-size: calc(9px * var(--designer-body-scale, 1)); }
   .navActions { gap: 6px; }
   .headerAction { width: 42px; min-width: 42px; }
-  .iconLabel { font-size: 9px; }
+  .iconLabel { font-size: calc(9px * var(--designer-body-scale, 1)); }
   .heroCopy { padding-left: 28px; }
   .trustPoints { gap: 18px; }
   .categoryGrid { gap: 22px; }
   .editorialProductsGrid { gap: 22px; }
-  .productGridCompact { --product-gap: 11px; }
+  .productGridCompact { --product-gap: var(--designer-grid-gap, 11px); }
   .viewAllButton { width: 104px; }
 }
 
@@ -1224,33 +1224,33 @@
   .logoButton,
   .logoButton img { width: 104px; }
   .menu { gap: 10px; }
-  .menuLink { font-size: 9px; }
+  .menuLink { font-size: calc(9px * var(--designer-body-scale, 1)); }
   .searchBox { display: none; }
-  .adminButton { padding-inline: 12px; font-size: 9px; }
+  .adminButton { padding-inline: 12px; font-size: calc(9px * var(--designer-body-scale, 1)); }
   .navActions { gap: 6px; }
-  .iconLabel { font-size: 9px; }
+  .iconLabel { font-size: calc(9px * var(--designer-body-scale, 1)); }
   .headerAction { width: 42px; min-width: 42px; }
   .announcementLinks { right: 24px; }
   .heroInner { grid-template-columns: 48% 52%; }
   .heroCopy { padding-left: 34px; }
-  .heroCopy h1 { font-size: 46px; }
-  .heroDescription { font-size: 14px; }
+  .heroCopy h1 { font-size: calc(46px * var(--designer-heading-scale, 1)); }
+  .heroDescription { font-size: calc(14px * var(--designer-body-scale, 1)); }
   .trustPoints { gap: 12px; }
   .trustPoint > span { width: 34px; height: 34px; }
-  .trustPoint strong { font-size: 10px; }
-  .trustPoint small { font-size: 8px; }
+  .trustPoint strong { font-size: calc(10px * var(--designer-body-scale, 1)); }
+  .trustPoint small { font-size: calc(8px * var(--designer-body-scale, 1)); }
   .categoryGrid { width: calc(100% - 70px); gap: 14px; }
   .categoryImageWrap { width: 92px; height: 92px; }
   .editorialProductsGrid { grid-template-columns: 1fr; }
   .editorialGrid { height: 340px; grid-template-rows: 163px 163px; }
-  .productGrid { --product-gap: 18px; }
-  .productGridCompact { --product-gap: 20px; }
+  .productGrid { --product-gap: var(--designer-grid-gap, 18px); }
+  .productGridCompact { --product-gap: var(--designer-grid-gap, 20px); }
   .productGridCompact .productImageWrap { height: 230px; }
   .saleCopy { padding-left: 50px; }
   .serviceItem { gap: 8px; padding-inline: 8px; }
   .serviceItem > span { width: 38px; height: 38px; }
-  .serviceItem strong { font-size: 10px; }
-  .serviceItem small { font-size: 9px; }
+  .serviceItem strong { font-size: calc(10px * var(--designer-body-scale, 1)); }
+  .serviceItem small { font-size: calc(9px * var(--designer-body-scale, 1)); }
   .productCardLarge .productImageWrap { height: 280px; }
   .testimonialSection { grid-template-columns: 1fr; }
   .newsletterSection { padding-inline: 38px; gap: 30px; }

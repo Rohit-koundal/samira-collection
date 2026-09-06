@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import api from '../services/api';
 import { DEFAULT_WEBSITE_CONFIG, mergeWebsiteConfig } from '../config/websiteCustomization';
 import { normalizeImageUrl } from '../services/normalize';
+import { reuseEqualBranches } from '../utils/reuseEqualBranches';
+import { isWebsitePreview } from '../config/websiteDesigner';
 
 const WebsiteCustomizationContext = createContext(null);
 
@@ -24,7 +26,17 @@ export function WebsiteCustomizationProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!isWebsitePreview()) { refresh(); return undefined; }
+    const token = new URLSearchParams(window.location.search).get('token');
+    const receive = (event) => {
+      if (window.parent === window || event.source !== window.parent || event.origin !== window.location.origin ||
+        event.data?.type !== 'samira:theme-preview' || !token || event.data.token !== token) return;
+      try { const next = mergeWebsiteConfig(event.data.config); setConfig((current) => reuseEqualBranches(current, next)); setLoading(false); } catch { /* Ignore malformed preview messages. */ }
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, [refresh]);
 
   useEffect(() => {
     const name = String(config.branding.websiteName || '').trim();
