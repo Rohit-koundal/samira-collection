@@ -15,6 +15,10 @@ const emptyAddress = {
   fullName: '', mobile: '', alternateMobile: '', pincode: '', state: '', city: '',
   houseNo: '', area: '', landmark: '', addressType: 'Home', isDefault: false,
 };
+function savedAddresses(data) {
+  if (!Array.isArray(data) || data.some(address => !address?._id)) throw new Error('Unable to read your saved addresses. Please try again.');
+  return data;
+}
 
 export default function AddressManagement({ route = '/profile/addresses', navigate }) {
   const { user, logout } = useAuth();
@@ -38,8 +42,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
     setLoadError('');
     try {
       const data = await api.get('/user/addresses');
-      if (!Array.isArray(data) || data.some(address => !address?._id)) throw new Error('Unable to read your saved addresses. Please try again.');
-      setAddresses(data);
+      setAddresses(savedAddresses(data));
     } catch (error) {
       setLoadError(error.message);
     } finally {
@@ -78,7 +81,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
       const updated = editing
         ? await api.put(`/user/addresses/${editorId}`, payload)
         : await api.post('/user/addresses', payload);
-      setAddresses(updated);
+      setAddresses(savedAddresses(updated));
       setNotice(editing ? 'Address updated.' : 'New address saved.');
       goBack();
     } catch (error) { setMessage(error.message); }
@@ -89,7 +92,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
     if (busyId) return;
     setBusyId(address._id); setMessage(''); setNotice('');
     try {
-      setAddresses(await api.patch(`/user/addresses/${address._id}/default`, {}));
+      setAddresses(savedAddresses(await api.patch(`/user/addresses/${address._id}/default`, {})));
       setNotice('Default delivery address updated.');
     } catch (error) { setMessage(error.message); }
     finally { setBusyId(''); }
@@ -98,7 +101,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
     if (busyId) return;
     setBusyId(removing._id); setMessage(''); setNotice('');
     try {
-      setAddresses(await api.delete(`/user/addresses/${removing._id}`));
+      setAddresses(savedAddresses(await api.delete(`/user/addresses/${removing._id}`)));
       setRemoving(null);
       setNotice('Address removed.');
     } catch (error) { setMessage(error.message); }

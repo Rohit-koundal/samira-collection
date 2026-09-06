@@ -2,8 +2,9 @@ import { Children, cloneElement, isValidElement } from 'react';
 import EmptyState from './EmptyState';
 import Loader from './Loader';
 
-export default function DataTable({ heads, rows, loading, emptyTitle, emptyNote, minWidth = 860, title, note }) {
+export default function DataTable({ heads, rows, loading, error, onRetry, emptyTitle, emptyNote, minWidth = 860, title, note }) {
   if (loading) return <Loader />;
+  if (error) return <div role="alert" className="admin-card space-y-3 p-5"><p className="text-sm font-semibold text-rose">{error}</p>{onRetry && <button type="button" className="admin-btn-secondary" onClick={() => onRetry()}>Try again</button>}</div>;
   if (!rows.length) return <EmptyState title={emptyTitle} note={emptyNote} />;
 
   const tableTitle = title || deriveTitle(emptyTitle);

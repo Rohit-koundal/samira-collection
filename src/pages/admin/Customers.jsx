@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
@@ -13,16 +13,22 @@ export default function Customers() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const load = () => {
-    setLoading(true);
+  const [loadError, setLoadError] = useState('');
+  const loadSequence = useRef(0);
+  const load = useCallback(() => {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError('');
     api.get('/admin/customers').then((items) => {
+      if (sequence !== loadSequence.current) return;
+      if (!Array.isArray(items) || items.some(item => !item?._id)) throw new Error('Unable to read customers. Please try again.');
       setCustomers(items);
       setMessage('');
-    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
-  };
+    }).catch((error) => { if (sequence === loadSequence.current) setLoadError(error.message); }).finally(() => { if (sequence === loadSequence.current) setLoading(false); });
+  }, []);
   useEffect(() => {
     load();
-  }, []);
+    return () => { loadSequence.current += 1; };
+  }, [load]);
 
   const filtered = useMemo(() => customers.filter((customer) => [customer.name, customer.email, customer.phone, customer.role].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase())), [customers, query]);
   const toggle = async (customer) => {
@@ -57,7 +63,7 @@ export default function Customers() {
       <PageHeader title="Customers" note="View and control customer access." />
       {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search customer name, email or phone" />
-      <DataTable loading={loading} emptyTitle="No customers found" heads={['Name', 'Phone', 'Email', 'Role', 'Modes', 'Status', 'Joined', 'Actions']} rows={filtered.map((customer) => (
+      <DataTable loading={loading} error={loadError} onRetry={load} emptyTitle="No customers found" heads={['Name', 'Phone', 'Email', 'Role', 'Modes', 'Status', 'Joined', 'Actions']} rows={filtered.map((customer) => (
         <tr key={customer._id} className="border-t border-slate-100">
           <td className="px-4 py-4 font-black">{customer.name}</td>
           <td className="px-4 py-4">{customer.phone || '-'}</td>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ConfirmModal from '../../components/admin/ConfirmModal';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
@@ -16,20 +16,25 @@ export default function Orders() {
   const [payment, setPayment] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const loadSequence = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const load = () => {
-    setLoading(true);
+  const load = useCallback(() => {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError('');
     api.get('/admin/orders')
       .then((items) => {
+        if (sequence !== loadSequence.current) return;
+        if (!Array.isArray(items) || items.some(item => !item?._id)) throw new Error('Unable to read orders. Please try again.');
         setOrders(items);
         setMessage('');
       })
-      .catch((error) => setMessage(error.message))
-      .finally(() => setLoading(false));
-  };
+      .catch((error) => { if (sequence === loadSequence.current) setLoadError(error.message); })
+      .finally(() => { if (sequence === loadSequence.current) setLoading(false); });
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => { load(); return () => { loadSequence.current += 1; }; }, [load]);
 
   const filtered = useMemo(() => orders.filter((order) => {
     const haystack = [order._id, order.user?.name, order.user?.email, order.user?.phone, order.shippingAddress?.fullName].filter(Boolean).join(' ').toLowerCase();
@@ -77,6 +82,7 @@ export default function Orders() {
       </SearchFilterBar>
       <DataTable
         loading={loading}
+        error={loadError} onRetry={load}
         emptyTitle="No orders found"
         heads={['Order ID', 'Customer', 'Date', 'Amount', 'Payment', 'Provider', 'Order Status', 'Actions']}
         rows={filtered.map((order) => (
