@@ -16,17 +16,20 @@ export default function Returns({ route = '' }) {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [updating, setUpdating] = useState({});
   const activeUpdates = useRef(new Set());
   const requestId = /^[a-f\d]{24}$/i.test(query.trim()) ? query.trim() : '';
   const load = useCallback(() => {
     const sequence = ++loadSequence.current;
     setLoading(true);
+    setLoadError('');
     api.get(`/admin/returns${requestId ? `?id=${requestId}` : ''}`).then((items) => {
       if (sequence !== loadSequence.current) return;
-      setRequests(items || []);
+      if (!Array.isArray(items) || items.some(item => !item?._id)) throw new Error('Unable to read return requests. Please try again.');
+      setRequests(items);
       setMessage('');
-    }).catch((error) => { if (sequence === loadSequence.current) setMessage(error.message); }).finally(() => { if (sequence === loadSequence.current) setLoading(false); });
+    }).catch((error) => { if (sequence === loadSequence.current) setLoadError(error.message); }).finally(() => { if (sequence === loadSequence.current) setLoading(false); });
   }, [requestId]);
   useEffect(() => {
     load();
@@ -65,7 +68,7 @@ export default function Returns({ route = '' }) {
           {statuses.map((item) => <option key={item}>{item}</option>)}
         </Select>
       </SearchFilterBar>
-      <DataTable loading={loading} emptyTitle="No return requests" heads={['Request ID', 'Customer', 'Product', 'Type', 'Reason', 'Status', 'Update']} rows={filtered.map((request) => (
+      <DataTable loading={loading} error={loadError} onRetry={load} emptyTitle="No return requests" heads={['Request ID', 'Customer', 'Product', 'Type', 'Reason', 'Status', 'Update']} rows={filtered.map((request) => (
         <tr key={request._id} className="border-t border-slate-100">
           <td className="px-4 py-4 font-black">{request._id.slice(-8).toUpperCase()}</td>
           <td className="px-4 py-4">{request.user?.name || 'Customer'}</td>

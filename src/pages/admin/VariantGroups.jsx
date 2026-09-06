@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, PencilLine, Plus, Trash2, X } from 'lucide-react';
 import api from '../../services/api';
 import { Select, TextInput } from '../../components/ui/Field';
@@ -10,30 +10,37 @@ export default function VariantGroups() {
   const [groups, setGroups] = useState([]);
   const [products, setProducts] = useState([]);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const loadSequence = useRef(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', baseProduct: '', productIds: [], colors: '', sizes: '' });
   const [editingGroupId, setEditingGroupId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError('');
     try {
       const [groupItems, productItems] = await Promise.all([
         api.get('/admin/variant-groups'),
         api.get('/admin/products?admin=true'),
       ]);
-      setGroups(groupItems?.data || []);
-      setProducts(Array.isArray(productItems) ? productItems : []);
+      if (sequence !== loadSequence.current) return;
+      const list = Array.isArray(groupItems) ? groupItems : groupItems?.data;
+      if (!Array.isArray(list) || list.some(item => !item?._id) || !Array.isArray(productItems)) throw new Error('Unable to read variant groups. Please try again.');
+      setGroups(list);
+      setProducts(productItems);
     } catch (error) {
-      setMessage(error.message);
+      if (sequence === loadSequence.current) setLoadError(error.message);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+    return () => { loadSequence.current += 1; };
+  }, [load]);
 
   const productMap = useMemo(() => new Map(products.map((product) => [product._id, product])), [products]);
 
@@ -149,7 +156,7 @@ export default function VariantGroups() {
       {message && <p role="status" className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
       <div className="admin-card overflow-hidden">
-        {loading ? (
+        {loadError ? <div role="alert" className="admin-card space-y-3 p-5"><p className="text-sm font-semibold text-rose">{loadError}</p><button type="button" className="admin-btn-secondary" onClick={() => load()}>Try again</button></div> : loading ? (
           <Loader label="Loading variant groups..." />
         ) : !groups.length ? (
           <div className="p-5"><EmptyState title="No variant groups yet" note="Create grouped variants for color and size families." /></div>

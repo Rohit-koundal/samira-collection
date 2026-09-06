@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BadgePercent, CheckCircle2, Clock3, PencilLine, Plus, ToggleLeft, Trash2, Users } from 'lucide-react';
 import CouponForm from '../../components/admin/CouponForm';
 import ConfirmModal from '../../components/admin/ConfirmModal';
@@ -21,8 +21,12 @@ export default function Coupons() {
   const [showEditor, setShowEditor] = useState(false);
   const [actionId, setActionId] = useState('');
   const [message, setMessage] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const loadSequence = useRef(0);
 
-  const load = async ({ quiet = false } = {}) => {
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    const sequence = ++loadSequence.current;
+    setLoadError('');
     if (!quiet) setLoading(true);
     try {
       const [couponData, productData, categoryData] = await Promise.all([
@@ -30,17 +34,18 @@ export default function Coupons() {
         api.get('/admin/products?admin=true'),
         fetchCategories(api),
       ]);
+      if (sequence !== loadSequence.current) return;
       setCoupons(asList(couponData));
       setProducts(asCatalogList(productData));
       setCategories(categoryData);
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to load coupons.' });
+      if (sequence === loadSequence.current) setLoadError(error.message || 'Unable to load coupons.');
     } finally {
-      if (!quiet) setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); return () => { loadSequence.current += 1; }; }, [load]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -149,6 +154,7 @@ export default function Coupons() {
       </SearchFilterBar>
 
       <DataTable
+        error={loadError} onRetry={load}
         loading={loading}
         emptyTitle="No coupons found"
         emptyNote="Create a coupon or clear the current filters."
@@ -199,8 +205,9 @@ function restrictionLabel(coupon) {
 }
 
 function asList(value) {
-  if (Array.isArray(value)) return value;
-  return Array.isArray(value?.items) ? value.items : [];
+  const items = Array.isArray(value) ? value : value?.items;
+  if (!Array.isArray(items) || items.some(item => !item?._id)) throw new Error('Unable to read coupons. Please try again.');
+  return items;
 }
 
 function formatNumber(value) {

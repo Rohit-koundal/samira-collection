@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Filter, Image as ImageIcon, PauseCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import BannerForm from '../../components/admin/BannerForm';
 import DataTable from '../../components/admin/DataTable';
@@ -17,28 +17,34 @@ export default function Banners() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const loadSequence = useRef(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [position, setPosition] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingBanner, setEditingBanner] = useState(null);
 
-  const loadBanners = async () => {
-    setLoading(true);
+  const loadBanners = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError('');
     try {
       const data = await api.get('/admin/banners?admin=true');
-      setBanners(Array.isArray(data) ? data : []);
+      if (sequence !== loadSequence.current) return;
+      if (!Array.isArray(data) || data.some(item => !item?._id)) throw new Error('Unable to read banners. Please try again.');
+      setBanners(data);
       setMessage('');
     } catch (error) {
-      setMessage(error.message);
+      if (sequence === loadSequence.current) setLoadError(error.message);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadBanners();
-  }, []);
+    return () => { loadSequence.current += 1; };
+  }, [loadBanners]);
 
   const filteredBanners = useMemo(() => {
     return banners.filter((banner) => {
@@ -164,6 +170,7 @@ export default function Banners() {
 
       <DataTable
         loading={loading}
+        error={loadError} onRetry={loadBanners}
         emptyTitle="No banners found"
         emptyNote="Try adjusting filters or add a new banner."
         minWidth={1040}
