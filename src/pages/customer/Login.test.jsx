@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Login from './Login';
+import LoginPrompt from '../../components/auth/LoginPrompt';
 
 const mockAuth = {
   sendOtp: jest.fn(),
@@ -44,6 +45,24 @@ describe('customer login', () => {
     expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute('href', '/terms');
     expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy-policy');
     expect(screen.getByRole('link', { name: /Get help/i })).toHaveAttribute('href', '/contact');
+  });
+
+  test('sends OTP to valid ten-digit numbers beginning with 91', async () => {
+    mockAuth.sendOtp.mockResolvedValueOnce({ message: 'OTP sent' });
+    render(<Login route="/login" />);
+    fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9123456789' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(mockAuth.sendOtp).toHaveBeenCalledWith('9123456789'));
+  });
+
+  test('the storefront login prompt accepts local numbers beginning with 91', () => {
+    const onContinue = jest.fn();
+    render(<LoginPrompt open onClose={jest.fn()} onContinue={onContinue} />);
+    fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9123456789' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onContinue).toHaveBeenCalledWith('9123456789');
   });
 
   test('supports typing, replacing, deleting and moving backward through OTP digits', () => {

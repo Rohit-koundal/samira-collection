@@ -9,6 +9,8 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
   const [loading, setLoading] = useState(Boolean(categoryId));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!categoryId) {
@@ -20,6 +22,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
 
     let cancelled = false;
     setLoading(true);
+    setLoadError('');
     setMessage('');
     api.get(`/admin/categories/${categoryId}`)
       .then((category) => {
@@ -34,7 +37,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
         });
       })
       .catch((error) => {
-        if (!cancelled) setMessage(error.message);
+        if (!cancelled) setLoadError(error.message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -43,12 +46,13 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, mode]);
+  }, [categoryId, mode, reload]);
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   const submit = async (event) => {
     event.preventDefault();
+    if (saving || loading || loadError || (mode === 'Update' && !categoryId)) return;
     setSaving(true);
     setMessage('');
     try {
@@ -73,6 +77,9 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
     }
   };
 
+  if (mode === 'Update' && !categoryId) return <p role="alert">Choose a category from the categories list before editing.</p>;
+  if (loadError) return <div role="alert" className="admin-card p-5">{loadError} <button type="button" onClick={() => setReload(value => value + 1)} className="admin-btn-ghost">Retry loading category</button></div>;
+  if (loading) return <p role="status">Loading category...</p>;
   return (
     <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
       {loading && <p className="rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-500 md:col-span-2">Loading category...</p>}

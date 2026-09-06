@@ -21,6 +21,8 @@ import {
   X,
 } from 'lucide-react';
 import MobileSearchOverlay from './MobileSearchOverlay';
+import { parseStoreSlug } from '../../utils/attribution';
+import { storefrontPath } from '../../utils/routing';
 
 const categoryLinks = [
   ['Sarees', '/products?search=Saree'],
@@ -61,7 +63,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
   const go = (path) => {
     setOpen(false);
-    navigate(path);
+    navigate(storefrontPath(path, parseStoreSlug(route)));
   };
 
   return (
@@ -95,7 +97,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           </div>
         </div>
       </header>
-      {searchOpen && <MobileSearchOverlay initialValue={searchValue} navigate={navigate} onClose={() => setSearchOpen(false)} />}
+      {searchOpen && <MobileSearchOverlay initialValue={searchValue} navigate={go} storeSlug={parseStoreSlug(route)} onClose={() => setSearchOpen(false)} />}
       <div
         className={`fixed inset-0 z-[75] transition-[visibility] duration-0 lg:hidden ${open ? 'visible pointer-events-auto delay-0' : 'invisible pointer-events-none delay-300'}`}
         aria-hidden={!open}

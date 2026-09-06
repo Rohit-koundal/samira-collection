@@ -29,6 +29,14 @@ describe('desktop home workflows', () => {
     expect(screen.getAllByRole('button', { name: /Browse all products/i }).length).toBeGreaterThan(0);
   });
 
+  test('desktop rails disable out-of-stock purchases and do not invent five-star reviews', () => {
+    const product = { _id: 'unavailable', name: 'Silk saree', price: 1599, originalPrice: 2399, stock: 0, images: ['/uploads/item.png'] };
+    const { container } = render(<DesktopLuxuryHome navigate={jest.fn()} featuredProducts={[product]} />);
+    screen.getAllByRole('button', { name: 'Out of stock' }).forEach(button => expect(button).toBeDisabled());
+    expect(container.querySelector('[data-card-field="rating"]')).toBeNull();
+    expect(screen.getAllByText('33% OFF').length).toBeGreaterThan(0);
+  });
+
   test('submits the homepage newsletter to the backend', async () => {
     api.post.mockResolvedValue({ message: 'Thanks for subscribing.' });
     render(<DesktopLuxuryHome navigate={jest.fn()} />);

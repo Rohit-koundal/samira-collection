@@ -1,427 +1,256 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
-import Icon from '../../components/layout/Icon';
-import { ProductVisual } from '../../components/product/ProductCard';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Heart, ImageOff, LoaderCircle, LockKeyhole, MapPin, Minus, Plus, RotateCcw, ShoppingBag, Truck, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { useStorefront } from '../../context/StorefrontContext';
 import api from '../../services/api';
-import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
-import { startMobileLoader, stopMobileLoader } from '../../utils/mobileLoader';
+import { getPrimaryImageUrl, normalizeProduct, normalizeProducts } from '../../services/normalize';
 import { couponApplyBody } from '../../utils/couponApply';
-import { DEFAULT_GST_RATE, DEFAULT_PLATFORM_FEE, inclusiveTax, readPricingSettings } from '../../utils/priceBreakdown';
+import { readPricingSettings } from '../../utils/priceBreakdown';
+import { bagIssue, bagKey, bagStock, bagTotals, chosenVariant, selectedBagItems } from '../../utils/bag';
+import { wishlistOptions, wishlistPrice } from '../../utils/wishlist';
+import { activeVariants } from '../../utils/variants';
+import { productHref } from '../../utils/routing';
+import { getSizeChartColumns } from '../../utils/productSizing';
 import CouponSelector from '../../components/coupon/CouponSelector';
+import './Cart.css';
+import '../../styles/MobileShoppingTheme.css';
 
+const money = value => '₹' + Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 export default function Cart({ navigate }) {
-  const cart = useCart();
-  const wishlist = useWishlist();
-  const { user } = useAuth();
-  const [code, setCode] = useState('');
-  const [message, setMessage] = useState('');
-  const [recommended, setRecommended] = useState([]);
-  const [coupons, setCoupons] = useState([]);
-  const [bestCouponCode, setBestCouponCode] = useState('');
-  const [couponBusyCode, setCouponBusyCode] = useState('');
-  const [pricing, setPricing] = useState({ platformFee: DEFAULT_PLATFORM_FEE, gstRate: DEFAULT_GST_RATE });
-  const cartSignature = useMemo(() => cart.items
-    .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}:${item.variantId || ''}`)
-    .join('|'), [cart.items]);
+  const cart = useCart(), wishlist = useWishlist(); const { user } = useAuth(); const { storeSlug } = useStorefront();
+  const [settings, setSettings] = useState(null), [settingsError, setSettingsError] = useState(''), [reload, setReload] = useState(0);
+  const [addresses, setAddresses] = useState([]), [addressId, setAddressId] = useState(''), [addressOpen, setAddressOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState([]);
+  const [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null), [notice, setNotice] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false), [checking, setChecking] = useState(false);
+  const [coupons, setCoupons] = useState([]), [bestCode, setBestCode] = useState(''), [couponBusy, setCouponBusy] = useState(''), [couponFeedback, setCouponFeedback] = useState(''), [couponChecking, setCouponChecking] = useState(false);
+  const actionLock = useRef(false), signatureRef = useRef(''), couponRequest = useRef(0);
+  const selected = useMemo(() => selectedBagItems(cart.items), [cart.items]);
+  const totals = bagTotals(selected, cart.coupon, settings || {});
+  const signature = selected.map(item => [bagKey(item), item.quantity, item.price ?? item.product.price].join(':')).join('|');
+  signatureRef.current = signature;
+  const busy = Boolean(cart.pendingCount || actionBusy || checking || couponBusy);
+  const selectedIssues = selected.some(item => bagIssue(item));
+  const canContinue = selected.length > 0 && selected.length <= 50 && !selectedIssues && !busy && !cart.loading && !cart.error && Boolean(settings) && !couponChecking;
+  const checkoutPath = '/checkout' + (addressId ? '?addressId=' + encodeURIComponent(addressId) : '');
+  const goCheckout = () => navigate(user ? checkoutPath : '/login?redirect=' + encodeURIComponent(checkoutPath));
+  const shop = storeSlug ? '/store/' + storeSlug + '/products' : '/products';
+  const refreshBag = cart.refresh;
+
+  useEffect(() => { refreshBag?.(); }, [refreshBag]);
 
   useEffect(() => {
-    let active = true;
-    startMobileLoader();
-
-    Promise.allSettled([
-      api.get('/products?sort=rating'),
-      api.get('/settings'),
-    ])
-      .then(([productsResult, settingsResult]) => {
-        if (!active) return;
-
-        if (productsResult.status === 'fulfilled') {
-          setRecommended(normalizeProducts(productsResult.value).slice(0, 8));
-        } else {
-          setRecommended([]);
-        }
-
-        if (settingsResult.status === 'fulfilled') {
-          setPricing(readPricingSettings(settingsResult.value));
-        }
-      })
-      .finally(() => {
-        if (active) stopMobileLoader();
-      });
-
-    return () => {
-      active = false;
-      stopMobileLoader();
-    };
+    let alive = true; setSettingsError('');
+    api.get('/settings', { silent: true }).then(data => { if (alive) setSettings(data); }).catch(() => { if (alive) setSettingsError('Could not load delivery charges. Retry before continuing.'); });
+    return () => { alive = false; };
+  }, [reload]);
+  useEffect(() => {
+    let alive = true;
+    api.get('/products?sort=rating&limit=8', { silent: true }).then(data => { if (alive) setRecommendations(normalizeProducts(data).slice(0, 6)); }).catch(() => {});
+    return () => { alive = false; };
   }, []);
-
   useEffect(() => {
-    if (!cart.items.length) return undefined;
-    let active = true;
-    const body = couponApplyBody({ cart });
-    api.post('/coupons/available', body)
-      .then((data) => {
-        if (!active) return;
-        setCoupons(Array.isArray(data?.items) ? data.items : []);
-        setBestCouponCode(data?.bestCouponCode || '');
-      })
-      .catch(() => {
-        if (active) {
-          setCoupons([]);
-          setBestCouponCode('');
-        }
-      });
-
+    let alive = true; setAddresses([]); setAddressId('');
+    if (user) api.get('/user/addresses', { silent: true }).then(data => {
+      if (!alive) return; const rows = Array.isArray(data) ? data : []; setAddresses(rows); setAddressId((rows.find(row => row.isDefault) || rows[0])?._id || '');
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [user?._id, user?.phone]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let alive = true;
+    const request = ++couponRequest.current;
+    if (!selected.length) { setCoupons([]); setBestCode(''); setCouponChecking(false); return undefined; }
+    const body = couponApplyBody({ cart: { items: selected, sellingTotal: totals.sellingTotal } });
+    api.post('/coupons/available', body).then(data => {
+      if (alive) { setCoupons(data.items || []); setBestCode(data.bestCouponCode || ''); }
+    }).catch(() => { if (alive) { setCoupons([]); setBestCode(''); } });
     if (cart.coupon?.code) {
-      api.post('/coupons/apply', { ...body, code: cart.coupon.code })
-        .then((data) => {
-          if (!active) return;
-          const nextDiscount = Number(data.discountAmount || 0);
-          if (nextDiscount !== Number(cart.coupon?.discount || 0)) {
-            cart.setCoupon({ code: data.couponCode, discount: nextDiscount });
-          }
-        })
-        .catch((error) => {
-          if (!active) return;
-          const removedCode = cart.coupon?.code;
-          cart.setCoupon(null);
-          setCode('');
-          setMessage(`${removedCode} was removed: ${error.message}`);
-        });
-    }
-    return () => { active = false; };
-  }, [cartSignature, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+      setCouponChecking(true);
+      api.post('/coupons/apply', { ...body, code: cart.coupon.code }).then(data => {
+        if (alive && request === couponRequest.current) cart.setCoupon({ code: data.couponCode || cart.coupon.code, discount: Number(data.discountAmount || 0) });
+      }).catch(failure => {
+        if (alive && request === couponRequest.current) { cart.setCoupon(null); setCouponFeedback('Coupon removed: ' + failure.message); }
+      }).finally(() => { if (alive && request === couponRequest.current) setCouponChecking(false); });
+    } else setCouponChecking(false);
+    return () => { alive = false; };
+  }, [signature, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedCount = cart.itemCount;
-  const platformFee = cart.items.length ? pricing.platformFee : 0;
-  const discountedSubtotal = Math.max(0, cart.sellingTotal - cart.couponDiscount);
-  const deliveryCharge = cart.items.length && discountedSubtotal < pricing.freeShippingMinAmount
-    ? pricing.deliveryCharge
-    : 0;
-  const taxAmount = inclusiveTax(discountedSubtotal, pricing.gstRate);
-  const payable = discountedSubtotal + deliveryCharge + platformFee;
-  const deliveryDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 5);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const applyCoupon = async code => {
+    if (couponBusy || busy || !selected.length) return false;
+    const current = signature; const request = ++couponRequest.current; setCouponBusy(code); setCouponFeedback('');
+    try {
+      const data = await api.post('/coupons/apply', couponApplyBody({ code, cart: { items: selected, sellingTotal: totals.sellingTotal } }));
+      if (signatureRef.current !== current || couponRequest.current !== request) { setCouponFeedback('Your bag changed. Please apply the coupon again.'); return false; }
+      cart.setCoupon({ code: data.couponCode || code, discount: Number(data.discountAmount ?? 0) }); return true;
+    } catch (failure) { setCouponFeedback(failure.message); return false; }
+    finally { setCouponBusy(''); setCouponChecking(false); }
+  };
+  const removeCoupon = () => { couponRequest.current += 1; cart.setCoupon(null); setCouponFeedback('Coupon removed.'); setCouponChecking(false); };
+  const performRemoval = async move => {
+    if (actionLock.current || !removing?.length) return;
+    actionLock.current = true; setActionBusy(true);
+    const rows = removing; const safe = []; let failed = 0;
+    for (const item of rows) {
+      if (!move) safe.push(item);
+      else { const result = await wishlist.addToWishlist(item.product); if (result?.ok) safe.push(item); else failed += 1; }
+    }
+    const result = safe.length ? await cart.removeItems(safe) : { ok: false };
+    if (result.ok) {
+      setRemoving(null);
+      setNotice({ text: move ? (failed ? 'Some items moved to your wishlist. The others remain in your bag.' : 'Moved to your wishlist. Ready whenever you are.') : 'Removed from your bag.', wishlist: move, undo: move ? null : safe });
+    } else setNotice({ text: move ? 'Could not finish moving these items. Your bag items are still here; please retry.' : result.message || 'Could not remove these items. Please retry.', error: true });
+    actionLock.current = false; setActionBusy(false);
+  };
+  const undo = async () => {
+    if (actionLock.current) return; actionLock.current = true; setActionBusy(true);
+    const failed = [];
+    for (const item of notice.undo) {
+      const result = await cart.addToCartConfirmed(item.product, item.size, item.color, item.variantId, item.quantity);
+      if (!result?.ok) failed.push(item);
+    }
+    setNotice(failed.length ? { text: 'Some items could not be restored at their current availability. You can retry.', undo: failed, error: true } : { text: 'Added back to your bag at the current price.' });
+    actionLock.current = false; setActionBusy(false);
+  };
+  const continueCheckout = async () => {
+    if (!canContinue) return; setChecking(true);
+    const result = await cart.refresh();
+    setChecking(false);
+    if (!result?.ok || selectedBagItems(result.items || []).some(bagIssue)) { setNotice({ text: 'Please review your bag. Availability may have changed.', error: true }); return; }
+    const fresh = selectedBagItems(result.items || []);
+    if (!fresh.length) return;
+    if (fresh.map(item => [bagKey(item), item.quantity, item.price ?? item.product.price].join(':')).join('|') !== signature) { setNotice({ text: 'Your bag has been updated. Review the latest prices and selections, then continue.' }); return; }
+    goCheckout();
+  };
+  const address = addresses.find(row => row._id === addressId);
+  const rules = readPricingSettings(settings || {});
+  const shippingRemaining = Math.max(0, rules.freeShippingMinAmount - totals.sellingTotal);
+  const allSelected = cart.items.length > 0 && selected.length === cart.items.length;
+  const initialLoading = !cart.items.length && (cart.loading || !cart.hydrated);
+  const loadFailed = !cart.items.length && !initialLoading && cart.error;
+  const bagCount = initialLoading ? 'Loading bag…' : loadFailed ? 'Unable to load' : `${cart.itemCount} items`;
+  const recommended = recommendations.filter(product => !cart.items.some(item => String(item.product._id) === String(product._id))).slice(0, 4);
+
+  return <section className="sc-bag">
+    <header className="sc-bag__mobile-header"><button onClick={() => navigate(shop)} aria-label="Continue shopping"><ArrowLeft size={21} /></button><div><h1>Shopping bag</h1><span>{bagCount}</span></div><button onClick={() => navigate('/wishlist')} aria-label="Open wishlist"><Heart size={21} /></button></header>
+    <div className="sc-bag__shell">
+      <div className="sc-bag__top"><div><h1>Shopping bag <span>{bagCount}</span></h1></div><p className="sc-bag__secure"><LockKeyhole size={15} /> Secure checkout</p></div>
+      <nav className="sc-bag__steps" aria-label="Checkout progress"><span aria-current="step"><b>1</b> Bag</span><i /><span><b>2</b> Address</span><i /><span><b>3</b> Payment</span></nav>
+      {cart.error && <div className="sc-bag__alert" role="alert"><p>{cart.error}</p><button onClick={cart.refresh} disabled={busy || cart.loading}>Retry</button></div>}
+      {notice && <div className={'sc-bag__alert ' + (notice.error ? '' : 'is-success')} role="status"><p>{notice.text}</p>{notice.undo && <button onClick={undo} disabled={busy}>Undo</button>}{notice.wishlist && <button onClick={() => navigate('/wishlist')}>View wishlist</button>}<button onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={17} /></button></div>}
+      {initialLoading ? <div className="sc-bag__loading" role="status"><LoaderCircle className="sc-bag__spin" size={24} /><p>Bringing your bag up to date…</p></div> : loadFailed ? <div className="sc-bag__empty"><div><CircleAlert size={30} strokeWidth={1.5} /></div><h2>We couldn’t load your bag</h2><p>Retry to retrieve your saved items.<br />Your bag hasn’t been cleared.</p></div> : !cart.items.length ? <div className="sc-bag__empty"><div><ShoppingBag size={30} strokeWidth={1.5} /></div><h2>Your shopping bag is empty</h2><p>Add products or move your favourites from your wishlist.</p><button className="sc-bag__primary" onClick={() => navigate('/wishlist')}>Explore your wishlist <Heart size={17} /></button><button className="sc-bag__text" onClick={() => navigate(shop)}>Continue shopping <ArrowRight size={16} /></button></div> : <>
+        <div className="sc-bag__layout"><main className="sc-bag__main">
+          <section className="sc-bag__address sc-bag__panel"><MapPin size={20} /><div><strong>{address ? 'Deliver to ' + address.fullName + ', ' + address.pincode : 'Where should we deliver?'}</strong><p>{address ? [address.houseNo, address.area, address.city].filter(Boolean).join(', ') : 'Choose your delivery address at checkout.'}</p></div><button className="sc-bag__outline" onClick={() => addresses.length ? setAddressOpen(true) : goCheckout()}>{address ? 'Change' : 'Add address'}</button></section>
+          {!user && <div className="sc-bag__signin"><LockKeyhole size={16} /><p>Sign in to access saved addresses and finish your order.</p><button onClick={goCheckout}>Sign in</button></div>}
+          {settings && selected.length > 0 && rules.deliveryCharge > 0 && <section className="sc-bag__shipping"><Truck size={20} /><div><p>{shippingRemaining > 0 ? <>You’re <strong>{money(shippingRemaining)}</strong> away from free delivery</> : <><strong>Free delivery</strong> on your selected items</>}</p>{shippingRemaining > 0 && <div className="sc-bag__progress"><span style={{ width: Math.min(100, totals.sellingTotal / rules.freeShippingMinAmount * 100) + '%' }} /></div>}<small>Based on item total before coupon discounts</small></div></section>}
+          <section className="sc-bag__selection"><label><input type="checkbox" checked={allSelected} ref={element => { if (element) element.indeterminate = selected.length > 0 && !allSelected; }} onChange={() => cart.selectItems(cart.items, !allSelected)} disabled={busy || cart.loading} aria-label="Select all bag items" /><strong>{selected.length} / {cart.items.length} items selected</strong></label><div><button onClick={() => setRemoving(selected)} disabled={!selected.length || busy}>Remove</button><button onClick={() => setRemoving(selected)} disabled={!selected.length || busy} aria-label="Move selected items to wishlist"><Heart size={17} /><span>Move to wishlist</span></button></div></section>
+          <div className="sc-bag__items">{cart.items.map(item => <BagItem key={bagKey(item)} item={item} busy={busy || cart.loading} settings={settings} onSelect={() => cart.selectItems([item], item.selected === false)} onEdit={() => setEditing(item)} onRemove={() => setRemoving([item])} onQuantity={quantity => cart.updateQuantity(bagKey(item), quantity, { cartKey: bagKey(item) })} onOpen={() => navigate(productHref(item.product, storeSlug))} />)}</div>
+          <button className="sc-bag__wishlist-link sc-bag__panel" onClick={() => navigate('/wishlist')}><Heart size={19} /><span>Add more from your wishlist</span><ArrowRight size={19} /></button>
+          <p className="sc-bag__reservation"><LockKeyhole size={13} /> Items stay in your bag but stock is only reserved during checkout.</p>
+        </main><aside className="sc-bag__aside">
+          <div className="sc-bag__summary-stack">
+            <div className="sc-bag__coupon"><h2>COUPONS & OFFERS</h2><CouponSelector coupons={selected.length ? coupons : []} bestCouponCode={bestCode} appliedCoupon={selected.length ? cart.coupon : null} busyCode={couponBusy || (couponChecking ? 'checking' : '')} feedback={couponFeedback || (!selected.length ? 'Select an item to apply a coupon.' : '')} onApply={applyCoupon} onRemove={removeCoupon} /></div>
+            <section id="bag-price-details" className="sc-bag__prices sc-bag__panel"><h2>PRICE DETAILS <span>({totals.itemCount} {totals.itemCount === 1 ? 'item' : 'items'})</span></h2>
+              <PriceRow label="Total MRP" value={money(totals.totalMRP)} /><PriceRow label="Discount on MRP" value={'− ' + money(totals.discount)} good />
+              <PriceRow label="Coupon discount" value={couponChecking ? 'Checking…' : totals.couponDiscount ? '− ' + money(totals.couponDiscount) : '—'} good={totals.couponDiscount > 0} />
+              <PriceRow label="Delivery charge" value={!settings ? 'Checking…' : totals.deliveryCharge ? money(totals.deliveryCharge) : 'FREE'} good={Boolean(settings) && !totals.deliveryCharge} />
+              <PriceRow label="Platform fee" value={!settings ? 'Checking…' : money(totals.platformFee)} />
+              <div className="sc-bag__total"><strong>Estimated total</strong><strong>{settings ? money(totals.finalAmount) : '—'}</strong></div>
+              {totals.discount + totals.couponDiscount > 0 && <p className="sc-bag__savings"><Check size={15} /> You save {money(totals.discount + totals.couponDiscount)} on this bag</p>}
+              <p className="sc-bag__tax">Includes {money(totals.taxAmount)} GST ({totals.taxRate}%). Payment-specific charges or offers are confirmed at checkout.</p>
+              {settingsError && <div className="sc-bag__alert" role="alert"><p>{settingsError}</p><button onClick={() => setReload(value => value + 1)}>Retry</button></div>}
+              {(selectedIssues || !selected.length || selected.length > 50) && <p className="sc-bag__issue" role="status">{selectedIssues ? 'Update or uncheck unavailable items to continue.' : !selected.length ? 'Select at least one item to continue.' : 'Select up to 50 items per order.'}</p>}
+              <button className="sc-bag__primary sc-bag__desktop-continue" onClick={continueCheckout} disabled={!canContinue}>{checking ? 'Checking your bag…' : 'Continue to address'}<ArrowRight size={17} /></button>
+              <p className="sc-bag__next">You can review your order before payment.</p>
+            </section>
+            <div className="sc-bag__help"><span>Need a hand with your order?</span><button onClick={() => navigate('/contact')}>Contact us <ArrowRight size={14} /></button></div>
+          </div>
+        </aside></div>
+        {recommended.length > 0 && <section className="sc-bag__recommendations"><div><h2>You may also like</h2></div><div>{recommended.map(product => <button key={product._id || product.id} onClick={() => navigate(productHref(product, storeSlug))}><div><BagImage product={product} /></div><span>{product.name}</span><strong>{money(product.price)}</strong><small>View style <ArrowRight size={12} /></small></button>)}</div></section>}
+        <div className="sc-bag__mobile-continue"><div><strong>{settings ? money(totals.finalAmount) : '—'}</strong><button onClick={() => document.getElementById('bag-price-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View price details</button></div><button className="sc-bag__primary" onClick={continueCheckout} disabled={!canContinue}>{checking ? <LoaderCircle size={18} className="sc-bag__spin" /> : 'Continue'}<ArrowRight size={17} /></button></div>
+      </>}
+      <footer className="sc-bag__footer"><span><LockKeyhole size={16} /> Secure checkout</span><button onClick={() => navigate('/shipping-policy')}>Shipping policy</button><button onClick={() => navigate('/return-policy')}>Return policy</button><button onClick={() => navigate('/privacy-policy')}>Privacy policy</button></footer>
+    </div>
+    {editing && <EditBagItem item={editing} cart={cart} onClose={() => setEditing(null)} />}
+    {removing && <BagDialog title={removing.length === 1 ? 'Keep it for later?' : 'Update selected items'} onClose={() => setRemoving(null)} busy={actionBusy}><div className="sc-bag-dialog__body"><div className="sc-bag-dialog__heart"><Heart size={28} /></div><p>{removing.length === 1 ? removing[0].product.name : removing.length + ' selected items'}</p><p className="sc-bag-dialog__muted">Move favourites to your wishlist, or remove them from your bag.</p></div><footer className="sc-bag-dialog__actions"><button className="sc-bag__outline" onClick={() => performRemoval(false)} disabled={actionBusy}>Remove</button><button className="sc-bag__primary" onClick={() => performRemoval(true)} disabled={actionBusy || removing.some(item => item.product.isActive === false)}>{actionBusy ? 'Updating…' : 'Move to wishlist'}</button></footer></BagDialog>}
+    {addressOpen && <BagDialog title="Choose delivery address" onClose={() => setAddressOpen(false)}><div className="sc-bag-dialog__body sc-bag__addresses">{addresses.map(row => <label key={row._id}><input type="radio" name="bag-address" checked={row._id === addressId} onChange={() => setAddressId(row._id)} /><div><strong>{row.fullName} <small>{row.addressType}</small></strong><p>{[row.houseNo, row.area, row.city, row.state, row.pincode].filter(Boolean).join(', ')}</p><span>{row.mobile}</span></div></label>)}</div><footer className="sc-bag-dialog__actions"><button className="sc-bag__outline" onClick={goCheckout}>Add new address</button><button className="sc-bag__primary" onClick={() => setAddressOpen(false)}>Deliver here</button></footer></BagDialog>}
+  </section>;
+}
+function PriceRow({ label, value, good }) { return <div className="sc-bag__price-row"><span>{label}</span><span className={good ? 'is-good' : ''}>{value}</span></div>; }
+function BagImage({ product }) {
+  const [failed, setFailed] = useState(false); const image = getPrimaryImageUrl(product.images);
+  return image && !failed ? <img src={image} alt={product.name} onError={() => setFailed(true)} loading="lazy" /> : <span className="sc-bag__image-empty"><ImageOff size={27} /><small>Image unavailable</small></span>;
+}
+function BagItem({ item, busy, settings, onSelect, onEdit, onRemove, onQuantity, onOpen }) {
+  const product = item.product, stock = bagStock(item), issue = bagIssue(item);
+  const { discount } = wishlistPrice({ ...product, price: item.price ?? product.price, originalPrice: item.originalPrice ?? product.originalPrice });
+  const unavailable = product.isActive === false || product.unavailable;
+  const returnText = product.returnPolicy || settings?.returnPolicy || (settings?.returnWindowDays > 0 ? settings.returnWindowDays + '-day returns, subject to store policy' : '');
+  return <article className={'sc-bag-item sc-bag__panel' + (item.selected === false ? ' is-unselected' : '')} aria-label={product.name}>
+    <div className="sc-bag-item__picture"><button onClick={onOpen} disabled={unavailable} aria-label={'View ' + product.name}><BagImage product={product} /></button><input type="checkbox" checked={item.selected !== false} onChange={onSelect} disabled={busy || item.localOnly} aria-label={'Select ' + product.name} /></div>
+    <div className="sc-bag-item__body"><p className="sc-bag-item__brand">{product.brand || 'Samira Collection'}</p><button className="sc-bag-item__name" onClick={onOpen} disabled={unavailable}>{product.name}</button><p className="sc-bag-item__seller">Sold by {product.sellerName || 'Samira Collection'}</p>
+      <div className="sc-bag-item__options"><button onClick={onEdit} disabled={busy || unavailable || item.localOnly} aria-label={'Change size and colour for ' + product.name}>Size: <strong>{item.size || 'One size'}</strong><ChevronDown size={13} /></button>{item.color && <span>{item.color}</span>}<div className="sc-bag-item__quantity"><button onClick={() => onQuantity(item.quantity - 1)} disabled={busy || item.quantity <= 1 || item.localOnly} aria-label={'Decrease quantity for ' + product.name}><Minus size={13} /></button><span aria-label={'Quantity ' + item.quantity}>Qty: {item.quantity}</span><button onClick={() => onQuantity(item.quantity + 1)} disabled={busy || item.quantity >= 20 || stock === 0 || (stock !== null && item.quantity >= stock) || item.localOnly} aria-label={'Increase quantity for ' + product.name}><Plus size={13} /></button></div></div>
+      <div className="sc-bag-item__price"><strong>{money((item.price ?? product.price) * item.quantity)}</strong>{discount > 0 && <><del>{money((item.originalPrice ?? product.originalPrice) * item.quantity)}</del><span>{discount}% OFF</span></>}</div>
+      {item.quantity > 1 && <p className="sc-bag-item__unit">{money(item.price ?? product.price)} each</p>}
+      {issue ? <p className="sc-bag__issue">{issue}</p> : stock > 0 && stock <= 5 ? <p className="sc-bag-item__low">Only {stock} left in this selection</p> : null}
+      {item.previousPrice > 0 && item.previousPrice !== item.price && <p className="sc-bag-item__price-change">Price updated from {money(item.previousPrice)} to {money(item.price)} each</p>}
+      {returnText && !unavailable && <p className="sc-bag-item__return"><RotateCcw size={13} />{returnText}</p>}
+    </div><button className="sc-bag-item__remove" onClick={onRemove} disabled={busy} aria-label={'Remove ' + product.name}><X size={19} /></button>
+  </article>;
+}
+function BagDialog({ title, children, onClose, busy }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const element = ref.current, overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden'; element.showModal?.(); if (!element.showModal) element.setAttribute('open', '');
+    return () => { document.body.style.overflow = overflow; element.close?.(); };
   }, []);
-  const applyCoupon = async (couponCode = code) => {
-    const nextCode = String(couponCode || '').trim().toUpperCase();
-    setMessage('');
-    if (!nextCode) {
-      setMessage('Select a coupon or enter a code.');
-      return;
-    }
-    setCouponBusyCode(nextCode);
-    startMobileLoader();
-    try {
-      const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart }));
-      cart.setCoupon({ code: data.couponCode || data.coupon?.code, discount: Number(data.discountAmount ?? data.discount ?? 0) });
-      setCode(data.couponCode || data.coupon?.code || nextCode);
-      setMessage(data.message || `${data.couponCode || data.coupon?.code || nextCode} applied`);
-      return true;
-    } catch (error) {
-      setMessage(error.message);
-      return false;
-    } finally {
-      setCouponBusyCode('');
-      stopMobileLoader();
-    }
-  };
-
-  const moveToWishlist = (item) => {
-    wishlist.addToWishlist(item.product);
-    setMessage('Added to wishlist. It will remain in your bag too.');
-  };
-
-  const removeCoupon = () => {
-    cart.setCoupon(null);
-    setCode('');
-    setMessage('Coupon removed');
-  };
-
-  const shareCart = async () => {
-    const text = `Samira Collection bag: ${selectedCount} item${selectedCount === 1 ? '' : 's'} worth Rs. ${payable}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Samira Collection Bag', text, url: window.location.href });
-      } else {
-        await navigator.clipboard.writeText(`${text} - ${window.location.href}`);
-        setMessage('Bag link copied');
-      }
-    } catch {
-      setMessage('Sharing was cancelled');
+  return <dialog ref={ref} className="sc-bag-dialog" aria-label={title} onCancel={event => { event.preventDefault(); if (!busy) onClose(); }} onClick={event => {
+    if (event.target !== event.currentTarget || busy) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
+  }}><header><div><p>YOUR SHOPPING BAG</p><h2>{title}</h2></div><button onClick={onClose} disabled={busy} aria-label="Close dialog"><X size={21} /></button></header>{children}</dialog>;
+}
+function EditBagItem({ item, cart, onClose }) {
+  const [product, setProduct] = useState(item.product), [size, setSize] = useState(item.size || ''), [color, setColor] = useState(item.color || ''), [quantity, setQuantity] = useState(item.quantity);
+  const [loading, setLoading] = useState(true), [ready, setReady] = useState(false), [error, setError] = useState(''), [saving, setSaving] = useState(false), [retry, setRetry] = useState(0);
+  const lock = useRef(false);
+  useEffect(() => {
+    let alive = true; setLoading(true); setReady(false); setError('');
+    api.post('/wishlist/resolve', { ids: [String(item.productId || item.product._id || item.product.id)] }).then(data => {
+      if (alive) { setProduct(normalizeProduct(data[0] || { ...item.product, unavailable: true })); setReady(true); }
+    }).catch(failure => { if (alive) setError(failure.message); }).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [item, retry]);
+  const options = wishlistOptions(product), variant = options.managed ? chosenVariant(product, size, color) : null;
+  const stock = bagStock({ product, size, color, variantId: variant?._id });
+  const possible = ready && !loading && (!options.managed || variant) && options.sizes.includes(size) && options.colors.includes(color) && stock !== 0 && (stock === null || quantity <= stock) && quantity > 0 && quantity <= 20;
+  const availableSize = value => !options.managed || activeVariants(product).some(row => row.size === value && row.stock > 0);
+  const availableColor = value => !options.managed || activeVariants(product).some(row => row.color === value && row.stock > 0);
+  const changeSize = value => {
+    setSize(value); setError('');
+    if (options.managed && !activeVariants(product).some(row => row.size === value && row.color === color && row.stock > 0)) {
+      const colors = [...new Set(activeVariants(product).filter(row => row.size === value && row.stock > 0).map(row => row.color))];
+      setColor(colors.length === 1 ? colors[0] : '');
     }
   };
-
-  const addAllToWishlist = () => {
-    cart.items.forEach((item) => wishlist.addToWishlist(item.product));
-    setMessage('Bag items added to wishlist');
+  const save = async () => {
+    if (!possible || lock.current) return; lock.current = true; setSaving(true); setError('');
+    const result = await cart.updateItemOptions(bagKey(item), { cartKey: bagKey(item), size, color, variantId: variant?._id || '', quantity });
+    if (result?.ok) onClose(); else setError(result?.message || 'Could not update this item. Your original selection is still in the bag.');
+    lock.current = false; setSaving(false);
   };
-
-  if (!cart.items.length) {
-    return (
-      <section className="bg-white pb-28 md:min-h-screen md:bg-white md:pb-0">
-        <BagHeader navigate={navigate} />
-        <div className="container-page py-10 md:flex md:min-h-[calc(100vh-72px)] md:items-center md:justify-center md:py-12">
-          <div className="flex w-full flex-col items-center text-center md:hidden">
-            <div className="relative mt-6 flex h-56 w-full max-w-[320px] items-center justify-center">
-              <div className="absolute left-8 top-28 h-1 w-7 rounded-full bg-slate-600/80" />
-              <div className="absolute left-11 top-24 h-1 w-14 rounded-full bg-slate-600/80" />
-              <div className="absolute left-16 top-20 h-1 w-5 rounded-full bg-slate-600/80" />
-              <div className="absolute left-[calc(50%-42px)] top-14 h-[150px] w-[108px] rounded-[20px] bg-[#ff557f] shadow-[0_20px_30px_rgba(255,85,127,0.18)]" />
-              <div className="absolute left-[calc(50%-5px)] top-10 h-14 w-7 rounded-t-full border-4 border-b-0 border-slate-600/80" />
-              <div className="absolute left-[calc(50%-13px)] top-[92px] text-white">
-                <Icon name="bag" className="h-14 w-14" />
-              </div>
-              <div className="absolute bottom-8 h-3 w-24 rounded-full bg-slate-200/80 blur-[1px]" />
-            </div>
-            <h1 className="mt-2 text-[20px] font-extrabold leading-tight text-[#1f2a44]">Hey, it feels so light!</h1>
-            <p className="mt-2 max-w-[290px] text-[14px] leading-6 text-slate-500">There is nothing in your bag. Let&apos;s add some items.</p>
-            <Button onClick={() => navigate('/wishlist')} variant="outline" className="mt-8 h-12 rounded-sm border-rose px-5 text-[12px] font-bold uppercase tracking-[0.08em] text-rose hover:bg-rose/5">
-              Add Items From Wishlist
-            </Button>
-          </div>
-
-          <div className="hidden w-full max-w-2xl flex-col items-center text-center md:flex">
-            <div className="relative flex h-52 w-52 items-center justify-center">
-              <div className="absolute left-3 top-24 h-1 w-6 rounded-full bg-slate-500/80" />
-              <div className="absolute left-6 top-20 h-1 w-12 rounded-full bg-slate-500/80" />
-              <div className="absolute left-12 top-16 h-1 w-6 rounded-full bg-slate-500/80" />
-              <div className="relative flex h-36 w-36 items-center justify-center rounded-[2rem] bg-rose text-white shadow-[0_16px_32px_rgba(255,66,120,0.25)]">
-                <Icon name="bag" className="h-16 w-16" />
-              </div>
-            </div>
-            <h1 className="mt-6 text-[28px] font-extrabold leading-tight text-charcoal">Hey, it feels so light!</h1>
-            <p className="mt-2 text-[17px] leading-7 text-slate-500">There is nothing in your bag. Let&apos;s add some items.</p>
-            <Button onClick={() => navigate('/wishlist')} variant="outline" className="mt-8 h-12 rounded-sm border-rose px-5 text-[15px] font-bold uppercase tracking-[0.08em] text-rose hover:bg-rose/5">
-              Add Items From Wishlist
-            </Button>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="bg-white pb-36 md:bg-ivory md:pb-10">
-      <BagHeader navigate={navigate} />
-
-      <div className="mx-auto max-w-5xl md:grid md:grid-cols-[minmax(0,1fr)_340px] md:gap-6 md:px-6 md:pt-6">
-        <div className="min-w-0">
-          <section className="border-b border-slate-100 bg-white px-4 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="body-text">Deliver to: <span className="label-text">{user?.name || 'Customer'}, {user?.pincode || 'Add PIN'}</span></p>
-                <p className="body-text mt-1 truncate text-slate-500">{user?.address || 'Add delivery address during checkout'}</p>
-              </div>
-              <Button onClick={() => navigate('/checkout')} variant="ghost" size="sm" className="shrink-0 px-0 text-rose">Change</Button>
-            </div>
-          </section>
-
-          <section className="bg-[#f4f4f5] px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Badge variant="accent" className="grid h-6 w-6 place-items-center rounded px-0 py-0 text-[10px] text-white">OK</Badge>
-                <p className="label-text sm:text-sm">{selectedCount}/{selectedCount} ITEMS SELECTED <span className="text-rose">(Rs. {cart.sellingTotal})</span></p>
-              </div>
-              <div className="flex shrink-0 gap-3 text-slate-800 sm:gap-4">
-                <button type="button" onClick={shareCart} aria-label="Share bag"><Icon name="share" className="h-5 w-5" /></button>
-                <button type="button" onClick={cart.clearCart} aria-label="Delete all bag items"><Icon name="trash" className="h-5 w-5" /></button>
-                <button type="button" onClick={addAllToWishlist} aria-label="Add bag items to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
-              </div>
-            </div>
-          </section>
-
-          <div className="bg-white">
-            {cart.items.map((item) => (
-              <BagItem
-                key={`${item.product._id || item.product.id || item.product.slug}-${item.size}-${item.color}`}
-                item={item}
-                deliveryDate={deliveryDate}
-                increaseQuantity={cart.increaseQuantity}
-                decreaseQuantity={cart.decreaseQuantity}
-                removeFromCart={cart.removeFromCart}
-                updateItemOptions={cart.updateItemOptions}
-                moveToWishlist={moveToWishlist}
-              />
-            ))}
-          </div>
-
-          <button onClick={() => navigate('/wishlist')} className="flex w-full items-center justify-between border-y border-slate-100 bg-white px-4 py-5 text-left">
-            <span className="flex items-center gap-3 label-text text-base"><Icon name="bookmark" className="h-6 w-6" /> Add More From Wishlist</span>
-            <span className="text-2xl">&gt;</span>
-          </button>
-
-          <section className="bg-[#f5f5f6] px-4 py-4">
-            <CouponSelector
-              coupons={coupons}
-              bestCouponCode={bestCouponCode}
-              appliedCoupon={cart.coupon}
-              busyCode={couponBusyCode}
-              feedback={message}
-              onApply={applyCoupon}
-              onRemove={removeCoupon}
-            />
-          </section>
-
-          {recommended.length > 0 && <RecommendationRail title="You may also like:" products={recommended} cart={cart} navigate={navigate} />}
-        </div>
-
-        <aside className="hidden md:block">
-          <PriceDetails cart={cart} platformFee={platformFee} deliveryCharge={deliveryCharge} taxAmount={taxAmount} taxRate={pricing.gstRate} payable={payable} />
-          <Button onClick={() => navigate('/checkout')} variant="accent" className="mt-4 w-full">Place Order</Button>
-        </aside>
-      </div>
-
-      <div className="md:hidden">
-        <PriceDetails cart={cart} platformFee={platformFee} deliveryCharge={deliveryCharge} taxAmount={taxAmount} taxRate={pricing.gstRate} payable={payable} />
-      </div>
-
-      <TrustStrip />
-
-      <div className="fixed bottom-16 left-0 right-0 z-40 bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)] md:hidden">
-        <p className="label-text border-t border-slate-200 bg-[#fff6f4] py-2 text-center">{selectedCount} Item selected for order</p>
-        <div className="p-3">
-          <Button onClick={() => navigate('/checkout')} variant="accent" className="h-14 w-full uppercase tracking-[0.12em]">Place Order</Button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function BagHeader({ navigate }) {
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white md:hidden">
-      <div className="flex h-16 items-center justify-between px-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/products')} className="text-3xl leading-none text-slate-600" aria-label="Back">←</button>
-          <h1 className="text-[16px] font-semibold uppercase tracking-[0.02em] text-[#4b5563]">Shopping Bag</h1>
-        </div>
-        <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-[#6b7280]">Step 1/3</span>
-      </div>
-    </header>
-  );
-}
-
-function BagItem({ item, deliveryDate, increaseQuantity, decreaseQuantity, removeFromCart, updateItemOptions, moveToWishlist }) {
-  const product = item.product;
-  const image = getPrimaryImageUrl(product.images);
-  const sizes = Array.isArray(product.sizes) && product.sizes.length ? product.sizes : [item.size || 'Free Size'];
-  const originalTotal = Number(product.originalPrice || product.price || 0) * item.quantity;
-  const sellingTotal = Number(product.price || 0) * item.quantity;
-  const discount = Math.max(0, originalTotal - sellingTotal);
-
-  return (
-    <article className="relative flex gap-3 border-b border-slate-100 bg-white px-4 py-4">
-      <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded bg-[#f6efe8]">
-        {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /> : <ProductVisual product={product} compact />}
-        <Badge variant="accent" className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded px-0 py-0 text-[10px] text-white">OK</Badge>
-      </div>
-      <div className="min-w-0 flex-1 pr-6">
-        <h2 className="product-brand truncate text-charcoal">{product.brand || 'Samira Collection'}</h2>
-        <p className="product-name mt-1 truncate text-slate-700">{product.name}</p>
-        <p className="small-text mt-1 truncate text-slate-400">Sold by: Samira Collection</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <label className="small-text flex h-8 items-center gap-1 rounded bg-slate-100 px-2 font-bold">
-            Size:
-            <select
-              value={item.size}
-              onChange={(event) => updateItemOptions(item.cartKey, { cartKey: item.cartKey, size: event.target.value })}
-              className="bg-transparent font-black outline-none"
-              aria-label="Select size"
-            >
-              {sizes.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
-          <div className="small-text grid h-8 grid-cols-[2rem_3rem_2rem] overflow-hidden rounded bg-slate-100 font-bold" aria-label="Quantity controls">
-            <button type="button" onClick={() => decreaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Decrease quantity">-</button>
-            <span className="grid place-items-center">Qty {item.quantity}</span>
-            <button type="button" onClick={() => increaseQuantity(item.cartKey, { cartKey: item.cartKey })} aria-label="Increase quantity">+</button>
-          </div>
-        </div>
-        <p className="mt-3 body-text">
-          <span className="price">Rs. {sellingTotal}</span>
-          <span className="old-price ml-2 text-slate-400 line-through">Rs. {originalTotal}</span>
-          <span className="discount ml-2 text-rose">Rs. {discount} OFF</span>
-        </p>
-        <p className="label-text mt-2"><span className="text-emerald-600">OK</span> Delivery by <span className="text-charcoal">{deliveryDate}</span></p>
-      </div>
-      <div className="absolute right-3 top-3 flex gap-3">
-        <button type="button" onClick={() => moveToWishlist(item)} className="text-slate-600" aria-label="Add to wishlist"><Icon name="heart" className="h-5 w-5" /></button>
-        <button type="button" onClick={() => removeFromCart(item.cartKey, { cartKey: item.cartKey })} className="text-2xl leading-none" aria-label="Remove">x</button>
-      </div>
-    </article>
-  );
-}
-
-function RecommendationRail({ title, products: items, cart, navigate }) {
-  return (
-    <section className="bg-[#fff7f9] px-4 py-5">
-      <h2 className="section-title flex items-center gap-3 text-base"><Icon name="bag" className="h-6 w-6" /> {title}</h2>
-      <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
-        {items.map((product) => {
-          const image = getPrimaryImageUrl(product.images);
-          const cartItem = cart.getCartItem(product);
-          return (
-            <Card key={product.id} className="w-40 shrink-0 rounded-2xl">
-              <button onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block h-44 w-full overflow-hidden bg-[#f6efe8]">
-                {image ? <img src={normalizeImageUrl(image)} alt={product.name} className="h-full w-full object-cover" /> : <ProductVisual product={product} compact />}
-              </button>
-              <CardContent className="p-3">
-                <h3 className="label-text truncate text-charcoal">{product.brand || 'Samira Collection'}</h3>
-                <p className="product-name truncate text-slate-500">{product.name}</p>
-                <p className="mt-1 small-text"><span className="price">Rs. {product.price}</span> <span className="old-price text-slate-400 line-through">Rs. {product.originalPrice}</span></p>
-              </CardContent>
-              <Button onClick={() => cart.addToCart(product)} variant={cartItem ? 'secondary' : 'ghost'} className={`w-full rounded-t-none border-t ${cartItem ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-200 text-rose hover:bg-rose/5'}`}>
-                {cartItem ? 'ADD MORE' : 'ADD TO CART'}
-              </Button>
-            </Card>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function PriceDetails({ cart, platformFee, deliveryCharge = 0, taxAmount = 0, taxRate = DEFAULT_GST_RATE, payable }) {
-  return (
-    <Card className="rounded-none md:rounded-2xl">
-      <CardHeader>
-        <CardTitle className="small-text uppercase tracking-[0.14em] text-charcoal">Price Details ({cart.itemCount} Item)</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 border-t border-slate-100 pt-4 body-text">
-        <Row label="Total MRP" value={`Rs. ${cart.totalMRP}`} />
-        <Row label="Discount on MRP" value={`- Rs. ${cart.discount}`} good />
-        <Row label="Coupon Discount" value={`- Rs. ${cart.couponDiscount}`} good />
-        <Row label="Delivery Charges" value={deliveryCharge ? `Rs. ${deliveryCharge}` : 'FREE'} good={!deliveryCharge} />
-        <Row label="Platform Fee" value={`Rs. ${platformFee}`} />
-        {taxAmount > 0 && <Row label={`GST (${taxRate}% incl.)`} value={`Rs. ${taxAmount}`} />}
-        <div className="flex justify-between border-t border-slate-100 pt-4">
-          <span>Total Amount</span>
-          <span className="price">Rs. {payable}</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Row({ label, value, good }) {
-  return <div className="flex justify-between gap-4"><span>{label}</span><span className={good ? 'text-emerald-600' : ''}>{value}</span></div>;
-}
-
-function TrustStrip() {
-  return (
-    <section className="bg-white px-4 pb-28 pt-5 md:mx-auto md:mt-6 md:max-w-5xl md:rounded-2xl md:pb-5">
-      <div className="grid grid-cols-3 gap-2 text-center small-text text-slate-500">
-        <div><Icon name="star" className="mx-auto h-6 w-6" /><p className="mt-2">Genuine Products</p></div>
-        <div><Icon name="box" className="mx-auto h-6 w-6" /><p className="mt-2">Contactless Delivery</p></div>
-        <div><Icon name="bag" className="mx-auto h-6 w-6" /><p className="mt-2">Secure Payments</p></div>
-      </div>
-      <p className="body-text mt-5 text-slate-600">By placing the order, you agree to Samira Collection's <span className="font-bold text-rose">Terms of Use</span> and <span className="font-bold text-rose">Privacy Policy</span>.</p>
-    </section>
-  );
+  const columns = getSizeChartColumns(product).filter(column => product.sizeChart?.rows?.some(row => Number(row[column.key]) > 0));
+  return <BagDialog title="Choose your perfect fit" onClose={onClose} busy={saving}><div className="sc-bag-dialog__body">
+    <div className="sc-bag-dialog__product"><div><BagImage product={product} /></div><section><small>{product.brand || 'Samira Collection'}</small><h3>{product.name}</h3><strong>{money(wishlistPrice(product, variant).price)}</strong><p>Price per item, inclusive of taxes</p></section></div>
+    {loading ? <p role="status">Checking available sizes and colours…</p> : <>
+      <fieldset><legend>Select size</legend><div className="sc-bag-dialog__choices">{options.sizes.map(value => <button key={value} aria-label={'Size ' + (value || 'One size')} aria-pressed={value === size} disabled={!ready || saving || !availableSize(value)} onClick={() => changeSize(value)}>{value || 'One size'}</button>)}</div></fieldset>
+      {options.colors.some(Boolean) && <fieldset><legend>Select colour</legend><div className="sc-bag-dialog__choices">{options.colors.map(value => <button key={value} aria-pressed={value === color} disabled={!ready || saving || !availableColor(value)} onClick={() => { setColor(value); setError(''); if (options.managed && !activeVariants(product).some(row => row.size === size && row.color === value && row.stock > 0)) setSize(''); }}>{value || 'As shown'}</button>)}</div></fieldset>}
+      <label className="sc-bag-dialog__quantity">Quantity <select value={quantity} disabled={saving || !ready} onChange={event => { setQuantity(Number(event.target.value)); setError(''); }} aria-label="Choose quantity">{Array.from({ length: Math.min(20, Math.max(quantity, stock ?? 20, 1)) }, (_, index) => index + 1).map(value => <option key={value} disabled={stock !== null && value > stock} value={value}>{value}</option>)}</select></label>
+      {(stock === 0 || (stock !== null && quantity > stock)) && <p className="sc-bag__issue">{stock ? 'Only ' + stock + ' left. Choose a lower quantity.' : 'This combination is unavailable. Choose another size or colour.'}</p>}
+      {columns.length > 0 && <details className="sc-bag-dialog__guide"><summary>Size guide · {product.sizeChart.unit || 'in'}</summary><div><table><thead><tr><th>Size</th>{columns.map(column => <th key={column.key}>{column.shortLabel}</th>)}</tr></thead><tbody>{product.sizeChart.rows.map(row => <tr key={row.size}><th>{row.size}</th>{columns.map(column => <td key={column.key}>{row[column.key] || '—'}</td>)}</tr>)}</tbody></table></div></details>}
+    </>}
+    {error && <div className="sc-bag__alert" role="alert"><p>{error}</p><button onClick={() => setRetry(value => value + 1)} disabled={saving}>Retry</button></div>}
+  </div><footer><p className="sc-bag-dialog__muted">If this size and colour are already in your bag, quantities will be combined.</p><button className="sc-bag__primary" onClick={save} disabled={!possible || saving || Boolean(error)}>{saving ? 'Saving changes…' : 'Save changes'}</button></footer></BagDialog>;
 }

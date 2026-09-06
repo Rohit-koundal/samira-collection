@@ -37,6 +37,7 @@ export default function ProductDetailPage({
   deliveryResult,
   cartItem,
   isOutOfStock,
+  cartBusy = false,
   onAddToCart,
   onBuyNow,
   onOrderWhatsApp,
@@ -131,6 +132,7 @@ export default function ProductDetailPage({
               deliveryResult={deliveryResult}
               cartItem={cartItem}
               isOutOfStock={isOutOfStock}
+              cartBusy={cartBusy}
               onAddToCart={onAddToCart}
               onBuyNow={onBuyNow}
               onOrderWhatsApp={onOrderWhatsApp}

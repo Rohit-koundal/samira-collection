@@ -11,7 +11,10 @@ export default function MyReturns({ navigate }) {
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    api.get('/returns/my-requests').then((data) => { if (active) setRequests(data); })
+    api.get('/returns/my-requests').then((data) => {
+      if (!Array.isArray(data) || data.some(item => !item || !item._id)) throw new Error('Your return requests could not be loaded. Please try again.');
+      if (active) setRequests(data);
+    })
       .catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [reload]);
@@ -21,11 +24,11 @@ export default function MyReturns({ navigate }) {
         : <div className="sc-orders__list">{requests.map((request) => <article className="sc-order-panel" key={request._id}>
           <header><h2>{request.type === 'exchange' ? 'Exchange' : 'Return'} request</h2><span className="sc-order-status sc-order-status--return">{request.status}</span></header>
           <OrderItem item={{ name: request.product?.name || 'Ordered product', image: request.product?.images?.[0]?.url || request.product?.images?.[0] || '', size: request.size, color: request.color, quantity: request.quantity }} />
-          <p>{request.reason}</p><p className="sc-orders__muted">Requested {orderDate(request.createdAt)} ? #{String(request._id).slice(-8).toUpperCase()}</p>
+          <p>{request.reason}</p><p className="sc-orders__muted">Requested {orderDate(request.createdAt)} · #{String(request._id).slice(-8).toUpperCase()}</p>
           {request.exchangeSize && <p className="sc-orders__muted">Replacement: {request.exchangeSize} {request.exchangeColor}</p>}
           {request.pickupScheduledAt && <p className="sc-orders__muted">Pickup scheduled {orderDate(request.pickupScheduledAt)}</p>}
           {request.adminComment && <p className="sc-orders__muted">{request.adminComment}</p>}
-          <button className="sc-orders__text" onClick={() => navigate(`/order-detail?id=${request.order?._id || request.order}`)}>View order & request details ?</button>
+          {(request.order?._id || typeof request.order === 'string') && <button className="sc-orders__text" onClick={() => navigate(`/order-detail?id=${encodeURIComponent(request.order?._id || request.order)}`)}>View order & request details ›</button>}
         </article>)}</div>}
   </OrderShell>;
 }

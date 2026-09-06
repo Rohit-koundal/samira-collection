@@ -78,7 +78,7 @@ export default function ProductForm({
   const [structureError, setStructureError] = useState('');
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-  const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId) || emptyProduct)));
+  const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId, apiPrefix) || emptyProduct)));
   const [assistant, setAssistant] = useState({
     category: '',
     subCategory: '',
@@ -95,6 +95,8 @@ export default function ProductForm({
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
   const [errors, setErrors] = useState({});
   const [draftReady, setDraftReady] = useState(() => !productId);
   const [assistantMode, setAssistantMode] = useState('fill-empty');
@@ -122,7 +124,7 @@ export default function ProductForm({
     flags: false,
   });
   const [assistantPreviewOpen, setAssistantPreviewOpen] = useState(false);
-  const draftKey = getDraftKey(productId);
+  const draftKey = getDraftKey(productId, apiPrefix);
   const reloadStructure = () => { setStructureError(''); return api.get('/catalog-configuration').then(setStructure).catch((error) => setStructureError(error.message)); };
   useEffect(() => {
     let alive = true;
@@ -150,14 +152,17 @@ export default function ProductForm({
   }, [apiPrefix, form.category]);
 
   useEffect(() => {
+    let alive = true;
     if (!productId) {
       setDraftReady(true);
       return;
     }
 
     setDraftReady(false);
+    setLoadError('');
     api.get(`${apiPrefix}/products/${productId}`).then((product) => {
-      const savedDraft = readDraft(productId);
+      if (!alive) return;
+      const savedDraft = readDraft(productId, apiPrefix);
       const mergedDraft = mergeDraftIntoProduct(savedDraft);
       setForm({
         ...emptyProduct,
@@ -190,9 +195,10 @@ export default function ProductForm({
         occasion: product.occasion || '',
         style: product.shortDescription || '',
       });
-    }).catch((error) => setMessage(error.message))
-      .finally(() => setDraftReady(true));
-  }, [apiPrefix, productId]);
+      setDraftReady(true);
+    }).catch((error) => { if (alive) setLoadError(error.message); });
+    return () => { alive = false; };
+  }, [apiPrefix, productId, reload]);
 
   useEffect(() => {
     if (!draftReady) return undefined;
@@ -300,6 +306,7 @@ export default function ProductForm({
 
   const submit = async (event) => {
     event.preventDefault();
+    if (saving || !draftReady || loadError || (mode === 'Update' && !productId)) return;
     if (!structure) { setMessage('Load the store product configuration before saving.'); return; }
     const sizingProduct = productForSizing(form);
     const nextErrors = validate(form, sizingProduct);
@@ -336,7 +343,7 @@ export default function ProductForm({
       if (productId) await api.put(`${apiPrefix}/products/${productId}`, payload);
       else await api.post(`${apiPrefix}/products`, payload);
       if (!productId) setForm(emptyProduct);
-      clearDraft(productId);
+      clearDraft(productId, apiPrefix);
       setMessage('Product saved successfully.');
       onSaved?.();
     } catch (error) {
@@ -362,6 +369,10 @@ export default function ProductForm({
     { id: 'details', label: 'Details', done: String(form.description || '').trim().length >= 20, target: 'product-basics', icon: FileText },
   ];
   const readyCount = checklist.filter((item) => item.done).length;
+
+  if (mode === 'Update' && !productId) return <p role="alert" className="admin-card p-5">Choose a product from the catalog before editing. <a href={cancelPath} className="underline">Back to catalog</a></p>;
+  if (loadError) return <div role="alert" className="admin-card p-5">{loadError} <button type="button" onClick={() => setReload(value => value + 1)} className="admin-btn-ghost">Retry loading product</button></div>;
+  if (!draftReady) return <p role="status" className="admin-card p-5">Loading product...</p>;
 
   return (
     <form onSubmit={submit} className="admin-product-form">
@@ -949,24 +960,24 @@ function prepareImages(images) {
   }));
 }
 
-function getDraftKey(productId) {
-  return `${DRAFT_PREFIX}:${productId || 'new'}`;
+function getDraftKey(productId, apiPrefix = '/admin') {
+  return `${DRAFT_PREFIX}${apiPrefix === '/admin' ? '' : ':' + apiPrefix}:${productId || 'new'}`;
 }
 
-function readDraft(productId) {
+function readDraft(productId, apiPrefix) {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(getDraftKey(productId));
+    const raw = window.localStorage.getItem(getDraftKey(productId, apiPrefix));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function clearDraft(productId) {
+function clearDraft(productId, apiPrefix) {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    window.localStorage.removeItem(getDraftKey(productId));
+    window.localStorage.removeItem(getDraftKey(productId, apiPrefix));
   } catch {
     // ignore storage errors
   }

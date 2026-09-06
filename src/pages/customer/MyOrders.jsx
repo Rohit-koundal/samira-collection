@@ -27,7 +27,12 @@ export default function MyOrders({ navigate, route = '/orders' }) {
     if (days) query.set('days', days);
     if (!user) { setLoading(false); return undefined; }
     api.get(`/orders/my-orders?${query}`).then((result) => {
-      if (active) setData(Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result);
+      if (!active) return;
+      const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
+      if (!Array.isArray(next?.items) || next.items.some((item) => !item || !item._id)) {
+        throw new Error('Your orders could not be loaded. Please try again.');
+      }
+      setData({ ...next, totalPages: Math.max(1, Number(next.totalPages) || 1), total: Number(next.total) || next.items.length });
     }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [search, status, days, page, reload, user]);
@@ -52,7 +57,7 @@ export default function MyOrders({ navigate, route = '/orders' }) {
       : loading ? <OrderState loading /> : error ? <OrderState title="Unable to load orders" error={error} retry={() => setReload((value) => value + 1)} />
         : <>
           <div className="sc-orders__results"><p>{data.total} {data.total === 1 ? 'order' : 'orders'}{search || status || days ? ' found' : ''}</p>{(search || status || days) && <button className="sc-orders__text" onClick={() => navigate('/orders')}>Clear filters</button>}</div>
-          {!data.items.length ? <OrderState title={search || status || days ? 'No matching orders' : 'Your first order is waiting'}><p>{search || status || days ? 'Try a different search or clear your filters.' : 'Your purchases and delivery updates will appear here.'}</p><button className="sc-orders__button" onClick={() => search || status || days ? navigate('/orders') : navigate('/products')}>{search || status || days ? 'View all orders' : 'Explore the collection'}</button></OrderState>
+          {!data.items.length ? <OrderState title={search || status || days ? 'No matching orders' : 'No orders yet'}><p>{search || status || days ? 'Try a different search or clear your filters.' : 'Your purchases and delivery updates will appear here.'}</p><button className="sc-orders__button" onClick={() => search || status || days ? navigate('/orders') : navigate('/products')}>{search || status || days ? 'View all orders' : 'Explore the collection'}</button></OrderState>
             : <div className="sc-orders__list">{data.items.map((order) => <article className="sc-order-card" key={order._id} aria-label={`Order ${orderCode(order)}`}>
               <header className="sc-order-card__meta"><div><span>ORDER PLACED</span><p>{orderDate(order.createdAt) || 'Date unavailable'}</p></div><div><span>ORDER TOTAL</span><p>{money(order.finalAmount)}</p></div><div className="sc-order-card__id"><span>ORDER ID</span><p>#{orderCode(order)}</p></div></header>
               <div className="sc-order-card__status"><StatusBadge status={order.orderStatus} /><span>{paymentLabel(order)}</span></div>

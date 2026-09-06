@@ -3,9 +3,10 @@ import Home from './Home';
 import PageState from '../../components/ui/PageState';
 import { useStorefront } from '../../context/StorefrontContext';
 import { trackEvent } from '../../utils/analytics';
+import { storefrontPath } from '../../utils/routing';
 
 export default function StoreHome(props) {
-  const { store, storeSlug, loading } = useStorefront();
+  const { store, storeSlug, loading, error, retry } = useStorefront();
 
   useEffect(() => {
     if (!storeSlug) return;
@@ -13,6 +14,7 @@ export default function StoreHome(props) {
   }, [storeSlug]);
 
   if (loading) return <PageState loading loadingLabel="Opening boutique..." />;
+  if (error) return <PageState error={error} onRetry={retry} />;
   if (!store) return <PageState error="This boutique is not published yet." />;
 
   return (
@@ -24,7 +26,7 @@ export default function StoreHome(props) {
           {store.bio && <p className="mt-2 max-w-2xl text-sm text-white/80">{store.bio}</p>}
         </div>
       </div>
-      <Home {...props} />
+      <Home {...props} storeSlug={storeSlug} navigate={path => props.navigate(storefrontPath(path, storeSlug))} />
     </div>
   );
 }

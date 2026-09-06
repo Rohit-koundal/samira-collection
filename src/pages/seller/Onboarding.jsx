@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import PageState from '../../components/ui/PageState';
@@ -6,7 +6,8 @@ import PageState from '../../components/ui/PageState';
 const emptyAddress = { fullName: '', mobile: '', pincode: '', city: '', state: '', houseNo: '', area: '' };
 
 export default function Onboarding() {
-  const { refreshProfile, switchMode } = useAuth();
+  const { user, refreshProfile, switchMode } = useAuth();
+  const master = user?.systemRole === 'MASTER_OWNER' && user?.activeMode === 'admin' && !user?.offlineSession;
   const [form, setForm] = useState({
     name: '',
     slug: '',
@@ -26,14 +27,19 @@ export default function Onboarding() {
   const [progress, setProgress] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [hasStore, setHasStore] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [saving, setSaving] = useState(false);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const updateAddress = (key, field, value) => setForm((current) => ({
     ...current,
     [key]: { ...current[key], [field]: value },
   }));
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const mine = await api.get('/stores/me/current');
       setForm((current) => ({
@@ -43,26 +49,34 @@ export default function Onboarding() {
         returnAddress: { ...emptyAddress, ...(mine.store?.returnAddress || {}) },
       }));
       setProgress(mine.progress);
+      setHasStore(true);
+      setCanEdit(['OWNER', 'MANAGER'].includes(mine.role));
       setMessage('');
-    } catch {
-      setProgress(null);
+    } catch (error) {
+      if (master && error.status === 403 && /seller access required/i.test(error.message)) { setHasStore(false); setCanEdit(true); }
+      else setLoadError(error.status === 403
+        ? 'A store owner must provision your seller workspace and grant access before you can set it up.'
+        : error.message || 'Your store could not be loaded. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [master]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const save = async (event) => {
     event.preventDefault();
+    if (saving || !canEdit || (!hasStore && !master)) return;
+    setSaving(true);
     setMessage('');
     try {
       const payload = { ...form };
-      const exists = Boolean(progress);
+      const exists = hasStore;
       const data = exists
         ? await api.put('/stores/me/current', payload)
         : await api.post('/stores', payload);
       setProgress(data.progress);
+      setHasStore(true);
       setForm((current) => ({
         ...current,
         ...data.store,
@@ -74,20 +88,23 @@ export default function Onboarding() {
       if (!exists) await switchMode?.('seller');
     } catch (error) {
       setMessage(error.message);
-    }
+    } finally { setSaving(false); }
   };
 
   const publish = async () => {
+    if (saving || !hasStore || !canEdit) return;
+    setSaving(true); setMessage('');
     try {
       const data = await api.post('/stores/me/current/publish', {});
       setProgress(data.progress);
       setMessage('Store published. Share your storefront link.');
     } catch (error) {
       setMessage(error.message);
-    }
+    } finally { setSaving(false); }
   };
 
   if (loading) return <PageState loading loadingLabel="Loading your boutique..." />;
+  if (loadError) return <PageState error={loadError} onRetry={load} />;
 
   return (
     <section className="space-y-5">
@@ -108,7 +125,9 @@ export default function Onboarding() {
           </div>
         </div>
       )}
-      <form onSubmit={save} className="grid gap-3 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-2">
+      {!canEdit && <p role="status" className="rounded-xl bg-white p-3 text-sm text-slate-600">Only the store owner or manager can edit and publish these settings.</p>}
+      <form onSubmit={save} className="rounded-2xl bg-white p-5 shadow-sm">
+        <fieldset disabled={saving || !canEdit} className="grid min-w-0 gap-3 md:grid-cols-2">
         <Field label="Boutique name" value={form.name} onChange={(value) => update('name', value)} />
         <Field label="URL slug" value={form.slug} onChange={(value) => update('slug', value)} />
         <Field label="Custom domain" value={form.customDomain} onChange={(value) => update('customDomain', value)} />
@@ -126,11 +145,12 @@ export default function Onboarding() {
         <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={!!form.shippingReady} onChange={(event) => update('shippingReady', event.target.checked)} /> Shipping ready</label>
         <AddressFields title="Pickup address" value={form.pickupAddress} onChange={(field, value) => updateAddress('pickupAddress', field, value)} />
         <AddressFields title="Return address" value={form.returnAddress} onChange={(field, value) => updateAddress('returnAddress', field, value)} />
-        {message && <p className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
+        {message && <p role="status" className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
         <div className="flex flex-wrap gap-3 md:col-span-2">
           <button type="submit" className="h-11 rounded-xl bg-wine px-5 text-sm font-black text-white">Save</button>
-          <button type="button" onClick={publish} className="h-11 rounded-xl border px-5 text-sm font-black">Publish storefront</button>
+          <button type="button" disabled={!hasStore} onClick={publish} className="h-11 rounded-xl border px-5 text-sm font-black disabled:opacity-50">Publish storefront</button>
         </div>
+        </fieldset>
       </form>
     </section>
   );

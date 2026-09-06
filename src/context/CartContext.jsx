@@ -1,344 +1,186 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import { normalizeProduct } from '../services/normalize';
 import { useAuth } from './AuthContext';
 import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 import { findProductVariant, hasManagedVariants, variantStock } from '../utils/variants';
 import { trackEvent } from '../utils/analytics';
+import { bagTotals, selectedBagItems } from '../utils/bag';
 
 export const CartContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_cart', null);
+const EMPTY_STORAGE_NAMES = [];
+const SYNC_KEY = 'samira_cart_sync';
 
-export function CartProvider({ children, storageName: storageNameProp, legacyStorageNames = [] }) {
+export function CartProvider({ children, storageName: storageNameProp, legacyStorageNames = EMPTY_STORAGE_NAMES }) {
   const { user } = useAuth();
-  const requestIdRef = useRef(0);
-  const [items, setItems] = useState([]);
-  const [coupon, setCoupon] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const [notice, setNotice] = useState('');
-
-  const isAuthenticated = Boolean(user);
-  const guestStorageName = storageNameProp && !isAuthenticated ? storageNameProp : GUEST_STORAGE.storageName;
-  const guestLegacyStorageNames = !isAuthenticated && legacyStorageNames.length ? legacyStorageNames : GUEST_STORAGE.legacyStorageNames;
-
-  useEffect(() => {
-    let alive = true;
-    const requestId = ++requestIdRef.current;
-
-    async function hydrate() {
-      setLoading(true);
-      setHydrated(false);
-      const guestCart = loadGuestCart(guestStorageName, guestLegacyStorageNames);
-      const legacyCart = storageNameProp && storageNameProp !== guestStorageName
-        ? loadGuestCart(storageNameProp, legacyStorageNames)
-        : { items: [], coupon: null };
-      const localItems = [...guestCart.items, ...legacyCart.items];
-
+  const account = String(user?._id || user?.id || user?.phone || 'guest');
+  const authenticated = account !== 'guest';
+  const owner = useRef(account); owner.current = account;
+  const alive = useRef(true), queue = useRef(Promise.resolve()), requests = useRef(new Map());
+  const refreshRequests = useRef(new Map());
+  const guestName = !authenticated && storageNameProp ? storageNameProp : GUEST_STORAGE.storageName;
+  const guestLegacy = !authenticated && legacyStorageNames.length ? legacyStorageNames : GUEST_STORAGE.legacyStorageNames;
+  const [items, setItems] = useState(() => authenticated ? [] : loadGuestCart(guestName, guestLegacy).items);
+  const itemsRef = useRef(items), couponRef = useRef(null);
+  const [coupon, setCouponState] = useState(null);
+  const [loading, setLoading] = useState(true), [hydrated, setHydrated] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const valid = useCallback(() => alive.current && owner.current === account, [account]);
+  const commit = useCallback(next => {
+    if (!valid()) return;
+    itemsRef.current = next; setItems(next);
+    if (!authenticated) persistGuestCart(guestName, guestLegacy, { items: next, coupon: couponRef.current, synced: !next.some(item => item.localOnly) });
+  }, [authenticated, guestLegacy, guestName, valid]);
+  const setCoupon = useCallback(value => {
+    couponRef.current = value; setCouponState(value);
+    if (!authenticated) persistGuestCart(guestName, guestLegacy, { items: itemsRef.current, coupon: value, synced: !itemsRef.current.some(item => item.localOnly) });
+  }, [authenticated, guestLegacy, guestName]);
+  const enqueue = useCallback(operation => {
+    const next = queue.current.catch(() => {}).then(() => valid() ? operation() : { ok: false, message: 'Your account changed. Please retry.' });
+    queue.current = next; return next;
+  }, [valid]);
+  const refresh = useCallback(() => {
+    if (refreshRequests.current.has(account)) return refreshRequests.current.get(account);
+    const request = enqueue(async () => {
+      setLoading(true); setError('');
       try {
-        let remoteCart = await api.get('/cart');
-        let remoteItems = normalizeCartResponse(remoteCart);
-
-        if (localItems.length) {
-          remoteItems = await mergeGuestCartIntoRemote(localItems, remoteItems);
-          clearGuestCart(guestStorageName, guestLegacyStorageNames);
-          if (storageNameProp && storageNameProp !== guestStorageName) {
-            clearGuestCart(storageNameProp, legacyStorageNames);
+        const cached = loadGuestCart(guestName, guestLegacy);
+        let remote = normalizeCartResponse(await api.get('/cart', { silent: true, cacheScope: account }));
+        if (!valid()) return { ok: false };
+        const failed = [];
+        // New server carts absorb the guest session automatically. Only unsynced
+        // legacy/offline lines need replay; synced caches must never resurrect removals.
+        if (!cached.synced) {
+          for (const line of cached.items) {
+            if (!valid()) return { ok: false };
+            if (remote.some(item => getItemKey(item) === getItemKey(line))) continue;
+            try { remote = normalizeCartResponse(await api.post('/cart', buildCartPayload(line.product, line.quantity, line.size, line.color, line.variantId))); }
+            catch { failed.push({ ...line, localOnly: true, issue: 'This saved item could not sync. Retry or remove it.' }); }
           }
         }
-
-        if (!alive || requestId !== requestIdRef.current) return;
-        setItems(remoteItems.length ? remoteItems : localItems);
-        setCoupon(remoteItems.length ? null : (guestCart.coupon || legacyCart.coupon || null));
-      } catch {
-        if (!alive || requestId !== requestIdRef.current) return;
-        setItems(localItems);
-        setCoupon(guestCart.coupon || legacyCart.coupon || null);
-      } finally {
-        if (alive && requestId === requestIdRef.current) {
-          setLoading(false);
-          setHydrated(true);
+        if (!valid()) return { ok: false };
+        if (authenticated) {
+          if (failed.length) persistGuestCart(guestName, guestLegacy, { items: failed, synced: false });
+          else clearGuestCart(guestName, guestLegacy);
         }
-      }
-    }
+        const next = authenticated ? remote : [...remote, ...failed];
+        commit(next);
+        if (failed.length) setError('Some saved items could not sync. Please retry.');
+        return { ok: !failed.length, items: next };
+      } catch (failure) {
+        if (valid()) setError(failure.message || 'Could not refresh your bag. Please retry.');
+        return { ok: false, message: failure.message };
+      } finally { if (valid()) { setLoading(false); setHydrated(true); } }
+    }).finally(() => { if (refreshRequests.current.get(account) === request) refreshRequests.current.delete(account); });
+    refreshRequests.current.set(account, request);
+    return request;
+  }, [account, authenticated, commit, enqueue, guestLegacy, guestName, valid]);
 
-    hydrate();
-    return () => {
-      alive = false;
+  useEffect(() => {
+    alive.current = true; setHydrated(false); setLoading(true);
+    const cached = loadGuestCart(guestName, guestLegacy);
+    itemsRef.current = authenticated ? [] : cached.items; setItems(itemsRef.current); setPendingCount(0);
+    couponRef.current = cached.coupon; setCouponState(cached.coupon);
+    refresh();
+    let lastFocus = Date.now();
+    const onFocus = () => { if (Date.now() - lastFocus > 30000) { lastFocus = Date.now(); refresh(); } };
+    const onStorage = event => {
+      if (event.key !== SYNC_KEY) return;
+      try { if (JSON.parse(event.newValue)?.account === account) refresh(); } catch { /* unrelated storage */ }
     };
-  }, [guestLegacyStorageNames, guestStorageName, isAuthenticated, legacyStorageNames, storageNameProp, user?._id, user?.phone]);
+    const onSessionRefreshed = event => {
+      const refreshedUser = event.detail;
+      if (String(refreshedUser?._id || refreshedUser?.id || refreshedUser?.phone || '') === account) refresh();
+    };
+    window.addEventListener('focus', onFocus); window.addEventListener('storage', onStorage);
+    window.addEventListener('samira:session-refreshed', onSessionRefreshed);
+    return () => { alive.current = false; window.removeEventListener('focus', onFocus); window.removeEventListener('storage', onStorage); window.removeEventListener('samira:session-refreshed', onSessionRefreshed); };
+  }, [account, authenticated, guestLegacy, guestName, refresh]);
+  useEffect(() => { if (hydrated && !items.length && coupon) setCoupon(null); }, [hydrated, items.length, coupon, setCoupon]);
+  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 4500); return () => clearTimeout(timer); }, [notice]);
 
-  useEffect(() => {
-    if (isAuthenticated) return;
-    persistGuestCart(guestStorageName, guestLegacyStorageNames, { items, coupon });
-  }, [coupon, guestLegacyStorageNames, guestStorageName, isAuthenticated, items]);
-
-  useEffect(() => {
-    if (!notice) return undefined;
-    const timer = window.setTimeout(() => setNotice(''), 2500);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-
-  useEffect(() => {
-    if (hydrated && !items.length && coupon) setCoupon(null);
-  }, [coupon, hydrated, items.length]);
-
-  const addToCart = (product, size = product.sizes?.[0] || 'M', color = product.colors?.[0] || 'Wine', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
-    const normalizedProduct = normalizeCartProduct(product);
-    const productId = getProductId(normalizedProduct);
-    const addQuantity = Math.max(1, Number(quantity || 1));
-    if (!productId) {
-      setNotice('Could not add this product to cart.');
-      return { ok: false, reason: 'invalid-product' };
-    }
-
-    const resolvedVariantId = variantId || findProductVariant(normalizedProduct, { size, color })?._id || '';
-    const cartKey = getCartKey(productId, size, color, resolvedVariantId);
-    const stock = getAvailableStock(normalizedProduct, { size, color, variantId: resolvedVariantId });
-    if (stock === 0) {
-      setNotice('This product is out of stock.');
-      return { ok: false, reason: 'out-of-stock' };
-    }
-
-    const existing = items.find((item) => getItemKey(item) === cartKey);
-    const nextQuantity = Number(existing?.quantity || 0) + addQuantity;
-    if (stock !== null && nextQuantity > stock) {
-      setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
-      return { ok: false, reason: 'stock-limit', quantity: existing?.quantity || 0 };
-    }
-
-    const previousItems = items;
-    const nextItems = existing
-      ? items.map((item) => (getItemKey(item) === cartKey ? { ...item, quantity: nextQuantity, product: { ...item.product, ...normalizedProduct }, cartKey } : item))
-      : [...items, { product: normalizedProduct, productId, size, color, variantId: resolvedVariantId, cartKey, quantity: addQuantity }];
-
-    setItems(nextItems);
-    trackEvent('ADD_TO_CART', { productId });
-
-    void (async () => {
+  const runMutation = (key, operation) => {
+    const requestKey = account + ':' + key;
+    if (requests.current.has(requestKey)) return requests.current.get(requestKey);
+    setPendingCount(value => value + 1);
+    const promise = enqueue(async () => {
       try {
-        const response = await api.post('/cart', buildCartPayload(normalizedProduct, addQuantity, size, color, resolvedVariantId));
-        setItems(normalizeCartResponse(response));
-      } catch (error) {
-        if (isAuthenticated) {
-          setItems(previousItems);
-          setNotice(error?.message || 'Unable to update cart.');
-        }
+        setError('');
+        const response = await operation();
+        if (!valid()) return { ok: false, message: 'Your account changed. Please check your bag.' };
+        const received = normalizeCartResponse(response);
+        const removed = new Set(response?.removedKeys || []);
+        const local = itemsRef.current.filter(item => item.localOnly && !removed.has(getItemKey(item)) && !received.some(row => getItemKey(row) === getItemKey(item)));
+        const next = [...received, ...local]; commit(next);
+        try { localStorage.setItem(SYNC_KEY, JSON.stringify({ account, at: Date.now(), nonce: Math.random() })); } catch { /* focus refresh remains available */ }
+        return { ok: true, items: next };
+      } catch (failure) {
+        const message = failure.message || 'Could not update your bag. Please retry.';
+        if (valid()) { setError(message); setNotice(message); }
+        return { ok: false, message };
       }
-    })();
-
-    return { ok: true, quantity: nextQuantity || addQuantity };
+    }).finally(() => { requests.current.delete(requestKey); if (valid()) setPendingCount(value => Math.max(0, value - 1)); });
+    requests.current.set(requestKey, promise); return promise;
   };
-
+  const addToCartConfirmed = (product, size = '', color = '', variantId = '', quantity = 1) =>
+    runMutation('add:' + getCartKey(getProductId(product), size, color, variantId), async () => {
+      const response = await api.post('/cart', buildCartPayload(product, quantity, size, color, variantId));
+      trackEvent('ADD_TO_CART', { productId: getProductId(product) }); return response;
+    });
+  // Preserve the storefront's synchronous result contract; actual state comes
+  // from the acknowledged server response for guests and accounts alike.
+  const addToCart = (product, size = product.sizes?.[0] || 'Free Size', color = product.colors?.[0] || '', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
+    const resolved = variantId || findProductVariant(product, { size, color })?._id || '';
+    const stock = getAvailableStock(product, { size, color, variantId: resolved });
+    if (stock === 0) { setNotice('This selection is out of stock.'); return { ok: false, reason: 'out-of-stock' }; }
+    if (!getProductId(product)) return { ok: false, reason: 'invalid-product' };
+    const existing = findCartItem(itemsRef.current, product, { size, color, variantId: resolved });
+    const total = Number(existing?.quantity || 0) + quantity;
+    if (total > 20 || (stock !== null && total > stock)) { setNotice('The available quantity has been reached.'); return { ok: false, reason: 'stock-limit' }; }
+    addToCartConfirmed(product, size, color, resolved, quantity);
+    return { ok: true, quantity: total };
+  };
+  const getCartItem = (productOrKey, options = {}) => findCartItem(itemsRef.current, productOrKey, options);
   const updateQuantity = (productOrKey, quantity, options = {}) => {
-    const key = resolveKey(productOrKey, options);
-    let nextQuantity = Number(quantity || 0);
-    const target = findCartItem(items, productOrKey, options);
-    if (!target) return;
-
-    const itemId = getBackendCartItemId(target);
-    const previousItems = items;
-    const nextItems = nextQuantity <= 0
-      ? items.filter((item) => !matchesItem(item, key, options))
-      : items.map((item) => {
-        if (!matchesItem(item, key, options)) return item;
-        const stock = getAvailableStock(item.product, { size: item.size, color: item.color, variantId: item.variantId });
-        if (stock !== null && nextQuantity > stock) {
-          setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
-          nextQuantity = stock;
-          return { ...item, quantity: stock };
-        }
-        return { ...item, quantity: nextQuantity };
-      });
-
-    setItems(nextItems);
-
-    void (async () => {
-      try {
-        let response;
-        if (nextQuantity <= 0) {
-          if (!itemId) return;
-          response = await api.delete(`/cart/${itemId}`);
-        } else {
-          if (!itemId) return;
-          response = await api.put(`/cart/${itemId}`, { quantity: nextQuantity });
-        }
-        setItems(normalizeCartResponse(response));
-      } catch (error) {
-        setItems(previousItems);
-        if (isAuthenticated) setNotice(error?.message || 'Unable to update cart.');
-      }
-    })();
+    const target = getCartItem(productOrKey, options);
+    if (!target) return Promise.resolve({ ok: false, message: 'Refresh your bag and try again.' });
+    if (quantity <= 0) return removeFromCart(productOrKey, options);
+    return runMutation('quantity:' + getItemKey(target), () => api.put('/cart/' + getBackendCartItemId(target), { quantity }));
   };
-
-  const increaseQuantity = (productOrKey, options = {}) => {
-    const item = findCartItem(items, productOrKey, options);
-    if (item) updateQuantity(getItemKey(item), Number(item.quantity || 0) + 1, { cartKey: getItemKey(item) });
+  const increaseQuantity = (productOrKey, options = {}) => { const item = getCartItem(productOrKey, options); return item && updateQuantity(productOrKey, item.quantity + 1, options); };
+  const decreaseQuantity = (productOrKey, options = {}) => { const item = getCartItem(productOrKey, options); return item && updateQuantity(productOrKey, item.quantity - 1, options); };
+  const removeItems = targets => {
+    const keys = new Set(targets.map(getItemKey));
+    return runMutation('remove:' + [...keys].join('|'), async () => {
+      const current = itemsRef.current.filter(item => keys.has(getItemKey(item)));
+      const remote = current.filter(item => !item.localOnly && getBackendCartItemId(item));
+      const response = remote.length ? await api.post('/cart/remove-items', { itemIds: remote.map(getBackendCartItemId) }) : { items: itemsRef.current };
+      const normalized = normalizeCartResponse(response).filter(item => !keys.has(getItemKey(item)));
+      return { items: normalized, removedKeys: [...keys] };
+    });
   };
-
-  const decreaseQuantity = (productOrKey, options = {}) => {
-    const item = findCartItem(items, productOrKey, options);
-    if (item) updateQuantity(getItemKey(item), Number(item.quantity || 0) - 1, { cartKey: getItemKey(item) });
-  };
-
-  const removeFromCart = (productOrKey, options = {}) => {
-    const key = resolveKey(productOrKey, options);
-    const target = findCartItem(items, productOrKey, options);
-    if (!target) return;
-    trackEvent('REMOVE_FROM_CART', { productId: getProductId(target.product) });
-
-    const itemId = getBackendCartItemId(target);
-    const previousItems = items;
-    setItems((current) => current.filter((item) => !matchesItem(item, key, options)));
-
-    if (!itemId) {
-      setNotice('Item removed from checkout.');
-      return;
-    }
-
-    void (async () => {
-      try {
-        const response = await api.delete(`/cart/${itemId}`);
-        setItems(normalizeCartResponse(response));
-      } catch (error) {
-        setItems(previousItems);
-        setNotice(error?.message || 'Unable to update cart.');
-      }
-    })();
-  };
-
+  const removeFromCart = (productOrKey, options = {}) => { const item = getCartItem(productOrKey, options); return item ? removeItems([item]) : Promise.resolve({ ok: true }); };
   const updateItemOptions = (productOrKey, options = {}) => {
-    const currentItem = findCartItem(items, productOrKey, options);
-    if (!currentItem) return;
-
-    const key = resolveKey(productOrKey, { cartKey: options.cartKey });
-    const nextSize = options.size ?? currentItem.size;
-    const nextColor = options.color ?? currentItem.color;
-    const nextVariantId = options.variantId ?? currentItem.variantId ?? '';
-    const nextProductId = currentItem.productId || getProductId(currentItem.product);
-    const nextKey = getCartKey(nextProductId, nextSize, nextColor, nextVariantId);
-    const existing = items.find((entry) => getItemKey(entry) === nextKey && getItemKey(entry) !== key);
-    const mergedQuantity = Number(existing?.quantity || 0) + Number(currentItem.quantity || 0);
-
-    if (!isAuthenticated) {
-      setItems((current) => {
-        const item = current.find((entry) => getItemKey(entry) === key);
-        if (!item) return current;
-
-        const duplicate = current.find((entry) => getItemKey(entry) === nextKey && getItemKey(entry) !== key);
-        if (duplicate) {
-          const stock = getAvailableStock(duplicate.product);
-          if (stock !== null && mergedQuantity > stock) {
-            setNotice(`Only ${stock} item${stock === 1 ? '' : 's'} available in stock.`);
-            return current;
-          }
-          return current
-            .filter((entry) => getItemKey(entry) !== key)
-            .map((entry) => (getItemKey(entry) === nextKey ? { ...entry, quantity: mergedQuantity } : entry));
-        }
-
-        return current.map((entry) => (getItemKey(entry) === key ? { ...entry, size: nextSize, color: nextColor, variantId: nextVariantId, cartKey: nextKey } : entry));
-      });
-      return;
-    }
-
-    const previousItems = items;
-    const nextItems = existing
-      ? items
-        .filter((entry) => getItemKey(entry) !== key)
-        .map((entry) => (getItemKey(entry) === nextKey ? { ...entry, quantity: mergedQuantity } : entry))
-      : items.map((entry) => (getItemKey(entry) === key ? { ...entry, size: nextSize, color: nextColor, variantId: nextVariantId, cartKey: nextKey } : entry));
-
-    setItems(nextItems);
-
-    void (async () => {
-      try {
-        if (existing) {
-          await api.delete(`/cart/${getBackendCartItemId(currentItem)}`);
-          const response = await api.post('/cart', buildCartPayload(currentItem.product, mergedQuantity, nextSize, nextColor, nextVariantId));
-          setItems(normalizeCartResponse(response));
-          return;
-        }
-
-        await api.delete(`/cart/${getBackendCartItemId(currentItem)}`);
-        const response = await api.post('/cart', buildCartPayload(currentItem.product, Number(currentItem.quantity || 1), nextSize, nextColor, nextVariantId));
-        setItems(normalizeCartResponse(response));
-      } catch (error) {
-        setItems(previousItems);
-        setNotice(error?.message || 'Unable to update cart.');
-      }
-    })();
+    const item = getCartItem(productOrKey, { cartKey: options.cartKey });
+    if (!item) return Promise.resolve({ ok: false });
+    const size = options.size ?? item.size, color = options.color ?? item.color;
+    const variantId = options.variantId ?? findProductVariant(item.product, { size, color })?._id ?? '';
+    return runMutation('options:' + getItemKey(item), () => api.put('/cart/' + getBackendCartItemId(item), { size, color, variantId, quantity: options.quantity ?? item.quantity }));
   };
-
-  const getCartItem = (productOrKey, options = {}) => findCartItem(items, productOrKey, options);
-
-  const clearCart = () => {
-    const previousItems = items;
-    const previousCoupon = coupon;
-    setItems([]);
-    setCoupon(null);
-
-    void (async () => {
-      try {
-        await api.delete('/cart');
-        clearGuestCart(guestStorageName, guestLegacyStorageNames);
-        if (storageNameProp && storageNameProp !== guestStorageName) {
-          clearGuestCart(storageNameProp, legacyStorageNames);
-        }
-      } catch (error) {
-        if (isAuthenticated) {
-          setItems(previousItems);
-          setCoupon(previousCoupon);
-          setNotice(error?.message || 'Unable to update cart.');
-        } else {
-          clearGuestCart(guestStorageName, guestLegacyStorageNames);
-        }
-      }
-    })();
-  };
-
-  const totalMRP = items.reduce((sum, item) => sum + Number(item.product.originalPrice || item.product.price || 0) * item.quantity, 0);
-  const sellingTotal = items.reduce((sum, item) => sum + Number(item.product.price || 0) * item.quantity, 0);
-  const discount = Math.max(0, totalMRP - sellingTotal);
-  const couponDiscount = coupon?.discount || 0;
-  const deliveryCharge = items.length && sellingTotal <= 999 ? 99 : 0;
-  const finalAmount = Math.max(0, sellingTotal - couponDiscount + deliveryCharge);
-  const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-
-  const value = {
-    items,
-    itemCount,
-    loading,
-    hydrated,
-    addToCart,
-    updateQuantity,
-    increaseQuantity,
-    decreaseQuantity,
-    removeFromCart,
-    updateItemOptions,
-    getCartItem,
-    clearCart,
-    coupon,
-    setCoupon,
-    totalMRP,
-    sellingTotal,
-    discount,
-    couponDiscount,
-    deliveryCharge,
-    finalAmount,
-    isSynced: isAuthenticated,
-  };
-
-  return (
-    <CartContext.Provider value={value}>
-      {children}
-      {notice && (
-        <button type="button" onClick={() => setNotice('')} className="fixed bottom-24 left-1/2 z-[90] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-xl bg-charcoal px-4 py-3 text-sm font-bold text-white shadow-2xl md:bottom-6">
-          {notice}
-        </button>
-      )}
-    </CartContext.Provider>
-  );
+  const selectItems = (targets, selected) => runMutation('selection:' + targets.map(getItemKey).join('|'), async () => {
+    const remote = targets.filter(item => !item.localOnly && getBackendCartItemId(item));
+    const response = remote.length ? await api.post('/cart/selection', { itemIds: remote.map(getBackendCartItemId), selected }) : { items: itemsRef.current.filter(item => !item.localOnly) };
+    const keys = new Set(targets.map(getItemKey));
+    return { items: [...normalizeCartResponse(response), ...itemsRef.current.filter(item => item.localOnly).map(item => keys.has(getItemKey(item)) ? { ...item, selected } : item)] };
+  });
+  const clearCart = () => runMutation('clear', async () => { const response = await api.delete('/cart'); setCoupon(null); return { ...response, removedKeys: itemsRef.current.map(getItemKey) }; });
+  const completeCheckout = async purchased => { const result = await removeItems(purchased); if (result.ok) setCoupon(null); return result; };
+  const totals = bagTotals(items, coupon);
+  const value = { items, ...totals, coupon, setCoupon, loading, hydrated, error, pendingCount, refresh,
+    selectedItems: selectedBagItems(items), addToCart, addToCartConfirmed, updateQuantity, increaseQuantity,
+    decreaseQuantity, removeFromCart, removeItems, updateItemOptions, selectItems, getCartItem, clearCart, completeCheckout, isSynced: !error };
+  return <CartContext.Provider value={value}>{children}{notice && <button type="button" role="status" onClick={() => setNotice('')} className="fixed bottom-24 left-1/2 z-[90] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-xl bg-charcoal px-4 py-3 text-sm font-bold text-white shadow-2xl md:bottom-6">{notice}</button>}</CartContext.Provider>;
 }
 
 export const useCart = () => useContext(CartContext);
@@ -350,15 +192,18 @@ function normalizeCartResponse(response) {
       ? response.items
       : Array.isArray(response?.data?.items)
         ? response.data.items
-        : [];
+        : null;
 
-  return sourceItems
-    .filter((item) => item?.product || item?.productId)
+  if (!sourceItems || response?.success === false || sourceItems.some(item => !item || !(item.product || item.productId))) {
+    throw new Error('Your bag could not be loaded. Please retry to retrieve your saved items.');
+  }
+
+  const normalized = sourceItems
     .map((item) => {
-      const product = normalizeCartProduct(item.product || item);
+      const product = normalizeCartLineProduct(item);
       const productId = item.productId || getProductId(product);
-      const size = item.size || product.sizes?.[0] || 'M';
-      const color = item.color || product.colors?.[0] || 'Wine';
+      const size = item.size ?? product.sizes?.[0] ?? 'Free Size';
+      const color = item.color ?? product.colors?.[0] ?? '';
       const variantId = item.variantId || product.variantId || product.selectedVariantId || '';
       return {
         ...item,
@@ -370,8 +215,9 @@ function normalizeCartResponse(response) {
         cartKey: item.cartKey || getCartKey(productId, size, color, variantId),
         quantity: Math.max(1, Number(item.quantity || 1)),
       };
-    })
-    .filter((item) => Boolean(item.productId));
+    });
+  if (normalized.some(item => !item.productId)) throw new Error('Your bag could not be loaded. Please retry to retrieve your saved items.');
+  return normalized;
 }
 
 function loadGuestCart(storageName, legacyStorageNames = []) {
@@ -379,6 +225,7 @@ function loadGuestCart(storageName, legacyStorageNames = []) {
   return {
     items: normalizeStoredItems(parsed.items || []),
     coupon: parsed.coupon || null,
+    synced: parsed.synced === true,
   };
 }
 
@@ -417,10 +264,10 @@ function normalizeStoredItems(storedItems) {
   return storedItems
     .filter((item) => item?.product)
     .map((item) => {
-      const product = normalizeCartProduct(item.product);
+      const product = normalizeCartLineProduct(item);
       const productId = item.productId || getProductId(product);
-      const size = item.size || product.sizes?.[0] || 'M';
-      const color = item.color || product.colors?.[0] || 'Wine';
+      const size = item.size ?? product.sizes?.[0] ?? 'Free Size';
+      const color = item.color ?? product.colors?.[0] ?? '';
       const variantId = item.variantId || product.variantId || product.selectedVariantId || '';
       return {
         ...item,
@@ -443,30 +290,12 @@ function normalizeCartProduct(product = {}) {
   });
 }
 
-async function mergeGuestCartIntoRemote(guestItems, remoteItems = []) {
-  // The backend automatically transfers the server-side guest cart when the
-  // first authenticated cart request includes the same session id. Only send
-  // locally cached lines that did not make it to that server cart; otherwise
-  // every OTP login would add the guest quantity a second time.
-  const remoteKeys = new Set(remoteItems.map(getItemKey));
-  for (const guestItem of guestItems) {
-    const productId = guestItem.productId || getProductId(guestItem.product);
-    if (!productId) continue;
-
-    const guestKey = getItemKey({ ...guestItem, productId });
-    if (remoteKeys.has(guestKey)) continue;
-
-    const payload = buildCartPayload(guestItem.product, Number(guestItem.quantity || 1), guestItem.size, guestItem.color, guestItem.variantId);
-    try {
-      await api.post('/cart', payload);
-      remoteKeys.add(guestKey);
-    } catch {
-      // Ignore guest items that can no longer be merged.
-    }
-  }
-
-  const refreshed = await api.get('/cart');
-  return normalizeCartResponse(refreshed);
+function normalizeCartLineProduct(item) {
+  const product = normalizeCartProduct(item.product || item);
+  const variant = findProductVariant(product, { variantId: item.variantId, size: item.size, color: item.color });
+  // Bag totals must use the selected SKU's server-confirmed price.
+  const price = Number(item.price ?? variant?.price ?? product.price);
+  return { ...product, price, originalPrice: Math.max(price, Number(item.originalPrice ?? variant?.originalPrice ?? product.originalPrice ?? price)) };
 }
 
 function buildCartPayload(product, quantity, size, color, variantId) {
@@ -512,7 +341,7 @@ function resolveKey(productOrKey, options = {}) {
     return productOrKey;
   }
   const productId = getProductId(productOrKey);
-  return getCartKey(productId, options.size || productOrKey?.sizes?.[0] || 'M', options.color || productOrKey?.colors?.[0] || 'Wine', options.variantId || productOrKey?.variantId || productOrKey?.selectedVariantId || '');
+  return getCartKey(productId, options.size ?? productOrKey?.sizes?.[0] ?? 'Free Size', options.color ?? productOrKey?.colors?.[0] ?? '', options.variantId || productOrKey?.variantId || productOrKey?.selectedVariantId || '');
 }
 
 function matchesItem(item, key, options = {}) {

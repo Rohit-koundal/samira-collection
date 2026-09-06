@@ -19,7 +19,7 @@ export function OrderShell({ title, detail = false, breadcrumb = 'Order details'
       <AccountSidebar user={user} logout={logout} navigate={navigate} activePath="/orders" />
       <div className="sc-orders__main">
         <header className="sc-orders__heading"><button className="sc-orders__back" aria-label={detail ? 'Back to orders' : 'Back to account'} onClick={() => navigate(detail ? '/orders' : '/profile')}><ArrowLeft size={21} /></button>
-          <div><p className="sc-orders__eyebrow">MY ACCOUNT</p><h1>{title}</h1></div>
+          <div><h1>{title}</h1></div>
           <button className="sc-orders__text" onClick={() => navigate('/returns')}>Returns & exchanges</button>
         </header>{children}
       </div>

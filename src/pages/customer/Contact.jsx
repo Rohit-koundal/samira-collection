@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clock3, Headphones, Mail, MapPin, MessageCircle, Send } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui';
 import PageState from '../../components/ui/PageState';
 import api from '../../services/api';
+import { normalizeIndianPhone } from '../../utils/phoneFormatter';
 
 const pageCopy = {
   '/return-policy': {
@@ -51,6 +52,9 @@ export default function Contact({ route = '/contact' }) {
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const submitLock = useRef(false);
   const [sent, setSent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
@@ -63,11 +67,14 @@ export default function Contact({ route = '/contact' }) {
   }, [route]);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true); setSettingsError('');
     api.get('/settings')
-      .then(setSettings)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .then(data => { if (active) setSettings(data || {}); })
+      .catch((err) => { if (active) setSettingsError(err.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [attempt]);
 
   const routePath = route.split('?')[0];
   const policy = pageCopy[routePath];
@@ -79,6 +86,8 @@ export default function Contact({ route = '/contact' }) {
       </section>
     );
   }
+
+  if (settingsError) return <section className="container-page py-6 md:py-10"><PageState error={settingsError} onRetry={() => setAttempt(value => value + 1)} /></section>;
 
   if (policy) {
     return (
@@ -98,6 +107,8 @@ export default function Contact({ route = '/contact' }) {
 
   const submit = async (event) => {
     event.preventDefault();
+    if (submitLock.current) return;
+    submitLock.current = true;
     setSent('');
     setError('');
     setSubmitting(true);
@@ -108,12 +119,13 @@ export default function Contact({ route = '/contact' }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   };
 
-  const email = settings.contactEmail || 'hello@samiracollection.com';
-  const phone = settings.whatsappNumber || settings.contactPhone || '+91 98765 43210';
+  const email = settings.contactEmail || '';
+  const phone = settings.whatsappNumber || settings.contactPhone || '';
 
   return (
     <section className="relative isolate overflow-hidden bg-[#fbf7f1] py-8 sm:py-12 lg:py-16">
@@ -136,19 +148,19 @@ export default function Contact({ route = '/contact' }) {
               </div>
 
               <div className="mt-7 space-y-3 sm:mt-9">
-                <ContactMethod
+                {email && <ContactMethod
                   icon={Mail}
                   label="Email us"
                   value={email}
                   href={`mailto:${email}`}
-                />
-                <ContactMethod
+                />}
+                {phone && <ContactMethod
                   icon={MessageCircle}
                   label="Chat on WhatsApp"
                   value={phone}
                   href={whatsAppHref(phone)}
                   external
-                />
+                />}
                 {settings.address ? (
                   <ContactMethod icon={MapPin} label="Our location" value={settings.address} />
                 ) : null}
@@ -198,8 +210,8 @@ export default function Contact({ route = '/contact' }) {
             <p className="mt-3 text-center text-[11px] leading-5 text-[#8b8082]">Your details are used only to respond to your enquiry.</p>
 
             <div aria-live="polite">
-              {sent ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-700">{sent}</p> : null}
-              {error ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">{error}</p> : null}
+              {sent ? <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-700">{sent}</p> : null}
+              {error ? <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">{error}</p> : null}
             </div>
           </form>
         </div>
@@ -253,6 +265,6 @@ function SupportNote({ icon: Icon, title, text }) {
 }
 
 function whatsAppHref(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  return digits ? `https://wa.me/${digits}` : undefined;
+  const digits = normalizeIndianPhone(value);
+  return digits ? `https://wa.me/91${digits}` : undefined;
 }

@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import Home from './Home';
 import { mergeWebsiteConfig } from '../../config/websiteCustomization';
 
 let mockWidth = 390;
 let mockConfig = mergeWebsiteConfig();
+let mockProduct;
 const mockDesktopModuleLoaded = jest.fn();
 jest.mock('@mantine/hooks', () => ({ useMediaQuery: (query) => mockWidth >= (query.includes('1024') ? 1024 : 768) }));
 jest.mock('../../context/WebsiteCustomizationContext', () => ({ useWebsiteCustomization: () => ({ config: mockConfig }) }));
@@ -15,13 +16,29 @@ jest.mock('./DesktopLuxuryHome', () => {
   return () => <div>Desktop home layout</div>;
 });
 jest.mock('../../store/apiSlice', () => ({
-  useGetProductsQuery: () => ({ data: [{ _id: '0123456789abcdef01234567', name: 'API product', price: 100, images: ['/uploads/item.png'], showOnHomepage: true, isFeatured: true, category: 'Kurtis' }] }),
+  useGetProductsQuery: () => ({ data: [mockProduct] }),
   useGetCategoriesQuery: () => ({ data: [] }),
   useGetBannersQuery: () => ({ data: [] }),
   useGetFeaturedReviewsQuery: () => ({ data: [] }),
 }));
 
-beforeEach(() => { mockWidth = 390; mockConfig = mergeWebsiteConfig(); });
+beforeEach(() => { mockWidth = 390; mockConfig = mergeWebsiteConfig(); mockProduct = { _id: '0123456789abcdef01234567', name: 'API product', price: 100, images: ['/uploads/item.png'], showOnHomepage: true, isFeatured: true, category: 'Kurtis' }; });
+
+test('mobile rails calculate discounts from actual prices and disable unavailable purchases', () => {
+  mockProduct = { ...mockProduct, price: 1599, originalPrice: 2399, discountPercentage: 0, stock: 0 };
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.getAllByText(/33% OFF/).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/0% OFF/)).not.toBeInTheDocument();
+  screen.getAllByRole('button', { name: /Out of stock/i }).forEach(button => expect(button).toBeDisabled());
+});
+
+test('the wishlist keyboard action does not also open the product card', () => {
+  const navigate = jest.fn();
+  const { container } = render(<Home navigate={navigate} />);
+  const button = container.querySelector('[data-mobile-product-card] button[aria-label="Add to wishlist"]');
+  fireEvent.keyDown(button, { key: 'Enter' });
+  expect(navigate).not.toHaveBeenCalled();
+});
 
 test('desktop edits do not change the current mobile composition while overrides are disabled', () => {
   mockConfig = mergeWebsiteConfig({ homepage: { sections: [{ id: 'hero', visible: false, heading: 'Desktop-only text' }] },

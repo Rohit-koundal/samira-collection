@@ -15,18 +15,23 @@ function withApiSuffix(url = '') {
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 }
 
-/**
- * Local `npm start` always talks to the machine's backend.
- * Render / live site uses REACT_APP_API_URL from `.env.production`.
- */
-export function getApiBaseUrl() {
-  const isBrowser = typeof window !== 'undefined';
-  const hostname = isBrowser ? window.location.hostname : '';
-
+export function resolveApiBaseUrl(hostname, configuredUrl = '') {
   if (isLocalHostname(hostname)) {
     const host = hostname === '::1' ? '127.0.0.1' : hostname;
+    try {
+      const configured = new URL(withApiSuffix(configuredUrl));
+      if (isLocalHostname(configured.hostname)) {
+        // Honour an explicitly configured local backend port. A phone opening
+        // the dev machine over LAN must not call the phone's own localhost.
+        if (['localhost', '127.0.0.1', '[::1]', '::1'].includes(configured.hostname)) configured.hostname = host;
+        return configured.toString().replace(/\/$/, '');
+      }
+    } catch { /* Missing/malformed local configuration uses the usual backend. */ }
     return `http://${host}:${LOCAL_API_PORT}/api`;
   }
+  return withApiSuffix(configuredUrl) || PRODUCTION_API_URL;
+}
 
-  return withApiSuffix(process.env.REACT_APP_API_URL) || PRODUCTION_API_URL;
+export function getApiBaseUrl() {
+  return resolveApiBaseUrl(typeof window !== 'undefined' ? window.location.hostname : '', process.env.REACT_APP_API_URL);
 }

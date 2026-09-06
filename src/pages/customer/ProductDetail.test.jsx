@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProductDetail from './ProductDetail';
 
 jest.mock('@reduxjs/toolkit/query', () => ({ skipToken: Symbol('skipToken') }));
@@ -38,8 +38,9 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
 
+const mockAddConfirmed = jest.fn();
 jest.mock('../../context/CartContext', () => ({
-  useCart: () => ({ getCartItem: () => null, addToCart: jest.fn() }),
+  useCart: () => ({ getCartItem: () => null, addToCart: jest.fn(), addToCartConfirmed: (...args) => mockAddConfirmed(...args) }),
 }));
 
 jest.mock('../../context/WishlistContext', () => ({
@@ -56,9 +57,11 @@ jest.mock('../../services/api', () => ({
 }));
 
 jest.mock('../../components/product/ProductCard', () => ({ ProductVisual: () => null }));
-jest.mock('../../components/product/ProductDetailPage', () => () => null);
+jest.mock('../../components/product/ProductDetailPage', () => ({ onBuyNow, onAddToCart, cartBusy }) => <div data-testid="desktop-purchase-actions"><button disabled={cartBusy} onClick={onBuyNow}>Desktop buy now</button><button disabled={cartBusy} onClick={onAddToCart}>Desktop add to bag</button></div>);
 jest.mock('../../components/seo/SeoHead', () => () => null);
 jest.mock('../../utils/analytics', () => ({ trackEvent: jest.fn() }));
+
+beforeEach(() => { mockAddConfirmed.mockReset(); });
 
 describe('mobile product details', () => {
   test('shows factual API information without adding generic product claims', async () => {
@@ -75,4 +78,47 @@ describe('mobile product details', () => {
     expect(screen.queryByText('Everyday festive')).not.toBeInTheDocument();
     expect(screen.queryByText('Designer')).not.toBeInTheDocument();
   });
+});
+
+describe.each(['mobile', 'desktop'])('%s purchase confirmation', (view) => {
+  function buyButton() {
+    return view === 'desktop'
+      ? within(screen.getByTestId('desktop-purchase-actions')).getByRole('button', { name: 'Desktop buy now' })
+      : screen.getAllByRole('button', { name: 'Buy Now', exact: true }).at(-1);
+  }
+  test('Buy now waits for the saved bag, prevents duplicate clicks and then opens checkout', async () => {
+    let resolveAdd;
+    mockAddConfirmed.mockReturnValue(new Promise((resolve) => { resolveAdd = resolve; }));
+    const navigate = jest.fn();
+    render(<ProductDetail navigate={navigate} route="/product?id=product-1" />);
+    const button = buyButton();
+    fireEvent.click(button); fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(mockAddConfirmed).toHaveBeenCalledTimes(1);
+    expect(mockAddConfirmed).toHaveBeenCalledWith(expect.objectContaining({ _id: 'product-1' }), expect.any(String), 'Navy', '', 1);
+    await act(async () => resolveAdd({ ok: true }));
+    expect(navigate).toHaveBeenCalledWith('/checkout');
+  });
+
+  test('a rejected bag update stays on the product and displays the server error', async () => {
+    mockAddConfirmed.mockResolvedValue({ ok: false, message: 'Only 1 item is available. Please update the quantity.' });
+    const navigate = jest.fn();
+    render(<ProductDetail navigate={navigate} route="/product?id=product-1" />);
+    fireEvent.click(buyButton());
+    expect((await screen.findAllByText('Only 1 item is available. Please update the quantity.')).length).toBeGreaterThan(0);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(buyButton()).toBeEnabled();
+  });
+});
+
+test('a pending Buy now cannot redirect after the customer leaves the product', async () => {
+  let resolveAdd;
+  mockAddConfirmed.mockReturnValue(new Promise((resolve) => { resolveAdd = resolve; }));
+  const navigate = jest.fn();
+  const { unmount } = render(<ProductDetail navigate={navigate} route="/product?id=product-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Desktop buy now' }));
+  unmount();
+  await act(async () => resolveAdd({ ok: true }));
+  expect(navigate).not.toHaveBeenCalled();
 });

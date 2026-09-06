@@ -5,21 +5,26 @@ import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../
 
 const recentStorageKey = 'samira_recent_searches';
 
-export default function MobileSearchOverlay({ initialValue = '', navigate, onClose }) {
+export default function MobileSearchOverlay({ initialValue = '', navigate, onClose, storeSlug = '' }) {
   const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState([]);
   const [recent, setRecent] = useState(readRecentSearches);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const inputRef = useRef(null);
   const requestSequence = useRef(0);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     inputRef.current?.focus();
-    return () => { document.body.style.overflow = previousOverflow; };
+    const escape = event => { if (event.key === 'Escape') closeRef.current?.(); };
+    window.addEventListener('keydown', escape);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', escape); requestSequence.current += 1; };
   }, []);
 
   useEffect(() => {
@@ -37,7 +42,7 @@ export default function MobileSearchOverlay({ initialValue = '', navigate, onClo
     setError('');
     const timer = window.setTimeout(async () => {
       try {
-        const response = await api.get(`/products?search=${encodeURIComponent(value)}&page=1&limit=8`);
+        const response = await api.get(`/products?search=${encodeURIComponent(value)}&page=1&limit=8${storeSlug ? `&store=${encodeURIComponent(storeSlug)}` : ''}`);
         if (sequence !== requestSequence.current) return;
         const items = Array.isArray(response) ? response : response?.products || response?.items || [];
         setResults(normalizeProducts(items));
@@ -53,7 +58,7 @@ export default function MobileSearchOverlay({ initialValue = '', navigate, onClo
     }, 280);
 
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, attempt, storeSlug]);
 
   const remember = (value) => {
     const next = [value, ...recent.filter((item) => item.toLowerCase() !== value.toLowerCase())].slice(0, 6);
@@ -122,7 +127,7 @@ export default function MobileSearchOverlay({ initialValue = '', navigate, onClo
         ) : loading ? (
           <div className="grid min-h-64 place-items-center"><span className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-wine" aria-label="Searching" /></div>
         ) : error ? (
-          <div className="grid min-h-64 place-items-center px-8 text-center"><div><h2 className="text-[14px] font-black text-charcoal">Search is unavailable</h2><p className="mt-2 text-[11px] leading-5 text-slate-500">{error}</p></div></div>
+          <div className="grid min-h-64 place-items-center px-8 text-center" role="alert"><div><h2 className="text-[14px] font-black text-charcoal">Search is unavailable</h2><p className="mt-2 text-[11px] leading-5 text-slate-500">{error}</p><button type="button" className="mt-3 rounded-xl border px-4 py-3 text-sm font-bold" onClick={() => setAttempt(value => value + 1)}>Try again</button></div></div>
         ) : results.length > 0 ? (
           <div className="p-3">
             <p className="px-1 pb-2 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Products</p>

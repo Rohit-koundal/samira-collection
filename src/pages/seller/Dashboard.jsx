@@ -1,24 +1,12 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import useSellerQuery from '../../hooks/useSellerQuery';
 import PageState from '../../components/ui/PageState';
 
 export default function SellerDashboard({ navigate }) {
-  const [stats, setStats] = useState(null);
-  const [onboarding, setOnboarding] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    Promise.all([
-      api.get('/seller/dashboard/stats'),
-      api.get('/stores/me/current'),
-    ]).then(([nextStats, mine]) => {
-      setStats(nextStats);
-      setOnboarding(mine);
-    }).catch((err) => setError(err.message));
-  }, []);
-
-  if (error) return <PageState error={error} />;
-  if (!stats) return <PageState loading loadingLabel="Loading boutique stats..." />;
+  const statsQuery = useSellerQuery('/seller/dashboard/stats');
+  const storeQuery = useSellerQuery('/stores/me/current');
+  if (statsQuery.error || storeQuery.error) return <PageState error={statsQuery.error || storeQuery.error} onRetry={() => { statsQuery.retry(); storeQuery.retry(); }} />;
+  if (statsQuery.loading || storeQuery.loading) return <PageState loading loadingLabel="Loading boutique stats..." />;
+  const stats = statsQuery.data, onboarding = storeQuery.data;
 
   return (
     <section className="space-y-5">

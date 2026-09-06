@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
   Banknote,
   CreditCard,
+  ChevronDown,
   Headphones,
   Landmark,
   LockKeyhole,
@@ -19,20 +20,23 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react';
-import PriceSummary from '../../components/cart/PriceSummary';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 import { trackEvent } from '../../utils/analytics';
+import { readAttribution } from '../../utils/attribution';
+import { clearPendingPayment, pendingPaymentKey, readPendingPayment, savePendingPayment } from '../../utils/pendingPayment';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import { couponApplyBody } from '../../utils/couponApply';
 import { shouldExitEmptyCheckout } from '../../utils/checkoutGuard';
+import { bagKey, checkoutCart } from '../../utils/bag';
 import CouponSelector from '../../components/coupon/CouponSelector';
 import './Checkout.css';
+import './CheckoutMobile.css';
+import '../../styles/MobileShoppingTheme.css';
 
 const PAYMENT_METHOD_NOTES = {
   UPI: 'Razorpay checkout — Google Pay, PhonePe, Paytm and other UPI apps',
@@ -89,10 +93,16 @@ const emptyAddress = {
 };
 
 export default function Checkout({ navigate }) {
-  const cart = useCart();
+  const fullCart = useCart();
+  const currentCart = useRef(fullCart);
+  currentCart.current = fullCart;
+  const cart = checkoutCart(fullCart);
   const { setToast, user } = useAuth();
+  const receiptStorageKey = pendingPaymentKey(user);
   const { isDesktop, notify } = useDesktopFeedback();
   const [addresses, setAddresses] = useState([]);
+  const [addressLoading, setAddressLoading] = useState(true);
+  const [addressError, setAddressError] = useState('');
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState('');
@@ -104,71 +114,98 @@ export default function Checkout({ navigate }) {
   const [couponFeedback, setCouponFeedback] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentOptions, setPaymentOptions] = useState([]);
+  const [paymentLoading, setPaymentLoading] = useState(true);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentAttempt, setPaymentAttempt] = useState(0);
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState('');
   const [error, setError] = useState('');
   const [placing, setPlacing] = useState(false);
+  const [pendingReceipt, setPendingReceipt] = useState(() => readPendingPayment(receiptStorageKey));
   const [savingAddress, setSavingAddress] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
   const [mobileStep, setMobileStep] = useState(2);
   const [showMobileAddressSelector, setShowMobileAddressSelector] = useState(false);
   const checkoutCompletedRef = useRef(false);
+  const orderLock = useRef(false);
+  const addressRequest = useRef(0);
   const emptyRedirectStartedRef = useRef(false);
   const cartHydrated = cart.hydrated;
   const cartItemCount = cart.items.length;
   const setCartCoupon = cart.setCoupon;
 
   useEffect(() => {
+    setPendingReceipt(readPendingPayment(receiptStorageKey));
+    const sync = event => { if (event.key === receiptStorageKey || event.key === null) setPendingReceipt(readPendingPayment(receiptStorageKey)); };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [receiptStorageKey]);
+
+  useEffect(() => {
     trackEvent('BEGIN_CHECKOUT');
   }, []);
   const showFeedback = (text, type = 'error') => {
     if (!text) return;
-    if (!notify(text, type, 'Checkout')) {
-      setError(text);
-    }
+    setError(text);
+    notify(text, type, 'Checkout');
   };
 
-  const loadAddresses = async (preferredAddressId) => {
+  const adoptAddresses = useCallback((nextAddresses, preferredAddressId) => {
+    if (!Array.isArray(nextAddresses)) throw new Error('Unable to load delivery addresses. Please try again.');
+    setAddresses(nextAddresses);
+    setSelectedAddressId(current => {
+      if (preferredAddressId && nextAddresses.some(item => item._id === preferredAddressId)) return preferredAddressId;
+      if (current && nextAddresses.some(item => item._id === current)) return current;
+      return (nextAddresses.find(item => item.isDefault) || nextAddresses[0])?._id || '';
+    });
+    setAddressError('');
+  }, []);
+
+  const loadAddresses = useCallback(async (preferredAddressId) => {
+    const request = ++addressRequest.current;
+    setAddressLoading(true);
+    setAddressError('');
     try {
       const items = await api.get('/user/addresses');
-      const nextAddresses = Array.isArray(items) ? items : [];
-      setAddresses(nextAddresses);
-      setSelectedAddressId((current) => {
-        const requestedAddressId = preferredAddressId && nextAddresses.some((item) => item._id === preferredAddressId)
-          ? preferredAddressId
-          : '';
-        if (requestedAddressId) return requestedAddressId;
-        if (current && nextAddresses.some((item) => item._id === current)) return current;
-        const selected = nextAddresses.find((item) => item.isDefault) || nextAddresses[0];
-        return selected?._id || '';
-      });
-      return nextAddresses;
-    } catch {
-      return [];
+      if (request !== addressRequest.current) return;
+      adoptAddresses(items, preferredAddressId);
+    } catch (err) {
+      if (request === addressRequest.current) setAddressError(err.message || 'Unable to load delivery addresses. Please try again.');
+    } finally {
+      if (request === addressRequest.current) setAddressLoading(false);
     }
-  };
+  }, [adoptAddresses]);
 
-  useEffect(() => { loadAddresses(); }, []);
+  useEffect(() => { loadAddresses(new URLSearchParams(window.location.search).get('addressId')); return () => { addressRequest.current += 1; }; }, [loadAddresses]);
 
   // Which payment methods exist is decided by the store settings, not the UI.
   useEffect(() => {
     let alive = true;
+    setPaymentLoading(true);
+    setPaymentError('');
     api.get('/settings/payment-methods')
       .then((data) => {
         if (!alive) return;
         const methods = Array.isArray(data?.methods) ? data.methods : [];
         setPaymentOptions(methods);
+        if (!methods.some(option => option.enabled)) setPaymentError('No payment methods are currently available. Please retry or contact the store.');
         setPaymentMethod((current) => {
           if (current && methods.some((option) => option.key === current && option.enabled)) return current;
           return methods.find((option) => option.enabled)?.key || '';
         });
       })
-      .catch(() => {
-        if (alive) setPaymentOptions([]);
-      });
+      .catch((err) => {
+        if (!alive) return;
+        setPaymentOptions([]);
+        setPaymentMethod('');
+        setPaymentError(err.message || 'Unable to load payment options. Please try again.');
+      })
+      .finally(() => { if (alive) setPaymentLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [paymentAttempt]);
 
+  const selectedAddress = addresses.find((item) => item._id === selectedAddressId);
   const cartSignature = cart.items
     .map((item) => `${item.product._id || item.product.id}:${item.quantity}:${item.size || ''}:${item.color || ''}:${item.variantId || ''}`)
     .join('|');
@@ -206,15 +243,18 @@ export default function Checkout({ navigate }) {
 
     let alive = true;
     setQuoteError('');
+    setQuote(null);
     api.post('/orders/quote', {
       orderItems: buildOrderItems(cart.items),
       coupon: cart.coupon,
       paymentMethod,
+      shippingAddress: selectedAddress,
     })
       .then((data) => {
         if (!alive) return;
-        setQuote(data?.totals || null);
-        setQuoteError(data?.totals ? '' : 'Unable to calculate order totals. Please refresh and try again.');
+        const valid = typeof data?.totals?.finalAmount === 'number' && Number.isFinite(data.totals.finalAmount) && data.totals.finalAmount >= 0;
+        setQuote(valid ? data.totals : null);
+        setQuoteError(valid ? '' : 'Unable to calculate order totals. Please retry.');
       })
       .catch((err) => {
         if (!alive) return;
@@ -229,10 +269,10 @@ export default function Checkout({ navigate }) {
       });
 
     return () => { alive = false; };
-  }, [cartSignature, paymentMethod, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cartSignature, paymentMethod, cart.coupon?.code, selectedAddressId, selectedAddress?.pincode, quoteAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px)');
     const onChange = (event) => setIsMobile(event.matches);
     media.addEventListener('change', onChange);
     setIsMobile(media.matches);
@@ -249,6 +289,7 @@ export default function Checkout({ navigate }) {
   }, [isMobile]);
 
   useEffect(() => {
+    if (cart.error || cart.loading || pendingReceipt) return;
     if (!shouldExitEmptyCheckout({
       hydrated: cartHydrated,
       itemCount: cartItemCount,
@@ -259,11 +300,11 @@ export default function Checkout({ navigate }) {
     setCartCoupon(null);
     setToast('Your bag is empty. Add an item before checkout.');
     navigate('/cart');
-  }, [cartHydrated, cartItemCount, navigate, setCartCoupon, setToast]);
+  }, [cartHydrated, cartItemCount, cart.error, cart.loading, pendingReceipt, navigate, setCartCoupon, setToast]);
 
-  const selectedAddress = addresses.find((item) => item._id === selectedAddressId);
   const deliveryWindow = useMemo(() => getDeliveryWindow(), []);
   const placeOrderLabel = getPlaceOrderLabel(paymentMethod, placing);
+  const quoteReady = Boolean(quote) && !paymentLoading && !paymentError && !addressLoading && !addressError && !cart.error && !cart.loading && !cart.pendingCount;
 
   // Backend quote wins; the cart figures are only a placeholder while it loads.
   const summary = useMemo(() => ({
@@ -271,6 +312,7 @@ export default function Checkout({ navigate }) {
     totalMRP: quote?.totalMRP ?? cart.totalMRP,
     discount: quote?.productDiscount ?? cart.discount,
     couponDiscount: quote?.couponDiscount ?? cart.couponDiscount,
+    prepaidDiscount: quote?.prepaidDiscount ?? 0,
     deliveryCharge: quote?.deliveryCharge ?? cart.deliveryCharge,
     codCharge: quote?.codCharge ?? 0,
     platformFee: quote?.platformFee ?? 0,
@@ -287,14 +329,22 @@ export default function Checkout({ navigate }) {
 
   const saveAddress = async (event) => {
     event.preventDefault();
+    if (savingAddress) return;
     setError('');
     setSavingAddress(true);
     try {
       const savedAddress = editingAddressId
         ? await api.put(`/user/addresses/${editingAddressId}`, addressForm)
         : await api.post('/user/addresses', addressForm);
+      if (Array.isArray(savedAddress)) {
+        const savedId = editingAddressId || savedAddress.find(item => !addresses.some(existing => existing._id === item._id))?._id;
+        addressRequest.current += 1;
+        adoptAddresses(savedAddress, savedId);
+        setAddressLoading(false);
+      } else {
+        await loadAddresses(savedAddress?._id || editingAddressId);
+      }
       resetAddressEditor();
-      await loadAddresses(savedAddress?._id || editingAddressId);
     } catch (err) {
       showFeedback(err.message, 'error');
     } finally {
@@ -340,28 +390,59 @@ export default function Checkout({ navigate }) {
     shippingAddress: selectedAddress,
     paymentMethod,
     coupon: cart.coupon ? { code: cart.coupon.code } : undefined,
-    attribution: JSON.parse(sessionStorage.getItem('samira_attribution') || '{}'),
+    attribution: readAttribution(),
   });
 
+  const verifyReceipt = async ({ response, purchased }) => {
+    const result = await api.post('/payments/verify', {
+      razorpay_order_id: response.razorpay_order_id,
+      razorpay_payment_id: response.razorpay_payment_id,
+      razorpay_signature: response.razorpay_signature,
+    });
+    if (!result?.order?._id) throw new Error('Order confirmation is not available yet.');
+    checkoutCompletedRef.current = true;
+    const unchanged = purchased.filter(item => {
+      const current = currentCart.current.items.find(line => bagKey(line) === bagKey(item));
+      return !current || current.quantity === item.quantity;
+    });
+    const cleanup = await currentCart.current.completeCheckout(unchanged).catch(() => ({ ok: false }));
+    clearPendingPayment(receiptStorageKey, response);
+    setToast(unchanged.length !== purchased.length ? 'Payment successful. Your bag changed during payment; please review the remaining quantities.' : cleanup.ok ? 'Payment successful' : 'Payment successful. Refresh your bag to check remaining items.');
+    navigate(`/order-success?id=${result.order._id}`);
+  };
+
+  const retryConfirmation = async () => {
+    if (orderLock.current || checkoutCompletedRef.current) return;
+    orderLock.current = true; setPlacing(true); setError('');
+    try { await verifyReceipt(pendingReceipt); }
+    catch { setError('We still could not confirm the order. Please check My orders or contact the store before paying again.'); }
+    finally { orderLock.current = false; setPlacing(false); }
+  };
+
   const placeOrder = async () => {
+    if (orderLock.current || checkoutCompletedRef.current) return;
+    const storedReceipt = readPendingPayment(receiptStorageKey);
+    if (storedReceipt) { setPendingReceipt(storedReceipt); return; }
     setError('');
     if (!user) return navigate('/login');
     if (!user.isPhoneVerified) return showFeedback('Please verify your mobile number to continue checkout.', 'warning');
     if (!cart.items.length) return showFeedback('Your cart is empty.', 'warning');
     if (!selectedAddress) return showFeedback('Please select or add a delivery address.', 'warning');
+    if (addressLoading || addressError) return showFeedback('Please reload your delivery addresses before placing an order.', 'warning');
     if (!paymentMethod) return showFeedback('Please choose a payment method.', 'warning');
-    if (!quote) return showFeedback(quoteError || 'Please wait while we calculate your order total.', 'warning');
+    if (!quoteReady) return showFeedback(quoteError || 'Please wait while we calculate your order total.', 'warning');
     setPlacing(true);
+    orderLock.current = true;
 
-    const payload = orderPayload();
     let pendingPayment = null;
 
     try {
+      const payload = orderPayload();
       if (paymentMethod === 'COD') {
         const order = await api.post('/orders/cod', payload);
         checkoutCompletedRef.current = true;
-        cart.clearCart();
-        setToast('COD order placed successfully');
+        const cleanup = await fullCart.completeCheckout(cart.items).catch(() => ({ ok: false }));
+        setToast(cleanup.ok ? 'COD order placed successfully' : 'Order placed successfully. Refresh your bag to check remaining items.');
         navigate(`/order-success?id=${order._id}`);
         return;
       }
@@ -384,29 +465,21 @@ export default function Checkout({ navigate }) {
         contact: selectedAddress?.mobile || user?.phone,
         preferredMethod: paymentMethod,
         onSuccess: async (response) => {
-          // The backend finalises the order it already stored; nothing about
-          // the items or amounts is resent from the browser.
-          const result = await api.post('/payments/verify', {
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          });
-          checkoutCompletedRef.current = true;
-          cart.clearCart();
-          setToast('Payment successful');
-          navigate(`/order-success?id=${result.order._id}`);
-        },
-        onDismiss: async () => {
-          setError('Payment cancelled. You can retry or choose Cash on Delivery.');
-          if (pendingPayment?.razorpayOrderId) {
-            await api.post('/payments/failure', {
-              reason: 'Payment cancelled by customer',
-              razorpayOrderId: pendingPayment.razorpayOrderId,
-            }).catch(() => null);
+          const receipt = { response, purchased: cart.items };
+          savePendingPayment(receiptStorageKey, receipt);
+          setPendingReceipt(receipt);
+          try { await verifyReceipt(receipt); }
+          catch (err) {
+            setPendingReceipt(receipt);
+            throw Object.assign(new Error('Payment confirmation is pending.'), { code: 'PAYMENT_CONFIRMATION_PENDING' });
           }
+        },
+        onDismiss: () => {
+          setError('Payment cancelled. You can retry or choose Cash on Delivery.');
         },
       });
     } catch (err) {
+      if (err.code === 'PAYMENT_CONFIRMATION_PENDING') return;
       if (paymentMethod !== 'COD') {
         const reason = err.message === 'Payment cancelled'
           ? 'Payment cancelled by customer'
@@ -432,6 +505,7 @@ export default function Checkout({ navigate }) {
             ? 'Online payment is not configured. Please use Cash on Delivery.'
             : err.message, 'error');
     } finally {
+      orderLock.current = false;
       setPlacing(false);
     }
   };
@@ -491,12 +565,23 @@ export default function Checkout({ navigate }) {
     setEditingAddressId('');
   };
 
-  if (!cartHydrated || !cartItemCount) return null;
+  const addressStatus = addressLoading || addressError ? <CheckoutLoadState label="delivery addresses" loading={addressLoading} error={addressError} onRetry={() => loadAddresses(selectedAddressId)} /> : null;
+  const paymentStatus = paymentLoading || paymentError ? <CheckoutLoadState label="payment options" loading={paymentLoading} error={paymentError} onRetry={() => setPaymentAttempt(value => value + 1)} /> : null;
+  const retryQuote = () => setQuoteAttempt(value => value + 1);
+
+  if (pendingReceipt) return <section className="sc-checkout-status sc-checkout-pending">
+    <ShieldCheck size={32} aria-hidden="true" /><h1>Payment confirmation pending</h1>
+    <p>The payment provider responded, but we could not confirm your order with the store. Retry confirmation or check My orders before making another payment.</p>
+    <div><button type="button" onClick={retryConfirmation} disabled={placing}>{placing ? 'Confirming...' : 'Retry confirmation'}</button><button type="button" onClick={() => navigate('/orders')} disabled={placing}>My orders</button><button type="button" onClick={() => navigate('/contact')} disabled={placing}>Contact support</button></div>
+    {error && <p role="alert">{error}</p>}
+  </section>;
+  if (!cartHydrated || cart.error) return <section className="sc-checkout-status"><CheckoutLoadState label="your bag" loading={!cart.error} error={cart.error} onRetry={cart.refresh} /></section>;
+  if (!cartItemCount) return null;
 
   if (isMobile) {
     return (
-      <section className="min-h-screen bg-[#f6f7fb] pb-28">
-        {mobileStep === 2 ? (
+      <section className="sc-mobile-checkout">
+        {addressStatus ? <><MobileStepHeader title="Delivery address" onBack={() => navigate('/cart')} /><div className="sc-mobile-checkout__content">{addressStatus}</div></> : mobileStep === 2 ? (
           showMobileAddressSelector ? (
             <MobileAddressSelector
               addresses={addresses}
@@ -535,10 +620,11 @@ export default function Checkout({ navigate }) {
           )
         ) : (
           <MobilePaymentStep
-            navigate={navigate}
+            selectedAddress={selectedAddress}
             cart={cart}
             summary={summary}
             paymentOptions={paymentOptions}
+            paymentStatus={paymentStatus}
             coupons={coupons}
             bestCouponCode={bestCouponCode}
             applyCoupon={applyCoupon}
@@ -552,7 +638,8 @@ export default function Checkout({ navigate }) {
             placeOrderLabel={placeOrderLabel}
             error={error}
             quoteError={quoteError}
-            quoteReady={Boolean(quote)}
+            quoteReady={quoteReady}
+            retryQuote={retryQuote}
             onBack={() => setMobileStep(2)}
           />
         )}
@@ -567,6 +654,8 @@ export default function Checkout({ navigate }) {
       cart={cart}
       summary={summary}
       paymentOptions={paymentOptions}
+      addressStatus={addressStatus}
+      paymentStatus={paymentStatus}
       addresses={addresses}
       selectedAddressId={selectedAddressId}
       setSelectedAddressId={setSelectedAddressId}
@@ -594,7 +683,8 @@ export default function Checkout({ navigate }) {
       placeOrderLabel={placeOrderLabel}
       error={isDesktop ? error : ''}
       quoteError={isDesktop ? quoteError : ''}
-      quoteReady={Boolean(quote)}
+      quoteReady={quoteReady}
+      retryQuote={retryQuote}
     />
   );
 }
@@ -605,6 +695,8 @@ function DesktopCheckout({
   cart,
   summary,
   paymentOptions,
+  addressStatus,
+  paymentStatus,
   addresses,
   selectedAddressId,
   setSelectedAddressId,
@@ -633,6 +725,7 @@ function DesktopCheckout({
   error,
   quoteError,
   quoteReady,
+  retryQuote,
 }) {
   const needsLogin = !user;
   const needsVerification = Boolean(user && !user.isPhoneVerified);
@@ -668,7 +761,7 @@ function DesktopCheckout({
                 </button>
               </SectionTitle>
 
-              {showAddressForm || !addresses.length ? (
+              {addressStatus || (showAddressForm || !addresses.length ? (
                 <div className="sc-checkout__address-form">
                   <AddressForm
                     form={addressForm}
@@ -685,7 +778,7 @@ function DesktopCheckout({
                 </div>
               ) : (
                 <div className="sc-checkout__address-grid">
-                  {addresses.slice(0, 4).map((address) => (
+                  {addresses.map((address) => (
                     <DesktopAddressCard
                       key={address._id}
                       address={address}
@@ -696,7 +789,7 @@ function DesktopCheckout({
                     />
                   ))}
                 </div>
-              )}
+              ))}
             </section>
 
             <section className="sc-checkout__card">
@@ -737,7 +830,7 @@ function DesktopCheckout({
             <section className="sc-checkout__card">
               <SectionTitle number="4" icon={CreditCard} title="Payment Method" />
               <div className="sc-checkout__payment">
-                {paymentOptions.length ? (
+                {paymentStatus || (paymentOptions.length ? (
                   <div className="sc-checkout__payment-tabs">
                     {paymentOptions.map((option) => {
                       const Icon = paymentIconFor(option.key);
@@ -760,7 +853,7 @@ function DesktopCheckout({
                   </div>
                 ) : (
                   <p className="sc-checkout__payment-copy">Loading payment options...</p>
-                )}
+                ))}
                 <div className="sc-checkout__payment-panel">
                   <p className="sc-checkout__payment-copy">{paymentCopyFor(paymentMethod)}</p>
                   {paymentMethod === 'UPI' ? (
@@ -790,7 +883,7 @@ function DesktopCheckout({
         </div>
 
         {error ? <p className="sc-checkout__error">{error}</p> : null}
-        {quoteError ? <p className="sc-checkout__error">{quoteError}</p> : null}
+        {quoteError ? <CheckoutLoadState label="order total" error={quoteError} onRetry={retryQuote} /> : null}
       </div>
     </section>
   );
@@ -859,7 +952,7 @@ function DesktopOrderItem({ item, onIncrease, onDecrease, onRemove }) {
       <div>
         <h3>{item.product.name}</h3>
         <p>Size: {item.size || '-'} <span>•</span> Qty: {item.quantity}</p>
-        <strong>₹{formatAmount(Number(item.product.price || 0) * Number(item.quantity || 1))}</strong>
+        <strong>₹{formatAmount(Number(item.price ?? item.product.price ?? 0) * Number(item.quantity || 1))}</strong>
         <div className="sc-checkout__item-actions">
           <div className="sc-checkout__qty-control" aria-label={`Quantity for ${item.product.name}`}>
             <button type="button" onClick={onDecrease} aria-label="Decrease quantity">
@@ -887,6 +980,7 @@ function DesktopPriceSummary({ summary, cta, placing, quoteReady, onAction }) {
       <SummaryRow label="Total MRP" value={`₹${formatAmount(summary.totalMRP)}`} />
       <SummaryRow label="Discount on MRP" value={`- ₹${formatAmount(summary.discount)}`} success />
       <SummaryRow label="Coupon Discount" value={`- ₹${formatAmount(summary.couponDiscount)}`} success />
+      {summary.prepaidDiscount > 0 && <SummaryRow label="Prepaid Discount" value={`- ₹${formatAmount(summary.prepaidDiscount)}`} success />}
       <SummaryRow label="Delivery Charges" value={summary.deliveryCharge ? `₹${formatAmount(summary.deliveryCharge)}` : 'FREE'} success={!summary.deliveryCharge} />
       {summary.platformFee > 0 ? <SummaryRow label="Platform Fee" value={`₹${formatAmount(summary.platformFee)}`} /> : null}
       {summary.taxAmount > 0 ? <SummaryRow label={`GST (${summary.taxRate || 5}% incl.)`} value={`₹${formatAmount(summary.taxAmount)}`} /> : null}
@@ -957,342 +1051,158 @@ function formatAmount(value) {
 }
 
 function MobileAddressSummary({ navigate, selectedAddress, cartItems, deliveryWindow, onChange, onContinue, error }) {
-  return (
-    <>
-      <MobileStepHeader title="Address" stepLabel="Step 2/3" onBack={() => navigate('/cart')} />
-      <div className="mx-auto w-full max-w-[470px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
-        <div className="border-t border-slate-200 bg-white px-5 py-6">
-          {selectedAddress ? (
-            <SelectedAddressCard address={selectedAddress} onChange={onChange} />
-          ) : (
-            <button
-              type="button"
-              onClick={onChange}
-              className="w-full rounded-[6px] border border-slate-300 px-4 py-4 text-center text-[14px] font-bold uppercase tracking-[0.02em] text-[#1f2a44]"
-            >
-              Select Address
-            </button>
-          )}
-        </div>
-
-        <div className="bg-[#f5f5f6] px-5 py-3">
-          <p className="text-[12px] font-bold uppercase tracking-[0.03em] text-[#4b5563]">Delivery Estimates</p>
-        </div>
-
-        <div className="bg-white">
-          {cartItems.map((item, index) => (
-            <DeliveryEstimateRow
-              key={item.cartKey || `${item.product._id || item.product.id}-${item.size || ''}-${item.color || ''}`}
-              item={item}
-              deliveryWindow={deliveryWindow}
-              bordered={index !== cartItems.length - 1}
-            />
-          ))}
-        </div>
-
-        {error && <p className="mx-5 mt-4 rounded-xl bg-rose/10 px-4 py-3 text-[13px] font-medium text-rose md:hidden">{error}</p>}
-      </div>
-
-      <MobileBottomAction label="Continue" onClick={onContinue} />
-    </>
-  );
+  return <>
+    <MobileStepHeader title="Delivery address" stepLabel="Step 2/3" onBack={() => navigate('/cart')} />
+    <MobileCheckoutSteps step={2} onBag={() => navigate('/cart')} />
+    <div className="sc-mobile-checkout__content">
+      <section className="sc-mobile-checkout__card">
+        <h2>Deliver to</h2>
+        {selectedAddress ? <SelectedAddressCard address={selectedAddress} onChange={onChange} /> :
+          <><p className="sc-mobile-checkout__muted">Add or choose an address for your order.</p><button type="button" className="sc-mobile-checkout__outline" onClick={onChange}><Plus size={17} />Select address</button></>}
+      </section>
+      <section className="sc-mobile-checkout__card">
+        <h2>Delivery estimates <span>{cartItems.length} item{cartItems.length === 1 ? '' : 's'}</span></h2>
+        {cartItems.map(item => <DeliveryEstimateRow key={item.cartKey || (item.product._id || item.product.id) + item.size + item.color} item={item} deliveryWindow={deliveryWindow} />)}
+      </section>
+      {error && <p role="alert" className="sc-mobile-checkout__error">{error}</p>}
+    </div>
+    <MobileBottomAction label={selectedAddress ? 'Continue to payment' : 'Select delivery address'} onClick={selectedAddress ? onContinue : onChange} />
+  </>;
 }
 
-function MobileAddressSelector({
-  addresses,
-  selectedAddressId,
-  setSelectedAddressId,
-  showAddressForm,
-  addressForm,
-  setAddressForm,
-  saveAddress,
-  openNewAddressForm,
-  openEditAddressForm,
-  removeAddress,
-  onBack,
-  onConfirm,
-  onCancelForm,
-  error,
-  editing,
-  savingAddress,
-}) {
-  return (
-    <>
-      {showAddressForm ? (
-        <div className="min-h-screen bg-[#f6f7fb]">
-          <div className="mx-auto w-full max-w-[470px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
-            <AddressForm
-              form={addressForm}
-              setForm={setAddressForm}
-              onSubmit={saveAddress}
-              message={error}
-              editing={editing}
-              onCancel={onCancelForm}
-              saving={savingAddress}
-            />
-          </div>
-        </div>
-      ) : (
-        <>
-          <MobileStepHeader title="Select Address" onBack={onBack} />
-          <div className="mx-auto w-full max-w-[470px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
-            <div className="border-t border-slate-200 bg-white px-4 py-4">
-              <button
-                type="button"
-                onClick={openNewAddressForm}
-                className="flex h-11 w-full items-center justify-center rounded-[4px] border border-[#8c94a6] text-[14px] font-bold uppercase tracking-[0.02em] text-[#1f2a44]"
-              >
-                Add New Address
-              </button>
-            </div>
-
-            <div className="bg-[#f5f5f6] px-5 py-3">
-              <p className="text-[12px] font-bold uppercase tracking-[0.03em] text-[#4b5563]">Default Address</p>
-            </div>
-
-            <div className="bg-white">
-              {addresses.length ? (
-                addresses.map((address) => (
-                  <SelectableAddressCard
-                    key={address._id}
-                    address={address}
-                    selected={selectedAddressId === address._id}
-                    onSelect={() => setSelectedAddressId(address._id)}
-                    onEdit={() => openEditAddressForm(address)}
-                    onRemove={() => removeAddress(address._id)}
-                  />
-                ))
-              ) : (
-                <p className="px-5 py-6 text-[13px] text-slate-500">No saved addresses yet.</p>
-              )}
-            </div>
-
-            {error && <p className="px-5 py-4 text-[13px] font-medium text-rose md:hidden">{error}</p>}
-          </div>
-
-          <MobileBottomAction label="Confirm" onClick={onConfirm} />
-        </>
-      )}
-    </>
-  );
+function MobileAddressSelector({ addresses, selectedAddressId, setSelectedAddressId, showAddressForm, addressForm, setAddressForm, saveAddress, openNewAddressForm, openEditAddressForm, removeAddress, onBack, onConfirm, onCancelForm, error, editing, savingAddress }) {
+  if (showAddressForm) return <div className="sc-mobile-checkout__form">
+    <AddressForm form={addressForm} setForm={setAddressForm} onSubmit={saveAddress} message={error} editing={editing} onCancel={onCancelForm} saving={savingAddress} />
+  </div>;
+  return <>
+    <MobileStepHeader title="Select address" onBack={onBack} />
+    <div className="sc-mobile-checkout__content">
+      <button type="button" className="sc-mobile-checkout__outline sc-mobile-checkout__add" onClick={openNewAddressForm}><Plus size={18} />Add new address</button>
+      <h2 className="sc-mobile-checkout__section-title">Saved addresses <span>{addresses.length}</span></h2>
+      {addresses.length ? addresses.map(address => <SelectableAddressCard key={address._id} address={address} selected={selectedAddressId === address._id} onSelect={() => setSelectedAddressId(address._id)} onEdit={() => openEditAddressForm(address)} onRemove={() => removeAddress(address._id)} />) :
+        <p className="sc-mobile-checkout__card sc-mobile-checkout__muted">No saved addresses yet. Add an address to continue.</p>}
+      {error && <p role="alert" className="sc-mobile-checkout__error">{error}</p>}
+    </div>
+    <MobileBottomAction label="Deliver to this address" onClick={onConfirm} disabled={!selectedAddressId} />
+  </>;
 }
 
-function MobilePaymentStep({
-  navigate,
-  cart,
-  summary,
-  paymentOptions,
-  coupons,
-  bestCouponCode,
-  applyCoupon,
-  removeCoupon,
-  couponBusyCode,
-  couponFeedback,
-  paymentMethod,
-  setPaymentMethod,
-  placeOrder,
-  placing,
-  placeOrderLabel,
-  error,
-  quoteError,
-  quoteReady,
-  onBack,
-}) {
-  return (
-    <>
-      <MobileStepHeader title="Payment" stepLabel="Step 3/3" onBack={onBack} />
-      <div className="mx-auto w-full max-w-[470px] space-y-4 bg-[#f6f7fb] px-0 pb-28">
-        <Card className="rounded-none border-x-0 border-t-0 shadow-none">
-          <CardHeader><CardTitle className="text-[16px]">Order Summary</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            {cart.items.map((item) => (
-              <div key={item.cartKey || `${item.product._id || item.product.id}-${item.size || ''}-${item.color || ''}`} className="flex justify-between gap-3 text-[14px]">
-                <span className="text-slate-600">{item.product.name} x {item.quantity}</span>
-                <span className="font-bold text-[#1f2a44]">Rs. {item.product.price * item.quantity}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-none border-x-0 shadow-none">
-          <CardContent className="pt-5">
-            <CouponSelector
-              coupons={coupons}
-              bestCouponCode={bestCouponCode}
-              appliedCoupon={cart.coupon}
-              busyCode={couponBusyCode}
-              feedback={couponFeedback}
-              onApply={applyCoupon}
-              onRemove={removeCoupon}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-none border-x-0 shadow-none">
-          <CardHeader><CardTitle className="text-[16px]">Payment Method</CardTitle></CardHeader>
-          <CardContent>
-            <div className="mt-4 grid gap-3">
-              {paymentOptions.length ? paymentOptions.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  disabled={!option.enabled}
-                  onClick={() => option.enabled && setPaymentMethod(option.key)}
-                  className={`rounded-2xl border p-4 text-left disabled:opacity-50 ${paymentMethod === option.key ? 'border-wine bg-blush' : 'border-slate-200 bg-white'}`}
-                >
-                  <p className="label-text">{option.label}</p>
-                  <p className="body-text mt-1 text-slate-500">{describePaymentOption(option)}</p>
-                </button>
-              )) : (
-                <p className="body-text text-slate-500">Loading payment options...</p>
-              )}
-            </div>
-            <OnlinePaymentNote paymentMethod={paymentMethod} />
-          </CardContent>
-        </Card>
-
-        <div className="px-4">
-          <PriceSummary cart={summary} cta={placeOrderLabel} onAction={placeOrder} />
+function MobilePaymentStep({ selectedAddress, cart, summary, paymentOptions, paymentStatus, coupons, bestCouponCode, applyCoupon, removeCoupon, couponBusyCode, couponFeedback, paymentMethod, setPaymentMethod, placeOrder, placing, placeOrderLabel, error, quoteError, quoteReady, retryQuote, onBack }) {
+  return <>
+    <MobileStepHeader title="Payment" stepLabel="Step 3/3" onBack={onBack} />
+    <MobileCheckoutSteps step={3} onAddress={onBack} />
+    <div className="sc-mobile-checkout__content">
+      <section className="sc-mobile-checkout__card sc-mobile-checkout__delivery-brief">
+        <h2><MapPin size={16} aria-hidden="true" />Deliver to</h2>
+        {selectedAddress && <SelectedAddressCard address={selectedAddress} onChange={onBack} />}
+      </section>
+      <details className="sc-mobile-checkout__card sc-mobile-checkout__order-review">
+        <summary><ShoppingBag size={18} aria-hidden="true" /><span>Review your order <small>{cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}</small></span><ChevronDown size={18} className="sc-mobile-checkout__review-chevron" aria-hidden="true" /></summary>
+        {cart.items.map(item => <div key={item.cartKey || (item.product._id || item.product.id) + item.size + item.color} className="sc-mobile-checkout__product">
+          <CheckoutProductImage item={item} />
+          <div><p>{item.product.name}</p><small>{[item.size, item.color, 'Qty: ' + item.quantity].filter(Boolean).join(' \u00b7 ')}</small></div>
+          <strong>{mobileMoney(Number(item.price ?? item.product.price) * item.quantity)}</strong>
+        </div>)}
+      </details>
+      <fieldset className="sc-mobile-checkout__coupon" disabled={placing} aria-label="Order coupons">
+        <CouponSelector coupons={coupons} bestCouponCode={bestCouponCode} appliedCoupon={cart.coupon} busyCode={couponBusyCode} feedback={couponFeedback} onApply={applyCoupon} onRemove={removeCoupon} />
+      </fieldset>
+      <section className="sc-mobile-checkout__card">
+        <h2>Choose payment method</h2>
+        <div className="sc-mobile-checkout__methods">
+          {paymentStatus || (paymentOptions.length ? paymentOptions.map(option => {
+            const Icon = paymentIconFor(option.key);
+            return <button key={option.key} type="button" disabled={!option.enabled || placing} aria-pressed={paymentMethod === option.key} onClick={() => option.enabled && setPaymentMethod(option.key)} className="sc-mobile-checkout__method">
+              <Icon size={21} aria-hidden="true" />
+              <span><strong>{option.label}</strong><small>{describePaymentOption(option)}</small></span>
+              <span className="sc-mobile-checkout__radio" aria-hidden="true" />
+            </button>;
+          }) : <p className="sc-mobile-checkout__muted" role="status">Loading payment options...</p>)}
         </div>
-
-        {error && <p className="mx-4 rounded-xl bg-rose/10 p-3 text-[13px] text-rose">{error}</p>}
-        {quoteError && <p className="mx-4 rounded-xl bg-rose/10 p-3 text-[13px] text-rose">{quoteError}</p>}
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[12px] uppercase tracking-[0.04em] text-slate-500">Total</p>
-            <p className="text-[18px] font-bold text-[#1f2a44]">Rs. {summary.finalAmount}</p>
-          </div>
-          <Button onClick={placeOrder} disabled={placing || !quoteReady} variant="accent" className="h-14 min-w-[180px] rounded-[4px] text-[14px] font-bold uppercase tracking-[0.05em]">
-            {placeOrderLabel}
-          </Button>
-        </div>
-      </div>
-    </>
-  );
+        {paymentMethod && <OnlinePaymentNote paymentMethod={paymentMethod} />}
+      </section>
+      <section className="sc-mobile-checkout__card sc-mobile-checkout__prices" aria-label="Price details" aria-busy={!quoteReady}>
+        <h2>Price details</h2>
+        <MobilePriceRow label="Total MRP" amount={summary.totalMRP} />
+        <MobilePriceRow label="Discount on MRP" amount={summary.discount} discount />
+        <MobilePriceRow label="Coupon discount" amount={summary.couponDiscount} discount />
+        {summary.prepaidDiscount > 0 && <MobilePriceRow label="Prepaid discount" amount={summary.prepaidDiscount} discount />}
+        <MobilePriceRow label="Delivery charge" amount={summary.deliveryCharge} free />
+        {summary.platformFee > 0 && <MobilePriceRow label="Platform fee" amount={summary.platformFee} />}
+        {summary.codCharge > 0 && <MobilePriceRow label="Cash on delivery fee" amount={summary.codCharge} />}
+        <div className="sc-mobile-checkout__total"><strong>Total amount</strong><strong>{quoteReady ? mobileMoney(summary.finalAmount) : 'Updating...'}</strong></div>
+        <p className="sc-mobile-checkout__muted">{summary.taxAmount > 0 ? 'Includes ' + mobileMoney(summary.taxAmount) + ' GST (' + (summary.taxRate || 5) + '%).' : 'Inclusive of applicable taxes.'}</p>
+      </section>
+      {error && <p role="alert" className="sc-mobile-checkout__error">{error}</p>}
+      {quoteError && <CheckoutLoadState label="order total" error={quoteError} onRetry={retryQuote} />}
+    </div>
+    <div className="sc-mobile-checkout__bottom"><div className="sc-mobile-checkout__bottom-inner">
+      <div><small>Total amount</small><strong>{quoteReady ? mobileMoney(summary.finalAmount) : 'Updating...'}</strong></div>
+      <button type="button" onClick={placeOrder} disabled={placing || !quoteReady || !paymentMethod || !selectedAddress} className="sc-mobile-checkout__primary"><LockKeyhole size={16} />{placeOrderLabel}</button>
+    </div></div>
+  </>;
 }
+
+function MobilePriceRow({ label, amount, discount, free }) {
+  return <div className="sc-mobile-checkout__price-row"><span>{label}</span><span className={discount || (free && !amount) ? 'is-saving' : ''}>{free && !amount ? 'FREE' : (discount && amount ? '- ' : '') + mobileMoney(amount)}</span></div>;
+}
+
+function CheckoutLoadState({ label, loading = false, error, onRetry }) {
+  return <div className="sc-checkout-load-state" role={error ? 'alert' : 'status'} aria-busy={loading}>
+    <p>{loading ? `Loading ${label}...` : error}</p>
+    {!loading && onRetry && <button type="button" onClick={onRetry}><RefreshCcw size={15} />Retry {label}</button>}
+  </div>;
+}
+const mobileMoney = value => '\u20b9' + Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
 function MobileStepHeader({ title, stepLabel, onBack }) {
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-16 w-full max-w-[470px] items-center justify-between px-4">
-        <div className="flex items-center gap-4">
-          <button type="button" onClick={onBack} className="text-slate-600" aria-label="Back">
-            <ArrowLeft className="h-7 w-7 stroke-[1.75]" />
-          </button>
-          <h1 className="text-[16px] font-semibold uppercase tracking-[0.02em] text-[#4b5563]">{title}</h1>
-        </div>
-        {stepLabel ? <span className="text-[12px] font-medium uppercase tracking-[0.06em] text-[#6b7280]">{stepLabel}</span> : null}
-      </div>
-    </header>
-  );
+  return <header className="sc-mobile-checkout__header"><div>
+    <button type="button" onClick={onBack} aria-label="Back"><ArrowLeft size={22} strokeWidth={1.7} /></button>
+    <h1>{title}</h1>{stepLabel && <span>{stepLabel}</span>}
+  </div></header>;
+}
+
+function MobileCheckoutSteps({ step, onBag, onAddress }) {
+  return <nav className="sc-mobile-checkout__steps" aria-label="Checkout progress">
+    <button type="button" disabled={!onBag} onClick={onBag}><b>1</b>Bag</button><i />
+    <button type="button" disabled={!onAddress} onClick={onAddress} aria-current={step === 2 ? 'step' : undefined}><b>2</b>Address</button><i />
+    <span aria-current={step === 3 ? 'step' : undefined}><b>3</b>Payment</span>
+  </nav>;
+}
+
+function AddressCopy({ address }) {
+  return <div className="sc-mobile-checkout__address-copy">
+    <div className="sc-mobile-checkout__address-name"><strong>{address.fullName}</strong><span>{address.addressType || 'Home'}</span>{address.isDefault && <small>Default</small>}</div>
+    <address>{buildAddressLines(address).map(line => <p key={line}>{line}</p>)}</address>
+    <p className="sc-mobile-checkout__phone">Mobile: <strong>{address.mobile || address.phone}</strong></p>
+  </div>;
 }
 
 function SelectedAddressCard({ address, onChange }) {
-  const label = (address.addressType || 'Home').toUpperCase();
-
-  return (
-    <div className="text-[#1f2a44]">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-bold">{address.fullName}</span>
-            {address.isDefault ? <span className="text-[14px] text-slate-400">(Default)</span> : null}
-            <Badge className="rounded-full border border-[#0cc3a1] bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-[#0ca78a]">
-              {label}
-            </Badge>
-          </div>
-          <div className="mt-2 space-y-0.5 text-[13px] leading-[1.35] text-[#24314d]">
-            {buildAddressLines(address).map((line) => <p key={line}>{line}</p>)}
-          </div>
-          <p className="mt-3 text-[13px] text-[#24314d]">Mobile: <span className="text-[15px] font-bold">{address.mobile || address.phone}</span></p>
-        </div>
-        <button type="button" onClick={onChange} className="pt-1 text-[14px] font-bold text-rose">
-          Change
-        </button>
-      </div>
-    </div>
-  );
+  return <div className="sc-mobile-checkout__address"><AddressCopy address={address} /><button type="button" className="sc-mobile-checkout__text" onClick={onChange}>Change</button></div>;
 }
 
 function SelectableAddressCard({ address, selected, onSelect, onEdit, onRemove }) {
-  const label = (address.addressType || 'Home').toUpperCase();
-
-  return (
-    <div className="px-5 py-5">
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={onSelect}
-          className={`mt-1 h-5 w-5 rounded-full border-2 ${selected ? 'border-rose' : 'border-slate-300'} flex items-center justify-center`}
-          aria-label={`Select ${address.fullName} address`}
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-rose' : 'bg-transparent'}`} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-bold text-[#1f2a44]">{address.fullName}</span>
-            <Badge className="rounded-full border border-[#0cc3a1] bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-[#0ca78a]">
-              {label}
-            </Badge>
-          </div>
-          <div className="mt-3 space-y-0.5 pl-0 text-[13px] leading-[1.35] text-[#24314d]">
-            {buildAddressLines(address).map((line) => <p key={line}>{line}</p>)}
-          </div>
-          <p className="mt-3 text-[13px] text-[#24314d]">Mobile: <span className="text-[15px] font-bold">{address.mobile || address.phone}</span></p>
-          <div className="mt-4 flex gap-4">
-            <button
-              type="button"
-              onClick={onRemove}
-              className="flex h-10 min-w-[104px] items-center justify-center rounded-[6px] border border-[#8c94a6] px-4 text-[14px] font-bold uppercase tracking-[0.02em] text-[#1f2a44]"
-            >
-              Remove
-            </button>
-            <button
-              type="button"
-              onClick={onEdit}
-              className="flex h-10 min-w-[72px] items-center justify-center rounded-[6px] border border-[#8c94a6] px-4 text-[14px] font-bold uppercase tracking-[0.02em] text-[#1f2a44]"
-            >
-              Edit
-            </button>
-          </div>
-        </div>
-      </div>
+  return <article className={'sc-mobile-checkout__card sc-mobile-checkout__saved' + (selected ? ' is-selected' : '')}>
+    <div className="sc-mobile-checkout__address">
+      <button type="button" className="sc-mobile-checkout__select" onClick={onSelect} aria-pressed={selected} aria-label={'Select ' + address.fullName + ' address'}><span className="sc-mobile-checkout__radio" aria-hidden="true" /></button>
+      <AddressCopy address={address} />
     </div>
-  );
+    <div className="sc-mobile-checkout__address-actions"><button type="button" onClick={onEdit}>Edit</button><button type="button" onClick={onRemove}>Remove</button></div>
+  </article>;
 }
 
-function DeliveryEstimateRow({ item, deliveryWindow, bordered }) {
+function CheckoutProductImage({ item }) {
   const image = getPrimaryImageUrl(item.product.images);
-
-  return (
-    <div className={`flex items-center gap-4 px-5 py-5 ${bordered ? 'border-b border-slate-100' : ''}`}>
-      <div className="h-16 w-12 shrink-0 overflow-hidden bg-[#f6efe8]">
-        {image ? (
-          <img src={normalizeImageUrl(image)} alt={item.product.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full bg-[#f3e5d7]" />
-        )}
-      </div>
-      <p className="text-[14px] leading-[1.4] text-[#1f2a44]">
-        Delivery between <span className="font-bold">{deliveryWindow}</span>
-      </p>
-    </div>
-  );
+  return <div className="sc-mobile-checkout__image">{image ? <img src={normalizeImageUrl(image)} alt={item.product.name} /> : <ShoppingBag size={22} aria-hidden="true" />}</div>;
 }
 
-function MobileBottomAction({ label, onClick }) {
-  return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
-      <div className="mx-auto w-full max-w-[470px]">
-        <Button onClick={onClick} variant="accent" className="h-14 w-full rounded-[4px] text-[14px] font-bold uppercase tracking-[0.05em]">
-          {label}
-        </Button>
-      </div>
-    </div>
-  );
+function DeliveryEstimateRow({ item, deliveryWindow }) {
+  return <div className="sc-mobile-checkout__product"><CheckoutProductImage item={item} /><div><p>{item.product.name}</p><small>{[item.size, item.color, 'Qty: ' + item.quantity].filter(Boolean).join(' \u00b7 ')}</small><p className="sc-mobile-checkout__estimate"><Truck size={14} />Estimated delivery: {deliveryWindow}</p></div></div>;
+}
+
+function MobileBottomAction({ label, onClick, disabled = false }) {
+  return <div className="sc-mobile-checkout__bottom"><div className="sc-mobile-checkout__bottom-inner"><button type="button" onClick={onClick} disabled={disabled} className="sc-mobile-checkout__primary sc-mobile-checkout__full">{label}</button></div></div>;
 }
 
 /**

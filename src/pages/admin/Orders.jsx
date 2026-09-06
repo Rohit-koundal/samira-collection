@@ -57,8 +57,10 @@ export default function Orders() {
   const deleteOrder = async () => {
     if (!deleteTarget) return;
     try {
-      await api.delete(`/admin/orders/${deleteTarget._id}`);
-      setOrders((current) => current.filter((order) => order._id !== deleteTarget._id));
+      const response = await api.delete(`/admin/orders/${deleteTarget._id}`);
+      setOrders((current) => current.map((order) => order._id === deleteTarget._id
+        ? { ...order, ...response.order, orderStatus: response.order?.orderStatus || 'Cancelled' } : order));
+      setMessage('');
       setDeleteTarget(null);
     } catch (error) {
       setMessage(error.message);
@@ -99,7 +101,7 @@ export default function Orders() {
                   {orderStatuses.map((item) => <option key={item}>{item}</option>)}
                 </select>
                 <a href={`/admin/orders/detail?id=${order._id}`} className="admin-table-action-link">View</a>
-                <button type="button" onClick={() => setDeleteTarget(order)} className="admin-table-action-link is-danger">Cancel</button>
+                {!['Delivered', 'Cancelled', 'Returned', 'Refunded'].includes(order.orderStatus) && <button type="button" onClick={() => setDeleteTarget(order)} className="admin-table-action-link is-danger">Cancel</button>}
               </div>
             </td>
           </tr>

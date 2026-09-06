@@ -14,7 +14,7 @@ export default function ProductGrid({ products, navigate, className = '', gridCl
   }
 
   return (
-    <div data-mobile-product-grid className={`grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 ${gridClassName}`}>
+    <div data-mobile-product-grid className={`grid grid-cols-2 gap-x-2.5 gap-y-[18px] md:grid-cols-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 ${gridClassName}`}>
       {products.map((product) => <ProductCard key={product.id} product={product} navigate={navigate} />)}
     </div>
   );

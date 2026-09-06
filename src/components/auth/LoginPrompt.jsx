@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button, Card, CardContent, Dialog, DialogContent } from '../ui';
 import { cn } from '../../lib/utils';
 import { clearOtpState } from '../../utils/loginOtpStorage';
+import { normalizeIndianPhone } from '../../utils/phoneFormatter';
 
 export { clearLoginPromptDismissed, markLoginPromptDismissed, isLoginPromptDismissed } from '../../utils/loginPromptStorage';
 
@@ -75,8 +76,7 @@ function normalizePhone(value, countryCode) {
   const digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
   if (countryCode === '+91') {
-    const local = digits.replace(/^91/, '').slice(0, 10);
-    return /^[6-9]\d{9}$/.test(local) ? local : '';
+    return normalizeIndianPhone(value);
   }
   return digits.length >= 6 ? `${countryCode}${digits}` : '';
 }

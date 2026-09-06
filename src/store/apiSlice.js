@@ -8,7 +8,7 @@ import { isWebsitePreview } from '../config/websiteDesigner';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
-  prepareHeaders: (headers, { getState }) => {
+  prepareHeaders: (headers, { getState, arg }) => {
     if (isWebsitePreview()) return headers;
     const token = getState().auth.token || localStorage.getItem('samira_token');
     if (token) headers.set('authorization', `Bearer ${token}`);
@@ -19,8 +19,12 @@ const rawBaseQuery = fetchBaseQuery({
       // ignore
     }
     try {
-      const storeSlug = sessionStorage.getItem('samira_store_slug');
+      const queryScope = new URLSearchParams(String(typeof arg === 'string' ? arg : arg?.url || '').split('?')[1] || '');
+      const hasParamScope = arg?.params && Object.prototype.hasOwnProperty.call(arg.params, 'store');
+      const hasStoreScope = hasParamScope || queryScope.has('store');
+      const storeSlug = hasParamScope ? arg.params.store : queryScope.has('store') ? queryScope.get('store') : sessionStorage.getItem('samira_store_slug');
       if (storeSlug) headers.set('x-store-slug', storeSlug);
+      else if (hasStoreScope) headers.delete('x-store-slug');
     } catch {
       // ignore
     }
@@ -37,6 +41,23 @@ function isCredentialAuthRequest(args) {
   return /\/(?:auth\/(?:register|send-otp|resend-otp|verify-otp|refresh)|admin\/login)\b/.test(requestUrl(args));
 }
 
+// Every protected request can expire together when a saved tab is reopened.
+// Share refresh work for that session so a slower failure cannot erase a login
+// that another request has already restored.
+const sessionRefreshes = new WeakMap();
+
+function sessionCredentials(api) {
+  return {
+    userId: String(api.getState().auth.user?._id || api.getState().auth.user?.id || ''),
+    token: api.getState().auth.token || localStorage.getItem('samira_token') || '',
+    refreshToken: api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token') || '',
+  };
+}
+
+function sameSession(left, right) {
+  return left.userId === right.userId && left.token === right.token && left.refreshToken === right.refreshToken;
+}
+
 async function baseQueryWithRefresh(args, api, extraOptions) {
   const silent = typeof args === 'object' && args.silent;
   if (typeof args === 'object') { const { silent: _silent, ...requestArgs } = args; args = requestArgs; }
@@ -47,26 +68,56 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
   }
   if (!silent) startMobileLoader();
   try {
+    const requestedSession = sessionCredentials(api);
     let result = await rawBaseQuery(args, api, extraOptions);
 
     if (result.error?.status === 401 && !isCredentialAuthRequest(args)) {
-      const refreshToken = api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token');
-      if (refreshToken) {
-        const refreshResult = await rawBaseQuery({
-          url: '/auth/refresh',
-          method: 'POST',
-          body: { refreshToken },
-        }, api, extraOptions);
-
-        if (refreshResult.data?.token && refreshResult.data?.user) {
-          api.dispatch(setCredentials(refreshResult.data));
-          window.dispatchEvent(new CustomEvent('samira:session-refreshed', { detail: refreshResult.data.user }));
-          result = await rawBaseQuery(args, api, extraOptions);
-        } else {
-          api.dispatch(logout());
-          window.dispatchEvent(new Event('samira:session-expired'));
+      const currentSession = sessionCredentials(api);
+      if (!sameSession(requestedSession, currentSession)) {
+        // A concurrent refresh, mode switch or sign-in already replaced the
+        // token. Never use this old response to invalidate the new session.
+        return currentSession.token && currentSession.userId === requestedSession.userId
+          ? rawBaseQuery(args, api, extraOptions)
+          : { error: { status: 409, data: { message: 'Your session changed. Please try again.' } } };
+      }
+      if (currentSession.refreshToken) {
+        let pending = sessionRefreshes.get(api.dispatch);
+        if (!pending || !sameSession(pending.session, currentSession)) {
+          pending = { session: currentSession };
+          pending.promise = (async () => {
+            const refreshed = await rawBaseQuery({
+              url: '/auth/refresh',
+              method: 'POST',
+              body: { refreshToken: currentSession.refreshToken },
+            }, api, extraOptions);
+            if (!sameSession(currentSession, sessionCredentials(api))) return { stale: true };
+            if (refreshed.data?.token && refreshed.data?.user) {
+              api.dispatch(setCredentials(refreshed.data));
+              window.dispatchEvent(new CustomEvent('samira:session-refreshed', { detail: refreshed.data.user }));
+            } else if ([401, 403].includes(refreshed.error?.status)) {
+              api.dispatch(logout());
+              window.dispatchEvent(new Event('samira:session-expired'));
+            }
+            return refreshed;
+          })();
+          sessionRefreshes.set(api.dispatch, pending);
         }
-      } else {
+        const refreshResult = await pending.promise;
+        if (sessionRefreshes.get(api.dispatch) === pending) sessionRefreshes.delete(api.dispatch);
+        if (refreshResult.data?.token && refreshResult.data?.user) {
+          if (sessionCredentials(api).token === refreshResult.data.token) result = await rawBaseQuery(args, api, extraOptions);
+          else result = { error: { status: 409, data: { message: 'Your session changed. Please try again.' } } };
+        } else if (refreshResult.error) {
+          // A network outage or unavailable database is recoverable. Return
+          // that error instead of the initial 401 so profile loading can retry
+          // without deleting the saved account and shopping data.
+          result = refreshResult;
+        } else if (!refreshResult.stale) {
+          result = { error: { status: 503, data: { message: 'Unable to restore your session. Please try again.' } } };
+        } else {
+          result = { error: { status: 409, data: { message: 'Your session changed. Please try again.' } } };
+        }
+      } else if (requestedSession.token) {
         api.dispatch(logout());
         window.dispatchEvent(new Event('samira:session-expired'));
       }
@@ -110,9 +161,9 @@ export const samiraApi = createApi({
     getCurrentUser: builder.query({ query: () => '/auth/me', providesTags: ['Auth'] }),
     switchMode: builder.mutation({ query: (body) => ({ url: '/auth/switch-mode', method: 'POST', body }), invalidatesTags: ['Auth', 'AdminDashboard'] }),
     getProducts: builder.query({ query: (query) => ({ url: '/products', ...params(query) }), providesTags: ['Products'] }),
-    getProduct: builder.query({ query: (id) => `/products/${id}`, providesTags: ['Products'] }),
-    getCategories: builder.query({ query: () => '/categories', providesTags: ['Categories'] }),
-    getBanners: builder.query({ query: () => '/banners', providesTags: ['Banners'] }),
+    getProduct: builder.query({ query: (value) => typeof value === 'object' ? { url: `/products/${encodeURIComponent(value.id)}`, params: { store: value.store || '' } } : `/products/${encodeURIComponent(value)}`, providesTags: ['Products'] }),
+    getCategories: builder.query({ query: (query) => ({ url: '/categories', ...params(query) }), providesTags: ['Categories'] }),
+    getBanners: builder.query({ query: (query) => ({ url: '/banners', ...params(query) }), providesTags: ['Banners'] }),
     getSettings: builder.query({ query: () => '/settings', providesTags: ['Settings'] }),
     getCart: builder.query({ query: () => '/cart', providesTags: ['Cart'] }),
     getWishlist: builder.query({ query: () => '/wishlist', providesTags: ['Wishlist'] }),
@@ -120,7 +171,7 @@ export const samiraApi = createApi({
     getCoupons: builder.query({ query: () => '/coupons', providesTags: ['Coupons'] }),
     getOrders: builder.query({ query: () => '/orders/my-orders', providesTags: ['Orders'] }),
     getReviews: builder.query({ query: (productId) => `/reviews/${productId}`, providesTags: ['Reviews'] }),
-    getFeaturedReviews: builder.query({ query: () => '/reviews/featured', providesTags: ['Reviews'] }),
+    getFeaturedReviews: builder.query({ query: (query) => ({ url: '/reviews/featured', ...params(query) }), providesTags: ['Reviews'] }),
     getAdminStats: builder.query({ query: () => '/admin/dashboard/stats', providesTags: ['AdminDashboard'] }),
     getAdminProducts: builder.query({ query: () => '/admin/products', providesTags: ['AdminProducts'] }),
     getAdminCategories: builder.query({ query: () => '/admin/categories', providesTags: ['AdminCategories'] }),

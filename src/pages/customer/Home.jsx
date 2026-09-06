@@ -9,6 +9,7 @@ import { getPrimaryImageUrl, normalizeImageUrl, normalizeProducts } from '../../
 import { useGetBannersQuery, useGetCategoriesQuery, useGetFeaturedReviewsQuery, useGetProductsQuery } from '../../store/apiSlice';
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 import { getHomepageSection } from '../../config/websiteCustomization';
+import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 
 const DesktopLuxuryHome = lazy(() => import('./DesktopLuxuryHome'));
 const emptyList = [];
@@ -19,17 +20,17 @@ const serviceHighlights = [
   { icon: ShieldCheck, title: 'Secure Payment', subtitle: '100% safe' },
 ];
 
-export default function Home({ navigate }) {
+export default function Home({ navigate, storeSlug = '' }) {
   const isDesktop = useMediaQuery('(min-width: 1024px)', false, { getInitialValueInEffect: false });
   const isTablet = useMediaQuery('(min-width: 768px)', false, { getInitialValueInEffect: false });
   const { config: websiteConfig } = useWebsiteCustomization();
   const mobileCustom = websiteConfig.mobile.enabled && !isTablet;
   const mobileSection = (id) => mobileCustom ? websiteConfig.mobile.sections.find((section) => section.id === id) : null;
-  const { data: productData = emptyList, isLoading, isError, refetch } = useGetProductsQuery();
-  const { data: categories = emptyList } = useGetCategoriesQuery();
-  const { data: banners = emptyList } = useGetBannersQuery();
+  const { data: productData = emptyList, isLoading, isError, refetch } = useGetProductsQuery({ store: storeSlug });
+  const { data: categories = emptyList } = useGetCategoriesQuery({ store: storeSlug });
+  const { data: banners = emptyList } = useGetBannersQuery({ store: storeSlug });
   const reviewsSection = getHomepageSection(websiteConfig, 'reviews');
-  const { data: customerReviews = emptyList } = useGetFeaturedReviewsQuery(undefined, { skip: !isDesktop || !reviewsSection.visible });
+  const { data: customerReviews = emptyList } = useGetFeaturedReviewsQuery({ store: storeSlug }, { skip: !isDesktop || !reviewsSection.visible });
   const catalog = useMemo(() => normalizeProducts(productData || emptyList), [productData]);
   const heroBanners = banners.filter((banner) => banner.type === 'Hero');
   const promoBanner = banners.find((banner) => ['Offer', 'Category', 'Sale', 'Hero'].includes(banner.type));
@@ -347,6 +348,7 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
   const isWishlisted = wishlist.items.some((item) => (item._id || item.id || item.slug) === productId);
   const image = getPrimaryImageUrl(product.images);
   const cartItem = cart.getCartItem(product);
+  const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
 
   const badge = product.isBestSeller
     ? { label: 'BESTSELLER', className: 'bg-[#f59e0b] text-white' }
@@ -363,6 +365,7 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
         tabIndex={0}
         onClick={() => navigate(`/product?id=${productId}`)}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             navigate(`/product?id=${productId}`);
@@ -387,6 +390,7 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
           )}
           <button
             type="button"
+            disabled={wishlist.loading}
             onClick={(event) => {
               event.stopPropagation();
               wishlist.toggleWishlist(product);
@@ -407,15 +411,17 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
           <div className="min-w-0">
             <div className="flex items-center gap-1">
               <span className="text-[13px] font-bold text-charcoal">Rs. {product.price}</span>
-              <span className="truncate text-[9px] text-slate-400 line-through">Rs. {product.originalPrice}</span>
+              {product.originalPrice > product.price && <span className="truncate text-[9px] text-slate-400 line-through">Rs. {product.originalPrice}</span>}
             </div>
-            <p className="mt-0.5 text-[9px] font-bold text-rose">({product.discountPercentage}% OFF)</p>
+            {product.discountPercentage > 0 && <p className="mt-0.5 text-[9px] font-bold text-rose">({product.discountPercentage}% OFF)</p>}
+            {unavailable && <p className="mt-0.5 text-[9px] font-bold text-slate-500">Out of stock</p>}
           </div>
           <button
             type="button"
             onClick={() => cart.addToCart(product)}
-            className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#e7e5e4] ${cartItem ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-600'}`}
-            aria-label={cartItem ? 'Add more to cart' : 'Add to cart'}
+            disabled={unavailable || cart.loading}
+            className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#e7e5e4] disabled:opacity-40 ${cartItem ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-600'}`}
+            aria-label={unavailable ? 'Out of stock' : cartItem ? 'Add more to cart' : 'Add to cart'}
           >
             <Icon name="bag" className="h-3.5 w-3.5" />
           </button>

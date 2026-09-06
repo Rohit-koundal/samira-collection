@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import DashboardCard from '../../components/admin/DashboardCard';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
@@ -19,20 +19,23 @@ export default function Reports() {
   const [products, setProducts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const loadVersion = useRef(0);
 
   const load = useCallback(() => {
+    const version = ++loadVersion.current;
     setLoading(true);
     Promise.all([
       api.get(`/admin/reports/sales?range=${range}`),
       api.get(`/admin/reports/products?range=${range}`),
     ]).then(([salesData, productData]) => {
+      if (version !== loadVersion.current) return;
       setSales(salesData);
       setProducts(productData);
       setMessage('');
-    }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
+    }).catch((error) => { if (version === loadVersion.current) setMessage(error.message); }).finally(() => { if (version === loadVersion.current) setLoading(false); });
   }, [range]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { loadVersion.current += 1; }; }, [load]);
 
   const series = sales?.series || [];
   const statusPoints = sales?.statusBreakdown || [];
@@ -49,8 +52,7 @@ export default function Reports() {
           </button>
         ))}
       </div>
-      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
-      {loading ? <PageState loading loadingLabel="Loading reports..." /> : (
+      {loading ? <PageState loading loadingLabel="Loading reports..." /> : message ? <PageState error={message} onRetry={load} /> : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DashboardCard title="Paid revenue" value={`Rs. ${sales?.totals?.revenue || 0}`} note="In this range" />

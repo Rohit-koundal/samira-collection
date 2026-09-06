@@ -1,15 +1,17 @@
 import { useAuth } from '../../context/AuthContext';
 import SellerLayout from '../seller/SellerLayout';
+import { currentPath } from '../../utils/routing';
 
 export default function SellerRoute({ children }) {
   const { user, switchMode } = useAuth();
+  const destination = currentPath().startsWith('/seller') ? currentPath() : '/seller';
   if (!user) {
     return (
       <section className="grid min-h-screen place-items-center bg-[#f7f2eb] px-4">
         <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-xl">
           <h1 className="text-2xl font-black">Seller login required</h1>
           <p className="mt-3 text-sm text-slate-600">Sign in to open your boutique dashboard.</p>
-          <a href="/login" className="mt-6 inline-flex rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Login</a>
+          <a href={`/login?redirect=${encodeURIComponent(destination)}`} className="mt-6 inline-flex rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Login</a>
         </div>
       </section>
     );
@@ -20,9 +22,9 @@ export default function SellerRoute({ children }) {
     return (
       <section className="grid min-h-screen place-items-center bg-[#f7f2eb] px-4">
         <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-xl">
-          <h1 className="text-2xl font-black">Start your boutique</h1>
-          <p className="mt-3 text-sm text-slate-600">Create a store to sell from Instagram and WhatsApp.</p>
-          <a href="/seller/onboarding" className="mt-6 inline-flex rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Create store</a>
+          <h1 className="text-2xl font-black">Seller access required</h1>
+          <p className="mt-3 text-sm text-slate-600">Ask the store owner to grant access to your seller workspace.</p>
+          <a href="/contact" className="mt-6 inline-flex rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Contact support</a>
         </div>
       </section>
     );
@@ -34,7 +36,7 @@ export default function SellerRoute({ children }) {
         <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-xl">
           <h1 className="text-2xl font-black">Switch to Seller Mode</h1>
           <p className="mt-3 text-sm text-slate-600">Your boutique tools stay separate from shopping.</p>
-          <button type="button" onClick={() => switchMode('seller')} className="mt-6 rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Switch to Seller</button>
+          <button type="button" onClick={() => switchMode('seller', destination)} className="mt-6 rounded-full bg-wine px-6 py-3 text-sm font-black text-white">Switch to Seller</button>
         </div>
       </section>
     );

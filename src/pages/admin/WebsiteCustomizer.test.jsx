@@ -105,7 +105,7 @@ test('workspace failure displays a retry instead of an endless loader', async ()
   await screen.findByRole('button', { name: 'Try again' });
   expect(screen.queryByText('Loading Website Designer…')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-  await waitFor(() => expect(screen.getByRole('tab', { name: 'Presets' })).toBeInTheDocument());
+  expect(await screen.findByRole('tab', { name: 'Presets' })).toBeInTheDocument();
 });
 
 test('editor opens without waiting for catalog or history, and avoids fetching the selected theme twice', async () => {

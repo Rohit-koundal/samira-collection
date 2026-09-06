@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Share2, ShieldCheck, Star, ThumbsUp, Truck } from 'lucide-react';
 import LazyBoundary from '../../components/ui/LazyBoundary';
@@ -15,14 +15,18 @@ import api from '../../services/api';
 import { activeVariants, findProductVariant, firstInStockVariant, hasManagedVariants, isColorAvailable, isSizeAvailable, variantStock } from '../../utils/variants';
 import { trackEvent } from '../../utils/analytics';
 import SeoHead from '../../components/seo/SeoHead';
-import { parseProductKey } from '../../utils/routing';
+import { parseProductKey, storefrontPath } from '../../utils/routing';
 import { getSelectableSizes } from '../../utils/productSizing';
+import { useStorefront } from '../../context/StorefrontContext';
+import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 
 const SizeChartModal = lazy(() => import('../../components/product/SizeChartModal'));
 const ReviewModal = lazy(() => import('../../components/product/ReviewModal'));
 
-export default function ProductDetail({ navigate, route = '' }) {
+export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const productKey = parseProductKey(route);
+  const { storeSlug } = useStorefront();
+  const navigate = useCallback(path => navigateRoute(storefrontPath(path, storeSlug)), [navigateRoute, storeSlug]);
   const cart = useCart();
   const wishlist = useWishlist();
   const { user } = useAuth();
@@ -35,6 +39,12 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [deliveryPin, setDeliveryPin] = useState('');
   const [touchStartX, setTouchStartX] = useState(0);
   const [actionMessage, setActionMessage] = useState('');
+  const [cartBusy, setCartBusy] = useState(false);
+  const purchasePending = useRef(false);
+  const activeProductKey = useRef(productKey);
+  const mounted = useRef(true);
+  activeProductKey.current = productKey;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [wishlistBusy, setWishlistBusy] = useState(false);
   const [deliveryChecking, setDeliveryChecking] = useState(false);
   const [deliveryResult, setDeliveryResult] = useState(null);
@@ -46,13 +56,13 @@ export default function ProductDetail({ navigate, route = '' }) {
   const [reviewSummary, setReviewSummary] = useState(null);
   const [helpfulReviewIds, setHelpfulReviewIds] = useState([]);
   const [helpfulBusyId, setHelpfulBusyId] = useState('');
-  const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey || skipToken);
+  const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey ? { id: productKey, store: storeSlug } : skipToken);
   const { data: settingsData } = useGetSettingsQuery();
   const product = productData ? normalizeProduct(productData) : null;
   const productId = product?._id || product?.id || product?.slug;
-  const relatedQuery = product?.categoryId ? { category: product.categoryId } : { sort: 'rating' };
+  const relatedQuery = product?.categoryId ? { category: product.categoryId, store: storeSlug } : { sort: 'rating', store: storeSlug };
   const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
-  const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating' } : skipToken);
+  const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating', store: storeSlug } : skipToken);
   const { data: reviewsData = [], refetch: refetchReviews } = useGetReviewsQuery(productId || skipToken);
   const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId || skipToken);
   const variantProducts = useMemo(
@@ -250,7 +260,8 @@ export default function ProductDetail({ navigate, route = '' }) {
     );
   }
 
-  const add = () => {
+  const add = async () => {
+    if (purchasePending.current || cart.loading) return { ok: false, reason: 'busy' };
     if (selectableSizes.length && !size) {
       setActionMessage('Please select a size first.');
       return { ok: false, reason: 'missing-size' };
@@ -259,7 +270,7 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('Please select a color first.');
       return { ok: false, reason: 'missing-color' };
     }
-    if (!Number(quantity) || Number(quantity) < 1) {
+    if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
       setActionMessage('Please choose a valid quantity.');
       return { ok: false, reason: 'invalid-quantity' };
     }
@@ -268,17 +279,26 @@ export default function ProductDetail({ navigate, route = '' }) {
       setActionMessage('This size and colour combination is unavailable. Please choose another option.');
       return { ok: false, reason: 'variant-unavailable' };
     }
-    const result = cart.addToCart(product, size, color, selected?._id || product.variantId || product.selectedVariantId || '', quantity);
-    if (result?.ok) {
-      setActionMessage(`${quantity} item${Number(quantity) === 1 ? '' : 's'} added to cart.`);
-    } else if (result?.reason === 'out-of-stock') {
+    if (isOutOfStock) {
       setActionMessage('This product is out of stock.');
-    } else if (result?.reason === 'stock-limit') {
-      setActionMessage(`Only ${result.quantity || 0} item${Number(result.quantity) === 1 ? '' : 's'} already available in your cart.`);
-    } else {
-      setActionMessage('Unable to add this product right now.');
+      return { ok: false, reason: 'out-of-stock' };
     }
-    return result;
+    purchasePending.current = true;
+    setCartBusy(true); setActionMessage('');
+    try {
+      const result = await cart.addToCartConfirmed(product, size, color, selected?._id || product.variantId || product.selectedVariantId || '', Number(quantity));
+      if (!mounted.current || activeProductKey.current !== productKey) return { ok: false, reason: 'page-changed' };
+      setActionMessage(result?.ok
+        ? `${quantity} item${Number(quantity) === 1 ? '' : 's'} added to cart.`
+        : result?.message || 'Unable to add this product right now. Please try again.');
+      return result;
+    } catch (error) {
+      if (mounted.current && activeProductKey.current === productKey) setActionMessage(error.message || 'Unable to add this product right now. Please try again.');
+      return { ok: false };
+    } finally {
+      purchasePending.current = false;
+      if (mounted.current) setCartBusy(false);
+    }
   };
 
   const selectDesktopSize = (nextSize) => {
@@ -405,8 +425,8 @@ export default function ProductDetail({ navigate, route = '' }) {
     }
   };
 
-  const buyNow = () => {
-    const result = add();
+  const buyNow = async () => {
+    const result = await add();
     if (result?.ok) navigate('/checkout');
   };
 
@@ -520,6 +540,7 @@ export default function ProductDetail({ navigate, route = '' }) {
           selectedStock={selectedStock}
           cartItem={cartItem}
           isOutOfStock={isOutOfStock}
+          cartBusy={cartBusy || cart.loading}
           isSizeAvailable={(item) => isSizeAvailable(product, item)}
           isColorAvailable={(item) => isColorAvailable(product, item, size)}
           onAddToCart={add}
@@ -728,10 +749,10 @@ export default function ProductDetail({ navigate, route = '' }) {
           ) : null}
 
           <div className="hidden gap-3 md:flex">
-            <button disabled={isOutOfStock} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
-              {cartItem ? 'Add More' : 'Add to Cart'}
+            <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
+              {cartBusy ? 'Adding…' : cartItem ? 'Add More' : 'Add to Cart'}
             </button>
-            <button disabled={isOutOfStock} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">Buy Now</button>
+            <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={buyNow} className="h-14 flex-1 rounded-xl bg-charcoal px-5 py-4 text-sm font-black text-white disabled:opacity-50">{cartBusy ? 'Adding…' : 'Buy Now'}</button>
             <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-14 flex-1 rounded-xl border border-emerald-600 px-5 py-4 text-sm font-black text-emerald-700 disabled:opacity-50">
               Order on WhatsApp
             </button>
@@ -820,12 +841,12 @@ export default function ProductDetail({ navigate, route = '' }) {
 
       <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
         <div className="grid grid-cols-[.9fr_1.2fr_.9fr] gap-2">
-          <button disabled={isOutOfStock} onClick={buyNow} className="h-12 rounded-[10px] border border-[#7a1f36] bg-white px-2 text-[12px] font-bold text-[#7a1f36] disabled:border-slate-200 disabled:text-slate-400">
-            Buy Now
+          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={buyNow} className="h-12 rounded-[10px] border border-[#7a1f36] bg-white px-2 text-[12px] font-bold text-[#7a1f36] disabled:border-slate-200 disabled:text-slate-400">
+            {cartBusy ? 'Adding…' : 'Buy Now'}
           </button>
-          <button disabled={isOutOfStock} onClick={add} className={`flex h-12 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12px] font-bold text-white disabled:bg-slate-300 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
+          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`flex h-12 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12px] font-bold text-white disabled:bg-slate-300 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
             <Icon name="bag" className="h-4 w-4" />
-            {isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
+            {cartBusy ? 'Adding…' : isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
           </button>
           <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-12 rounded-[10px] border border-emerald-600 px-2 text-[12px] font-bold text-emerald-700 disabled:border-slate-200 disabled:text-slate-400">
             WhatsApp
@@ -1030,16 +1051,16 @@ function RailProduct({ product, navigate }) {
   const cart = useCart();
   const image = getPrimaryImageUrl(product.images);
   const cartItem = cart.getCartItem(product);
+  const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
   return (
     <article className="w-40 shrink-0 md:w-52">
       <button type="button" onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f6efe8]">
         {image ? <img loading="lazy" decoding="async" src={normalizeImageUrl(image)} alt={product.name} className="h-48 w-full object-cover md:h-64" /> : <ProductVisual product={product} compact />}
       </button>
-      <h3 className="product-brand mt-2 truncate">{product.brand || 'Samira Collection'}</h3>
-      <p className="product-name truncate text-slate-500">{product.name}</p>
+      <h3 className="product-name mt-2 truncate" title={product.name}>{product.name}</h3>
       <p className="mt-1"><span className="old-price text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="price">Rs. {product.price}</span></p>
-      <button type="button" onClick={() => cart.addToCart(product)} className={`mt-3 h-10 w-full rounded-xl border ${cartItem ? 'border-emerald-600 text-emerald-700' : 'border-rose text-rose'}`}>
-        {cartItem ? 'Add More' : 'Add to Cart'}
+      <button type="button" disabled={unavailable || cart.loading} onClick={() => cart.addToCart(product)} className={`mt-3 h-10 w-full rounded-xl border disabled:opacity-50 ${cartItem ? 'border-emerald-600 text-emerald-700' : 'border-rose text-rose'}`}>
+        {unavailable ? 'Out of stock' : cartItem ? 'Add More' : 'Add to Cart'}
       </button>
     </article>
   );

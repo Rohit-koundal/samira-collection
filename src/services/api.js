@@ -43,7 +43,7 @@ async function request(path, options = {}) {
   const body = options.body ? JSON.parse(options.body) : undefined;
   const endpoint = method === 'GET' ? samiraApi.endpoints.request : samiraApi.endpoints.mutate;
   const action = method === 'GET'
-    ? endpoint.initiate({ path, silent: options.silent }, {
+    ? endpoint.initiate({ path, silent: options.silent, ...(options.cacheScope !== undefined ? { cacheScope: options.cacheScope } : {}) }, {
       forceRefetch: options.forceRefetch !== false,
       subscribe: false,
     })

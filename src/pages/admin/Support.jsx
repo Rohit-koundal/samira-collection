@@ -16,6 +16,8 @@ export default function Support({ route = '' }) {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [pending, setPending] = useState({});
+  const pendingIds = useRef(new Set());
   const messageId = /^[a-f\d]{24}$/i.test(query.trim()) ? query.trim() : '';
 
   const load = useCallback(() => {
@@ -36,18 +38,25 @@ export default function Support({ route = '' }) {
   });
 
   const update = async (item, nextStatus) => {
+    if (pendingIds.current.has(item._id)) return;
+    pendingIds.current.add(item._id);
+    setPending((current) => ({ ...current, [item._id]: true }));
     try {
       await api.put(`/admin/contact/${item._id}/status`, { status: nextStatus });
       setMessages((current) => current.map((entry) => (entry._id === item._id ? { ...entry, status: nextStatus } : entry)));
+      setMessage('');
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      pendingIds.current.delete(item._id);
+      setPending((current) => ({ ...current, [item._id]: false }));
     }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Support inbox" note="Messages submitted from the contact form." />
-      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
+      {message && <p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message} <button type="button" className="admin-btn-ghost" onClick={load}>Refresh inbox</button></p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search name, email or message">
         <Select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full px-3 sm:w-44">
           <option value="">All Status</option>
@@ -64,7 +73,7 @@ export default function Support({ route = '' }) {
           <td className="max-w-sm px-4 py-4 text-sm">{item.message}</td>
           <td className="px-4 py-4"><StatusBadge value={item.status} /></td>
           <td className="px-4 py-4">
-            <Select value={item.status} onChange={(event) => update(item, event.target.value)} className="h-10 w-36 rounded-lg px-2">
+            <Select aria-label={`Status for ${item.name || item._id}`} disabled={pending[item._id]} value={item.status} onChange={(event) => update(item, event.target.value)} className="h-10 w-36 rounded-lg px-2">
               {statuses.map((value) => <option key={value}>{value}</option>)}
             </Select>
           </td>

@@ -1,20 +1,12 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import { useState } from 'react';
+import useSellerQuery from '../../hooks/useSellerQuery';
 import PageState from '../../components/ui/PageState';
 
 export default function SellerAnalytics() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
   const [range, setRange] = useState('30d');
-
-  useEffect(() => {
-    api.get(`/seller/analytics/funnel?range=${range}`)
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [range]);
-
-  if (error) return <PageState error={error} />;
-  if (!data) return <PageState loading loadingLabel="Loading store analytics..." />;
+  const { data, loading, error, retry } = useSellerQuery(`/seller/analytics/funnel?range=${range}`);
+  if (error) return <PageState error={error} onRetry={retry} />;
+  if (loading) return <PageState loading loadingLabel="Loading store analytics..." />;
 
   const events = Object.entries(data.events || {});
 
@@ -25,7 +17,7 @@ export default function SellerAnalytics() {
           <h1 className="text-2xl font-black">Sales analytics</h1>
           <p className="text-sm font-semibold text-slate-500">{data.note}</p>
         </div>
-        <select className="h-11 rounded-xl border px-3 text-sm font-bold" value={range} onChange={(event) => setRange(event.target.value)}>
+        <select aria-label="Analytics period" className="h-11 rounded-xl border px-3 text-sm font-bold" value={range} onChange={(event) => setRange(event.target.value)}>
           <option value="today">Today</option>
           <option value="7d">7 days</option>
           <option value="30d">30 days</option>
@@ -40,7 +32,7 @@ export default function SellerAnalytics() {
           </div>
         ))}
       </div>
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
+      <div className="overflow-x-auto rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-lg font-black">Attributed sales</h2>
         {!data.attributedSales?.length ? <p className="mt-2 text-sm font-semibold text-slate-500">No attributed orders yet. Share links with source, campaign or reel parameters.</p> : (
           <table className="mt-3 min-w-full text-left text-sm">

@@ -35,8 +35,12 @@ export default function Notifications({ navigate, route = '/notifications' }) {
     api.get(`/notifications?${query}`, { silent: true }).then((result) => {
       if (!active) return;
       const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
-      setData(next);
-      if (page > next.totalPages) setPage(next.totalPages);
+      if (!Array.isArray(next?.items) || next.items.some((item) => !item || !item._id)) {
+        throw new Error('Notifications could not be loaded. Please try again.');
+      }
+      const totalPages = Math.max(1, Number(next.totalPages) || 1);
+      setData({ ...next, totalPages });
+      if (page > totalPages) setPage(totalPages);
     }).catch((err) => { if (active) setError(err.message || 'Unable to load notifications.'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [userId, page, category, read, revision, reload]);

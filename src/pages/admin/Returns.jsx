@@ -16,6 +16,8 @@ export default function Returns({ route = '' }) {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [updating, setUpdating] = useState({});
+  const activeUpdates = useRef(new Set());
   const requestId = /^[a-f\d]{24}$/i.test(query.trim()) ? query.trim() : '';
   const load = useCallback(() => {
     const sequence = ++loadSequence.current;
@@ -40,22 +42,23 @@ export default function Returns({ route = '' }) {
   }, [query, requests, status]);
 
   const update = async (request, nextStatus) => {
-    if (nextStatus === request.status) return;
-    const previous = requests;
-    setRequests((current) => current.map((item) => (item._id === request._id ? { ...item, status: nextStatus } : item)));
+    if (nextStatus === request.status || activeUpdates.current.has(request._id)) return;
+    activeUpdates.current.add(request._id);
+    setUpdating(current => ({ ...current, [request._id]: true }));
     setMessage('');
     try {
-      await api.put(`/admin/returns/${request._id}/status`, { status: nextStatus });
+      const saved = await api.put(`/admin/returns/${request._id}/status`, { status: nextStatus });
+      setRequests((current) => current.map((item) => item._id === request._id ? { ...item, status: saved.status || nextStatus } : item));
     } catch (error) {
-      setRequests(previous);
       setMessage(error.message);
-    }
+    } finally { activeUpdates.current.delete(request._id); setUpdating(current => ({ ...current, [request._id]: false })); }
   };
 
   return (
     <section className="space-y-5">
       <PageHeader title="Returns / Exchange" note="Approve, reject and track customer return requests." />
-      {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
+      <p className="admin-note">Mark a refund only after returning the money through your payment provider or directly to the customer. Updating the status does not transfer money.</p>
+      {message && <p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search request, customer or product">
         <Select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full px-3 sm:w-44">
           <option value="">All Status</option>
@@ -71,7 +74,7 @@ export default function Returns({ route = '' }) {
           <td className="px-4 py-4">{request.reason || '-'}</td>
           <td className="px-4 py-4"><StatusBadge value={request.status} /></td>
           <td className="px-4 py-4">
-            <Select value={request.status} onChange={(event) => update(request, event.target.value)} className="h-10 w-44 rounded-lg px-2">
+            <Select aria-label={`Status for ${request._id}`} disabled={updating[request._id]} value={request.status} onChange={(event) => update(request, event.target.value)} className="h-10 w-44 rounded-lg px-2">
               {statuses.map((item) => <option key={item}>{item}</option>)}
             </Select>
           </td>

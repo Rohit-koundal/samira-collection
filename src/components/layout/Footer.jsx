@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ArrowRight,
   BadgePercent,
@@ -38,6 +38,8 @@ import logo from '../../assets/samira-collection-logo.png';
 import { useGetSettingsQuery } from '../../store/apiSlice';
 import api from '../../services/api';
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
+import { useStorefront } from '../../context/StorefrontContext';
+import { storefrontPath } from '../../utils/routing';
 import { normalizeImageUrl } from '../../services/normalize';
 import './Footer.css';
 
@@ -130,13 +132,17 @@ const legalLinks = [
 ];
 
 export default function Footer({ navigate }) {
+  const { storeSlug } = useStorefront();
   const { data: settings = {} } = useGetSettingsQuery();
   const { config: websiteConfig } = useWebsiteCustomization();
   const footerConfig = websiteConfig.footer;
   const [email, setEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
+  const subscribeLock = useRef(false);
 
   const go = (path) => {
+    path = storefrontPath(path, storeSlug);
     if (navigate) navigate(path);
   };
   const socialUrls = Object.fromEntries(Object.entries({ ...(settings.socialLinks || {}), ...(footerConfig.socialLinks || {}) }).filter(([, value]) => value));
@@ -156,17 +162,21 @@ export default function Footer({ navigate }) {
   };
   const subscribe = async (event) => {
     event.preventDefault();
+    if (subscribeLock.current) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setNewsletterStatus('Please enter your email.');
       return;
     }
+    subscribeLock.current = true; setSubscribing(true); setNewsletterStatus('');
     try {
       const data = await api.post('/newsletter/subscribe', { email: trimmedEmail, source: 'footer' });
       setNewsletterStatus(data.message || 'Thanks for subscribing.');
       setEmail('');
     } catch (error) {
       setNewsletterStatus(error.message || 'Unable to subscribe right now.');
+    } finally {
+      subscribeLock.current = false; setSubscribing(false);
     }
   };
 
@@ -233,16 +243,17 @@ export default function Footer({ navigate }) {
               placeholder="Enter your email"
               aria-label="Email address"
               value={email}
+              disabled={subscribing}
               onChange={(event) => {
                 setEmail(event.currentTarget.value);
                 if (newsletterStatus) setNewsletterStatus('');
               }}
             />
-            <button type="submit" aria-label="Subscribe">
+            <button type="submit" aria-label={subscribing ? 'Subscribing' : 'Subscribe'} disabled={subscribing}>
               <ArrowRight size={18} aria-hidden="true" />
             </button>
           </form>
-          {newsletterStatus ? <p className="sc-footer__form-status">{newsletterStatus}</p> : null}
+          {newsletterStatus ? <p role="status" className="sc-footer__form-status">{newsletterStatus}</p> : null}
           <div className="sc-footer__or">
             <span />
             OR

@@ -3,6 +3,8 @@ import { getApiBaseUrl } from '../store/apiBaseUrl';
 export function normalizeProduct(product) {
   const images = normalizeImageEntries(product.images);
   const videos = normalizeVideoEntries(product.videos);
+  const sellingPrice = Number(product.sellingPrice ?? product.price ?? 0);
+  const originalPrice = Math.max(sellingPrice, Number(product.originalPrice ?? sellingPrice));
   return {
     ...product,
     images,
@@ -13,8 +15,8 @@ export function normalizeProduct(product) {
     rating: product.rating || 0,
     numReviews: product.numReviews || 0,
     colors: product.colors?.length ? product.colors : [],
-    originalPrice: product.originalPrice || product.price,
-    discountPercentage: product.discountPercentage || 0,
+    originalPrice,
+    discountPercentage: originalPrice > sellingPrice ? Math.round((originalPrice - sellingPrice) / originalPrice * 100) : 0,
     primaryImageUrl: getPrimaryImageUrl(images),
     variantGroupId: product.variantGroupId || product.variantGroup?.id || product.variantGroup,
     variantName: product.variantName || '',

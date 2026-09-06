@@ -1,4 +1,4 @@
-import { BEFORE_ROUTE_CHANGE_EVENT, boutiquePath, parseProductKey, productHref, pushAppRoute } from './routing';
+import { BEFORE_ROUTE_CHANGE_EVENT, boutiquePath, parseProductKey, productHref, pushAppRoute, storefrontPath } from './routing';
 
 test('designer navigation guard cancels a route change without changing the URL', () => {
   window.history.replaceState(null, '', '/admin/customization');
@@ -14,6 +14,13 @@ test('designer navigation guard cancels a route change without changing the URL'
 
 test('the preview route is never interpreted as a boutique slug', () => {
   expect(boutiquePath('/website-preview')).toBe('/website-preview');
+});
+
+test.each(['/', '/products?category=silk', '/search?search=kurta', '/product?id=one', '/category?category=silk'])('catalog navigation %s remains in the selected boutique', path => {
+  expect(storefrontPath(path, 'silk')).toBe(`/store/silk${path === '/' ? '' : path}`);
+});
+test.each(['/cart', '/checkout', '/profile', '/seller', '/admin/products', '/store/other/products', 'https://example.com'])('non-catalog navigation %s retains its correct destination', path => {
+  expect(storefrontPath(path, 'silk')).toBe(path);
 });
 
 describe('product routes', () => {

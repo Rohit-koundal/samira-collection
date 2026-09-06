@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CopyPlus, Trash2, Upload, X } from 'lucide-react';
 import api from '../../services/api';
 import { Select, TextInput } from '../../components/ui/Field';
@@ -35,11 +35,15 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState([]);
   const [files, setFiles] = useState([]);
+  const [publishing, setPublishing] = useState(false);
+  const forms = useRef(new Map());
+  const publishingRef = useRef(false);
+  const rememberForm = useCallback((id, form) => { forms.current.set(id, form); }, []);
   const { notify } = useDesktopFeedback();
-  const { data: draftResponse, isLoading, isFetching } = useGetProductDraftsQuery();
+  const { data: draftResponse, isLoading, error: listError, refetch } = useGetProductDraftsQuery();
   const [bulkUploadProductDrafts, { isLoading: uploading }] = useBulkUploadProductDraftsMutation();
   const [updateProductDraft, { isLoading: saving }] = useUpdateProductDraftMutation();
-  const [deleteProductDraft] = useDeleteProductDraftMutation();
+  const [deleteProductDraft, { isLoading: deleting }] = useDeleteProductDraftMutation();
   const [publishSelectedDrafts] = usePublishSelectedDraftsMutation();
 
   const drafts = useMemo(() => draftResponse?.data || [], [draftResponse]);
@@ -54,6 +58,7 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   }, []);
 
   const selectedCount = useMemo(() => selected.length, [selected]);
+  const busy = saving || publishing || deleting;
   const showFeedback = (text, type = 'info') => {
     if (!text) return;
     if (!notify(text, type, 'Product Drafts')) {
@@ -71,38 +76,53 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
       setFiles([]);
       showFeedback('Drafts created successfully.', 'success');
     } catch (error) {
-      showFeedback(error.message, 'error');
+      showFeedback(error.data?.message || error.message || 'Draft upload failed. Please try again.', 'error');
     }
   };
 
   const saveDraft = async (draft) => {
+    if (busy) return false;
     try {
       await updateProductDraft({
         id: draft._id || draft.id,
         body: normalizeDraftBody(draft, categories, structure),
       }).unwrap();
       showFeedback('Draft saved successfully.', 'success');
+      return true;
     } catch (error) {
-      showFeedback(error.message, 'error');
+      showFeedback(error.data?.message || error.message || 'Draft could not be saved. Please try again.', 'error');
+      return false;
     }
   };
 
   const removeDraft = async (draftId) => {
+    if (busy) return;
     if (!window.confirm('Delete this draft?')) return;
-    await deleteProductDraft(draftId).unwrap();
-    showFeedback('Draft deleted successfully.', 'success');
+    try {
+      await deleteProductDraft(draftId).unwrap();
+      forms.current.delete(draftId);
+      showFeedback('Draft deleted successfully.', 'success');
+    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be deleted. Please try again.', 'error'); }
   };
 
   const publishSelected = async () => {
+    if (busy || publishingRef.current) return;
     if (!selected.length) return showFeedback('Select at least one draft to publish.', 'warning');
     if (!structure) return showFeedback('Load product configuration before publishing.', 'error');
+    publishingRef.current = true; setPublishing(true);
     try {
-      await publishSelectedDrafts({ ids: selected }).unwrap();
+      const selectedForms = selected.map(id => ({ id, form: forms.current.get(id) || drafts.find(draft => (draft._id || draft.id) === id) }));
+      // Persist the reviewed card values before publishing; stop if any save fails.
+      for (const item of selectedForms) {
+        if (!item.form) throw new Error('A selected draft is no longer available. Refresh the list.');
+        await updateProductDraft({ id: item.id, body: normalizeDraftBody(item.form, categories, structure) }).unwrap();
+      }
+      await publishSelectedDrafts({ ids: selectedForms.map(item => item.id) }).unwrap();
       setSelected([]);
       showFeedback('Selected drafts published.', 'success');
     } catch (error) {
-      showFeedback(error.message, 'error');
-    }
+      showFeedback(error.data?.message || error.message || 'Selected drafts could not be published. Please try again.', 'error');
+    } finally { publishingRef.current = false; setPublishing(false); }
   };
 
   return (
@@ -115,6 +135,7 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
       {focusedDraftId && <p className="admin-note">Showing your imported draft. <a className="text-wine underline" href="/admin/product-drafts">View all drafts</a></p>}
 
       {structureError && <p role="alert" className="admin-card p-4">{structureError} <button type="button" onClick={loadStructure}>Retry product configuration</button></p>}
+      {listError && <p role="alert" className="admin-card p-4">{listError.data?.message || listError.message || 'Drafts could not be loaded.'} <button type="button" onClick={refetch}>Retry loading drafts</button></p>}
       <div className="admin-card p-4 md:p-5">
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
           <label className="grid gap-2">
@@ -150,16 +171,16 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
           <p className="text-xs font-black uppercase tracking-[0.2em] text-wine/60">Selected drafts</p>
           <p className="mt-1 text-sm font-semibold text-slate-500">{selectedCount} selected · {drafts.length} total</p>
         </div>
-        <button type="button" onClick={publishSelected} disabled={!selected.length || saving} className="admin-btn disabled:opacity-60">
+        <button type="button" onClick={publishSelected} disabled={!selected.length || busy || !structure} className="admin-btn disabled:opacity-60">
           <CopyPlus className="h-4 w-4" />
-          Publish Selected
+          {publishing ? 'Publishing...' : 'Publish Selected'}
         </button>
       </div>
 
-      {message && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine md:hidden">{message}</p>}
+      {message && <p role="status" className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
       <div className="admin-card overflow-hidden">
-        {isLoading || isFetching ? (
+        {isLoading ? (
           <Loader label="Loading drafts..." />
         ) : !visibleDrafts.length ? (
           <div className="p-5"><EmptyState title="No product drafts found" note="Upload product images to create draft records." /></div>
@@ -175,6 +196,8 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
                 onSelect={() => setSelected((current) => current.includes(draft._id || draft.id) ? current.filter((id) => id !== (draft._id || draft.id)) : [...current, draft._id || draft.id])}
                 onSave={saveDraft}
                 onDelete={removeDraft}
+                onFormChange={rememberForm}
+                busy={busy}
               />
             ))}
           </div>
@@ -184,7 +207,8 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   );
 }
 
-function DraftCard({ draft, structure, categories, selected, onSelect, onSave, onDelete }) {
+function DraftCard({ draft, structure, categories, selected, onSelect, onSave, onDelete, onFormChange, busy }) {
+  const dirty = useRef(false);
   const [form, setForm] = useState(() => ({
     ...draft,
     sizes: Array.isArray(draft.sizes) ? draft.sizes.join(', ') : '',
@@ -196,8 +220,11 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
     sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
   }));
   const [subcategories, setSubcategories] = useState([]);
+  const draftId = draft._id || draft.id;
+  useEffect(() => { onFormChange(draftId, form); }, [draftId, form, onFormChange]);
 
   useEffect(() => {
+    if (dirty.current) return;
     setForm({
       ...draft,
       sizes: Array.isArray(draft.sizes) ? draft.sizes.join(', ') : '',
@@ -215,7 +242,8 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
     fetchSubcategories(api, categoryId).then(setSubcategories);
   }, [form.category]);
 
-  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const editForm = (updater) => { dirty.current = true; setForm(updater); };
+  const update = (field, value) => editForm((current) => ({ ...current, [field]: value }));
   const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
   const sizingProduct = { ...form, category: categoryName, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
   const sizingMode = resolveSizingMode(sizingProduct);
@@ -224,7 +252,7 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
   const columns = getSizeChartColumns(sizingProduct);
   const rows = reconcileSizeChartRows(form.sizeChart?.rows, sizes, columns);
   const updateMeasurement = (size, field, value) => {
-    setForm((current) => ({
+    editForm((current) => ({
       ...current,
       sizeChart: {
         unit: current.sizeChart?.unit === 'cm' ? 'cm' : 'in',
@@ -239,10 +267,10 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
     <article className="rounded-[22px] border border-[#f0e5db] bg-[#fffdfa] p-4 shadow-[0_10px_24px_rgba(111,74,52,0.05)]">
       <div className="flex items-start justify-between gap-3">
         <label className="flex items-center gap-2 text-sm font-black text-charcoal">
-          <input type="checkbox" checked={selected} onChange={onSelect} className="accent-wine" />
+          <input type="checkbox" disabled={busy || draft.status === 'published'} checked={selected} onChange={onSelect} className="accent-wine" />
           Draft
         </label>
-        <button type="button" onClick={() => onDelete(draft._id || draft.id)} className="text-rose" aria-label="Delete draft">
+        <button type="button" disabled={busy} onClick={() => onDelete(draft._id || draft.id)} className="text-rose" aria-label="Delete draft">
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
@@ -250,11 +278,11 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
       <div className="mt-3 overflow-hidden rounded-2xl bg-[#f7efe8]">
         <img src={normalizeImageUrl(form.image || form.images?.[0]?.url || '/uploads/placeholder.jpg')} alt={form.name || 'Draft'} className="h-44 w-full object-cover" />
       </div>
-      <div className="mt-4 space-y-3">
+      <fieldset disabled={busy || draft.status === 'published'} className="mt-4 min-w-0 space-y-3">
         <TextInput value={form.name || ''} onChange={(event) => update('name', event.target.value)} placeholder="Product name" />
         {['social-import', 'reel-import'].includes(draft.sourceType) && <>
           {draft.sourceUrl && <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-wine underline">Original {draft.sourcePlatform === 'facebook' ? 'Facebook' : 'Instagram'} post</a>}
-          <div className="grid grid-cols-4 gap-2">{(form.images || []).map((image, index) => <button key={image.url} type="button" onClick={() => setForm((value) => ({ ...value, image: image.url, images: value.images.map((item) => ({ ...item, primary: item.url === image.url })) }))} aria-label={'Set imported photo ' + (index + 1) + ' as cover'} aria-pressed={image.primary} className={'overflow-hidden rounded-lg border-2 ' + (image.primary ? 'border-wine' : 'border-transparent')}><img src={normalizeImageUrl(image.url)} alt={'Imported product photo ' + (index + 1)} className="aspect-[3/4] w-full object-cover" loading="lazy" /></button>)}</div>
+          <div className="grid grid-cols-4 gap-2">{(form.images || []).map((image, index) => <button key={image.url} type="button" onClick={() => editForm((value) => ({ ...value, image: image.url, images: value.images.map((item) => ({ ...item, primary: item.url === image.url })) }))} aria-label={'Set imported photo ' + (index + 1) + ' as cover'} aria-pressed={image.primary} className={'overflow-hidden rounded-lg border-2 ' + (image.primary ? 'border-wine' : 'border-transparent')}><img src={normalizeImageUrl(image.url)} alt={'Imported product photo ' + (index + 1)} className="aspect-[3/4] w-full object-cover" loading="lazy" /></button>)}</div>
           <label className="grid gap-1 text-xs font-bold">Description<textarea rows={4} maxLength={6000} value={form.description || ''} onChange={(event) => update('description', event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm font-normal" /></label>
         </>}
         <Select value={form.category?._id || form.category || ''} onChange={(event) => update('category', event.target.value)}>
@@ -268,10 +296,10 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
         </Select>
         <div className="grid grid-cols-2 gap-2">
           <TextInput type="number" value={form.originalPrice || ''} onChange={(event) => update('originalPrice', event.target.value)} placeholder="Original price" />
-          <TextInput type="number" value={form.sellingPrice || form.price || ''} onChange={(event) => update('sellingPrice', event.target.value)} placeholder="Selling price" />
+          <TextInput type="number" value={form.sellingPrice ?? form.price ?? ''} onChange={(event) => update('sellingPrice', event.target.value)} placeholder="Selling price" />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <TextInput type="number" value={form.stock || ''} onChange={(event) => update('stock', event.target.value)} placeholder="Stock" />
+          <TextInput type="number" value={form.stock ?? ''} onChange={(event) => update('stock', event.target.value)} placeholder="Stock" />
           {sizingMode === 'sized' ? <TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="Sizes: S, M, L" /> : <div className="grid place-items-center rounded-xl bg-emerald-50 px-2 text-center text-[10px] font-black text-emerald-700">No size selection</div>}
         </div>
         {structure?.features?.sizing !== false && <Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}>
@@ -306,11 +334,11 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
         <TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} placeholder="Fabric" />
         <TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} placeholder="Occasion" />
         <TextInput value={form.tags || ''} onChange={(event) => update('tags', event.target.value)} placeholder="Tags" />
-        <button type="button" onClick={() => onSave(form)} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white">
+        <button type="button" onClick={async () => { if (await onSave(form)) dirty.current = false; }} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white">
           <Check className="h-4 w-4" />
           Save Draft
         </button>
-      </div>
+      </fieldset>
     </article>
   );
 }
@@ -324,9 +352,9 @@ function normalizeDraftBody(form, categories = [], structure) {
     category: form.category?._id || form.category || undefined,
     images: Array.isArray(form.images) ? form.images : [],
     videos: Array.isArray(form.videos) ? form.videos : [],
-    price: Number(form.sellingPrice || form.price || 0),
+    price: Number(form.sellingPrice ?? form.price ?? 0),
     originalPrice: Number(form.originalPrice || form.sellingPrice || form.price || 0),
-    sellingPrice: Number(form.sellingPrice || form.price || 0),
+    sellingPrice: Number(form.sellingPrice ?? form.price ?? 0),
     stock: Number(form.stock || 0),
     sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
     sizingMode: sizingProduct.sizingMode || 'auto',

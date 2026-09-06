@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Banknote, CircleCheck, CircleDashed, Clock3, DollarSign, LayoutDashboard, Package, ShoppingBag, Sparkles, TrendingUp, Users } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import PageState from '../../components/ui/PageState';
 
 const statusPalette = [
   { name: 'Pending', color: '#f3b58c' },
@@ -17,10 +18,12 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setError('');
     api.get('/admin/dashboard/overview')
       .then((data) => {
         if (!alive) return;
@@ -36,7 +39,7 @@ export default function Dashboard() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reload]);
 
   const stats = useMemo(() => overview?.stats || {}, [overview]);
   const statCards = useMemo(() => ([
@@ -52,6 +55,8 @@ export default function Dashboard() {
 
   const recentOrders = overview?.recentOrders || [];
   const topProducts = overview?.topProducts || [];
+
+  if (error) return <PageState error={error} onRetry={() => setReload((value) => value + 1)} />;
 
   return (
     <section className="space-y-5">
@@ -81,7 +86,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <StatusPill icon={error ? CircleDashed : CircleCheck} label={error ? 'API unavailable' : 'API connected'} detail={error || 'Dashboard overview endpoint'} tone={error ? 'text-rose bg-rose/10' : 'text-emerald-700 bg-emerald-50'} />
+            <StatusPill icon={loading ? CircleDashed : CircleCheck} label={loading ? 'Checking API' : 'API connected'} detail="Dashboard overview endpoint" tone={loading ? 'text-wine bg-blush' : 'text-emerald-700 bg-emerald-50'} />
             <StatusPill icon={CircleDashed} label="Data source" detail={overview ? 'Orders and products API' : 'Awaiting API response'} tone="text-wine bg-blush" />
           </div>
           <div className="mt-4 rounded-2xl border border-[#eadfd5] bg-[#fffaf2] px-4 py-4">

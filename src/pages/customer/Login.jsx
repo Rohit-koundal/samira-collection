@@ -5,7 +5,8 @@ import { ArrowLeft, HelpCircle, Smartphone } from 'lucide-react';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import { pushAppRoute } from '../../utils/routing';
 import { clearOtpState, readOtpState, writeOtpState } from '../../utils/loginOtpStorage';
-import { digitsOnly, isValidIndianMobile, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
+import { digitsOnly, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
+import { normalizeIndianPhone } from '../../utils/phoneFormatter';
 
 const OTP_COOLDOWN_SECONDS = 60;
 
@@ -493,7 +494,7 @@ function HelpLink() {
 function normalizePhone(value, countryCode) {
   const digits = digitsOnly(value, 12);
   if (countryCode === '+91') {
-    return isValidIndianMobile(digits.replace(/^91/, '')) ? digits.replace(/^91/, '').slice(-10) : '';
+    return normalizeIndianPhone(value);
   }
   return digits.length >= 6 ? `${countryCode}${digits}` : '';
 }

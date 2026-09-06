@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
-import { ProductVisual } from './ProductCard';
+import { ProductVisual } from './ProductVisual';
 
 export default function ProductImageCarousel({
   product,
@@ -151,7 +151,7 @@ export default function ProductImageCarousel({
 
           {hasMultiple && (
             <>
-              <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center gap-1.5">
+              <div className="sc-gallery__dots pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center gap-1.5">
                 {images.map((image, dotIndex) => (
                   <span
                     key={`${image.url}-dot-${dotIndex}`}

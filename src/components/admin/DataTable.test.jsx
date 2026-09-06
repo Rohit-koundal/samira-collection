@@ -4,7 +4,7 @@ import DataTable from './DataTable';
 
 describe('admin data table', () => {
   test('adds mobile labels and displays the live record count', () => {
-    const { container } = render(
+    render(
       <DataTable
         title="Orders"
         heads={['Order ID', 'Customer']}
@@ -19,7 +19,7 @@ describe('admin data table', () => {
 
     expect(screen.getByRole('heading', { name: 'Orders' })).toBeInTheDocument();
     expect(screen.getByText('1 record')).toBeInTheDocument();
-    expect(container.querySelector('td[data-label="Order ID"]')).toHaveTextContent('SC-1001');
-    expect(container.querySelector('td[data-label="Customer"]')).toHaveTextContent('Samira Customer');
+    expect(screen.getByRole('cell', { name: 'SC-1001' })).toHaveAttribute('data-label', 'Order ID');
+    expect(screen.getByRole('cell', { name: 'Samira Customer' })).toHaveAttribute('data-label', 'Customer');
   });
 });

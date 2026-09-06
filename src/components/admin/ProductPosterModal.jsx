@@ -6,23 +6,28 @@ import { productHref } from '../../utils/routing';
 export default function ProductPosterModal({ open, product, settings, onClose }) {
   const [posterUrl, setPosterUrl] = useState('');
   const [message, setMessage] = useState('');
+  const [generationFailed, setGenerationFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   const shareLink = useMemo(() => `${window.location.origin}${productHref(product)}`, [product]);
 
   useEffect(() => {
     if (!open || !product) return undefined;
     let cancelled = false;
+    setPosterUrl('');
+    setMessage('');
+    setGenerationFailed(false);
     generatePoster(product, settings, shareLink)
       .then((url) => {
         if (!cancelled) setPosterUrl(url);
       })
       .catch((error) => {
-        if (!cancelled) setMessage(error.message || 'Unable to generate poster');
+        if (!cancelled) { setGenerationFailed(true); setMessage(error.message || 'Unable to generate poster'); }
       });
     return () => {
       cancelled = true;
     };
-  }, [open, product, settings, shareLink]);
+  }, [open, product, settings, shareLink, retry]);
 
   if (!open || !product) return null;
 
@@ -35,8 +40,11 @@ export default function ProductPosterModal({ open, product, settings, onClose })
   };
 
   const copyLink = async () => {
-    await navigator.clipboard.writeText(shareLink);
-    setMessage('Product link copied.');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(shareLink);
+      setMessage('Product link copied.');
+    } catch { setMessage('Could not copy automatically. Copy the product link below.'); }
   };
 
   return (
@@ -47,19 +55,20 @@ export default function ProductPosterModal({ open, product, settings, onClose })
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-wine/60">Product Poster</p>
             <h2 className="text-lg font-black text-charcoal">Generate shareable poster</h2>
           </div>
-          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200">
+          <button type="button" aria-label="Close poster" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[1fr_320px]">
           <div className="min-h-0 overflow-auto rounded-[24px] border border-slate-200 bg-[#fbf7f3] p-4">
-            {posterUrl ? <img src={posterUrl} alt="Poster preview" className="mx-auto w-full max-w-[420px] rounded-[24px] shadow-lg" /> : <div className="grid h-full min-h-[420px] place-items-center text-sm font-bold text-slate-500">Generating poster...</div>}
+            {posterUrl ? <img src={posterUrl} alt="Poster preview" className="mx-auto w-full max-w-[420px] rounded-[24px] shadow-lg" /> : <div className="grid h-full min-h-[420px] place-items-center text-sm font-bold text-slate-500">{generationFailed ? <button type="button" className="admin-btn-ghost" onClick={() => setRetry((value) => value + 1)}>Retry poster</button> : 'Generating poster...'}</div>}
           </div>
           <div className="space-y-3 rounded-[24px] border border-slate-200 p-4">
             <p className="text-sm font-bold text-charcoal">{product.name}</p>
             <p className="text-sm text-slate-500">WhatsApp: {settings?.whatsappNumber || '-'}</p>
             <p className="text-sm text-slate-500">Website: {window.location.origin}</p>
-            {message && <p className="rounded-xl bg-[#fdf4f6] px-3 py-2 text-sm font-semibold text-rose">{message}</p>}
+            <input aria-label="Product link" readOnly value={shareLink} className="admin-field__control" />
+            {message && <p role="status" className="rounded-xl bg-[#fdf4f6] px-3 py-2 text-sm font-semibold text-rose">{message}</p>}
             <button type="button" onClick={download} disabled={!posterUrl} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white disabled:opacity-60">
               <Download className="h-4 w-4" />
               Download PNG

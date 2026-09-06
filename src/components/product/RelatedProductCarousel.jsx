@@ -4,6 +4,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
 import './RelatedProductCarousel.css';
+import { isUnavailable, wishlistPrice, wishlistStock } from '../../utils/wishlist';
 
 export default function RelatedProductCarousel({ products = [], navigate }) {
   const railRef = useRef(null);
@@ -40,7 +41,8 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
           const image = getPrimaryImageUrl(product.images);
           const price = Number(product.price || 0).toLocaleString('en-IN');
           const original = Number(product.originalPrice || product.price || 0).toLocaleString('en-IN');
-          const discount = Number(product.discountPercentage || 0);
+          const discount = wishlistPrice(product).discount;
+          const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
           const isWishlisted = wishlist.items.some((item) => (item._id || item.id || item.slug) === productId);
           const cartItem = cart.getCartItem(product);
 
@@ -65,12 +67,12 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
                 <h3 title={product.name}>{product.name}</h3>
                 <div className="sc-related__meta">
                   <span className="sc-related__price">Rs. {price}</span>
-                  <span className="sc-related__original">Rs. {original}</span>
+                  {Number(product.originalPrice) > Number(product.price) && <span className="sc-related__original">Rs. {original}</span>}
                 </div>
-                <p className="sc-related__discount">({discount}% OFF)</p>
-                <button type="button" className={`sc-related__cart${cartItem ? ' sc-related__cart--active' : ''}`} onClick={() => cart.addToCart(product)}>
+                {discount > 0 && <p className="sc-related__discount">({discount}% OFF)</p>}
+                <button type="button" disabled={unavailable || cart.loading} className={`sc-related__cart disabled:opacity-50${cartItem ? ' sc-related__cart--active' : ''}`} onClick={() => cart.addToCart(product)}>
                   <ShoppingBag size={15} />
-                  {cartItem ? 'Add More' : 'Add to Cart'}
+                  {unavailable ? 'Out of stock' : cartItem ? 'Add More' : 'Add to Cart'}
                 </button>
               </div>
             </article>

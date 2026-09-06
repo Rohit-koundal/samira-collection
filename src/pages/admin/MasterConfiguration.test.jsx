@@ -63,3 +63,65 @@ test('network error shows retry without creating a configuration', async () => {
   expect(await screen.findByText('Configuration locked')).toBeInTheDocument();
   expect(api.post).not.toHaveBeenCalled();
 });
+
+test('private presets save a copy and failed deletion leaves both active structure and preset intact', async () => {
+  api.get.mockResolvedValue(workspace(false));
+  api.post.mockResolvedValue({ _id: 'private', name: 'My fashion preset', structure });
+  api.delete.mockRejectedValueOnce(new Error('Preset deletion failed')).mockResolvedValueOnce({});
+  render(<MasterConfiguration />);
+  fireEvent.change(await screen.findByLabelText('New preset name'), { target: { value: 'My fashion preset' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save editor as private preset' }));
+  const remove = await screen.findByRole('button', { name: 'Delete preset My fashion preset' });
+  expect(api.post).toHaveBeenCalledWith('/master/clone', { name: 'My fashion preset', structure });
+  fireEvent.click(remove);
+  await screen.findByText('Preset deletion failed');
+  expect(screen.getByRole('button', { name: 'My fashion preset' })).toBeInTheDocument();
+  fireEvent.click(remove);
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'My fashion preset' })).not.toBeInTheDocument());
+  expect(screen.getByLabelText('Customer-facing label')).toHaveValue('Material');
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+test('client handover preserves typed details after failure and refreshes the locked workspace on success', async () => {
+  api.post.mockRejectedValueOnce(new Error('Phone cannot be granted access')).mockResolvedValueOnce({});
+  render(<MasterConfiguration />);
+  fireEvent.change(await screen.findByLabelText('Client name'), { target: { value: 'Store client' } });
+  fireEvent.change(screen.getByLabelText('Client mobile number'), { target: { value: '9000000002' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Grant client admin access' }));
+  await screen.findByText('Phone cannot be granted access');
+  expect(screen.getByLabelText('Client mobile number')).toHaveValue('9000000002');
+  fireEvent.click(screen.getByRole('button', { name: 'Grant client admin access' }));
+  await screen.findByText(/Client access granted/);
+  expect(api.post).toHaveBeenLastCalledWith('/master/client-admins', { name: 'Store client', phone: '9000000002' });
+  expect(screen.getByLabelText('Client mobile number')).toHaveValue('');
+});
+
+test('template import sends the reviewed file and revision; oversized files never reach the API', async () => {
+  api.get.mockResolvedValue(workspace(false));
+  api.post.mockResolvedValue({ ...workspace(false).configuration, revision: 3 });
+  render(<MasterConfiguration />);
+  const input = await screen.findByLabelText('Import store template');
+  fireEvent.change(input, { target: { files: [{ size: 64001, text: async () => '{}' }] } });
+  await screen.findByText('Choose a store template under 64 KB.');
+  expect(api.post).not.toHaveBeenCalled();
+  const template = { structure, version: 1 };
+  fireEvent.change(input, { target: { files: [{ size: 800, text: async () => JSON.stringify(template) }] } });
+  await screen.findByText('Template imported. Review and lock before handover.');
+  expect(api.post).toHaveBeenCalledWith('/master/import', { revision: 2, template });
+});
+
+test('template export downloads the saved API response and refuses unsaved local edits', async () => {
+  const template = { structure, version: 1 };
+  api.get.mockImplementation(async path => path === '/master/export' ? template : workspace(false));
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: jest.fn(() => 'blob:template') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: jest.fn() });
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  render(<MasterConfiguration />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Export structure' }));
+  await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+  expect(api.get).toHaveBeenCalledWith('/master/export');
+  fireEvent.change(screen.getByLabelText('Customer-facing label'), { target: { value: 'Fabric' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Export structure' }));
+  await screen.findByText('Save your draft first; exports use the saved configuration.');
+  expect(click).toHaveBeenCalledTimes(1);
+});

@@ -8,6 +8,8 @@ import { useWishlist } from '../../context/WishlistContext';
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 import { normalizeImageUrl } from '../../services/normalize';
 import { getDesktopActiveLink } from '../../utils/navbarActive';
+import { parseStoreSlug } from '../../utils/attribution';
+import { storefrontPath } from '../../utils/routing';
 import './Navbar.css';
 
 const desktopLinks = [
@@ -48,7 +50,7 @@ export default function Navbar({
   const [searchTerm, setSearchTerm] = useState(searchValue);
   const cartCount = Number.isFinite(Number(cartCountProp)) ? Number(cartCountProp) : Number(cart?.itemCount || 0);
   const wishlistCount = Number.isFinite(Number(wishlistCountProp)) ? Number(wishlistCountProp) : Number(wishlist?.items?.length || 0);
-  const go = onNavigate || navigate || (() => {});
+  const go = path => (onNavigate || navigate || (() => {}))(storefrontPath(path, parseStoreSlug(route)));
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : user?.role === 'admin';
   const showAdminPill = isAdmin && user?.availableModes?.includes('admin');
 

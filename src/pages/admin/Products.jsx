@@ -11,6 +11,8 @@ import { asCatalogList, fetchCategories } from '../../utils/catalogOptions';
 import { getPrimaryImageUrl } from '../../services/normalize';
 import ProductPosterModal from '../../components/admin/ProductPosterModal';
 import ProductCaptionModal from '../../components/admin/ProductCaptionModal';
+import StockInput from '../../components/admin/StockInput';
+import PageState from '../../components/ui/PageState';
 
 const pageSize = 10;
 
@@ -34,21 +36,22 @@ export default function Products({ route = '/admin/products' }) {
   const [settings, setSettings] = useState(null);
   const [posterProduct, setPosterProduct] = useState(null);
   const [captionProduct, setCaptionProduct] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   const loadProducts = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [items, categoryItems] = await Promise.all([
         api.get('/admin/products?admin=true'),
         fetchCategories(api),
       ]);
-      const settingsData = await api.get('/settings');
       setProducts(asCatalogList(items));
       setCategories(categoryItems);
-      setSettings(settingsData);
       setMessage('');
+      api.get('/settings').then(setSettings).catch(() => setSettings(null));
     } catch (error) {
-      setMessage(error.message);
+      setLoadError(error.message);
     } finally {
       setLoading(false);
     }
@@ -102,19 +105,22 @@ export default function Products({ route = '/admin/products' }) {
 
   const updateStock = async (product, nextStock) => {
     const value = Number(nextStock);
-    setProducts((current) => current.map((item) => (item._id === product._id ? { ...item, stock: value } : item)));
     try {
-      await api.patch(`/admin/products/${product._id}/stock`, { stock: value });
+      const saved = await api.patch(`/admin/products/${product._id}/stock`, { stock: value });
+      setProducts((current) => current.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
+      setMessage('');
     } catch (error) {
       setMessage(error.message);
+      throw error;
     }
   };
 
   const toggleStatus = async (product) => {
     const isActive = !product.isActive;
-    setProducts((current) => current.map((item) => (item._id === product._id ? { ...item, isActive } : item)));
     try {
-      await api.patch(`/admin/products/${product._id}/status`, { isActive });
+      const saved = await api.patch(`/admin/products/${product._id}/status`, { isActive });
+      setProducts((current) => current.map((item) => item._id === product._id ? { ...item, isActive: saved.isActive } : item));
+      setMessage('');
     } catch (error) {
       setMessage(error.message);
     }
@@ -122,8 +128,8 @@ export default function Products({ route = '/admin/products' }) {
 
   const markOutOfStock = async (product) => {
     try {
-      await api.patch(`/admin/products/${product._id}/mark-out-of-stock`, {});
-      setProducts((current) => current.map((item) => (item._id === product._id ? { ...item, stock: 0 } : item)));
+      const saved = await api.patch(`/admin/products/${product._id}/mark-out-of-stock`, {});
+      setProducts((current) => current.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
     } catch (error) {
       setMessage(error.message);
     }
@@ -192,8 +198,10 @@ export default function Products({ route = '/admin/products' }) {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === visible.length) setSelectedIds([]);
-    else setSelectedIds(visible.map((product) => product._id));
+    const visibleIds = visible.map((product) => product._id);
+    setSelectedIds((current) => visibleIds.every((id) => current.includes(id))
+      ? current.filter((id) => !visibleIds.includes(id))
+      : [...new Set([...current, ...visibleIds])]);
   };
 
   const openAddModal = () => {
@@ -214,6 +222,7 @@ export default function Products({ route = '/admin/products' }) {
     setEditorMode('Add');
   };
 
+  if (loadError) return <PageState error={loadError} onRetry={loadProducts} />;
   return (
     <section className="space-y-5">
       <PageHeader title="Products" note="Manage catalog, pricing, stock, visibility and featured collections.">
@@ -352,7 +361,7 @@ export default function Products({ route = '/admin/products' }) {
                 <tr>
                   <th className="w-12">
                     <button type="button" onClick={toggleSelectAll} className="grid h-5 w-5 place-items-center rounded border border-[#d9cec3] bg-white" aria-label="Select all products">
-                      {selectedIds.length === visible.length && visible.length > 0 ? <Check className="h-3 w-3 text-wine" /> : <Square className="h-3 w-3 text-slate-400" />}
+                      {visible.length > 0 && visible.every((product) => selectedIds.includes(product._id)) ? <Check className="h-3 w-3 text-wine" /> : <Square className="h-3 w-3 text-slate-400" />}
                     </button>
                   </th>
                   <th className="admin-catalog-product">Product</th>
@@ -432,14 +441,12 @@ export default function Products({ route = '/admin/products' }) {
                       </td>
                       <td>
                         <div className="flex flex-col items-start gap-1.5">
-                          <input
-                            type="number"
-                            min="0"
+                          {product.variants?.length ? <a href="/admin/inventory" className="admin-table-action-link" title="Update stock for each size and colour">{product.stock} · Edit variants</a> : <StockInput
                             value={product.stock}
-                            onChange={(event) => updateStock(product, event.target.value)}
+                            onSave={(value) => updateStock(product, value)}
                             className="h-9 w-[72px] rounded-lg border border-[#eadfd5] bg-white px-2.5 text-sm font-semibold text-charcoal"
                             aria-label={`${product.name} stock`}
-                          />
+                          />}
                           <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${stockTone}`}>
                             {stockState}
                           </span>

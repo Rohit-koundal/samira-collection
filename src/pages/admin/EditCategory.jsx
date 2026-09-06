@@ -3,7 +3,7 @@ import PageHeader from '../../components/admin/PageHeader';
 
 export default function EditCategory({ route = '' }) {
   const params = new URLSearchParams(route.split('?')[1] || '');
-  const categoryId = params.get('id') || params.get('categoryId') || route.split('/').filter(Boolean).pop();
+  const categoryId = params.get('id') || params.get('categoryId');
 
   return (
     <section className="space-y-5">

@@ -22,6 +22,7 @@ export default function ProductInfoPanel({
   selectedStock,
   cartItem,
   isOutOfStock,
+  cartBusy = false,
   onAddToCart,
   onBuyNow,
   onOrderWhatsApp,
@@ -191,12 +192,12 @@ export default function ProductInfoPanel({
         {isOutOfStock ? <p className="sc-info__stock-message">This selection is currently out of stock. Choose another available size or colour.</p> : stockLimit !== null && stockLimit <= 5 ? <p className="sc-info__low-stock">Only {stockLimit} left in this selection</p> : null}
 
         <div className={`sc-info__actions${storeWhatsappNumber ? '' : ' sc-info__actions--two'}`}>
-          <button type="button" disabled={isOutOfStock} onClick={onAddToCart} className={`sc-info__action sc-info__action--primary${cartItem ? ' sc-info__action--active' : ''}`}>
+          <button type="button" disabled={isOutOfStock || cartBusy} onClick={onAddToCart} className={`sc-info__action sc-info__action--primary${cartItem ? ' sc-info__action--active' : ''}`}>
             <ShoppingBag aria-hidden="true" />
-            {isOutOfStock ? 'Out of stock' : cartItem ? 'Add another' : 'Add to bag'}
+            {cartBusy ? 'Adding…' : isOutOfStock ? 'Out of stock' : cartItem ? 'Add another' : 'Add to bag'}
           </button>
-          <button type="button" disabled={isOutOfStock} onClick={onBuyNow} className="sc-info__action sc-info__action--dark">
-            {isOutOfStock ? 'Unavailable' : 'Buy now'}
+          <button type="button" disabled={isOutOfStock || cartBusy} onClick={onBuyNow} className="sc-info__action sc-info__action--dark">
+            {cartBusy ? 'Adding…' : isOutOfStock ? 'Unavailable' : 'Buy now'}
           </button>
           {storeWhatsappNumber ? (
             <button type="button" disabled={isOutOfStock} onClick={onOrderWhatsApp} className="sc-info__action sc-info__action--whatsapp">

@@ -10,7 +10,7 @@ const links = [
   ['Customers', '/seller/crm'],
   ['Inbox', '/seller/inbox'],
   ['Analytics', '/seller/analytics'],
-  ['Instagram', '/seller/instagram'],
+  ['Social studio', '/seller/social'],
   ['Audit log', '/seller/audit'],
 ];
 
@@ -22,7 +22,7 @@ const icons = {
   Customers: Users,
   Inbox: MessageCircle,
   Analytics: BarChart3,
-  Instagram: Camera,
+  'Social studio': Camera,
   'Audit log': ClipboardList,
 };
 
@@ -53,6 +53,9 @@ export default function SellerLayout({ children }) {
           ))}
         </nav>
       </aside>
+      <nav className="flex gap-2 overflow-x-auto border-b border-[#e8dcd4] bg-white px-4 py-3 lg:hidden" aria-label="Seller workspace navigation">
+        {items.map(item => <a key={item.path} href={item.path} aria-current={item.active ? 'page' : undefined} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${item.active ? 'bg-[#751d39] text-white' : 'text-[#75656f]'}`}><item.Icon size={15} />{item.label}</a>)}
+      </nav>
       <div className="p-4 lg:p-8">{children}</div>
     </div>
   );

@@ -59,6 +59,15 @@ describe('customer notifications', () => {
     expect(await screen.findByRole('heading', { name: 'No notifications yet' })).toBeInTheDocument();
     expect(screen.getByText('Order and return updates will appear here.')).toBeInTheDocument();
   });
+
+  test.each([undefined, { success: false }, { items: [null] }])('an invalid list response shows recovery instead of crashing or claiming no updates', async (response) => {
+    api.get.mockResolvedValueOnce(response).mockResolvedValue([shipped()]);
+    render(<Notifications navigate={jest.fn()} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Notifications could not be loaded');
+    expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Order shipped')).toBeInTheDocument();
+  });
 });
 
 describe('notification centre and navbar', () => {

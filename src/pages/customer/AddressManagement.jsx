@@ -9,6 +9,7 @@ import { lookupPincode } from '../../utils/indiaPincode';
 import { digitsOnly, isValidIndianMobile, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
 import './Profile.css';
 import './AddressManagement.css';
+import '../../styles/MobileShoppingTheme.css';
 
 const emptyAddress = {
   fullName: '', mobile: '', alternateMobile: '', pincode: '', state: '', city: '',
@@ -37,7 +38,8 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
     setLoadError('');
     try {
       const data = await api.get('/user/addresses');
-      setAddresses(Array.isArray(data) ? data : []);
+      if (!Array.isArray(data) || data.some(address => !address?._id)) throw new Error('Unable to read your saved addresses. Please try again.');
+      setAddresses(data);
     } catch (error) {
       setLoadError(error.message);
     } finally {
@@ -105,6 +107,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
 
   return (
     <section className="sc-addresses">
+      <header className="sc-addresses__mobile-header"><button type="button" aria-label="Back to profile" onClick={() => navigate('/profile')}><ArrowLeft size={22} strokeWidth={1.7} /></button><h1>Saved addresses</h1></header>
       <div className="sc-account__shell">
         <nav className="sc-account__breadcrumb sc-addresses__breadcrumb" aria-label="Breadcrumb">
           <button type="button" onClick={() => navigate('/')}>Home</button><ChevronRight size={13} />
@@ -123,7 +126,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
             </header>
             {notice && <p role="status" className="sc-addresses__notice"><Check size={16} />{notice}</p>}
             {message && !isEditor && !removing && <p role="alert" className="sc-addresses__error">{message}</p>}
-            {loading ? <div role="status" className="sc-addresses__empty">Loading your addresses?</div>
+            {loading ? <div role="status" className="sc-addresses__empty">Loading your addresses…</div>
               : loadError ? <div role="alert" className="sc-addresses__empty"><p>{loadError}</p><button type="button" className="sc-addresses__secondary" onClick={load}>Try again</button></div>
                 : !addresses.length ? <div className="sc-addresses__empty">
                   <span className="sc-addresses__empty-icon"><MapPin size={32} strokeWidth={1.5} /></span>
@@ -146,7 +149,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
         </div>
       </div>
       {isEditor && <AddressDialog label={editing ? 'Edit address' : 'Add new address'} onClose={goBack} busy={saving}>
-        {loading ? <p role="status" className="sc-addresses__empty">Loading your address?</p>
+        {loading ? <p role="status" className="sc-addresses__empty">Loading your address…</p>
           : loadError ? <div className="sc-addresses__empty" role="alert"><p>{loadError}</p><button type="button" onClick={load}>Try again</button><button type="button" onClick={goBack}>Back to addresses</button></div>
             : editing && !selected ? <div className="sc-addresses__empty"><h2>Address not found</h2><p>This address may have been removed.</p><button type="button" className="sc-addresses__secondary" onClick={goBack}>Back to addresses</button></div>
               : <AddressForm form={form} setForm={setForm} onSubmit={save} message={message} editing={editing} onCancel={goBack} saving={saving} />}
@@ -159,7 +162,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
           {message && <p role="alert" className="sc-addresses__error">{message}</p>}
           <div className="sc-addresses__confirm-actions">
             <button type="button" className="sc-addresses__secondary" disabled={!!busyId} onClick={() => { setRemoving(null); setMessage(''); }}>Cancel</button>
-            <button type="button" className="sc-addresses__primary" disabled={!!busyId} onClick={remove}>{busyId ? 'Removing?' : 'Remove address'}</button>
+            <button type="button" className="sc-addresses__primary" disabled={!!busyId} onClick={remove}>{busyId ? 'Removing…' : 'Remove address'}</button>
           </div>
         </div>
       </AddressDialog>}
@@ -195,7 +198,7 @@ function AddressCard({ address, onEdit, onRemove, onDefault, disabled, busy }) {
     <div className="sc-address-card__actions">
       <button type="button" disabled={disabled} onClick={onEdit}>Edit</button>
       <button type="button" disabled={disabled} onClick={onRemove}>Remove</button>
-      {!address.isDefault && <button type="button" disabled={disabled} onClick={() => onDefault(address)}>{busy ? 'Updating?' : 'Make default'}</button>}
+      {!address.isDefault && <button type="button" disabled={disabled} onClick={() => onDefault(address)}>{busy ? 'Updating…' : 'Make default'}</button>}
     </div>
   </article>;
 }
@@ -381,7 +384,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
 
 function LabeledField({ icon: Icon, label, children }) {
   return (
-    <label className="block">
+    <label className="sc-address-form__field block">
       <span className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold text-[#6d1f34]">
         <Icon className="h-3.5 w-3.5 text-[#b88945]" />
         {label}

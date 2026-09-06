@@ -1,3 +1,6 @@
+import api from './api';
+import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
+
 const mockUnsubscribe = jest.fn();
 const mockInitiateQuery = jest.fn(() => ({ type: 'query-request' }));
 const mockInitiateMutation = jest.fn(() => ({ type: 'mutation-request' }));
@@ -18,9 +21,6 @@ jest.mock('../store/apiSlice', () => ({
 jest.mock('../store/store', () => ({ store: { dispatch: (...args) => mockDispatch(...args) } }));
 jest.mock('../utils/mobileLoader', () => ({ startMobileLoader: jest.fn(), stopMobileLoader: jest.fn() }));
 jest.mock('./imageCompression', () => ({ compressImageFile: jest.fn(), isSupportedImageFile: jest.fn() }));
-
-import api from './api';
-import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -46,4 +46,11 @@ test('background notification polling does not trigger the mobile loading overla
   expect(mockInitiateQuery).toHaveBeenCalledWith({ path: '/notifications/summary', silent: true }, { forceRefetch: true, subscribe: false });
   expect(startMobileLoader).not.toHaveBeenCalled();
   expect(stopMobileLoader).not.toHaveBeenCalled();
+});
+
+test('bag requests use separate query identities for guests and customer accounts', async () => {
+  await api.get('/cart', { silent: true, cacheScope: 'guest' });
+  await api.get('/cart', { silent: true, cacheScope: 'customer-1' });
+  expect(mockInitiateQuery).toHaveBeenNthCalledWith(1, { path: '/cart', silent: true, cacheScope: 'guest' }, { forceRefetch: true, subscribe: false });
+  expect(mockInitiateQuery).toHaveBeenNthCalledWith(2, { path: '/cart', silent: true, cacheScope: 'customer-1' }, { forceRefetch: true, subscribe: false });
 });

@@ -4,6 +4,7 @@ import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
 import StatusBadge from '../../components/admin/StatusBadge';
 import api from '../../services/api';
+import StockInput from '../../components/admin/StockInput';
 
 export default function Inventory() {
   const [products, setProducts] = useState([]);
@@ -31,17 +32,19 @@ export default function Inventory() {
 
   const updateStock = async (product, stock, variantId) => {
     try {
-      await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock), ...(variantId ? { variantId } : {}) });
-      load();
+      const saved = await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock), ...(variantId ? { variantId } : {}) });
+      setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
+      setMessage('');
     } catch (error) {
       setMessage(error.message);
+      throw error;
     }
   };
 
   const markOutOfStock = async (product) => {
     try {
-      await api.patch(`/admin/products/${product._id}/mark-out-of-stock`, {});
-      setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: 0 } : item));
+      const saved = await api.patch(`/admin/products/${product._id}/mark-out-of-stock`, {});
+      setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
     } catch (error) {
       setMessage(error.message);
     }
@@ -80,10 +83,10 @@ export default function Inventory() {
                 {Array.isArray(product.variants) && product.variants.length ? product.variants.map((variant) => (
                   <label key={variant._id} className="flex items-center gap-2 text-xs font-bold">
                     <span className="min-w-24">{variant.size} / {variant.color}</span>
-                    <input type="number" value={variant.stock} onChange={(event) => updateStock(product, event.target.value, variant._id)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
+                    <StockInput aria-label={`${product.name} ${variant.size} ${variant.color} stock`} value={variant.stock} onSave={(value) => updateStock(product, value, variant._id)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
                   </label>
                 )) : (
-                  <input type="number" value={product.stock} onChange={(event) => updateStock(product, event.target.value)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
+                  <StockInput aria-label={`${product.name} stock`} value={product.stock} onSave={(value) => updateStock(product, value)} className="h-10 w-24 rounded-lg border border-slate-200 px-3 font-bold" />
                 )}
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => markOutOfStock(product)} className="admin-table-action-link is-danger">Out of stock</button>

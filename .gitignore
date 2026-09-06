@@ -262,3 +262,27 @@ vite.config.ts.timestamp-*
 !backend/services/productImportContext.service.js
 !backend/services/reelCandidateVision.service.js
 !backend/tests/productImportContext.test.js
+!backend/services/geminiJson.service.js
+!backend/tests/geminiJson.test.js
+!backend/tests/wishlist.integration.test.js
+!backend/tests/cart.integration.test.js
+!backend/tests/socialWorkspace.test.js
+# Commerce corrections and isolated regression fixtures; environment files stay ignored.
+!backend/services/orderPricingService.js
+!backend/utils/validators.js
+!backend/tests/auth.test.js
+!backend/tests/orders.test.js
+!backend/tests/leftovers.test.js
+!backend/tests/phoneUtils.test.js
+!backend/tests/authRecovery.unit.test.js
+!backend/tests/inventoryValidation.unit.test.js
+!backend/tests/accessFixtures.js
+!backend/tests/release3.test.js
+!backend/tests/helpers.js
+!backend/tests/factories.js
+!backend/controllers/variantGroupController.js
+!backend/tests/applicationWorkflows.integration.test.js
+!backend/tests/returns.test.js
+!backend/tests/testHarness.unit.test.js
+!backend/tests/uploads.integration.test.js
+!backend/tests/reelWorkflows.integration.test.js

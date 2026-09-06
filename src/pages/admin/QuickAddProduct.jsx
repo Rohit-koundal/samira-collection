@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import api from '../../services/api';
 import ImageUploader from '../../components/admin/ImageUploader';
 import PageHeader from '../../components/admin/PageHeader';
-import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
+import ImportSizeFields from '../../components/admin/ImportSizeFields';
+import { asCatalogList, fetchSubcategories } from '../../utils/catalogOptions';
+import { importSizingProduct } from '../../utils/socialImport';
+import { buildSizeChartPayload, getSelectableSizes, getSizeChartValidation, resolveSizingMode } from '../../utils/productSizing';
+import './SocialProductImport.css';
 import {
   applyVisionSuggestion,
   buildQuickAddPayload,
@@ -28,6 +32,9 @@ export default function QuickAddProduct() {
   const [copyTouched, setCopyTouched] = useState(false);
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [structure, setStructure] = useState(null);
+  const [setupError, setSetupError] = useState('');
+  const [setupLoading, setSetupLoading] = useState(true);
 
   const nameTouchedRef = useRef(false);
   const copyTouchedRef = useRef(false);
@@ -43,11 +50,21 @@ export default function QuickAddProduct() {
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
   useEffect(() => { visionEnabledRef.current = visionEnabled; }, [visionEnabled]);
 
+  const loadSetup = useCallback(async () => {
+    setSetupLoading(true);
+    setSetupError('');
+    try {
+      const [configuration, items] = await Promise.all([api.get('/catalog-configuration'), api.get('/admin/categories?admin=true')]);
+      setStructure(configuration);
+      setCategories(asCatalogList(items));
+    } catch (error) {
+      setSetupError(error.message || 'Product options could not load.');
+    } finally { setSetupLoading(false); }
+  }, []);
+  useEffect(() => { loadSetup(); }, [loadSetup]);
+
   useEffect(() => {
     let alive = true;
-    fetchCategories(api).then((items) => {
-      if (alive) setCategories(items);
-    });
     api.get('/admin/products/quick-analyze/status')
       .then((status) => {
         if (!alive) return;
@@ -61,7 +78,7 @@ export default function QuickAddProduct() {
         setVisionEnabled(false);
         setVisionNote('Could not check photo AI status. Restart the backend, then refresh this page.');
       });
-    return () => { alive = false; };
+    return () => { alive = false; analyzeTokenRef.current += 1; };
   }, []);
 
   useEffect(() => {
@@ -157,6 +174,7 @@ export default function QuickAddProduct() {
 
     const firstUrl = images[0]?.url || '';
     if (!firstUrl) {
+      analyzeTokenRef.current += 1;
       analyzedUrlRef.current = '';
       setAnalyzing(false);
       if (visionEnabledRef.current === false) {
@@ -180,8 +198,15 @@ export default function QuickAddProduct() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || analyzing || setupLoading || setupError || !structure) return;
     const nextErrors = validateQuickAdd(form);
+    const sizing = importSizingProduct(form, categories, structure);
+    if (!getSizeChartValidation(sizing).valid) nextErrors.sizing = 'Complete the available sizes and actual measurements below.';
+    if (!Number.isSafeInteger(Number(form.stock)) || Number(form.stock) < 0) nextErrors.stock = 'Enter a whole-number stock quantity.';
+    if (!Number.isFinite(Number(form.price))) nextErrors.price = 'Enter a valid selling price.';
+    for (const attribute of structure.attributes || []) {
+      if (attribute.required && !String(form.attributeValues?.[attribute.key] ?? '').trim()) nextErrors[attribute.key] = `${attribute.label} is required.`;
+    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -192,6 +217,13 @@ export default function QuickAddProduct() {
       const payload = buildQuickAddPayload({
         ...form,
         categoryName: selectedCategory?.name || '',
+      });
+      Object.assign(payload, {
+        attributeValues: form.attributeValues || {},
+        sizingMode: resolveSizingMode(sizing),
+        sizeChartProfile: sizing.sizeChartProfile || 'auto',
+        sizes: getSelectableSizes(sizing),
+        sizeChart: buildSizeChartPayload(sizing),
       });
       if (!payload.category) delete payload.category;
       const product = await api.post('/admin/products', payload);
@@ -270,6 +302,7 @@ export default function QuickAddProduct() {
       )}
 
       <form onSubmit={submit} className="admin-quick-add">
+        {setupError && <p role="alert">{setupError} <button type="button" className="admin-btn-ghost" onClick={loadSetup}>Retry product options</button></p>}
         <div className="admin-form-card">
           <h2>Photos</h2>
           <p className="admin-form-card__note">
@@ -296,6 +329,9 @@ export default function QuickAddProduct() {
             {!analyzing && visionNote && <p className="admin-quick-add__status">{visionNote}</p>}
             {errors.images && <p className="admin-field__error mt-2">{errors.images}</p>}
           </div>
+
+          {structure?.attributes?.map((attribute) => <label key={attribute.key} className="admin-field mt-4"><span>{attribute.label}{attribute.unit ? ` (${attribute.unit})` : ''}{attribute.required && <em>*</em>}</span><input className="admin-field__control" maxLength={500} value={form.attributeValues?.[attribute.key] ?? ''} onChange={(event) => { update('attributeValues', { ...form.attributeValues, [attribute.key]: event.target.value }); setErrors((current) => ({ ...current, [attribute.key]: undefined })); }} />{errors[attribute.key] && <span className="admin-field__error">{errors[attribute.key]}</span>}</label>)}
+          {structure && <div className="mt-4"><ImportSizeFields form={form} onUpdate={update} categories={categories} structure={structure} />{errors.sizing && <p role="alert" className="admin-field__error">{errors.sizing}</p>}</div>}
         </div>
 
         <div className="admin-form-card">
@@ -435,10 +471,6 @@ export default function QuickAddProduct() {
                 <input value={form.tags} onChange={(event) => update('tags', event.target.value)} className="admin-field__control" placeholder="festive, silk" />
               </label>
               <label className="admin-field">
-                <span>Sizes</span>
-                <input value={form.sizes} onChange={(event) => update('sizes', event.target.value)} className="admin-field__control" placeholder="S, M, L, XL" />
-              </label>
-              <label className="admin-field">
                 <span>Colors</span>
                 <input value={form.colors} onChange={(event) => update('colors', event.target.value)} className="admin-field__control" placeholder="Pink, Maroon" />
               </label>
@@ -450,11 +482,11 @@ export default function QuickAddProduct() {
           </p>
         </div>
 
-        {message && !created && <p className="admin-quick-add__message">{message}</p>}
+        {message && !created && <p role="status" className="admin-quick-add__message">{message}</p>}
 
         <div className="admin-form-actions admin-quick-add__actions">
           <a href="/admin/products" className="admin-btn-ghost">Cancel</a>
-          <button type="submit" disabled={saving || analyzing} className="admin-btn disabled:opacity-60">
+          <button type="submit" disabled={saving || analyzing || setupLoading || Boolean(setupError) || !structure} className="admin-btn disabled:opacity-60">
             {saving ? 'Saving...' : analyzing ? 'Reading photo…' : 'Looks good, add product'}
           </button>
         </div>

@@ -6,6 +6,8 @@ export default function DesktopNewArrivalsLayout({
   routeQuery,
   collectionLabel,
   loading,
+  error,
+  onRetry,
   visibleProducts,
   categories,
   filters,
@@ -25,6 +27,9 @@ export default function DesktopNewArrivalsLayout({
       subtitle={subtitle}
       breadcrumbs={breadcrumbs}
       products={visibleProducts}
+      loading={loading}
+      error={error}
+      onRetry={onRetry}
       categories={categories}
       filters={filters}
       sortValue={filters.sort}

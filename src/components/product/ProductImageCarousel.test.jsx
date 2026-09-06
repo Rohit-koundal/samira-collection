@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import ProductImageCarousel from './ProductImageCarousel';
-jest.mock('./ProductCard', () => ({ ProductVisual: () => <p>No image available</p> }));
+jest.mock('./ProductVisual', () => ({ ProductVisual: () => <p>No image available</p> }));
 const product = { name: 'Silk saree', images: [
   { url: 'https://images.example.test/front.jpg' },
   { url: 'https://images.example.test/back.jpg' },

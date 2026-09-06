@@ -81,6 +81,11 @@ export function productHref(product, storeSlug = '') {
     : pathname;
 }
 
+export function storefrontPath(path, storeSlug = '') {
+  if (!storeSlug || !/^\/(?:$|\?|products(?:[/?]|$)|product(?:[/?]|$)|search(?:[/?]|$)|category(?:[/?]|$))/.test(String(path || ''))) return path;
+  return `/store/${encodeURIComponent(storeSlug)}${path === '/' ? '' : path}`;
+}
+
 function decodeRoutePart(value) {
   try {
     return decodeURIComponent(value).trim();

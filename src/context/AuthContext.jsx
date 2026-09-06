@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import api from '../services/api';
@@ -11,6 +11,8 @@ export function AuthProvider({ children, navigate }) {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
   const [toast, setToastState] = useState(null);
+  const sessionRevision = useRef(0);
+  const profileRequest = useRef(0);
 
   const setToast = useCallback((value) => {
     if (!value) {
@@ -35,6 +37,7 @@ export function AuthProvider({ children, navigate }) {
   }, [setToast]);
 
   const persist = useCallback((data) => {
+    sessionRevision.current += 1;
     dispatch(setCredentials(data));
   }, [dispatch]);
 
@@ -45,13 +48,18 @@ export function AuthProvider({ children, navigate }) {
   const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('samira_token');
     if (!token) return null;
+    const revision = sessionRevision.current;
+    const request = ++profileRequest.current;
+    const isCurrent = () => revision === sessionRevision.current && request === profileRequest.current && !!localStorage.getItem('samira_token');
     try {
       const profile = await api.get('/auth/me');
+      if (!isCurrent()) return null;
       dispatch(setUserAction(profile));
       return profile;
     } catch (error) {
       // A temporary profile fetch failure must not erase a saved session.
-      if (error.status === 401 || error.status === 403) {
+      if (isCurrent() && (error.status === 401 || error.status === 403)) {
+        sessionRevision.current += 1;
         dispatch(logoutAction());
         dispatch(samiraApi.util.resetApiState());
       }
@@ -61,6 +69,7 @@ export function AuthProvider({ children, navigate }) {
 
   useEffect(() => {
     refreshProfile();
+    return () => { profileRequest.current += 1; };
   }, [refreshProfile]);
 
   useEffect(() => {
@@ -72,6 +81,7 @@ export function AuthProvider({ children, navigate }) {
   useEffect(() => {
     const onRefreshed = (event) => dispatch(setUserAction(event.detail));
     const onExpired = () => {
+      sessionRevision.current += 1;
       dispatch(logoutAction());
       dispatch(samiraApi.util.resetApiState());
     };
@@ -136,6 +146,7 @@ export function AuthProvider({ children, navigate }) {
 
   const deleteProfile = useCallback(async () => {
     const response = await api.delete('/auth/profile');
+    sessionRevision.current += 1;
     dispatch(logoutAction());
     dispatch(samiraApi.util.resetApiState());
     try {
@@ -149,6 +160,7 @@ export function AuthProvider({ children, navigate }) {
   }, [dispatch, navigate, setToast]);
 
   const logout = useCallback(() => {
+    sessionRevision.current += 1;
     dispatch(logoutAction());
     dispatch(samiraApi.util.resetApiState());
     try {

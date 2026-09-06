@@ -1,21 +1,11 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import useSellerQuery from '../../hooks/useSellerQuery';
 import PageState from '../../components/ui/PageState';
 
 export default function SellerCrm() {
-  const [items, setItems] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/seller/crm')
-      .then((data) => setItems(Array.isArray(data) ? data : data.items || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: items, error, loading, retry } = useSellerQuery('/seller/crm', { list: true });
 
   if (loading) return <PageState loading loadingLabel="Loading customers..." />;
-  if (error) return <PageState error={error} />;
+  if (error) return <PageState error={error} onRetry={retry} />;
 
   return (
     <section className="space-y-5">

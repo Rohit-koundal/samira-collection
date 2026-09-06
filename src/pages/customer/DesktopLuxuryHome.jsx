@@ -15,6 +15,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
+import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import { getHomepageSection } from '../../config/websiteCustomization';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import styles from './DesktopLuxuryHome.module.css';
@@ -355,6 +356,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
   const originalPrice = Number(product.originalPrice ?? price);
   const discount = Number(product.discountPercentage) || (originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0);
   const wishlisted = wishlist.items.some((item) => getProductId(item) === productId);
+  const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
 
   const toggleWishlist = async (event) => {
     event.stopPropagation();
@@ -376,8 +378,8 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
       <div className={styles.productImageWrap} data-theme-product-media>
         <img loading="lazy" decoding="async" src={image} alt={product.name} />
         {(product.isNewArrival || product.isBestSeller) && <span className={styles.productBadge}>{product.isBestSeller ? 'Bestseller' : 'New'}</span>}
-        <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
-        <button type="button" className={styles.cartButton} onClick={addToCart} aria-label="Add to cart" data-card-field="cart"><IconShoppingBag /></button>
+        <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} disabled={wishlist.loading} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
+        <button type="button" className={styles.cartButton} onClick={addToCart} disabled={unavailable || cart.loading} aria-label={unavailable ? 'Out of stock' : 'Add to cart'} data-card-field="cart"><IconShoppingBag /></button>
         <button type="button" data-card-field="quick-view" className="absolute bottom-3 right-3 z-20 rounded-lg bg-white/95 px-3 py-2 text-[10px] font-black uppercase text-wine shadow" onClick={(event) => { event.stopPropagation(); setQuickOpen(true); }}>Quick view</button>
         {productImages.length > 1 && (
           <>
@@ -400,17 +402,17 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
           </>
         )}
       </div>
-      <h3 data-card-field="title">{product.name}</h3>
+      <h3 data-card-field="title" title={product.name}>{product.name}</h3>
       <p className={styles.productCategory}>{formatCategory(product.category) || product.fabric || 'Samira Collection'}</p>
       <div className={styles.priceRow} data-card-field="price">
         <strong>Rs. {formatPrice(price)}</strong>
         {originalPrice > price && <del>Rs. {formatPrice(originalPrice)}</del>}
         {discount > 0 && <span data-card-field="discount">{discount}% OFF</span>}
       </div>
-      <div className={styles.ratingRow} data-card-field="rating">
-        <span>{[0, 1, 2, 3, 4].map((star) => <IconStarFilled key={star} />)}</span>
-        <small>({product.numReviews || product.rating || 0})</small>
-      </div>
+      {Number(product.numReviews) > 0 && <div className={styles.ratingRow} data-card-field="rating">
+        <span><IconStarFilled />{Number(product.rating || 0).toFixed(1)}</span>
+        <small>({product.numReviews})</small>
+      </div>}
       {quickOpen && <LazyBoundary><Suspense fallback={<p role="status" className="p-3 text-sm text-slate-600">Loading quick view…</p>}><QuickViewModal product={product} onClose={() => setQuickOpen(false)} onOpenFull={() => { setQuickOpen(false); navigate(`/product?id=${encodeURIComponent(productId)}`); }} /></Suspense></LazyBoundary>}
     </article>
   );
@@ -468,15 +470,17 @@ function NewsletterSection({ section }) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const submit = async (event) => {
     event.preventDefault();
+    if (submitLock.current) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setStatus('Please enter your email.');
       return;
     }
-    setSubmitting(true);
+    submitLock.current = true; setSubmitting(true);
     setStatus('');
     try {
       const data = await api.post('/newsletter/subscribe', { email: trimmedEmail, source: 'homepage' });
@@ -485,7 +489,7 @@ function NewsletterSection({ section }) {
     } catch (error) {
       setStatus(error.message || 'Unable to subscribe right now.');
     } finally {
-      setSubmitting(false);
+      submitLock.current = false; setSubmitting(false);
     }
   };
 
@@ -496,6 +500,7 @@ function NewsletterSection({ section }) {
         <input
           type="email"
           value={email}
+          disabled={submitting}
           onChange={(event) => {
             setEmail(event.target.value);
             if (status) setStatus('');

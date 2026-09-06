@@ -74,3 +74,33 @@ test('smart fill works for a saved unpublished candidate and keeps manual edits'
   expect(screen.getByLabelText(/^Stock/)).toHaveValue(4);
   expect(api.post).toHaveBeenCalledWith('/admin/reel-imports/job/candidates/candidate/analyze', { selectedFrameIds: ['front'] });
 });
+
+test('a failed refresh preserves filled fields and reports the actual model failure', async () => {
+  const ready = { ...candidate, suggestions: { ...candidate.suggestions, price: 1299 } };
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation(async path => path.endsWith('/candidates') ? { data: [ready] } : path.endsWith('/capabilities') ? { data: { smartSuggestionsEnabled: true } } : original(path));
+  const error = 'No supported Gemini model is available.';
+  // Even an older backend returning generic suggestions must not clear the form.
+  api.post.mockResolvedValue({ data: { ...candidate, suggestions: { name: 'Product 1' }, analysis: { status: 'failed', error, errorCode: 'AI_MODEL_UNAVAILABLE' } } });
+  render(<ReelProductImport route="/admin/reel-import?jobId=job" />);
+  await screen.findByDisplayValue('Pink embroidered saree');
+  fireEvent.change(screen.getByLabelText(/^Stock/), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Smart fill details' }));
+  await waitFor(() => expect(mockNotify).toHaveBeenCalledWith(error, 'warning', 'Smart Reel Assistant'));
+  expect(screen.getByDisplayValue('Pink embroidered saree')).toBeInTheDocument();
+  expect(screen.getByLabelText(/Selling price/)).toHaveValue(1299);
+  expect(screen.getByLabelText(/^Stock/)).toHaveValue(5);
+});
+
+test('bulk smart fill stops on account or service failures and keeps the real explanation', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation(async path => path.endsWith('/candidates') ? { data: [candidate, { ...candidate, _id: 'second', groupNumber: 2 }] } : path.endsWith('/capabilities') ? { data: { smartSuggestionsEnabled: true } } : original(path));
+  const error = 'The Gemini quota is currently exhausted.';
+  api.post.mockResolvedValue({ data: { ...candidate, analysis: { status: 'failed', error, errorCode: 'AI_QUOTA_EXCEEDED' } } });
+  render(<ReelProductImport route="/admin/reel-import?jobId=job" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Smart fill all products' }));
+  await waitFor(() => expect(mockNotify).toHaveBeenCalledWith(expect.stringContaining(error), 'warning', 'Smart Reel Assistant'));
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(mockNotify.mock.calls.at(-1)[0]).toContain('Remaining products were not analyzed');
+  expect(mockNotify.mock.calls.at(-1)[0]).not.toContain('clearer photos');
+});

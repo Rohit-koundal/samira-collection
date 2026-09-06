@@ -18,6 +18,9 @@ export default function ProductListingPage({
   onFiltersChange,
   onClearFilters,
   allProducts = [],
+  loading = false,
+  error,
+  onRetry,
 }) {
   const facetProducts = allProducts.length ? allProducts : products;
   const facets = useMemo(
@@ -58,11 +61,7 @@ export default function ProductListingPage({
             </div>
           </div>
 
-          <div className="sc-plp__divider" aria-hidden="true">
-            <span className="sc-plp__divider-line" />
-            <span className="sc-plp__divider-mark">✦</span>
-            <span className="sc-plp__divider-line" />
-          </div>
+          <div className="sc-plp__divider" aria-hidden="true" />
 
           <div className="sc-plp__content">
             <ProductFilterSidebar
@@ -74,7 +73,9 @@ export default function ProductListingPage({
             />
 
             <div className="sc-plp__grid">
-              {products.length ? products.map((product) => (
+              {error ? <div className="col-span-full rounded-2xl bg-white p-8 text-center" role="alert"><p>Store data service is temporarily unavailable.</p><button type="button" onClick={onRetry} className="mt-4 rounded-xl bg-wine px-5 py-3 text-sm font-bold text-white">Try again</button></div>
+                : loading ? <p className="col-span-full p-8 text-center text-sm" role="status">Loading styles…</p>
+                : products.length ? products.map((product) => (
                 <ProductCard key={product.id} product={product} navigate={navigate} />
               )) : (
                 <div className="col-span-full rounded-2xl border border-[#ead8cb] bg-white p-8 text-center text-sm font-semibold text-[#6f625c]">

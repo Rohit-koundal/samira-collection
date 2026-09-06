@@ -814,3 +814,18 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.sc-checkout-status { min-height: 60vh; padding: 24px 16px; }
+.sc-checkout-load-state { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; border: 1px solid #e8edf2; border-radius: 12px; background: #fff; color: #475569; font: 13px/1.6 var(--font-auth-app, sans-serif); }
+.sc-checkout-load-state p { flex: 1; min-width: 160px; }
+.sc-checkout-load-state button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid #edc8d2; border-radius: 8px; color: #a82b50; background: white; cursor: pointer; font-size: 12px; }
+.sc-checkout-load-state button:focus-visible { outline: 2px solid #c73562; outline-offset: 2px; }
+.sc-checkout-pending { width: calc(100% - 32px); max-width: 700px; min-height: 0; margin: 24px auto; padding: 24px; border: 1px solid #e8edf2; border-radius: 16px; background: white; font-family: var(--font-auth-app, sans-serif); }
+.sc-checkout-pending > svg { color: #c73562; }
+.sc-checkout-pending h1 { font: 600 22px/1.4 var(--font-auth-app, sans-serif); margin: 16px 0 12px; }
+.sc-checkout-pending p { font-size: 14px; line-height: 1.7; color: #64748b; }
+.sc-checkout-pending > div { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+.sc-checkout-pending button { min-height: 46px; border: 1px solid #e8edf2; border-radius: 10px; padding: 10px 16px; font-size: 13px; color: #a82b50; }
+.sc-checkout-pending button:first-child { background: #c73562; color: white; border-color: #c73562; }
+.sc-checkout-pending button:disabled { opacity: .5; }
+.sc-checkout-pending button:focus-visible { outline: 2px solid #c73562; outline-offset: 3px; }

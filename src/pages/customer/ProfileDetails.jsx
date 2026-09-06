@@ -248,6 +248,7 @@ export default function ProfileDetails() {
               <div className="col-span-2 space-y-3">
                 <input
                   value={form.phone}
+                  disabled={phoneOtpSending || phoneOtpVerifying || saving}
                   onChange={(event) => onChange('phone', digitsOnly(event.target.value, 10))}
                   className={baseInputClass}
                   placeholder="Enter mobile number"
@@ -262,18 +263,19 @@ export default function ProfileDetails() {
                 {phoneChanged ? (
                   <>
                     <div className="flex gap-3">
-                      <button type="button" onClick={requestPhoneOtp} disabled={phoneOtpSending} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
+                      <button type="button" onClick={requestPhoneOtp} disabled={phoneOtpSending || phoneOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
                         {phoneOtpSending ? 'Sending...' : (phoneOtpSent ? 'Resend OTP' : 'Send OTP')}
                       </button>
                       <input
                         value={phoneOtp}
+                        disabled={phoneOtpSending || phoneOtpVerifying || saving}
                         onChange={(event) => setPhoneOtp(digitsOnly(event.target.value, 6))}
                         className={`${baseInputClass} h-[44px] flex-1`}
                         placeholder="Enter OTP"
                         inputMode="numeric"
                       />
                     </div>
-                    <button type="button" onClick={confirmPhoneOtp} disabled={phoneOtpVerifying || phoneOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
+                    <button type="button" onClick={confirmPhoneOtp} disabled={phoneOtpSending || phoneOtpVerifying || saving || phoneOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
                       {phoneOtpVerifying ? 'Verifying...' : (phoneVerificationToken ? 'Verified' : 'Verify Mobile Number')}
                     </button>
                     <VerificationNote verified={Boolean(phoneVerificationToken)} pendingText="New number needs OTP verification before save." />
@@ -304,6 +306,7 @@ export default function ProfileDetails() {
               <div className="col-span-2 space-y-3">
                 <input
                   value={form.email}
+                  disabled={emailOtpSending || emailOtpVerifying || saving}
                   onChange={(event) => onChange('email', event.target.value)}
                   className={baseInputClass}
                   placeholder="Enter email"
@@ -312,18 +315,19 @@ export default function ProfileDetails() {
                 {normalizedDraftEmail && emailChanged ? (
                   <>
                     <div className="flex gap-3">
-                      <button type="button" onClick={requestEmailOtp} disabled={emailOtpSending} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
+                      <button type="button" onClick={requestEmailOtp} disabled={emailOtpSending || emailOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
                         {emailOtpSending ? 'Sending...' : (emailOtpSent ? 'Resend OTP' : 'Send OTP')}
                       </button>
                       <input
                         value={emailOtp}
+                        disabled={emailOtpSending || emailOtpVerifying || saving}
                         onChange={(event) => setEmailOtp(digitsOnly(event.target.value, 6))}
                         className={`${baseInputClass} h-[44px] flex-1`}
                         placeholder="Enter OTP"
                         inputMode="numeric"
                       />
                     </div>
-                    <button type="button" onClick={confirmEmailOtp} disabled={emailOtpVerifying || emailOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
+                    <button type="button" onClick={confirmEmailOtp} disabled={emailOtpSending || emailOtpVerifying || saving || emailOtp.length !== 6} className="h-[44px] w-full border border-[#ff3f7f] text-[13px] font-bold text-[#ff3f7f] disabled:opacity-60">
                       {emailOtpVerifying ? 'Verifying...' : (emailVerificationToken ? 'Verified' : 'Verify Email')}
                     </button>
                     <VerificationNote verified={Boolean(emailVerificationToken)} pendingText="Email must be verified before save." />
@@ -396,7 +400,7 @@ export default function ProfileDetails() {
 
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:static md:border-0 md:bg-transparent md:px-5 md:pt-0">
           <div className="mx-auto w-full max-w-[470px]">
-            <button type="button" onClick={onSave} disabled={saving || deleting} className="h-[46px] w-full rounded-[4px] bg-[#ff3f7f] text-[15px] font-bold uppercase tracking-[0.01em] text-white disabled:opacity-60">
+            <button type="button" onClick={onSave} disabled={saving || deleting || phoneOtpSending || phoneOtpVerifying || emailOtpSending || emailOtpVerifying} className="h-[46px] w-full rounded-[4px] bg-[#ff3f7f] text-[15px] font-bold uppercase tracking-[0.01em] text-white disabled:opacity-60">
               {saving ? 'Saving Details...' : 'Save Details'}
             </button>
           </div>

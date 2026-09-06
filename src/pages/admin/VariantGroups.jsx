@@ -19,7 +19,7 @@ export default function VariantGroups() {
     setLoading(true);
     try {
       const [groupItems, productItems] = await Promise.all([
-        api.get('/variant-groups'),
+        api.get('/admin/variant-groups'),
         api.get('/admin/products?admin=true'),
       ]);
       setGroups(groupItems?.data || []);
@@ -89,9 +89,16 @@ export default function VariantGroups() {
   };
 
   const removeGroup = async (groupId) => {
+    if (saving) return;
     if (!window.confirm('Delete this variant group?')) return;
-    await api.delete(`/admin/variant-groups/${groupId}`);
-    await load();
+    setSaving(true); setMessage('');
+    try {
+      await api.delete(`/admin/variant-groups/${groupId}`);
+      setGroups(current => current.filter(group => (group._id || group.id) !== groupId));
+      if (editingGroupId === groupId) clearForm();
+      setMessage('Variant group deleted successfully.');
+    } catch (error) { setMessage(error.message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -139,7 +146,7 @@ export default function VariantGroups() {
         </button>
       </div>
 
-      {message && <p className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
+      {message && <p role="status" className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
 
       <div className="admin-card overflow-hidden">
         {loading ? (
@@ -159,7 +166,7 @@ export default function VariantGroups() {
                     <button type="button" onClick={() => editGroup(group)} className="rounded-full border border-slate-200 bg-white p-2 text-slate-600" aria-label="Edit group">
                       <PencilLine className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => removeGroup(group._id || group.id)} className="text-rose" aria-label="Delete group">
+                    <button type="button" disabled={saving} onClick={() => removeGroup(group._id || group.id)} className="text-rose" aria-label="Delete group">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>

@@ -55,6 +55,7 @@ const SellerOrders = lazy(() => import('./pages/seller/Orders'));
 const SellerCrm = lazy(() => import('./pages/seller/Crm'));
 const SellerInbox = lazy(() => import('./pages/seller/Inbox'));
 const SellerInstagram = lazy(() => import('./pages/seller/Instagram'));
+const SocialWorkspace = lazy(() => import('./pages/admin/SocialWorkspace'));
 const SellerAudit = lazy(() => import('./pages/seller/Audit'));
 const SellerAnalytics = lazy(() => import('./pages/seller/Analytics'));
 const SellerProductForm = lazy(() => import('./pages/seller/ProductFormPage'));
@@ -129,6 +130,7 @@ const sellerRoutes = {
   '/seller/crm': SellerCrm,
   '/seller/inbox': SellerInbox,
   '/seller/instagram': SellerInstagram,
+  '/seller/social': SocialWorkspace,
   '/seller/audit': SellerAudit,
   '/seller/analytics': SellerAnalytics,
 };
@@ -161,6 +163,7 @@ const adminRoutes = {
   '/admin/customization': WebsiteCustomizer,
   '/admin/store-content': StoreContent,
   ...(reelProductImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
+  '/admin/social': SocialWorkspace,
 };
 
 const samiraTheme = createTheme({
@@ -255,18 +258,18 @@ function AppShell({ route, navigate }) {
     '/checkout',
     '/order-detail',
     '/order-success',
-    '/wishlist',
     '/returns',
     '/notifications',
   ];
-  const focusedMobileRoutes = ['/product', '/cart', '/checkout'];
-  const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
+  const focusedMobileRoutes = ['/product', '/cart', '/checkout', '/wishlist', '/orders', '/order-detail', '/order-success', '/profile/addresses'];
+  const hideMobileBottomNavRoutes = ['/cart', '/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user]);
   const wishlistStoragePlan = useMemo(() => createStoragePlan('samira_wishlist', user), [user]);
   const isProductPage = routePath === '/product'
     || routePath.startsWith('/product/')
+    || /^\/store\/[^/]+\/product$/.test(logicalPath)
     || /\/products\/[^/]+$/.test(logicalPath)
     || /\/product\/[^/]+$/.test(logicalPath);
   const hideMobileHeader = focusedMobileRoutes.includes(routePath) || isProductPage;
@@ -283,7 +286,7 @@ function AppShell({ route, navigate }) {
     if (isSeller) return sellerRoutes[routePath] || SellerDashboard;
     if (logicalPath.startsWith('/store/')) {
       const parts = logicalPath.split('/').filter(Boolean);
-      if (parts[2] === 'product' && parts[3]) return ProductDetail;
+      if (parts[2] === 'product') return ProductDetail;
       if (parts[2] === 'products' && parts[3]) return ProductDetail;
       if (parts[2] === 'products' || parts[2] === 'search' || parts[2] === 'category') return Products;
       return StoreHome;

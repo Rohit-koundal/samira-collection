@@ -421,22 +421,23 @@ function ReviewWorkspace({ jobId }) {
       });
       const nextCandidate = response.data || response;
       setCandidates((current) => current.map((item) => (item._id || item.id) === id ? nextCandidate : item));
-      setForms((current) => ({
+      const completed = nextCandidate.analysis?.status === 'completed';
+      if (completed) setForms((current) => ({
         ...current,
         [id]: mergeSmartCandidateForm(current[id] || currentForm, candidateForm(candidate), candidateForm(nextCandidate)),
       }));
-      const completed = nextCandidate.analysis?.status === 'completed';
+      const message = response.warning || nextCandidate.analysis?.error || 'Smart suggestions need another try.';
       if (!quiet) {
         notify(
-          completed ? 'Product details suggested from the selected reel views.' : (response.warning || nextCandidate.analysis?.error || 'Smart suggestions need another try.'),
+          completed ? 'Product details suggested from the selected reel views.' : message,
           completed ? 'success' : 'warning',
           'Smart Reel Assistant',
         );
       }
-      return completed;
+      return { completed, error: completed ? '' : message, errorCode: nextCandidate.analysis?.errorCode };
     } catch (error) {
       if (!quiet) notify(error.message, 'error', 'Smart Reel Assistant');
-      return false;
+      return { completed: false, error: error.message, errorCode: error.code };
     } finally {
       setSmartFilling((current) => current.filter((item) => item !== id));
     }
@@ -447,15 +448,23 @@ function ReviewWorkspace({ jobId }) {
     const eligible = candidates.filter((candidate) => !['ignored', 'merged'].includes(candidate.status) && !candidate.savedDraft?.publishedProductId);
     if (!eligible.length) return notify('There are no candidates available for smart fill.', 'info', 'Smart Reel Assistant');
     setSmartFillingAll(true);
-    let completed = 0;
+    let completed = 0; let attempted = 0; let failure = '';
     try {
       for (const candidate of eligible) {
-        if (await smartFillCandidate(candidate, true)) completed += 1;
+        const result = await smartFillCandidate(candidate, true);
+        attempted += 1;
+        if (result.completed) completed += 1;
+        else {
+          failure ||= result.error;
+          // A project/service failure affects every group; avoid spending quota
+          // repeating the same unsuccessful request for the remaining products.
+          if (['AI_QUOTA_EXCEEDED', 'AI_ACCESS_DENIED', 'AI_MODEL_UNAVAILABLE', 'AI_CONNECTION_FAILED', 'AI_PROVIDER_UNAVAILABLE', 'AI_KEY_MISSING'].includes(result.errorCode)) break;
+        }
       }
       const failed = eligible.length - completed;
       notify(
         failed
-          ? `${completed} of ${eligible.length} products were filled. ${failed} need clearer photos or manual details.`
+          ? `${completed} of ${eligible.length} products were filled. ${failure || 'Please review the messages on the remaining products.'}${attempted < eligible.length ? ' Remaining products were not analyzed.' : ''}`
           : `${completed} product${completed === 1 ? '' : 's'} filled with catalog suggestions. Please confirm before creating drafts.`,
         failed ? 'warning' : 'success',
         'Smart Reel Assistant',

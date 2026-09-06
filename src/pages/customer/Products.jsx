@@ -17,20 +17,23 @@ import {
 } from '../../store/catalogSlice';
 import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 import { trackEvent } from '../../utils/analytics';
+import { useStorefront } from '../../context/StorefrontContext';
+import { storefrontPath } from '../../utils/routing';
 
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
+  const { storeSlug } = useStorefront();
   const [openFilters, setOpenFilters] = useState(false);
   const routePath = route.split('?')[0];
-  const basePath = route.split('?')[0] === '/search' ? '/search' : '/products';
+  const basePath = storefrontPath(routePath.endsWith('/search') ? '/search' : '/products', storeSlug);
   const routeQuery = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const filters = useSelector(selectCatalogFilters);
   const params = useMemo(() => createCatalogSearchParams(filters), [filters]);
-  const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: productData = [], isLoading, isFetching, error, refetch } = useGetProductsQuery();
+  const { data: categories = [] } = useGetCategoriesQuery({ store: storeSlug });
+  const { data: productData = [], isLoading, isFetching, error, refetch } = useGetProductsQuery({ store: storeSlug });
   const loading = isLoading || isFetching;
   const catalog = useMemo(() => {
-    return normalizeProducts(Array.isArray(productData) ? productData : []);
+    return normalizeProducts(Array.isArray(productData) ? productData : productData?.items || []);
   }, [productData]);
   const visibleProducts = useSelector((state) => selectVisibleProducts(state, catalog, categories));
   const collectionLabel = useMemo(() => getCollectionLabel(routeQuery, filters), [routeQuery, filters]);
@@ -82,13 +85,15 @@ export default function Products({ navigate, route = '/products' }) {
 
   return (
     <section className="bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 md:p-0">
-      {routePath === '/products' || routePath === '/search' || routePath === '/category' ? (
+      {(
         <DesktopNewArrivalsLayout
           navigate={navigate}
           route={route}
           routeQuery={routeQuery}
           collectionLabel={collectionLabel}
           loading={loading}
+          error={error}
+          onRetry={refetch}
           visibleProducts={visibleProducts}
           categories={categories}
           filters={filters}
@@ -97,7 +102,7 @@ export default function Products({ navigate, route = '/products' }) {
           clearFilterParams={clearFilterParams}
           allProducts={catalog}
         />
-      ) : null}
+      )}
       <div className="mb-3 flex items-center justify-between gap-2 lg:hidden">
         <div>
           <p className="text-[13px] font-bold text-[#1f2a44]">{collectionLabel}</p>

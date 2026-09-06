@@ -1,24 +1,11 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import useSellerQuery from '../../hooks/useSellerQuery';
 import PageState from '../../components/ui/PageState';
 
 export default function SellerProducts({ navigate }) {
-  const [items, setItems] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const load = () => {
-    setLoading(true);
-    api.get('/seller/products')
-      .then((data) => setItems(Array.isArray(data) ? data : data.items || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []);
+  const { data: items, error, loading, retry } = useSellerQuery('/seller/products', { list: true });
 
   if (loading) return <PageState loading loadingLabel="Loading products..." />;
-  if (error) return <PageState error={error} onRetry={load} />;
+  if (error) return <PageState error={error} onRetry={retry} />;
 
   return (
     <section className="space-y-5">

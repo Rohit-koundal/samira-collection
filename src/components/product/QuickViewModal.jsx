@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ShoppingBag, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
+import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 
 export default function QuickViewModal({ product, onClose, onOpenFull }) {
   const cart = useCart();
@@ -17,6 +18,7 @@ export default function QuickViewModal({ product, onClose, onOpenFull }) {
   const image = normalizeImageUrl(getPrimaryImageUrl(product.images));
   const price = Number(product.sellingPrice ?? product.price ?? 0);
   const original = Number(product.originalPrice ?? price);
+  const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
   return <div className="fixed inset-0 z-[120] grid place-items-center p-4" role="presentation" onClick={(event) => { event.stopPropagation(); onClose?.(); }}>
     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
     <section role="dialog" aria-modal="true" aria-label={`Quick view ${product.name}`} className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white shadow-2xl md:grid-cols-[.9fr_1.1fr]" onClick={(event) => event.stopPropagation()}>
@@ -28,7 +30,7 @@ export default function QuickViewModal({ product, onClose, onOpenFull }) {
         <p className="mt-2 text-sm font-semibold text-slate-500">{[product.category, product.fabric].filter(Boolean).join(' · ')}</p>
         <div className="mt-5 flex items-center gap-3"><strong className="text-xl text-charcoal">Rs. {price.toLocaleString('en-IN')}</strong>{original > price && <del className="text-sm text-slate-400">Rs. {original.toLocaleString('en-IN')}</del>}</div>
         {product.description && <p className="mt-5 line-clamp-4 text-sm leading-6 text-slate-600">{product.description}</p>}
-        <div className="mt-7 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => cart.addToCart(product)} className="site-theme-button inline-flex h-12 items-center justify-center gap-2"><ShoppingBag className="h-4 w-4" />Add to cart</button><button type="button" onClick={onOpenFull} className="h-12 rounded-xl border border-[#eadfd5] text-sm font-black text-wine">View full details</button></div>
+        <div className="mt-7 grid gap-3 sm:grid-cols-2"><button type="button" disabled={unavailable || cart.loading} onClick={() => cart.addToCart(product)} className="site-theme-button inline-flex h-12 items-center justify-center gap-2 disabled:opacity-50"><ShoppingBag className="h-4 w-4" />{unavailable ? 'Out of stock' : 'Add to cart'}</button><button type="button" onClick={onOpenFull} className="h-12 rounded-xl border border-[#eadfd5] text-sm font-black text-wine">View full details</button></div>
       </div>
     </section>
   </div>;

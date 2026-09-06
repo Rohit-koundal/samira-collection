@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { Provider } from 'react-redux';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { AuthProvider } from '../../context/AuthContext';
+import { AuthProvider, useAuth } from '../../context/AuthContext';
 import authReducer from '../../store/authSlice';
 import api from '../../services/api';
 import Navbar from './Navbar';
@@ -100,4 +100,31 @@ test.each([401, 403])('clears a rejected session when profile loading returns %s
   expect(localStorage.getItem('samira_token')).toBeNull();
   expect(localStorage.getItem('samira_refresh_token')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+});
+
+test('a delayed profile response cannot restore an account after logout', async () => {
+  let resolveProfile;
+  api.get.mockReturnValue(new Promise((resolve) => { resolveProfile = resolve; }));
+  function SessionActions() {
+    const { logout: signOut } = useAuth();
+    return <button onClick={signOut}>Sign out now</button>;
+  }
+  const { store } = openSavedSession(SessionActions);
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out now' }));
+  await act(async () => resolveProfile(admin));
+  expect(store.getState().auth.user).toBeNull();
+  expect(localStorage.getItem('samira_user')).toBeNull();
+});
+
+test('a delayed profile failure cannot clear a newly switched admin session', async () => {
+  let rejectProfile;
+  api.get.mockReturnValue(new Promise((_, reject) => { rejectProfile = reject; }));
+  const user = { ...admin, activeMode: 'customer' };
+  api.post.mockResolvedValue({ user: admin, token: 'admin-token', refreshToken: 'admin-refresh' });
+  const { store, navigate } = openSavedSession(Navbar, user);
+  fireEvent.click(screen.getByRole('button', { name: 'Admin' }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin'));
+  await act(async () => rejectProfile(Object.assign(new Error('Old token expired'), { status: 401 })));
+  expect(store.getState().auth.user).toEqual(admin);
+  expect(localStorage.getItem('samira_token')).toBe('admin-token');
 });

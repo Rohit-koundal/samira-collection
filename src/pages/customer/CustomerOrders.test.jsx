@@ -53,7 +53,7 @@ test('loading errors show retry instead of an empty order history', async () => 
   api.get.mockRejectedValueOnce(new Error('Unable to reach store')).mockResolvedValue({ items: [base], total: 1, totalPages: 1 });
   render(<ListPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to reach store');
-  expect(screen.queryByText('Your first order is waiting')).not.toBeInTheDocument();
+  expect(screen.queryByText('No orders yet')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(await screen.findByRole('button', { name: 'Silk Saree' })).toBeInTheDocument();
 });
@@ -120,6 +120,15 @@ test('invoice download and help use the current order', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Download invoice (PDF)' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Need help?' }));
   expect(navigate).toHaveBeenCalledWith(`/contact?order=${base._id}`);
+});
+
+test.each([undefined, { success: false }, { items: [null] }])('invalid order data can be retried without an empty history or rendering failure', async (response) => {
+  api.get.mockResolvedValueOnce(response).mockResolvedValue({ items: [base], total: 1, totalPages: 1 });
+  render(<ListPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your orders could not be loaded');
+  expect(screen.queryByText('No orders yet')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByRole('button', { name: 'Silk Saree' })).toBeInTheDocument();
 });
 
 test('invoice preview opens and closes without leaving the order page', async () => {

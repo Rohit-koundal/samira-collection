@@ -14,8 +14,11 @@ export default function ProductCaptionModal({ open, product, settings, onClose }
   if (!open || !product) return null;
 
   const copy = async () => {
-    await navigator.clipboard.writeText(caption);
-    setMessage('Caption copied.');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(caption);
+      setMessage('Caption copied.');
+    } catch { setMessage('Could not copy automatically. Select the caption below and copy it manually.'); }
   };
 
   return (
@@ -26,13 +29,13 @@ export default function ProductCaptionModal({ open, product, settings, onClose }
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-wine/60">Social Caption</p>
             <h2 className="text-lg font-black text-charcoal">Generate copy-ready caption</h2>
           </div>
-          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200">
+          <button type="button" aria-label="Close caption" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-          <textarea readOnly value={caption} className="min-h-[340px] flex-1 rounded-[24px] border border-slate-200 bg-[#fcfaf7] p-4 text-sm leading-6 text-charcoal" />
-          {message && <p className="rounded-xl bg-[#fdf4f6] px-3 py-2 text-sm font-semibold text-rose">{message}</p>}
+          <textarea aria-label="Product caption" value={caption} onChange={(event) => setCaption(event.target.value)} className="min-h-[340px] flex-1 rounded-[24px] border border-slate-200 bg-[#fcfaf7] p-4 text-sm leading-6 text-charcoal" />
+          {message && <p role="status" className="rounded-xl bg-[#fdf4f6] px-3 py-2 text-sm font-semibold text-rose">{message}</p>}
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={copy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white">
               <Copy className="h-4 w-4" />
@@ -59,14 +62,14 @@ function buildCaption(product, settings) {
     '',
     product.name || 'Elegant Ethnic Wear',
     `Category: ${category}`,
-    `Fabric: ${product.fabric || 'Premium fabric'}`,
-    `Occasion: ${product.occasion || 'Everyday elegance'}`,
+    ...(product.fabric ? [`Fabric: ${product.fabric}`] : []),
+    ...(product.occasion ? [`Occasion: ${product.occasion}`] : []),
     `Available Sizes: ${sizes}`,
     `Available Colors: ${colors}`,
     `Price: ₹${Number(product.price || 0).toLocaleString('en-IN')}`,
-    `MRP: ₹${Number(product.originalPrice || 0).toLocaleString('en-IN')} (${discount}% OFF)`,
+    ...(Number(product.originalPrice) > Number(product.price) ? [`MRP: ₹${Number(product.originalPrice).toLocaleString('en-IN')}${discount > 0 ? ` (${discount}% OFF)` : ''}`] : []),
     '',
-    `Order now on WhatsApp: ${settings?.whatsappNumber || 'Not configured'}`,
+    ...(settings?.whatsappNumber ? [`Order now on WhatsApp: ${settings.whatsappNumber}`] : []),
     `Website: ${window.location.origin}`,
     '',
     '#SamiraCollection #EthnicWear #NewArrival',

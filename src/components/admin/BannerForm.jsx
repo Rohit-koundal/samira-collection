@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FieldLabel, Select, TextInput } from '../ui/Field';
+import { Select, TextInput } from '../ui/Field';
 import ImageUploader from './ImageUploader';
 
 const bannerTypeOptions = ['Hero', 'Offer', 'Category', 'Sale'];
@@ -37,6 +37,7 @@ export default function BannerForm({
 
   const submit = async (event) => {
     event.preventDefault();
+    if (saving) return;
     await onSubmit?.({
       ...form,
       title: String(form.title || '').trim(),
@@ -119,23 +120,23 @@ export default function BannerForm({
   );
 }
 
-function Field({ label, className = '', ...props }) {
+function Field({ label, className = '', onChange, ...props }) {
   return (
-    <div className={className}>
-      <FieldLabel>{label}</FieldLabel>
-      <TextInput className="mt-2" {...props} />
-    </div>
+    <label className={className}>
+      <span className="label-text text-slate-500">{label}</span>
+      <TextInput className="mt-2" {...props} onChange={(event) => onChange(event.target.value)} />
+    </label>
   );
 }
 
 function SelectField({ label, options, value, onChange }) {
   return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
+    <label>
+      <span className="label-text text-slate-500">{label}</span>
       <Select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2">
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </Select>
-    </div>
+    </label>
   );
 }
 

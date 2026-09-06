@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 import {
   captureAttribution,
@@ -17,9 +17,10 @@ const StorefrontContext = createContext({
 
 export function StorefrontProvider({ route, children }) {
   const pathSlug = parseStoreSlug(route);
-  const [pathStore, setPathStore] = useState(null);
+  const [pathResult, setPathResult] = useState(null);
   const [hostStore, setHostStore] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt(value => value + 1), []);
 
   useEffect(() => {
     getOrCreateSessionId();
@@ -54,25 +55,26 @@ export function StorefrontProvider({ route, children }) {
 
   useEffect(() => {
     if (!pathSlug) {
-      setPathStore(null);
+      setPathResult(null);
       return undefined;
     }
     let cancelled = false;
-    setLoading(true);
-    api.get(`/stores/${pathSlug}`)
+    setPathResult({ slug: pathSlug, loading: true });
+    api.get(`/stores/${encodeURIComponent(pathSlug)}`)
       .then((data) => {
-        if (!cancelled) setPathStore(data);
+        if (!data?.slug) throw new Error('The boutique returned incomplete information. Please try again.');
+        if (!cancelled) setPathResult({ slug: pathSlug, store: data, loading: false });
       })
-      .catch(() => {
-        if (!cancelled) setPathStore(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch((error) => {
+        if (!cancelled) setPathResult({ slug: pathSlug, error: error.message || 'Unable to open this boutique. Please try again.', loading: false });
       });
     return () => { cancelled = true; };
-  }, [pathSlug]);
+  }, [pathSlug, attempt]);
 
-  const store = pathStore || hostStore;
+  const currentPath = pathResult?.slug === pathSlug ? pathResult : null;
+  const store = pathSlug ? currentPath?.store || null : hostStore;
+  const loading = Boolean(pathSlug && (!currentPath || currentPath.loading));
+  const error = pathSlug ? currentPath?.error || '' : '';
   const storeSlug = pathSlug || hostStore?.slug || '';
   const isHostStore = Boolean(hostStore?.slug && !pathSlug);
 
@@ -81,8 +83,8 @@ export function StorefrontProvider({ route, children }) {
   }, [storeSlug]);
 
   const value = useMemo(
-    () => ({ store, storeSlug, loading, isHostStore }),
-    [isHostStore, loading, store, storeSlug],
+    () => ({ store, storeSlug, loading, error, retry, isHostStore }),
+    [isHostStore, loading, error, retry, store, storeSlug],
   );
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
 }

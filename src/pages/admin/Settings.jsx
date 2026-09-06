@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../../components/admin/PageHeader';
 import api from '../../services/api';
 
@@ -31,20 +31,26 @@ export default function Settings() {
   const [paymentReadiness, setPaymentReadiness] = useState(null);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [readinessError, setReadinessError] = useState('');
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
-  useEffect(() => {
-    Promise.all([
-      api.get('/admin/settings'),
-      api.get('/admin/settings/payment-readiness'),
-    ]).then(([settings, readiness]) => {
-      setForm(settings);
-      setPaymentReadiness(readiness);
-    }).catch((error) => setMessage(error.message));
+  const refreshReadiness = useCallback(async () => {
+    try { setPaymentReadiness(await api.get('/admin/settings/payment-readiness')); setReadinessError(''); }
+    catch (error) { setPaymentReadiness(null); setReadinessError(error.message || 'Payment readiness could not be checked.'); }
   }, []);
+  const load = useCallback(async () => {
+    setLoading(true); setLoadError('');
+    try { setForm(await api.get('/admin/settings')); }
+    catch (error) { setLoadError(error.message); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); refreshReadiness(); }, [load, refreshReadiness]);
 
   const submit = async (event) => {
     event.preventDefault();
+    if (saving || loading || loadError) return;
     setMessage('');
     setSaving(true);
     try {
@@ -64,11 +70,11 @@ export default function Settings() {
         rtoBlockThreshold: Number(form.rtoBlockThreshold || 0),
         prepaidDiscountType: form.prepaidDiscountType || '',
         codPincodes: form.codPincodes,
-        returnWindowDays: Number(form.returnWindowDays || 7),
+        returnWindowDays: Number(form.returnWindowDays ?? 7),
       });
       setForm(saved);
-      setPaymentReadiness(await api.get('/admin/settings/payment-readiness'));
       setMessage('Settings saved successfully.');
+      await refreshReadiness();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -79,6 +85,10 @@ export default function Settings() {
   return (
     <section className="space-y-5">
       <PageHeader title="Website Settings" note="Control store details, policies and footer content." />
+      {loading && <p role="status" className="admin-card p-5">Loading settings...</p>}
+      {loadError && <p role="alert" className="admin-card p-5">{loadError} <button type="button" onClick={load} className="admin-btn-ghost">Retry settings</button></p>}
+      {!loading && !loadError && <>
+      {readinessError && <p role="status" className="admin-card p-5">Settings are available. {readinessError} <button type="button" onClick={refreshReadiness} className="admin-btn-ghost">Retry payment check</button></p>}
       <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
         {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] ?? ''} onChange={(value) => update(field, value)} />)}
         <section className="rounded-2xl border border-[#eadfd5] bg-[#fbf8f4] p-4 md:col-span-2">
@@ -151,9 +161,10 @@ export default function Settings() {
           <Input label="Facebook Link" value={form.socialLinks?.facebook || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, facebook: value })} />
           <Input label="YouTube Link" value={form.socialLinks?.youtube || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, youtube: value })} />
         </div>
-        {message && <p className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
+        {message && <p role="status" className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
         <button disabled={saving} className="admin-btn md:col-span-2 disabled:opacity-60">{saving ? 'Saving...' : 'Save Settings'}</button>
       </form>
+      </>}
     </section>
   );
 }
@@ -171,7 +182,7 @@ function GatewayStatus({ readiness }) {
 }
 
 function Input({ label, value, onChange, type = 'text' }) {
-  return <label className="grid gap-2 text-sm font-semibold">{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-[#eadfd5] px-4 text-sm" /></label>;
+  return <label className="grid gap-2 text-sm font-semibold">{label}<input type={type} min={type === 'number' ? '0' : undefined} step={type === 'number' ? 'any' : undefined} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-[#eadfd5] px-4 text-sm" /></label>;
 }
 
 function Textarea({ label, value, onChange }) {
