@@ -80,6 +80,9 @@ Both repository Render Blueprints include these demo settings. For a Render
 service managed directly in the dashboard, add them under **Environment** and
 redeploy; local ignored `.env` files are not deployed through Git. Frontend API
 URL and backend allowed origins must point to the deployed services as usual.
+The Blueprints use `autoDeployTrigger: commit`. An existing dashboard-managed
+service must also have **Auto-Deploy: On Commit**; if it uses **After CI Checks
+Pass** without CI checks, Render does not deploy the commit.
 
 Hosted demo takes precedence over `LOCAL_OWNER_DEMO`, so the API binds to
 `0.0.0.0` and uses the hosting platform's `PORT`. It works through the hosting
