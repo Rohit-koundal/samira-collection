@@ -58,13 +58,17 @@ from another device over Wi-Fi; use real SMS for that setup.
 
 ## Hosted owner demo (Render or another server)
 
-To demonstrate owner login on the deployed website, set these variables on the
+To demonstrate owner login on the deployed website, set this variable on the
 **backend service**, then deploy the updated backend:
 
 ```dotenv
 OTP_MODE=demo
-ALLOW_HOSTED_OWNER_DEMO=true
 ```
+
+This preserves the application's original demo login behavior. The optional
+`ALLOW_HOSTED_OWNER_DEMO=true` setting is also supported for an explicit
+Blueprint configuration. Set it to `false` to disable owner demo access even
+while customer OTP remains in demo mode.
 
 `DEMO_OTP` can provide a custom six-digit demo code; the existing default is
 `123456`. The same mobile/desktop OTP screen displays it. No owner SMS is sent.
