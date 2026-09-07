@@ -6,8 +6,10 @@ import { Search } from 'lucide-react';
 import NotificationBell from '../notifications/NotificationBell';
 import { adminTitleFromPath } from './AdminSidebar';
 import useAppPath from '../../hooks/useAppPath';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
 
 export default function AdminHeader({ onOpenSidebar }) {
+  const brand = useBrandIdentity();
   const { logout, user, switchMode } = useAuth();
   const path = useAppPath();
   const title = adminTitleFromPath(path);
@@ -28,7 +30,7 @@ export default function AdminHeader({ onOpenSidebar }) {
   return (
     <header className="admin-header sticky top-0 z-40">
       <div className="admin-header__strip">
-        <span>Samira Collection · Admin</span>
+        <span>{brand.websiteName} · Admin</span>
         <span className="admin-header__strip-note">Free shipping, returns and live catalog stay in sync</span>
       </div>
 

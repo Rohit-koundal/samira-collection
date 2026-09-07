@@ -22,6 +22,23 @@ describe('category-aware product sizing', () => {
     ]);
   });
 
+  test('explicit selectable sizing always exposes the fields the backend validates', () => {
+    const product = { name: 'Saree blouse', category: 'Sarees', sizingMode: 'sized', sizes: ['S'], sizeChart: { rows: [] } };
+    expect(getSizeChartColumns(product).map(column => column.key)).toEqual(['bust', 'chest', 'waist', 'hips', 'acrossShoulder', 'sleeveLength', 'frontLength']);
+    expect(getSizeChartValidation(product)).toEqual({ valid: false, missing: ['S Bust', 'S Chest', 'S Waist', 'S Hips', 'S Across shoulder', 'S Sleeve length', 'S Front length'] });
+    const withValues = { ...product, sizeChart: { unit: 'in', rows: [{ size: 'S', bust: 34, chest: 34, waist: 28, hips: 36, acrossShoulder: 14, sleeveLength: 8, frontLength: 15 }] } };
+    expect(getSizeChartValidation(withValues).valid).toBe(true);
+    expect(buildSizeChartPayload(withValues).rows[0].bust).toBe(34);
+    expect(getSizeChartValidation({ ...withValues, sizeChart: { rows: [{ ...withValues.sizeChart.rows[0], bust: Infinity }] } }).missing).toContain('S Bust');
+  });
+
+  test('explicit free-size mode hides measurement fields even with an old garment template', () => {
+    const product = { name: 'Saree', sizingMode: 'free-size', sizeChartProfile: 'dress', sizes: ['S'] };
+    expect(getSizeChartColumns(product)).toEqual([]);
+    expect(getSizeChartValidation(product)).toEqual({ valid: true, missing: [] });
+    expect(buildSizeChartPayload(product)).toEqual({ unit: 'in', columns: [], rows: [] });
+  });
+
   test('uses dress measurements without unrelated bottom fields', () => {
     const columns = getSizeChartColumns({ category: 'Dresses', sizes: ['S'] });
     expect(columns.map((column) => column.key)).toEqual(['acrossShoulder', 'sleeveLength', 'bust', 'waist', 'frontLength', 'hips']);

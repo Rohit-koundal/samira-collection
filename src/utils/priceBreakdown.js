@@ -14,5 +14,7 @@ export function readPricingSettings(settings = {}) {
     gstRate: Number(settings.gstRate ?? DEFAULT_GST_RATE),
     deliveryCharge: Number(settings.deliveryCharge ?? 99),
     freeShippingMinAmount: Number(settings.freeShippingMinAmount ?? 999),
+    shippingFreeAboveEnabled: settings.shippingFreeAboveEnabled !== false,
+    shippingPricingMode: settings.shippingPricingMode || 'fixed',
   };
 }

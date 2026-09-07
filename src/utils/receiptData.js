@@ -66,7 +66,7 @@ export function receiptView(receipt = {}) {
   const number = clean(receipt.invoiceNumber) || (orderId ? `SC-${orderId.slice(-8).toUpperCase()}` : 'Not available');
   const tax = amount(receipt.taxAmount);
   return {
-    storeName, sellerName: clean(store.legalBusinessName) || storeName,
+    storeName, sellerName: clean(store.legalBusinessName) || storeName, logoUrl: clean(store.logoUrl), invoiceNote: clean(store.invoiceNote),
     sellerAddress: invoiceAddress(store.billingAddress || store.address),
     sellerContact: [store.contactPhone || store.whatsappNumber, store.contactEmail].map(clean).filter(Boolean),
     gstin: clean(store.gstin), number, orderId, date: invoiceDate(receipt.invoiceDate || receipt.orderDate), orderDate: invoiceDate(receipt.orderDate),
@@ -79,6 +79,6 @@ export function receiptView(receipt = {}) {
     tracking: [receipt.shipment?.courierName, receipt.shipment?.trackingNumber || receipt.shipment?.awb].map(clean).filter(Boolean).join(' | '),
     taxNote: tax > 0 ? `Includes ${invoiceMoney(tax)} GST${Number(receipt.taxRate) > 0 ? ` (${amount(receipt.taxRate)}%)` : ''}. Tax is already included in the invoice total.` : '',
     policy: clean(receipt.policies?.returnPolicy) || 'For returns, exchanges or order support, please contact the store with your order number.',
-    filename: `Samira-Collection-Invoice-${number.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)}.pdf`,
+    filename: `${storeName.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'Store'}-Invoice-${number.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)}.pdf`,
   };
 }

@@ -16,6 +16,7 @@ import { getSizeChartColumns } from '../../utils/productSizing';
 import CouponSelector from '../../components/coupon/CouponSelector';
 import './Cart.css';
 import '../../styles/MobileShoppingTheme.css';
+import { SETTINGS_CHANGED_EVENT, SETTINGS_STORAGE_KEY } from '../../config/storeSettings';
 
 const money = value => '₹' + Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 export default function Cart({ navigate }) {
@@ -33,13 +34,20 @@ export default function Cart({ navigate }) {
   signatureRef.current = signature;
   const busy = Boolean(cart.pendingCount || actionBusy || checking || couponBusy);
   const selectedIssues = selected.some(item => bagIssue(item));
-  const canContinue = selected.length > 0 && selected.length <= 50 && !selectedIssues && !busy && !cart.loading && !cart.error && Boolean(settings) && !couponChecking;
+  const storeOrderIssue = settings?.acceptingOrders === false ? settings.orderPauseMessage || 'The store is temporarily not accepting new orders.' : totals.sellingTotal < Number(settings?.minimumOrderAmount || 0) ? 'Add items worth ' + money(Number(settings.minimumOrderAmount) - totals.sellingTotal) + ' more to reach the minimum order value.' : '';
+  const canContinue = selected.length > 0 && selected.length <= 50 && !selectedIssues && !storeOrderIssue && !busy && !cart.loading && !cart.error && Boolean(settings) && !couponChecking;
   const checkoutPath = '/checkout' + (addressId ? '?addressId=' + encodeURIComponent(addressId) : '');
   const goCheckout = () => navigate(user ? checkoutPath : '/login?redirect=' + encodeURIComponent(checkoutPath));
   const shop = storeSlug ? '/store/' + storeSlug + '/products' : '/products';
   const refreshBag = cart.refresh;
 
   useEffect(() => { refreshBag?.(); }, [refreshBag]);
+  useEffect(() => {
+    const refresh = () => setReload(value => value + 1);
+    const storage = event => { if (event.key === SETTINGS_STORAGE_KEY) refresh(); };
+    window.addEventListener(SETTINGS_CHANGED_EVENT, refresh); window.addEventListener('storage', storage);
+    return () => { window.removeEventListener(SETTINGS_CHANGED_EVENT, refresh); window.removeEventListener('storage', storage); };
+  }, []);
 
   useEffect(() => {
     let alive = true; setSettingsError('');
@@ -138,12 +146,13 @@ export default function Cart({ navigate }) {
       <div className="sc-bag__top"><div><h1>Shopping bag <span>{bagCount}</span></h1></div><p className="sc-bag__secure"><LockKeyhole size={15} /> Secure checkout</p></div>
       <nav className="sc-bag__steps" aria-label="Checkout progress"><span aria-current="step"><b>1</b> Bag</span><i /><span><b>2</b> Address</span><i /><span><b>3</b> Payment</span></nav>
       {cart.error && <div className="sc-bag__alert" role="alert"><p>{cart.error}</p><button onClick={cart.refresh} disabled={busy || cart.loading}>Retry</button></div>}
+      {storeOrderIssue && <div className="sc-bag__alert" role="status"><p>{storeOrderIssue}</p></div>}
       {notice && <div className={'sc-bag__alert ' + (notice.error ? '' : 'is-success')} role="status"><p>{notice.text}</p>{notice.undo && <button onClick={undo} disabled={busy}>Undo</button>}{notice.wishlist && <button onClick={() => navigate('/wishlist')}>View wishlist</button>}<button onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={17} /></button></div>}
       {initialLoading ? <div className="sc-bag__loading" role="status"><LoaderCircle className="sc-bag__spin" size={24} /><p>Bringing your bag up to date…</p></div> : loadFailed ? <div className="sc-bag__empty"><div><CircleAlert size={30} strokeWidth={1.5} /></div><h2>We couldn’t load your bag</h2><p>Retry to retrieve your saved items.<br />Your bag hasn’t been cleared.</p></div> : !cart.items.length ? <div className="sc-bag__empty"><div><ShoppingBag size={30} strokeWidth={1.5} /></div><h2>Your shopping bag is empty</h2><p>Add products or move your favourites from your wishlist.</p><button className="sc-bag__primary" onClick={() => navigate('/wishlist')}>Explore your wishlist <Heart size={17} /></button><button className="sc-bag__text" onClick={() => navigate(shop)}>Continue shopping <ArrowRight size={16} /></button></div> : <>
         <div className="sc-bag__layout"><main className="sc-bag__main">
           <section className="sc-bag__address sc-bag__panel"><MapPin size={20} /><div><strong>{address ? 'Deliver to ' + address.fullName + ', ' + address.pincode : 'Where should we deliver?'}</strong><p>{address ? [address.houseNo, address.area, address.city].filter(Boolean).join(', ') : 'Choose your delivery address at checkout.'}</p></div><button className="sc-bag__outline" onClick={() => addresses.length ? setAddressOpen(true) : goCheckout()}>{address ? 'Change' : 'Add address'}</button></section>
           {!user && <div className="sc-bag__signin"><LockKeyhole size={16} /><p>Sign in to access saved addresses and finish your order.</p><button onClick={goCheckout}>Sign in</button></div>}
-          {settings && selected.length > 0 && rules.deliveryCharge > 0 && <section className="sc-bag__shipping"><Truck size={20} /><div><p>{shippingRemaining > 0 ? <>You’re <strong>{money(shippingRemaining)}</strong> away from free delivery</> : <><strong>Free delivery</strong> on your selected items</>}</p>{shippingRemaining > 0 && <div className="sc-bag__progress"><span style={{ width: Math.min(100, totals.sellingTotal / rules.freeShippingMinAmount * 100) + '%' }} /></div>}<small>Based on item total before coupon discounts</small></div></section>}
+          {settings && selected.length > 0 && rules.shippingFreeAboveEnabled && rules.deliveryCharge > 0 && <section className="sc-bag__shipping"><Truck size={20} /><div><p>{shippingRemaining > 0 ? <>You’re <strong>{money(shippingRemaining)}</strong> away from free delivery</> : <><strong>Free delivery</strong> on your selected items</>}</p>{shippingRemaining > 0 && <div className="sc-bag__progress"><span style={{ width: Math.min(100, totals.sellingTotal / rules.freeShippingMinAmount * 100) + '%' }} /></div>}<small>Based on item total before coupon discounts</small></div></section>}
           <section className="sc-bag__selection"><label><input type="checkbox" checked={allSelected} ref={element => { if (element) element.indeterminate = selected.length > 0 && !allSelected; }} onChange={() => cart.selectItems(cart.items, !allSelected)} disabled={busy || cart.loading} aria-label="Select all bag items" /><strong>{selected.length} / {cart.items.length} items selected</strong></label><div><button onClick={() => setRemoving(selected)} disabled={!selected.length || busy}>Remove</button><button onClick={() => setRemoving(selected)} disabled={!selected.length || busy} aria-label="Move selected items to wishlist"><Heart size={17} /><span>Move to wishlist</span></button></div></section>
           <div className="sc-bag__items">{cart.items.map(item => <BagItem key={bagKey(item)} item={item} busy={busy || cart.loading} settings={settings} onSelect={() => cart.selectItems([item], item.selected === false)} onEdit={() => setEditing(item)} onRemove={() => setRemoving([item])} onQuantity={quantity => cart.updateQuantity(bagKey(item), quantity, { cartKey: bagKey(item) })} onOpen={() => navigate(productHref(item.product, storeSlug))} />)}</div>
           <button className="sc-bag__wishlist-link sc-bag__panel" onClick={() => navigate('/wishlist')}><Heart size={19} /><span>Add more from your wishlist</span><ArrowRight size={19} /></button>
@@ -154,7 +163,7 @@ export default function Cart({ navigate }) {
             <section id="bag-price-details" className="sc-bag__prices sc-bag__panel"><h2>PRICE DETAILS <span>({totals.itemCount} {totals.itemCount === 1 ? 'item' : 'items'})</span></h2>
               <PriceRow label="Total MRP" value={money(totals.totalMRP)} /><PriceRow label="Discount on MRP" value={'− ' + money(totals.discount)} good />
               <PriceRow label="Coupon discount" value={couponChecking ? 'Checking…' : totals.couponDiscount ? '− ' + money(totals.couponDiscount) : '—'} good={totals.couponDiscount > 0} />
-              <PriceRow label="Delivery charge" value={!settings ? 'Checking…' : totals.deliveryCharge ? money(totals.deliveryCharge) : 'FREE'} good={Boolean(settings) && !totals.deliveryCharge} />
+              <PriceRow label="Delivery charge" value={!settings ? 'Checking…' : rules.shippingPricingMode === 'weight' && (!rules.shippingFreeAboveEnabled || shippingRemaining > 0) ? 'At checkout' : totals.deliveryCharge ? money(totals.deliveryCharge) : 'FREE'} good={Boolean(settings) && !totals.deliveryCharge} />
               <PriceRow label="Platform fee" value={!settings ? 'Checking…' : money(totals.platformFee)} />
               <div className="sc-bag__total"><strong>Estimated total</strong><strong>{settings ? money(totals.finalAmount) : '—'}</strong></div>
               {totals.discount + totals.couponDiscount > 0 && <p className="sc-bag__savings"><Check size={15} /> You save {money(totals.discount + totals.couponDiscount)} on this bag</p>}

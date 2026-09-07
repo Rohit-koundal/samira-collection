@@ -24,6 +24,8 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { SETTINGS_CHANGED_EVENT, SETTINGS_STORAGE_KEY } from '../../config/storeSettings';
 import { trackEvent } from '../../utils/analytics';
 import { readAttribution } from '../../utils/attribution';
 import { clearPendingPayment, pendingPaymentKey, readPendingPayment, savePendingPayment } from '../../utils/pendingPayment';
@@ -93,6 +95,7 @@ const emptyAddress = {
 };
 
 export default function Checkout({ navigate }) {
+  const brand = useBrandIdentity();
   const fullCart = useCart();
   const currentCart = useRef(fullCart);
   currentCart.current = fullCart;
@@ -118,6 +121,12 @@ export default function Checkout({ navigate }) {
   const [paymentError, setPaymentError] = useState('');
   const [paymentAttempt, setPaymentAttempt] = useState(0);
   const [quoteAttempt, setQuoteAttempt] = useState(0);
+  useEffect(() => {
+    const refresh = () => { setPaymentAttempt(value => value + 1); setQuoteAttempt(value => value + 1); };
+    const storage = event => { if (event.key === SETTINGS_STORAGE_KEY) refresh(); };
+    window.addEventListener(SETTINGS_CHANGED_EVENT, refresh); window.addEventListener('storage', storage);
+    return () => { window.removeEventListener(SETTINGS_CHANGED_EVENT, refresh); window.removeEventListener('storage', storage); };
+  }, []);
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState('');
   const [error, setError] = useState('');
@@ -253,7 +262,7 @@ export default function Checkout({ navigate }) {
       .then((data) => {
         if (!alive) return;
         const valid = typeof data?.totals?.finalAmount === 'number' && Number.isFinite(data.totals.finalAmount) && data.totals.finalAmount >= 0;
-        setQuote(valid ? data.totals : null);
+        setQuote(valid ? { ...data.totals, shipping: data.shipping } : null);
         setQuoteError(valid ? '' : 'Unable to calculate order totals. Please retry.');
       })
       .catch((err) => {
@@ -386,6 +395,7 @@ export default function Checkout({ navigate }) {
   };
 
   const orderPayload = () => ({
+    expectedTotal: quote?.finalAmount,
     orderItems: buildOrderItems(cart.items),
     shippingAddress: selectedAddress,
     paymentMethod,
@@ -456,6 +466,8 @@ export default function Checkout({ navigate }) {
         }
 
       await openRazorpayCheckout({
+        storeName: brand.websiteName,
+        description: brand.websiteName + ' order',
         key: razorpayKey,
         amount: pendingPayment.amount,
         currency: pendingPayment.currency,
@@ -480,6 +492,11 @@ export default function Checkout({ navigate }) {
       });
     } catch (err) {
       if (err.code === 'PAYMENT_CONFIRMATION_PENDING') return;
+      if (String(err.code || '').startsWith('SHIPPING_')) {
+        retryQuote();
+        showFeedback(err.message, 'error');
+        return;
+      }
       if (paymentMethod !== 'COD') {
         const reason = err.message === 'Payment cancelled'
           ? 'Payment cancelled by customer'
@@ -639,6 +656,7 @@ export default function Checkout({ navigate }) {
             error={error}
             quoteError={quoteError}
             quoteReady={quoteReady}
+            shipping={quote?.shipping}
             retryQuote={retryQuote}
             onBack={() => setMobileStep(2)}
           />
@@ -684,6 +702,7 @@ export default function Checkout({ navigate }) {
       error={isDesktop ? error : ''}
       quoteError={isDesktop ? quoteError : ''}
       quoteReady={quoteReady}
+      shipping={quote?.shipping}
       retryQuote={retryQuote}
     />
   );
@@ -725,6 +744,7 @@ function DesktopCheckout({
   error,
   quoteError,
   quoteReady,
+  shipping,
   retryQuote,
 }) {
   const needsLogin = !user;
@@ -877,6 +897,7 @@ function DesktopCheckout({
           </main>
 
           <aside className="sc-checkout__side">
+            <ShippingAvailability shipping={shipping} />
             <DesktopPriceSummary summary={summary} cta={placeOrderLabel} placing={placing} quoteReady={quoteReady} onAction={placeOrder} />
             <DesktopAssurance />
           </aside>
@@ -887,6 +908,11 @@ function DesktopCheckout({
       </div>
     </section>
   );
+}
+
+function ShippingAvailability({ shipping }) {
+  if (!shipping?.serviceable || shipping.provider !== 'bluedart') return null;
+  return <div role="status" className="my-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>Blue Dart delivery available</strong><p>PIN {shipping.destinationPincode} · Delivery {Number(shipping.deliveryCharge) === 0 ? 'FREE' : `₹${Number(shipping.deliveryCharge).toLocaleString('en-IN')}`}</p></div>;
 }
 
 function CheckoutSteps() {
@@ -1087,7 +1113,7 @@ function MobileAddressSelector({ addresses, selectedAddressId, setSelectedAddres
   </>;
 }
 
-function MobilePaymentStep({ selectedAddress, cart, summary, paymentOptions, paymentStatus, coupons, bestCouponCode, applyCoupon, removeCoupon, couponBusyCode, couponFeedback, paymentMethod, setPaymentMethod, placeOrder, placing, placeOrderLabel, error, quoteError, quoteReady, retryQuote, onBack }) {
+function MobilePaymentStep({ selectedAddress, cart, summary, paymentOptions, paymentStatus, coupons, bestCouponCode, applyCoupon, removeCoupon, couponBusyCode, couponFeedback, paymentMethod, setPaymentMethod, placeOrder, placing, placeOrderLabel, error, quoteError, quoteReady, shipping, retryQuote, onBack }) {
   return <>
     <MobileStepHeader title="Payment" stepLabel="Step 3/3" onBack={onBack} />
     <MobileCheckoutSteps step={3} onAddress={onBack} />
@@ -1135,6 +1161,7 @@ function MobilePaymentStep({ selectedAddress, cart, summary, paymentOptions, pay
       </section>
       {error && <p role="alert" className="sc-mobile-checkout__error">{error}</p>}
       {quoteError && <CheckoutLoadState label="order total" error={quoteError} onRetry={retryQuote} />}
+      <ShippingAvailability shipping={shipping} />
     </div>
     <div className="sc-mobile-checkout__bottom"><div className="sc-mobile-checkout__bottom-inner">
       <div><small>Total amount</small><strong>{quoteReady ? mobileMoney(summary.finalAmount) : 'Updating...'}</strong></div>

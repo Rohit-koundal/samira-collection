@@ -1,473 +1,148 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Banknote, CircleCheck, CircleDashed, Clock3, DollarSign, LayoutDashboard, Package, ShoppingBag, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Banknote, CheckCheck, ChevronLeft, ChevronRight, Download, Package, Plus, RefreshCw, Search, ShoppingBag, Truck, Users, Wallet } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import PageState from '../../components/ui/PageState';
+import { normalizeImageUrl } from '../../services/normalize';
+import { validateDashboardResponse } from '../../utils/dashboardData';
+import './Dashboard.css';
 
-const statusPalette = [
-  { name: 'Pending', color: '#f3b58c' },
-  { name: 'Processing', color: '#cf7fb4' },
-  { name: 'Shipped', color: '#8eb1f0' },
-  { name: 'Delivered', color: '#62b98b' },
-  { name: 'Cancelled', color: '#f39f9f' },
-  { name: 'Refunded', color: '#9a89ef' },
+const ranges = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['month', 'This month'], ['90d', '90 days'], ['custom', 'Custom']];
+const tasks = [
+  ['pending', 'New orders', 'Review & confirm', ShoppingBag], ['packing', 'To pack', 'Prepare confirmed orders', Package],
+  ['dispatch', 'To dispatch', 'Arrange shipment', Truck], ['cod', 'Confirm COD', 'Verify with the customer', CheckCheck],
+  ['collection', 'COD to collect', 'Delivered, payment pending', Wallet], ['returns', 'Return requests', 'Review return / exchange', RefreshCw],
 ];
+const currency = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value));
+const number = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(Number(value));
+const compact = value => new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value || 0));
+const day = value => value ? new Date(value.length === 7 ? `${value}-01T00:00:00+05:30` : value.length === 10 ? `${value}T00:00:00+05:30` : value).toLocaleDateString('en-IN', { day: value.length === 7 ? undefined : 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }) : '—';
+const today = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [selection, setSelection] = useState('30d');
+  const [period, setPeriod] = useState({ range: '30d' });
+  const [from, setFrom] = useState(''); const [to, setTo] = useState('');
+  const [dateError, setDateError] = useState('');
   const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [reload, setReload] = useState(0);
-
+  const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [reload, setReload] = useState(0); const [page, setPage] = useState(1); const [limit, setLimit] = useState(5);
+  const [autoRefresh, setAutoRefresh] = useState(false); const [downloadError, setDownloadError] = useState('');
+  const [attentionScope, setAttentionScope] = useState('period');
+  const requestVersion = useRef(0); const loadingRef = useRef(true);
+  const params = new URLSearchParams({ ...period, orderPage: page, orderLimit: limit, attentionScope }).toString();
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError('');
-    api.get('/admin/dashboard/overview')
-      .then((data) => {
-        if (!alive) return;
-        setOverview(data || {});
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setError(err.message || 'Unable to load dashboard');
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [reload]);
-
-  const stats = useMemo(() => overview?.stats || {}, [overview]);
-  const statCards = useMemo(() => ([
-    { label: 'Total Sales', value: formatCurrency(stats.sales?.value), delta: stats.sales?.delta, note: stats.sales?.note, icon: Banknote, tint: '#fde7e6', iconColor: '#ce5760' },
-    { label: 'Total Orders', value: formatNumber(stats.orders?.value), delta: stats.orders?.delta, note: stats.orders?.note, icon: ShoppingBag, tint: '#fff0e7', iconColor: '#d98652' },
-    { label: 'Total Customers', value: formatNumber(stats.customers?.value), delta: stats.customers?.delta, note: stats.customers?.note, icon: Users, tint: '#f4edff', iconColor: '#8c6bd6' },
-    { label: 'Total Products', value: formatNumber(stats.products?.value), delta: stats.products?.delta, note: stats.products?.note, icon: Package, tint: '#edf2ff', iconColor: '#577be2' },
-    { label: 'Total Revenue', value: formatCurrency(stats.revenue?.value), delta: stats.revenue?.delta, note: stats.revenue?.note, icon: DollarSign, tint: '#e9f7ef', iconColor: '#35a165' },
-  ]), [stats]);
-
-  const chartSeries = Array.isArray(overview?.salesOverview) ? overview.salesOverview : [];
-  const orderOverview = Array.isArray(overview?.orderOverview) ? overview.orderOverview : [];
-
-  const recentOrders = overview?.recentOrders || [];
-  const topProducts = overview?.topProducts || [];
-
-  if (error) return <PageState error={error} onRetry={() => setReload((value) => value + 1)} />;
-
-  return (
-    <section className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]">
-        <div className="admin-card p-5 lg:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="admin-kicker">Dashboard</p>
-              <h1 className="mt-2">Welcome back, {user?.name?.split(' ')?.[0] || 'Admin'}</h1>
-              <p className="admin-note">Live store performance, orders, and best-selling products.</p>
-            </div>
-            <div className="admin-btn-ghost">
-              <LayoutDashboard className="h-4 w-4 text-wine" />
-              Admin overview
-            </div>
-          </div>
-          {error && <p className="mt-4 rounded-xl bg-blush px-4 py-3 text-sm text-wine">{error}</p>}
-        </div>
-        <div className="admin-card p-5 lg:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="admin-kicker">Store health</p>
-              <h2 className="mt-2">{loading ? 'Checking connection' : error ? 'Connection needs attention' : 'Live data connected'}</h2>
-            </div>
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-wine text-white">
-              <Sparkles className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <StatusPill icon={loading ? CircleDashed : CircleCheck} label={loading ? 'Checking API' : 'API connected'} detail="Dashboard overview endpoint" tone={loading ? 'text-wine bg-blush' : 'text-emerald-700 bg-emerald-50'} />
-            <StatusPill icon={CircleDashed} label="Data source" detail={overview ? 'Orders and products API' : 'Awaiting API response'} tone="text-wine bg-blush" />
-          </div>
-          <div className="mt-4 rounded-2xl border border-[#eadfd5] bg-[#fffaf2] px-4 py-4">
-            <p className="text-sm text-slate-500">Signed in as</p>
-            <p className="mt-1 text-lg font-semibold text-charcoal">{user?.name || 'Admin'}</p>
-            {user?.phone || user?.email ? <p className="mt-1 text-sm text-slate-500">{user.phone || user.email}</p> : null}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-5">
-        {statCards.map((card) => <StatCard key={card.label} {...card} loading={loading} />)}
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <Panel title="Sales Overview" subtitle="Current month revenue trend" actionLabel="This Month">
-          <SalesChart series={chartSeries} loading={loading} />
-        </Panel>
-        <Panel title="Orders Overview" subtitle="Order mix by status" actionLabel="This Month">
-          <OrdersDonut series={orderOverview} loading={loading} />
-        </Panel>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
-        <Panel title="Recent Orders" subtitle="Latest customer activity" actionLabel="View All" actionHref="/admin/orders">
-          <RecentOrders orders={recentOrders} loading={loading} />
-        </Panel>
-        <Panel title="Top Selling Products" subtitle="Best performers from orders" actionLabel="View All" actionHref="/admin/products">
-          <TopProducts products={topProducts} loading={loading} />
-        </Panel>
-      </div>
-    </section>
-  );
-}
-
-function StatCard({ label, value, delta, note, icon: Icon, tint, iconColor, loading }) {
-  return (
-    <div className="admin-card px-4 py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="admin-kicker">{label}</p>
-          <p className="mt-2 text-[26px] font-semibold text-charcoal">{loading ? <span className="inline-block h-7 w-20 animate-pulse rounded bg-slate-100" /> : value}</p>
-          <div className="mt-2 flex items-center gap-2 text-xs">
-            <span className="rounded-full px-2 py-1 font-semibold" style={{ backgroundColor: tint, color: iconColor }}>
-              {delta >= 0 ? '▲' : '▼'} {Math.abs(delta || 0)}%
-            </span>
-            <span className="text-slate-500">{note}</span>
-          </div>
-        </div>
-        <div className="grid h-11 w-11 place-items-center rounded-full" style={{ backgroundColor: tint, color: iconColor }}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Panel({ title, subtitle, actionLabel, actionHref, children }) {
-  return (
-    <div className="admin-card min-w-0 overflow-hidden p-4 lg:p-5">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <h2>{title}</h2>
-          <p className="admin-note">{subtitle}</p>
-        </div>
-        {actionHref ? (
-          <a href={actionHref} className="admin-btn-ghost text-xs">
-            {actionLabel}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </a>
-        ) : (
-          <span className="admin-btn-ghost text-xs">{actionLabel}</span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SalesChart({ series, loading }) {
-  const values = series.map((item) => Number(item.value || 0));
-  const maxValue = Math.max(...values, 1);
-  const width = 720;
-  const height = 280;
-  const padding = 28;
-  const innerWidth = width - padding * 2;
-  const innerHeight = height - 50;
-
-  const points = series.map((item, index) => {
-    const x = padding + (series.length <= 1 ? innerWidth / 2 : (innerWidth * index) / (series.length - 1));
-    const y = padding + innerHeight - ((Number(item.value || 0) / maxValue) * innerHeight);
-    return { ...item, x, y };
-  });
-
-  const areaPath = points.length
-    ? `M ${points[0].x} ${height - 22} ${points.map((point) => `L ${point.x} ${point.y}`).join(' ')} L ${points[points.length - 1].x} ${height - 22} Z`
-    : '';
-  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-
-  return (
-    <div className="overflow-hidden rounded-[18px] border border-[#eadfd5] bg-[#fffaf2] p-4">
-      {loading ? (
-        <div className="grid h-[320px] place-items-center rounded-[22px] border border-dashed border-[#eadfd5] bg-white/70">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
-        </div>
-      ) : !series.length ? (
-        <EmptyMetric label="No sales have been recorded for this period." />
-      ) : (
-        <>
-          <svg viewBox={`0 0 ${width} ${height}`} className="h-[300px] w-full">
-            <defs>
-              <linearGradient id="salesArea" x1="0%" x2="0%" y1="0%" y2="100%">
-                <stop offset="0%" stopColor="#ce5760" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#ce5760" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path d={areaPath} fill="url(#salesArea)" />
-            <path d={linePath} fill="none" stroke="#c54d62" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((point) => (
-              <g key={`${point.label}-${point.x}`}>
-                <circle cx={point.x} cy={point.y} r="6" fill="#fff" stroke="#c54d62" strokeWidth="4" />
-                <text x={point.x} y={point.y - 14} textAnchor="middle" className="fill-charcoal text-[12px] font-black">
-                  {formatCompact(point.value)}
-                </text>
-                <text x={point.x} y={height - 6} textAnchor="middle" className="fill-slate-400 text-[11px] font-semibold">
-                  {point.label}
-                </text>
-              </g>
-            ))}
-          </svg>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            <InfoTile icon={Banknote} label="Total Sales" value={formatCurrency(values.reduce((sum, item) => sum + item, 0))} />
-            <InfoTile icon={Clock3} label="This Month" value={formatCurrency(values[values.length - 1] || 0)} />
-            <InfoTile icon={TrendingUp} label="Avg. Daily Sales" value={formatCurrency(Math.round((values.reduce((sum, item) => sum + item, 0) || 0) / Math.max(series.length, 1)))} />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function OrdersDonut({ series, loading }) {
-  const total = series.reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const circumference = 2 * Math.PI * 56;
-  let offset = 0;
-
-  return (
-    <div className="min-w-0 overflow-hidden rounded-[18px] border border-[#eadfd5] bg-[#fffaf2] p-3 sm:p-4">
-      {loading ? (
-        <div className="grid h-[320px] place-items-center rounded-[22px] border border-dashed border-[#eadfd5] bg-white/70">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
-        </div>
-      ) : !series.length ? (
-        <EmptyMetric label="No orders have been recorded for this period." />
-      ) : (
-        <div className="grid min-w-0 gap-4 min-[1180px]:grid-cols-[minmax(160px,180px)_minmax(0,1fr)] min-[1180px]:items-center">
-          <div className="relative mx-auto h-[200px] w-[200px] max-w-full min-[1180px]:h-[180px] min-[1180px]:w-[180px]">
-            <svg viewBox="0 0 160 160" className="h-full w-full -rotate-90">
-              <circle cx="80" cy="80" r="56" fill="none" stroke="#efe6de" strokeWidth="18" />
-              {series.map((item, index) => {
-                const dash = total ? (Number(item.value || 0) / total) * circumference : 0;
-                const circle = (
-                  <circle
-                    key={item.label}
-                    cx="80"
-                    cy="80"
-                    r="56"
-                    fill="none"
-                    stroke={statusPalette[index % statusPalette.length].color}
-                    strokeWidth="18"
-                    strokeDasharray={`${dash} ${circumference - dash}`}
-                    strokeDashoffset={-offset}
-                    strokeLinecap="round"
-                  />
-                );
-                offset += dash;
-                return circle;
-              })}
-            </svg>
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="text-center">
-                <p className="text-3xl font-semibold text-charcoal">{formatCompact(total)}</p>
-                <p className="mt-1 text-sm text-slate-500">Total orders</p>
-              </div>
-            </div>
-          </div>
-          <div className="min-w-0 space-y-2">
-            {series.map((item, index) => (
-              <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 rounded-[16px] bg-white px-3 py-2.5 shadow-[0_8px_18px_rgba(111,74,52,0.04)]">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: statusPalette[index % statusPalette.length].color }} />
-                  <p className="truncate text-xs font-bold text-charcoal 2xl:text-sm">{item.label}</p>
-                </div>
-                <p className="shrink-0 whitespace-nowrap text-right text-xs font-black text-slate-500 2xl:text-sm">{formatCompact(item.value)} <span className="font-semibold text-slate-400">({total ? Math.round((Number(item.value || 0) / total) * 100) : 0}%)</span></p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RecentOrders({ orders, loading }) {
-  if (loading) {
-    return <LoadingRows />;
-  }
-
-  if (!orders.length) {
-    return <EmptyState title="No recent orders yet" detail="Orders placed by customers will appear here." icon={ShoppingBag} />;
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[18px] border border-[#eadfd5] bg-white">
-      {orders.map((order) => (
-        <div key={order._id || order.id} className="flex items-center gap-3 border-b border-[#f6eee6] px-4 py-3 last:border-b-0">
-          <Avatar name={order.user?.name || order.shippingAddress?.fullName || 'Customer'} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-charcoal">{order.user?.name || order.shippingAddress?.fullName || 'Customer'}</p>
-            <p className="truncate text-xs text-slate-500">
-              {shortOrderId(order._id || order.id)} · {formatDate(order.createdAt)} · {formatNumber(order.itemsCount || 0)} items
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-charcoal">{formatCurrency(order.finalAmount || order.amount || 0)}</p>
-            <StatusBadge status={order.orderStatus} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TopProducts({ products, loading }) {
-  if (loading) {
-    return <LoadingRows />;
-  }
-
-  if (!products.length) {
-    return <EmptyState title="No top products yet" detail="Completed orders will populate this list automatically." icon={Package} />;
-  }
-
-  return (
-    <div className="space-y-3">
-      {products.map((product, index) => (
-        <div key={product.id || `${product.name}-${index}`} className="flex items-center gap-3 rounded-[18px] border border-[#eadfd5] bg-white px-4 py-3">
-          <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#fff5ed]">
-            {product.image ? (
-              <img src={product.image} alt={product.name} className="h-full w-full object-cover" loading="lazy" />
-            ) : (
-              <Package className="h-5 w-5 text-wine/70" />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-charcoal">{product.name}</p>
-            <p className="text-xs text-slate-500">{formatCompact(product.sold)} sold</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-charcoal">{formatCurrency(product.revenue || product.price || 0)}</p>
-            <a href={`/admin/products/edit?id=${encodeURIComponent(product.id || product._id || '')}`} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-rose">
-              Details <ArrowRight className="h-3.5 w-3.5" />
-            </a>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StatusPill({ icon: Icon, label, detail, tone }) {
-  return (
-    <div className={`flex items-center gap-3 rounded-[18px] px-4 py-3 ${tone}`}>
-      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70">
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-sm font-semibold">{label}</p>
-        <p className="text-xs opacity-80">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function InfoTile({ icon: Icon, label, value }) {
-  return (
-    <div className="rounded-[18px] border border-[#eadfd5] bg-white px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-wine" />
-        <p className="admin-kicker">{label}</p>
-      </div>
-      <p className="mt-2 text-sm font-semibold text-charcoal">{value}</p>
-    </div>
-  );
-}
-
-function EmptyState({ title, detail, icon: Icon }) {
-  return (
-    <div className="grid min-h-[240px] place-items-center rounded-[18px] border border-dashed border-[#eadfd5] bg-[#fffaf2] px-4 text-center">
-      <div>
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-wine/10 text-wine">
-          <Icon className="h-5 w-5" />
-        </div>
-        <p className="mt-4 text-base font-semibold text-charcoal">{title}</p>
-        <p className="mt-1 text-sm text-slate-500">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-[68px] animate-pulse rounded-[22px] bg-slate-100/80" />
-      ))}
-    </div>
-  );
-}
-
-function Avatar({ name }) {
-  const initials = String(name || 'A')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-
-  return (
-    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-wine/10 text-sm font-black text-wine">
-      {initials || 'A'}
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  const value = String(status || 'Pending');
-  const styles = {
-    Pending: 'bg-[#fff4eb] text-[#d47d3d]',
-    Confirmed: 'bg-[#eff6ff] text-[#4f7dd6]',
-    Packed: 'bg-[#f4edff] text-[#7b5fd0]',
-    Shipped: 'bg-[#eef7ff] text-[#4b8bd8]',
-    'Out for Delivery': 'bg-[#fff3ea] text-[#d0724d]',
-    Delivered: 'bg-[#e9f7ef] text-[#2d9f63]',
-    Cancelled: 'bg-[#ffecec] text-[#d95d5d]',
-    'Return Requested': 'bg-[#f2f2f2] text-[#6f6f6f]',
-    'Exchange Requested': 'bg-[#f2f2f2] text-[#6f6f6f]',
-    Returned: 'bg-[#f3f0ff] text-[#7b5fd0]',
-    Refunded: 'bg-[#e9f7ef] text-[#2d9f63]',
+    const version = ++requestVersion.current;
+    loadingRef.current = true; setLoading(true); setError(''); setDownloadError('');
+    api.get(`/admin/dashboard/overview?${params}`, { silent: true, cache: 'no-store' }).then(data => {
+      if (version !== requestVersion.current) return;
+      setOverview(validateDashboardResponse(data, new URLSearchParams(params)));
+    }).catch(err => { if (version === requestVersion.current) setError(err.message || 'Unable to load dashboard'); })
+      .finally(() => { if (version === requestVersion.current) { setLoading(false); loadingRef.current = false; } });
+    return () => { requestVersion.current += 1; };
+  }, [params, reload]);
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible' && !loadingRef.current) setReload(value => value + 1); }, 60000);
+    return () => window.clearInterval(timer);
+  }, [autoRefresh]);
+  const chooseRange = value => { setSelection(value); setDateError(''); if (value !== 'custom') { setPeriod({ range: value }); setPage(1); } };
+  const applyDates = event => {
+    event.preventDefault();
+    if (!from || !to || from > to || to > today() || (new Date(to) - new Date(from)) / 86400000 >= 366) {
+      setDateError('Choose a valid start and end date, up to today (maximum 366 days).'); return;
+    }
+    setDateError(''); setPeriod({ from, to }); setPage(1);
   };
-
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${styles[value] || styles.Pending}`}>{value}</span>;
-}
-
-function formatNumber(value) {
-  if (value === undefined || value === null || value === '') return '—';
-  return new Intl.NumberFormat('en-IN').format(Number(value || 0));
-}
-
-function formatCompact(value) {
-  return new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value || 0));
-}
-
-function formatCurrency(value) {
-  if (value === undefined || value === null || value === '') return '—';
-  return `Rs. ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Number(value || 0))}`;
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-}
-
-function shortOrderId(value = '') {
-  return String(value).slice(-8).toUpperCase();
-}
-
-function EmptyMetric({ label }) {
-  return (
-    <div className="grid min-h-[320px] place-items-center rounded-[18px] border border-dashed border-[#eadfd5] bg-[#fffaf2] px-6 text-center text-sm font-semibold text-slate-500">
-      {label}
+  const ordersLink = extra => `/admin/orders?${new URLSearchParams({ ...period, ...extra })}`;
+  const stats = overview?.stats || {}; const inventory = overview?.inventory || {};
+  const pagination = overview?.recentPagination || { page: 1, totalPages: 1, total: overview?.recentOrders?.length || 0, limit };
+  const periodLabel = overview?.range ? `${day(overview.range.fromDate)}${overview.range.fromDate?.slice(0, 4) !== overview.range.toDate?.slice(0, 4) ? ` ${overview.range.fromDate?.slice(0, 4)}` : ''} – ${day(overview.range.toDate)}, ${overview.range.toDate?.slice(0, 4)}` : ranges.find(([key]) => key === period.range)?.[1] || 'Selected period';
+  const cards = [
+    ['Booked order value', 'sales', currency, ShoppingBag, 'Valid COD and paid online orders; excludes cancelled, returned and refunded orders.'],
+    ['Paid order value', 'revenue', currency, Banknote, 'Paid order totals, including fees and tax, before partial refunds. Based on order date, not payment date.'],
+    ['Total orders', 'orders', number, Package, 'All orders in this period, including cancellations and unpaid checkouts.'],
+    ['Buying customers', 'customers', number, Users, 'Unique customers with a valid COD or paid online order in this period.'],
+    ['Average order value', 'average', currency, Wallet, 'Booked order value divided by valid orders in this period.'],
+    ['Products added', 'products', number, Package, 'Catalog products created within these dates, including products later archived.'],
+  ];
+  const download = () => { try { downloadDashboard(overview, periodLabel); setDownloadError(''); } catch { setDownloadError('Download could not start. Please try again in your browser.'); } };
+  return <section className="store-dashboard">
+    <header className="dash-heading"><div><p className="admin-kicker">Business overview</p><h1>Dashboard</h1><p className="admin-note">Hello, {user?.name?.split(' ')[0] || 'Admin'}. Here is how your store is doing.</p></div><div className="dash-actions"><a href="/admin/products/add" className="admin-btn-primary"><Plus size={16} /> Add product</a><a href="/admin/reports" className="admin-btn-ghost">Reports <ArrowRight size={15} /></a></div></header>
+    <div className="admin-card dash-toolbar">
+      <div className="dash-range-buttons" aria-label="Dashboard period">{ranges.map(([value, label]) => <button key={value} type="button" aria-pressed={selection === value} onClick={() => chooseRange(value)}>{label}</button>)}</div>
+      <div className="dash-actions"><button type="button" className="admin-btn-ghost" disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh</button><button type="button" className="admin-btn-ghost" onClick={download} disabled={loading || !!error || !overview}><Download size={15} /> Export CSV</button></div>
+      {selection === 'custom' && <form className="dash-custom-range" onSubmit={applyDates} noValidate><label>From<input aria-label="From date" type="date" max={today()} value={from} onChange={event => setFrom(event.target.value)} /></label><label>To<input aria-label="To date" type="date" min={from} max={today()} value={to} onChange={event => setTo(event.target.value)} /></label><button type="submit" className="admin-btn-primary">Apply dates</button><span>Apply to update the overview.</span></form>}
+      {dateError && <p role="alert" className="dash-error">{dateError}</p>}
+      <div className="dash-freshness"><p>{loading ? 'Updating dashboard…' : error ? 'Update failed' : <><span className="dash-live-dot" /><span>Live data connected</span>{overview?.generatedAt && <> · Updated {new Date(overview.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })} IST</>}</>}</p><label><input type="checkbox" checked={autoRefresh} onChange={event => setAutoRefresh(event.target.checked)} /> Refresh every minute</label></div>
     </div>
-  );
+    {downloadError && <p role="alert" className="dash-error">{downloadError}</p>}
+    {loading ? <PageState loading loadingLabel="Loading store performance…" /> : error ? <PageState error={error} onRetry={() => setReload(value => value + 1)} /> : <>
+      <div className="dash-section-label"><h2>{periodLabel}</h2><span>All matching records · India time (IST)</span></div>
+      <div className="dash-metrics">{cards.map(([label, key, format, Icon, note]) => <article className="admin-card dash-metric" key={key}><div className="dash-metric-top"><span>{label}</span><Icon size={18} /></div><strong>{format(stats[key]?.value)}</strong><MetricChange metric={stats[key]} /><p>{note}</p></article>)}</div>
+      <p className="dash-comparison-note">Changes compare the previous equal-length period. A dash means there is no earlier value to compare.</p>
+      <Panel title="Needs your attention" note={attentionScope === 'period' ? 'Open tasks for orders placed in these dates; returns use the request date.' : 'Open tasks across all dates.'}><div className="dash-task-scope"><label>Tasks for <select aria-label="Task period" value={attentionScope} onChange={event => setAttentionScope(event.target.value)}><option value="period">Selected dates</option><option value="all">All dates</option></select></label></div><div className="dash-tasks">{tasks.map(([key, label, note, Icon]) => <a key={key} href={`${key === 'returns' ? '/admin/returns' : '/admin/orders'}?${new URLSearchParams({ ...(attentionScope === 'period' ? period : {}), ...(key === 'returns' ? { status: 'Requested' } : { attention: key }) })}`} className={(overview?.attention?.[key]?.value || 0) > 0 ? 'has-work' : ''}><div><Icon size={19} /><strong>{number(overview?.attention?.[key]?.value)}</strong></div><span>{label}</span><small>{key === 'collection' && overview?.attention?.collection?.amount ? `${currency(overview.attention.collection.amount)} outstanding` : note}</small><ArrowRight className="dash-task-arrow" size={15} /></a>)}</div></Panel>
+      <div className="dash-two-columns">
+        <Panel title="Paid order trend" note="Paid order value by order date for the selected period."><SalesChart series={overview?.salesOverview || []} /></Panel>
+        <Panel title="Order status" note="Select a status to see matching orders." href={ordersLink()} link="View orders">{!overview?.orderOverview?.length ? <Empty text="No orders in this period." /> : <div className="dash-status-list">{overview.orderOverview.map(item => <a key={item.label} href={ordersLink({ status: item.label })}><span>{item.label}</span><strong>{number(item.value)}</strong><span className="dash-status-track"><i style={{ width: `${stats.orders?.value ? Math.max(1, item.value / stats.orders.value * 100) : 0}%` }} /></span><small>{stats.orders?.value ? Math.round(item.value / stats.orders.value * 100) : 0}%</small><ArrowRight size={14} /></a>)}</div>}</Panel>
+      </div>
+      <div className="dash-two-columns">
+        <Panel title="Recent orders" note={`${number(pagination.total)} orders in the selected period.`} href={ordersLink()} link="View all">
+          <form action="/admin/orders" method="get" className="dash-search"><Search size={17} /><input name="search" aria-label="Search all orders" placeholder="Order ID, customer, email or phone" maxLength={100} required /><button type="submit">Search</button></form><p className="dash-help">Search looks across all order dates.</p>
+          {!overview?.recentOrders?.length ? <Empty text="No orders in this period. Try a wider date range." /> : <div className="dash-order-list">{overview.recentOrders.map(order => <a key={order._id} href={`/admin/orders/detail?id=${encodeURIComponent(order._id)}`}><div className="dash-order-avatar">{(order.user?.name || order.shippingAddress?.fullName || 'C').slice(0, 1).toUpperCase()}</div><div className="dash-order-main"><strong>{order.user?.name || order.shippingAddress?.fullName || 'Customer'}</strong><span>{order.invoiceNumber || `#${order._id.slice(-8).toUpperCase()}`}</span><small>{day(order.createdAt)} · {number(order.itemsCount)} items</small></div><div className="dash-order-amount"><strong>{currency(order.finalAmount)}</strong><span className={`dash-badge ${order.orderStatus === 'Delivered' ? 'is-success' : order.orderStatus === 'Cancelled' ? 'is-muted' : ''}`}>{order.orderStatus || 'Pending'}</span><small>{order.paymentMethod} · {order.paymentStatus}</small></div></a>)}</div>}
+          <div className="dash-pagination"><label>Show <select aria-label="Orders per page" value={limit} onChange={event => { setLimit(Number(event.target.value)); setPage(1); }}>{[5, 10, 20].map(value => <option key={value}>{value}</option>)}</select></label><span>Page {pagination.page} of {pagination.totalPages}</span><div><button aria-label="Previous orders" disabled={pagination.page <= 1} onClick={() => setPage(pagination.page - 1)}><ChevronLeft size={18} /></button><button aria-label="Next orders" disabled={pagination.page >= pagination.totalPages} onClick={() => setPage(pagination.page + 1)}><ChevronRight size={18} /></button></div></div>
+        </Panel>
+        <Panel title="Best-selling products" note="Top 10 by units in valid COD and paid online orders." href="/admin/products" link="All products">
+          {!overview?.topProducts?.length ? <Empty text="Products will appear when valid orders are placed in this period." /> : <ol className="dash-products">{overview.topProducts.map((product, index) => <li key={product.key || product.id || index}><span className="dash-rank">{index + 1}</span><div className="dash-product-image">{product.image ? <img src={normalizeImageUrl(product.image)} alt="" loading="lazy" onError={event => { event.currentTarget.style.display = 'none'; }} /> : <Package size={20} />}</div><div className="dash-product-info">{product.id ? <a href={`/admin/products/edit?id=${encodeURIComponent(product.id)}`} title={product.name}>{product.name || 'Product'}</a> : <strong>{product.name || 'Removed product'}</strong>}<span>{number(product.sold)} units ordered</span></div><strong>{currency(product.revenue)}</strong></li>)}</ol>}
+          <p className="dash-help">Item value before order-level discounts, fees and returns adjustments. Cancelled, returned and refunded orders are excluded.</p>
+        </Panel>
+      </div>
+      <Panel title="Live inventory" note="Current stock across the catalog, not historical stock for the selected dates. Alerts include low or sold-out size / colour variants." href="/admin/inventory?filter=attention" link="Manage stock">
+        <div className="dash-inventory-summary"><span><strong>{number(inventory.active)}</strong> active products</span><span><strong>{number(inventory.alerts)}</strong> need stock attention</span><span><strong>{number(inventory.out)}</strong> sold out</span><span><strong>{number(inventory.total)}</strong> total catalog products</span></div>
+        {!inventory.products?.length ? <Empty text="No stock alerts for active products." /> : <div className="dash-stock-grid">{inventory.products.map(product => <a key={product._id} href={`/admin/products/edit?id=${encodeURIComponent(product._id)}`}><div><strong title={product.name}>{product.name}</strong><small>{product.sku || 'No SKU'} · Alert at {product.lowStockAlert ?? 5}</small></div><span className={`dash-badge ${product.availableStock <= 0 ? 'is-muted' : ''}`}>{product.availableStock <= 0 ? 'Sold out' : `${number(product.availableStock)} available`}</span><ArrowRight size={15} /></a>)}</div>}
+        {inventory.alerts > 6 && <p className="dash-help">Showing 6 of {number(inventory.alerts)} products needing attention. Open Manage stock for the full list.</p>}
+      </Panel>
+    </>}
+  </section>;
+}
+
+function MetricChange({ metric }) {
+  const delta = metric?.delta;
+  return <div className={`dash-change ${delta > 0 ? 'is-up' : delta < 0 ? 'is-down' : ''}`}>{delta == null ? '— No comparison' : `${delta > 0 ? '+' : ''}${delta}% vs previous period`}</div>;
+}
+function Panel({ title, note, href, link, children }) {
+  return <section className="admin-card dash-panel"><header><div><h2>{title}</h2><p>{note}</p></div>{href && <a href={href}>{link}<ArrowRight size={14} /></a>}</header>{children}</section>;
+}
+function Empty({ text }) { return <div className="dash-empty"><Package size={23} /><p>{text}</p></div>; }
+function SalesChart({ series }) {
+  if (!series.length) return <Empty text="No paid orders in this period." />;
+  const max = Math.max(1, ...series.map(item => Number(item.value || 0)));
+  const bottom = 194;
+  const points = series.map((item, index) => ({ ...item, x: 55 + index / Math.max(series.length - 1, 1) * 565, y: bottom - Number(item.value || 0) / max * 165 }));
+  const tick = Math.max(1, Math.ceil(points.length / 6));
+  return <div className="dash-chart"><svg viewBox="0 0 640 230" role="img" aria-label="Paid order value trend; exact values are available in the table below"><title>Paid order value by order date</title>
+    {[0, 0.5, 1].map(ratio => <g key={ratio}><line x1={55} x2={625} y1={bottom - ratio * 165} y2={bottom - ratio * 165} stroke="#eee6e2" /><text x={47} y={bottom - ratio * 165 + 4} textAnchor="end">{compact(max * ratio)}</text></g>)}
+    <path d={`M${points[0].x},${bottom} ${points.map(p => `L${p.x},${p.y}`).join(' ')} L${points.at(-1).x},${bottom} Z`} fill="#f8e9ed" /><path d={points.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')} fill="none" stroke="#781c3b" strokeWidth="2.5" strokeLinejoin="round" />
+    {points.map((p, index) => <g key={p.key || p.label}><circle cx={p.x} cy={p.y} r={series.length > 31 ? 2 : 3} fill="#781c3b"><title>{day(p.key || p.label)}: {currency(p.value)}, {number(p.orders)} orders</title></circle>{index % tick === 0 && <text x={p.x} y={220} textAnchor="middle">{day(p.key || p.label)}</text>}</g>)}
+  </svg><details><summary>View exact values</summary><div className="dash-table-scroll"><table><thead><tr><th>Date (IST)</th><th>All orders</th><th>Paid order value</th></tr></thead><tbody>{series.map((item, index) => <tr key={item.key || index}><td>{item.key || item.label}</td><td>{number(item.orders)}</td><td>{currency(item.value)}</td></tr>)}</tbody></table></div></details></div>;
+}
+
+export function dashboardCsv(data, label) {
+  const rows = [['Dashboard period', label], ['Time zone', 'Asia/Kolkata'], ['Generated at', data.generatedAt || ''], [], ['Metric', 'Value', 'Previous period']];
+  [['Booked order value', 'sales'], ['Paid order value (before partial refunds)', 'revenue'], ['All orders', 'orders'], ['Buying customers', 'customers'], ['Average order value', 'average'], ['Products added', 'products']].forEach(([name, key]) => rows.push([name, data.stats?.[key]?.value ?? '', data.stats?.[key]?.previous ?? '']));
+  rows.push([], ['Order date (IST)', 'All orders', 'Paid order value']);
+  (data.salesOverview || []).forEach(item => rows.push([item.key || item.label, item.orders, item.value]));
+  rows.push([], ['Order status', 'Count']); (data.orderOverview || []).forEach(item => rows.push([item.label, item.value]));
+  rows.push([], ['Top 10 products', 'Units ordered', 'Item value before order discounts / fees']);
+  (data.topProducts || []).forEach(item => rows.push([item.name, item.sold, item.revenue]));
+  rows.push([], [`Open task (${data.scopes?.attention === 'all' ? 'all dates' : 'selected dates'})`, 'Count']); tasks.forEach(([key, title]) => rows.push([title, data.attention?.[key]?.value ?? '']));
+  rows.push([], ['Current inventory', 'Products']);
+  [['Active products', 'active'], ['Need stock attention', 'alerts'], ['Sold out', 'out'], ['Total catalog products', 'total']].forEach(([title, key]) => rows.push([title, data.inventory?.[key] ?? '']));
+  return '\uFEFF' + rows.map(row => row.map(value => { const text = String(value ?? ''); return `"${(/^\s*[=+@-]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`; }).join(',')).join('\r\n');
+}
+function downloadDashboard(data, label) {
+  const url = URL.createObjectURL(new Blob([dashboardCsv(data, label)], { type: 'text/csv;charset=utf-8;' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `dashboard-${data.range?.fromDate || 'summary'}-${data.range?.toDate || today()}.csv`;
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

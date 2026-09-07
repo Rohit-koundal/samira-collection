@@ -2,6 +2,7 @@ import NotificationBell from '../notifications/NotificationBell';
 import { useEffect, useMemo, useState } from 'react';
 import { Flower2, Heart, HelpCircle, Search, ShoppingBag, Shield, Truck, UserRound } from 'lucide-react';
 import logoFallback from '../../assets/samira-collection-logo.png';
+import StoreLogo from '../ui/StoreLogo';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -104,7 +105,7 @@ export default function Navbar({
         <div className="sc-navbar__main">
           <div className="sc-navbar__brand">
             <button type="button" className="sc-navbar__brand-link" onClick={() => go('/')}>
-              <img className="sc-navbar__logo" src={configuredLogo} alt={websiteConfig.branding.websiteName || 'Store logo'} />
+              <StoreLogo className="sc-navbar__logo" src={configuredLogo} name={websiteConfig.branding.websiteName} />
             </button>
           </div>
 

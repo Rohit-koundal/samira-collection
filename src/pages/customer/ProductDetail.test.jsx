@@ -96,7 +96,8 @@ describe.each(['mobile', 'desktop'])('%s purchase confirmation', (view) => {
     expect(button).toBeDisabled();
     expect(navigate).not.toHaveBeenCalled();
     expect(mockAddConfirmed).toHaveBeenCalledTimes(1);
-    expect(mockAddConfirmed).toHaveBeenCalledWith(expect.objectContaining({ _id: 'product-1' }), expect.any(String), 'Navy', '', 1);
+    expect(mockAddConfirmed).toHaveBeenCalledWith(expect.objectContaining({ _id: 'product-1' }), '', 'Navy', '', 1);
+    expect(screen.queryByRole('button', { name: 'Size Chart' })).not.toBeInTheDocument();
     await act(async () => resolveAdd({ ok: true }));
     expect(navigate).toHaveBeenCalledWith('/checkout');
   });

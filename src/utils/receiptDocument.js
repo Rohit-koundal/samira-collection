@@ -67,6 +67,7 @@ export function buildReceiptDefinition(receipt, logoData) {
       rule(),
       label('RETURNS & SUPPORT'),
       { text: view.policy, color: muted, fontSize: 8, lineHeight: 1.25, margin: [0, 0, 0, 10] },
+      ...(view.invoiceNote ? [{ text: view.invoiceNote, color: muted, fontSize: 8, margin: [0, 0, 0, 10] }] : []),
       { unbreakable: true, stack: [{ text: `Thank you for shopping with ${view.storeName}.`, bold: true, color: wine, fontSize: 10 }, { text: 'Computer-generated invoice. Please retain a copy for your records.', fontSize: 8, color: muted, margin: [0, 4, 0, 0] }] },
     ],
   };

@@ -2,6 +2,18 @@ import api from './api';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 const mockUnsubscribe = jest.fn();
+
+test('Smart Fill can be cancelled without opening the global mobile loader', async () => {
+  const abort = jest.fn();
+  let finish;
+  mockDispatch.mockReturnValue({ unwrap: () => new Promise(resolve => { finish = resolve; }), abort });
+  const controller = new AbortController();
+  const pending = api.post('/admin/products/smart-fill', { notes: 'Wine saree' }, { silent: true, signal: controller.signal });
+  expect(mockInitiateMutation).toHaveBeenCalledWith({ path: '/admin/products/smart-fill', method: 'POST', body: { notes: 'Wine saree' }, silent: true });
+  controller.abort(); expect(abort).toHaveBeenCalledTimes(1);
+  finish({ suggestion: {} }); await pending;
+  expect(startMobileLoader).not.toHaveBeenCalled(); expect(stopMobileLoader).not.toHaveBeenCalled();
+});
 const mockInitiateQuery = jest.fn(() => ({ type: 'query-request' }));
 const mockInitiateMutation = jest.fn(() => ({ type: 'mutation-request' }));
 const mockDispatch = jest.fn(() => ({

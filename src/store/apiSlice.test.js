@@ -2,6 +2,17 @@ import { configureStore } from '@reduxjs/toolkit';
 import { waitFor } from '@testing-library/react';
 import authReducer, { logout, setCredentials } from './authSlice';
 import { samiraApi } from './apiSlice';
+import { startMobileLoader } from '../utils/mobileLoader';
+
+test('Smart Fill suggestions do not refetch catalog subscriptions or block the mobile screen', async () => {
+  mockRawQuery.mockResolvedValue({ data: [] });
+  const catalog = testStore.dispatch(samiraApi.endpoints.request.initiate({ path: '/admin/products' }));
+  await catalog.unwrap(); jest.clearAllMocks();
+  await testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path: '/admin/products/smart-fill', body: { notes: 'Saree' }, silent: true })).unwrap();
+  expect(mockRawQuery).toHaveBeenCalledTimes(1);
+  expect(mockRawQuery.mock.calls[0][0].url).toBe('/admin/products/smart-fill');
+  expect(startMobileLoader).not.toHaveBeenCalled(); catalog.unsubscribe();
+});
 
 const mockRawQuery = jest.fn();
 let mockBaseOptions;

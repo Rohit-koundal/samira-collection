@@ -12,11 +12,73 @@ import ProductForm from '../../components/admin/ProductForm';
 import Products from './Products';
 import ProductCaptionModal from '../../components/admin/ProductCaptionModal';
 import api from '../../services/api';
+import { applySmartPatch, selectedSmartPatch, suggestionRows } from '../../utils/productSmartFill';
 jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() }));
 jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { name: 'Owner', systemRole: 'MASTER_OWNER' } }) }));
 jest.mock('../../components/admin/ImageUploader', () => ({ onChange, uploadPath }) => <button type="button" onClick={() => onChange([{ url: 'https://media.example/photo.jpg' }])}>Upload photo {uploadPath}</button>);
 jest.mock('../../components/admin/VideoUploader', () => () => null);
 const category = { _id: 'cat', name: 'Sarees', isActive: false };
+
+test.each(['/admin', '/seller'])('Smart Fill uses %s permissions and saves reviewed listing fields through the normal product endpoint', async (prefix) => {
+  const configuration = { features: { sizing: false }, attributes: [{ key: 'material', label: 'Material' }] };
+  api.get.mockImplementation(async path => path === '/catalog-configuration' ? configuration : path.includes('/categories') ? [category] : path.includes('/smart-fill/status') ? { enabled: true } : []);
+  api.post.mockImplementation(async path => path.endsWith('/smart-fill') ? { mode: 'ai', suggestion: { name: 'Wine embroidered saree', category: 'cat', price: 899, originalPrice: 1299, description: 'A wine saree with an embroidered border.', shortDescription: 'Wine saree with an embroidered border.', highlights: ['Embroidered border'], attributeValues: { material: 'Georgette' } }, fieldSources: { price: { quote: 'Price: 899', source: 'caption' }, originalPrice: { quote: 'MRP: 1299', source: 'caption' } } } : { _id: 'created' });
+  render(<ProductForm apiPrefix={prefix} uploadPrefix={prefix + '/uploads'} />);
+  await screen.findByLabelText('Material');
+  fireEvent.click(screen.getByRole('button', { name: 'Upload photo ' + prefix + '/uploads' }));
+  fireEvent.click(screen.getByRole('button', { name: /Smart fill/ }));
+  fireEvent.change(screen.getByLabelText('Supplier notes or product details'), { target: { value: 'Name: Wine saree\nPrice: 899\nMRP: 1299' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest details' }));
+  await screen.findByText('Review suggestions');
+  expect(api.post).toHaveBeenCalledWith(prefix + '/products/smart-fill', expect.objectContaining({ imageUrls: ['https://media.example/photo.jpg'] }), expect.objectContaining({ silent: true }));
+  fireEvent.click(screen.getByRole('button', { name: /Apply \d+ selected details/ }));
+  expect(screen.getByLabelText(/Product name/)).toHaveValue('Wine embroidered saree');
+  expect(screen.getByLabelText('Material')).toHaveValue('Georgette');
+  fireEvent.change(screen.getByLabelText('Stock quantity'), { target: { value: '3' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith(prefix + '/products', expect.objectContaining({ name: 'Wine embroidered saree', price: 899, originalPrice: 1299, stock: 3, sizes: [], highlights: ['Embroidered border'], metaTitle: 'Wine embroidered saree', attributeValues: { material: 'Georgette' } })));
+});
+
+test('Smart Fill does not replace existing values by default and preserves independently edited attributes on undo', () => {
+  const baseline = { name: 'My product', category: 'cat', price: '900', stock: 5, description: '', attributeValues: { material: 'Cotton' } };
+  const rows = suggestionRows({ suggestion: { name: 'Suggested product', price: 999, description: 'A useful description.', stock: 100, attributeValues: { material: 'Silk', lining: 'Cotton' } }, fieldSources: { price: { quote: 'Price: 999' } } }, baseline, { categories: [category], structure: { attributes: [{ key: 'material', label: 'Material' }, { key: 'lining', label: 'Lining' }] }, seo: false });
+  const patch = selectedSmartPatch(rows, rows.map(row => row.key), baseline);
+  const applied = applySmartPatch(baseline, patch);
+  expect(applied.name).toBe('My product'); expect(applied.price).toBe('900'); expect(applied.stock).toBe(5);
+  expect(applied.description).toBe('A useful description.'); expect(applied.attributeValues).toEqual({ material: 'Cotton', lining: 'Cotton' });
+  const undone = applySmartPatch({ ...applied, attributeValues: { material: 'Linen', lining: 'Cotton' } }, patch, true);
+  expect(undone.description).toBe(''); expect(undone.attributeValues.material).toBe('Linen'); expect(undone.attributeValues.lining).toBe('');
+  expect(selectedSmartPatch(rows, ['name'], baseline, true)[0].value).toBe('Suggested product');
+});
+
+test('Smart Fill protects inventory added during analysis and rejects prices that conflict with retained MRP', () => {
+  const baseline = { name: '', category: 'cat', price: '', originalPrice: '500', colors: '', sizes: '', subCategory: '', sizingMode: 'auto' };
+  const result = { suggestion: { name: 'Silk saree', price: 899, sizes: ['M'], colors: ['Wine'], subCategory: 'Festive', description: 'An embroidered product.' }, fieldSources: { price: { quote: 'Price: 899' } } };
+  const rows = suggestionRows(result, baseline, { categories: [category], seo: false });
+  const keys = rows.map(row => row.key);
+  expect(selectedSmartPatch(rows, keys, baseline).some(row => row.key === 'price')).toBe(false);
+  const variants = [{ size: 'L', color: 'Blue', stock: 3 }];
+  const next = applySmartPatch({ ...baseline, trackVariants: true, variants }, selectedSmartPatch(rows, keys, { ...baseline, trackVariants: true, variants }));
+  expect(next.variants).toEqual(variants); expect(next.name).toBe(''); expect(next.sizes).toBe(''); expect(next.description).toBe('An embroidered product.');
+  expect(selectedSmartPatch(rows, keys, { ...baseline, category: 'another' }).some(row => ['subCategory', 'sizes'].includes(row.key))).toBe(false);
+});
+
+test('a selectable-size saree exposes missing bust, focuses it on save and can switch to free size', async () => {
+  const product = { _id: 'product', name: 'Silk saree', sku: 'SC-SAREE', category: 'cat', price: 900, originalPrice: 1100, stock: 3, description: 'Silk saree with a refined woven finish.', images: [{ url: 'https://media.example/saree.jpg' }], sizingMode: 'sized', sizeChartProfile: 'auto', sizes: ['S'], colors: [], tags: [], sizeChart: { unit: 'in', columns: [], rows: [] } };
+  api.get.mockImplementation(async path => path === '/catalog-configuration' ? { features: { sizing: true }, attributes: [] } : path.includes('/categories') ? [category] : path === '/admin/products/product' ? product : []);
+  api.put.mockResolvedValue({});
+  render(<ProductForm mode="Update" productId="product" />);
+  const bust = await screen.findByLabelText('S Bust');
+  expect(bust).toHaveValue(null);
+  fireEvent.click(screen.getByRole('button', { name: 'Update Product' }));
+  expect(api.put).not.toHaveBeenCalled();
+  expect(bust).toHaveFocus(); expect(bust).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('alert')).toHaveTextContent('S Bust');
+  fireEvent.change(screen.getByLabelText(/^Customer sizing/), { target: { value: 'free-size' } });
+  expect(screen.queryByLabelText('S Bust')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Update Product' }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/products/product', expect.objectContaining({ sizingMode: 'free-size', sizes: [], sizeChart: { unit: 'in', columns: [], rows: [] }, stock: 3 })));
+});
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); jest.spyOn(window, 'confirm').mockReturnValue(true); api.get.mockResolvedValue([]); });
 afterEach(() => jest.restoreAllMocks());
 
@@ -111,12 +173,13 @@ test('subscriber loading retries then search distinguishes active and unsubscrib
   expect(screen.queryByText('asha@example.test')).not.toBeInTheDocument();
   expect(screen.getByText('Unsubscribed')).toBeInTheDocument();
 });
-test('dashboard read failure never presents zero totals as a successful report and can retry', async () => {
+test('dashboard read failures retry and legacy responses never appear as current period data', async () => {
   api.get.mockRejectedValueOnce(new Error('Dashboard offline')).mockResolvedValueOnce({ stats: { orders: { value: 12 } } });
   render(<Dashboard />);
   fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-  expect(await screen.findByText('12')).toBeInTheDocument();
-  expect(screen.getByText('Live data connected')).toBeInTheDocument();
+  expect(await screen.findByText('The dashboard API is out of date. Restart or update the backend, then refresh this page.')).toBeInTheDocument();
+  expect(screen.queryByText('12')).not.toBeInTheDocument();
+  expect(screen.queryByText('Live data connected')).not.toBeInTheDocument();
 });
 test('customer promotion requires confirmation and failed block retains the customer', async () => {
   const customer = { _id: 'customer', name: 'Asha', role: 'customer', phone: '9000000001', createdAt: '2026-09-01' };

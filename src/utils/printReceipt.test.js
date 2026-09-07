@@ -3,7 +3,7 @@ import sample from './__fixtures__/invoice.json';
 const mockDownload = jest.fn();
 const mockPrint = jest.fn();
 const mockCreate = jest.fn(() => ({ download: mockDownload, print: mockPrint }));
-jest.mock('pdfmake/build/pdfmake', () => ({ __esModule: true, default: { addVirtualFileSystem: jest.fn(), createPdf: (...args) => mockCreate(...args) } }));
+jest.mock('!!pdfmake/build/pdfmake', () => ({ __esModule: true, default: { addVirtualFileSystem: jest.fn(), createPdf: (...args) => mockCreate(...args) } }), { virtual: true });
 jest.mock('pdfmake/build/vfs_fonts', () => ({ __esModule: true, default: {} }));
 beforeEach(() => {
   jest.clearAllMocks();

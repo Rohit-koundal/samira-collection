@@ -4,6 +4,7 @@ import { compressImageFile, isSupportedImageFile } from './imageCompression';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 function customerSafeMessage(message, status, path = '', code = '') {
+  if (code.startsWith('SHIPPING_') && message) return message;
   if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
     return path.includes('/videos') || path.includes('reel')
       ? 'Reel videos need Cloudflare R2 or Cloudinary. Local disk storage is not enough for AI processing.'
@@ -43,12 +44,15 @@ async function request(path, options = {}) {
   const body = options.body ? JSON.parse(options.body) : undefined;
   const endpoint = method === 'GET' ? samiraApi.endpoints.request : samiraApi.endpoints.mutate;
   const action = method === 'GET'
-    ? endpoint.initiate({ path, silent: options.silent, ...(options.cacheScope !== undefined ? { cacheScope: options.cacheScope } : {}) }, {
+    ? endpoint.initiate({ path, silent: options.silent, ...(options.cache ? { cache: options.cache } : {}), ...(options.cacheScope !== undefined ? { cacheScope: options.cacheScope } : {}) }, {
       forceRefetch: options.forceRefetch !== false,
       subscribe: false,
     })
-    : endpoint.initiate({ path, method, body });
+    : endpoint.initiate({ path, method, body, ...(options.silent ? { silent: true } : {}) });
   const promise = store.dispatch(action);
+  const abort = () => promise.abort?.();
+  options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) abort();
   if (!options.silent) startMobileLoader();
 
   try {
@@ -57,6 +61,7 @@ async function request(path, options = {}) {
   } catch (error) {
     throw toCustomerError(error, path);
   } finally {
+    options.signal?.removeEventListener('abort', abort);
     if (!options.silent) stopMobileLoader();
     if (method === 'GET') promise?.unsubscribe?.();
   }
@@ -87,7 +92,7 @@ async function prepareUploadFiles(files, fieldName) {
 
 const api = {
   get: (path, options = {}) => request(path, options),
-  post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
+  post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),

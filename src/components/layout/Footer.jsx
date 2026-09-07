@@ -35,6 +35,7 @@ import {
   IconBrandYoutube,
 } from '@tabler/icons-react';
 import logo from '../../assets/samira-collection-logo.png';
+import StoreLogo from '../ui/StoreLogo';
 import { useGetSettingsQuery } from '../../store/apiSlice';
 import api from '../../services/api';
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
@@ -188,10 +189,11 @@ export default function Footer({ navigate }) {
       <div className="sc-footer__top">
         <section className="sc-footer__brand">
           <button type="button" className="sc-footer__logo-link" onClick={() => go('/')}>
-            <img src={configuredLogo} alt={websiteConfig.branding.websiteName || 'Store logo'} className="sc-footer__logo" />
+            <StoreLogo src={configuredLogo} name={websiteConfig.branding.websiteName} className="sc-footer__logo" />
           </button>
           <p>{footerConfig.description || settings.footerText}</p>
           {footerConfig.showContact && footerContactText && <p>{footerContactText}</p>}
+          {footerConfig.showContact && settings.supportHours && <p>{settings.supportHours}</p>}
           {footerConfig.showSocialLinks && <SocialRow socialUrls={socialUrls} onOpen={openExternal} />}
         </section>
 

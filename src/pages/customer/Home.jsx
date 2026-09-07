@@ -10,6 +10,7 @@ import { useGetBannersQuery, useGetCategoriesQuery, useGetFeaturedReviewsQuery, 
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 import { getHomepageSection } from '../../config/websiteCustomization';
 import { isUnavailable, wishlistStock } from '../../utils/wishlist';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
 
 const DesktopLuxuryHome = lazy(() => import('./DesktopLuxuryHome'));
 const emptyList = [];
@@ -126,6 +127,7 @@ function MobileSection({ section, children }) {
 }
 
 function MobileHero({ banner, heading, navigate }) {
+  const brand = useBrandIdentity();
   return (
     <section className="px-3 pb-4 pt-3">
       <button
@@ -165,7 +167,7 @@ function MobileHero({ banner, heading, navigate }) {
                 <img src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} loading="eager" fetchPriority="high" decoding="async" className="h-full w-full object-cover object-top" />
               ) : (
                 <div className="flex h-full items-center justify-center bg-gradient-to-b from-[#f8e2d7] to-[#f6cfd2] text-[11px] font-semibold text-[#7a1f36]">
-                  Samira Collection
+                  {brand.websiteName}
                 </div>
               )}
             </div>

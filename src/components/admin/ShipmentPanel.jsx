@@ -1,0 +1,92 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Download, Package, RefreshCw, Truck } from 'lucide-react';
+import api from '../../services/api';
+
+const human = value => String(value || 'WAITING').replaceAll('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
+const inputClass = 'admin-field__control w-full min-w-0';
+export default function ShipmentPanel({ orderId, returnId, onChanged }) {
+  const base = returnId ? `/admin/returns/${returnId}/delivery` : `/admin/orders/${orderId}/delivery`;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [parcel, setParcel] = useState({ weightKg: '', lengthCm: '', widthCm: '', heightCm: '' });
+  const [slot, setSlot] = useState({ date: '', time: '10:00', closeTime: '18:00' });
+  const [checked, setChecked] = useState(false);
+  const [cancelConfirmed, setCancelConfirmed] = useState(false);
+  const [pickupToken, setPickupToken] = useState('');
+  const [carrierConfirmed, setCarrierConfirmed] = useState(false);
+  const [confirmedNoRequest, setConfirmedNoRequest] = useState(false);
+  const generation = useRef(0);
+  const lock = useRef(false);
+  const load = useCallback(async (refresh = false) => {
+    const version = generation.current;
+    try {
+      const result = await api.get(`${base}${refresh ? '?refresh=1' : ''}`, { silent: true, cache: 'no-store' });
+      if (version !== generation.current) return;
+      setData(result); setError(result.warning || '');
+      setParcel(current => Object.values(current).some(Boolean) ? current : result.shipment?.parcel || result.parcel || current);
+    } catch (e) { if (version === generation.current) setError(e.message); }
+  }, [base]);
+  useEffect(() => {
+    generation.current += 1; setData(null); setMessage(''); setError(''); setChecked(false); setCancelConfirmed(false); setCarrierConfirmed(false); setConfirmedNoRequest(false); setPickupToken('');
+    setParcel({ weightKg: '', lengthCm: '', widthCm: '', heightCm: '' });
+    load();
+    return () => { generation.current += 1; };
+  }, [load]);
+  const act = async action => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError(''); setMessage('');
+    const version = generation.current;
+    try {
+      await api.post(`${base}/${action}`, { ...slot, parcel, pickupToken, confirmedWithCarrier: carrierConfirmed, confirmedNoRequest });
+      if (version !== generation.current) return;
+      setMessage({ book: 'Shipment created. Download the label, attach it to your packed parcel, then request pickup.', pickup: 'Pickup request confirmed by Blue Dart.', cancel: 'Courier shipment cancelled. The order and payment remain available to manage separately.', reconcile: 'Booking outcome checked.' }[action]);
+      await load(); onChanged?.();
+    } catch (e) { if (version === generation.current) { await load(); setError(e.message); } }
+    finally { lock.current = false; if (version === generation.current) setBusy(false); }
+  };
+  const download = async () => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError('');
+    try {
+      const file = await api.get(`${base}/label`, { cache: 'no-store' });
+      const bytes = Uint8Array.from(atob(file.base64), c => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url; a.download = file.filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      setMessage('Shipping label downloaded. Open the PDF and print at actual size.');
+    } catch (e) { setError(e.message); }
+    finally { lock.current = false; setBusy(false); }
+  };
+  const shipment = data?.shipment;
+  const integrated = shipment?.awb ? shipment.provider === 'bluedart' : data?.readiness?.name === 'bluedart';
+  const uncertain = ['UNKNOWN', 'BOOKING'].includes(shipment?.bookingState) || !!shipment?.operation;
+  const canBook = integrated && !shipment?.awb && !uncertain && shipment?.bookingState !== 'CANCELLED';
+  const canPickup = shipment?.bookingState === 'BOOKED' && !uncertain && !shipment?.pickup?.token && shipment?.status === 'READY_TO_SHIP';
+  return <section className="admin-card min-w-0 p-5" aria-label={returnId ? 'Reverse delivery' : 'Courier delivery'}>
+    <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2"><Truck size={19} />{returnId ? 'Reverse pickup' : 'Courier delivery'}</h2><button type="button" className="admin-table-action-link inline-flex items-center gap-1" disabled={busy} onClick={() => load(true)}><RefreshCw size={14} />Refresh tracking</button></header>
+    {error && <p role="alert" className="my-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
+    {message && <p role="status" className="my-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{message}</p>}
+    {!data ? <p className="admin-note mt-3">{error ? 'Delivery details could not load.' : 'Loading delivery details...'}</p> : <>
+      <div className="my-4 flex flex-wrap items-center justify-between gap-3"><div><strong>{human(shipment?.status)}</strong><p className="admin-note">{shipment?.awb ? `${shipment.courierName || 'Courier'} · AWB ${shipment.awb}` : 'No courier AWB has been booked.'}</p></div>{(shipment?.environment || data.readiness?.mode) === 'sandbox' && <strong className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">SANDBOX · No real delivery</strong>}</div>
+      {shipment?.providerRef && <p className="admin-note break-all">Booking reference: {shipment.providerRef}</p>}
+      {shipment?.providerStatus && <p className="mt-2 text-sm">{shipment.providerStatus}</p>}
+      {shipment?.lastError && <p role="status" className="admin-note mt-2">{shipment.lastError}</p>}
+      {shipment?.lastSyncedAt && <p className="admin-note mt-2">Last checked: {new Date(shipment.lastSyncedAt).toLocaleString('en-IN')}</p>}
+      {shipment?.pickup?.token && <p className="mt-3 text-sm">Pickup {shipment.pickup.cancelled ? 'cancelled' : 'confirmed'} · {shipment.pickup.date} at {shipment.pickup.time} IST · Token {shipment.pickup.token}</p>}
+      {!integrated && <p className="admin-note">Shipping is managed manually. Connect Blue Dart in <a className="admin-table-action-link" href="/admin/settings">Store settings → Orders & delivery</a>.</p>}
+      {integrated && !data.readiness?.liveBooking && !shipment?.awb && <p role="status" className="admin-note">{data.readiness?.note}</p>}
+      <fieldset disabled={busy}>
+        {canBook && <div className="mt-4"><h3 className="flex items-center gap-2 text-sm"><Package size={17} />Packed parcel · one package</h3><div className="mt-3 grid grid-cols-2 gap-3">{[['weightKg', 'Weight (kg)'], ['lengthCm', 'Length (cm)'], ['widthCm', 'Width (cm)'], ['heightCm', 'Height (cm)']].map(([key, label]) => <label className="text-sm" key={key}>{label}<input type="number" min="0.001" step="0.001" className={inputClass} value={parcel[key] ?? ''} onChange={e => { setParcel(p => ({ ...p, [key]: e.target.value })); setChecked(false); }} /></label>)}</div><p className="admin-note mt-2">Measure the finished parcel including packaging. Changing these measurements does not change the customer's order total.</p></div>}
+        {(canBook || canPickup) && <div className="mt-4 grid gap-3 sm:grid-cols-3">{[['date', 'Pickup date', 'date'], ['time', 'Ready from (IST)', 'time'], ['closeTime', 'Closes at (IST)', 'time']].map(([key, label, type]) => <label className="min-w-0 text-sm" key={key}>{label}<input className={inputClass} type={type} value={slot[key]} onChange={e => setSlot(s => ({ ...s, [key]: e.target.value }))} /></label>)}</div>}
+        {canBook && <><label className="my-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} className="mt-1" /><span>I have checked the package details. Create the Blue Dart shipment using my account rates.</span></label><button type="button" disabled={!checked || !data.readiness?.liveBooking} className="admin-btn" onClick={() => act('book')}>Create {returnId ? 'return shipment' : 'shipment'}</button></>}
+        {integrated && shipment?.awb && shipment.status !== 'CANCELLED' && <div className="mt-4 flex flex-wrap gap-3"><button type="button" className="admin-btn-ghost inline-flex items-center gap-2" disabled={!shipment.labelAvailable} onClick={download}><Download size={16} />Download label / print PDF</button>{canPickup && <button type="button" className="admin-btn" onClick={() => act('pickup')}>Request Blue Dart pickup</button>}</div>}
+        {integrated && shipment?.awb && !shipment.labelAvailable && <p className="admin-note mt-2">The PDF was not returned by Blue Dart. Download the original label from your carrier account using this AWB.</p>}
+        {uncertain && <div className="mt-4 rounded-xl border border-amber-200 p-4"><h3>Check the existing request</h3><p className="admin-note">A request may already exist at Blue Dart. Check by reference before creating another parcel.</p>{shipment?.operation?.startsWith('pickup') && <label className="mt-3 block text-sm">Confirmed pickup token<input className={inputClass} value={pickupToken} onChange={e => setPickupToken(e.target.value)} /></label>}{shipment?.operation && !['book'].includes(shipment.operation) && <label className="my-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={carrierConfirmed} onChange={e => setCarrierConfirmed(e.target.checked)} />I confirmed this request with Blue Dart.</label>}<details className="mt-3"><summary>Blue Dart confirmed no request exists</summary><label className="my-3 flex items-start gap-2"><input type="checkbox" checked={confirmedNoRequest} onChange={e => { setConfirmedNoRequest(e.target.checked); setCarrierConfirmed(e.target.checked); }} /><span>Blue Dart confirmed there is no AWB or pickup for this reference. Unlock a retry. A failed tracking lookup alone does not confirm this.</span></label></details><button type="button" className="admin-btn-ghost mt-3" onClick={() => act('reconcile')}>Check booking outcome</button></div>}
+        {integrated && shipment?.awb && !uncertain && ['READY_TO_SHIP', 'PICKUP_SCHEDULED'].includes(shipment.status) && <details className="mt-5 text-sm"><summary className="cursor-pointer text-wine">Cancel courier booking</summary><p className="admin-note mt-2">Blue Dart must confirm cancellation before the parcel is handed over. Manage the order cancellation and any customer refund separately.</p><label className="my-3 flex items-start gap-2"><input type="checkbox" checked={cancelConfirmed} onChange={e => setCancelConfirmed(e.target.checked)} /><span>I want to cancel this courier booking and its pickup.</span></label><button type="button" disabled={!cancelConfirmed} className="admin-btn-ghost" onClick={() => act('cancel')}>Cancel shipment & pickup</button></details>}
+      </fieldset>
+      {shipment?.events?.length > 0 && <details className="mt-5 text-sm"><summary className="cursor-pointer font-bold">Courier history</summary><ol className="mt-3 space-y-3">{[...shipment.events].reverse().map((event, i) => <li key={i} className="border-l-2 border-rose/20 pl-3"><strong>{human(event.status)}</strong><p>{event.note}</p><time className="admin-note">{new Date(event.date).toLocaleString('en-IN')}</time></li>)}</ol></details>}
+    </>}
+  </section>;
+}

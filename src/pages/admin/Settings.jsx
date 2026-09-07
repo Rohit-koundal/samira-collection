@@ -1,190 +1,201 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BadgeCheck, Building2, Check, ChevronRight, CreditCard, Globe2, ImagePlus, Link2, Mail, ReceiptText, RotateCcw, Save, Search, ShieldCheck, Truck } from 'lucide-react';
 import PageHeader from '../../components/admin/PageHeader';
+import ImageUploader from '../../components/admin/ImageUploader';
 import api from '../../services/api';
+import { normalizeImageUrl } from '../../services/normalize';
+import useUnsavedChanges from '../../hooks/useUnsavedChanges';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { SETTINGS_SECTIONS, settingsForm, settingsPayload, announceSettingsSaved } from '../../config/storeSettings';
+import logoFallback from '../../assets/samira-collection-logo.png';
+import StoreLogo from '../../components/ui/StoreLogo';
+import './Settings.css';
+import DeliverySettings from '../../components/admin/DeliverySettings';
 
-const fields = [
-  ['storeName', 'Store Name'],
-  ['legalBusinessName', 'Legal business name'],
-  ['gstin', 'GSTIN'],
-  ['invoicePrefix', 'Invoice prefix'],
-  ['contactEmail', 'Contact Email'],
-  ['contactPhone', 'Contact Phone'],
-  ['whatsappNumber', 'WhatsApp Number'],
-  ['address', 'Store Address'],
-  ['billingAddress', 'Billing address on invoices'],
-  ['freeShippingMinAmount', 'Free Shipping Minimum Amount', 'number'],
-  ['deliveryCharge', 'Delivery Charge', 'number'],
-  ['platformFee', 'Platform Fee', 'number'],
-  ['gstRate', 'GST rate % (shown as inclusive)', 'number'],
-  ['codCharge', 'COD Charge (added to COD orders)', 'number'],
-  ['codMaxAmount', 'COD Max Order Amount (0 = no limit)', 'number'],
-  ['codMinAmount', 'COD Min Order Amount (0 = no minimum)', 'number'],
-  ['prepaidDiscountValue', 'Prepaid discount value', 'number'],
-  ['rtoBlockMinOrders', 'RTO block min orders (0 = off)', 'number'],
-  ['rtoBlockThreshold', 'RTO block rate 0-1 (0 = off)', 'number'],
-  ['returnWindowDays', 'Return window (days)', 'number'],
-  ['footerText', 'Footer Text'],
-];
+const ICONS = { brand: Building2, invoice: ReceiptText, contact: Mail, delivery: Truck, payment: CreditCard, policy: ShieldCheck, social: Link2, website: Globe2 };
+const POLICIES = [['returnPolicy', 'Return Policy'], ['shippingPolicy', 'Shipping Policy'], ['cancellationPolicy', 'Cancellation Policy'], ['privacyPolicy', 'Privacy Policy'], ['termsConditions', 'Terms and Conditions'], ['sizeGuide', 'Size Guide'], ['faqs', 'FAQs'], ['ourStory', 'Our Story']];
 
 export default function Settings() {
+  const brand = useBrandIdentity();
   const [form, setForm] = useState({});
+  const [baseline, setBaseline] = useState(null);
+  const [active, setActive] = useState('identity');
+  const [search, setSearch] = useState('');
   const [paymentReadiness, setPaymentReadiness] = useState(null);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const uploadLock = useRef(false);
+  const uploadBusy = value => { uploadLock.current = value; setUploading(value); };
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [readinessError, setReadinessError] = useState('');
-  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-
+  const lock = useRef(false);
+  const dirty = !!baseline && JSON.stringify(form) !== JSON.stringify(baseline);
+  useUnsavedChanges(dirty, saving || uploading);
+  const update = (field, value) => { setMessage(null); setForm(current => ({ ...current, ...(['contactEmail', 'contactPhone', 'address', 'footerText', 'socialLinks'].includes(field) ? { contactDetailsEnabled: true } : {}), [field]: value })); };
+  const updateIdentity = (field, value) => {
+    setMessage(null);
+    setForm(current => ({
+      ...current,
+      ...(!current.brandIdentityEnabled ? { logoUrl: current.logoUrl ?? brand.logo, faviconUrl: current.faviconUrl ?? brand.favicon, tagline: current.tagline ?? brand.tagline } : {}),
+      [field]: value, brandIdentityEnabled: true,
+    }));
+  };
   const refreshReadiness = useCallback(async () => {
     try { setPaymentReadiness(await api.get('/admin/settings/payment-readiness')); setReadinessError(''); }
-    catch (error) { setPaymentReadiness(null); setReadinessError(error.message || 'Payment readiness could not be checked.'); }
+    catch (error) { setPaymentReadiness(null); setReadinessError(error.message || 'Payment availability could not be checked.'); }
   }, []);
   const load = useCallback(async () => {
     setLoading(true); setLoadError('');
-    try { setForm(await api.get('/admin/settings')); }
+    try { const value = settingsForm(await api.get('/admin/settings')); setForm(value); setBaseline(value); }
     catch (error) { setLoadError(error.message); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); refreshReadiness(); }, [load, refreshReadiness]);
 
-  const submit = async (event) => {
+  const submit = async event => {
     event.preventDefault();
-    if (saving || loading || loadError) return;
-    setMessage('');
-    setSaving(true);
+    if (lock.current || uploadLock.current || loading || loadError || !dirty) return;
+    lock.current = true; setSaving(true); setMessage(null);
     try {
-      if (!form.storeName?.trim()) throw new Error('Store name is required.');
-      if (form.contactEmail && !/^\S+@\S+\.\S+$/.test(form.contactEmail)) throw new Error('Enter a valid email.');
-      const saved = await api.put('/admin/settings', {
-        ...form,
-        freeShippingMinAmount: Number(form.freeShippingMinAmount || 0),
-        deliveryCharge: Number(form.deliveryCharge || 0),
-        platformFee: Number(form.platformFee ?? 23),
-        gstRate: Number(form.gstRate ?? 5),
-        codCharge: Number(form.codCharge || 0),
-        codMaxAmount: Number(form.codMaxAmount || 0),
-        codMinAmount: Number(form.codMinAmount || 0),
-        prepaidDiscountValue: Number(form.prepaidDiscountValue || 0),
-        rtoBlockMinOrders: Number(form.rtoBlockMinOrders || 0),
-        rtoBlockThreshold: Number(form.rtoBlockThreshold || 0),
-        prepaidDiscountType: form.prepaidDiscountType || '',
-        codPincodes: form.codPincodes,
-        returnWindowDays: Number(form.returnWindowDays ?? 7),
-      });
-      setForm(saved);
-      setMessage('Settings saved successfully.');
+      const saved = settingsForm(await api.put('/admin/settings', settingsPayload(form)));
+      setForm(saved); setBaseline(saved); announceSettingsSaved();
+      setMessage({ text: 'Settings saved successfully.', error: false });
       await refreshReadiness();
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (error) { setMessage({ text: error.message, error: true, conflict: error.status === 409 }); }
+    finally { lock.current = false; setSaving(false); }
   };
+  const reloadLatest = async () => {
+    if (lock.current || uploadLock.current) return;
+    lock.current = true; setSaving(true);
+    try {
+      const edits = Object.fromEntries(Object.entries(form).filter(([key, value]) => !['_id', '__v', 'createdAt', 'updatedAt', 'storeId'].includes(key) && JSON.stringify(value) !== JSON.stringify(baseline?.[key])));
+      const latest = settingsForm(await api.get('/admin/settings'));
+      setBaseline(latest); setForm({ ...latest, ...edits });
+      setMessage({ text: 'Latest settings loaded. Your edits have been kept; review them before saving.', error: false });
+    } catch (error) { setMessage({ text: error.message, error: true, conflict: true }); }
+    finally { lock.current = false; setSaving(false); }
+  };
+  const discard = () => { if (saving || uploading || !baseline) return; setForm(settingsForm(baseline)); setMessage(null); };
+  const input = (field, label, options = {}) => <Field key={field} label={label} value={form[field] ?? ''} onChange={value => update(field, value)} {...options} />;
+  const number = (field, label, note = '', options = {}) => input(field, label, { type: 'number', note, min: 0, step: 'any', ...options });
+  const toggle = (field, label, note = '', options = {}) => <Toggle key={field} label={label} note={note} checked={!!form[field]} onChange={value => update(field, value)} {...options} />;
+  const selected = SETTINGS_SECTIONS.find(section => section.id === active);
+  const sections = SETTINGS_SECTIONS.filter(section => (section.title + ' ' + section.note + ' ' + section.keywords).toLowerCase().includes(search.toLowerCase().trim()));
+  const logo = normalizeImageUrl(form.brandIdentityEnabled ? form.logoUrl : form.logoUrl ?? brand.logo) || logoFallback;
 
-  return (
-    <section className="space-y-5">
-      <PageHeader title="Website Settings" note="Control store details, policies and footer content." />
-      {loading && <p role="status" className="admin-card p-5">Loading settings...</p>}
-      {loadError && <p role="alert" className="admin-card p-5">{loadError} <button type="button" onClick={load} className="admin-btn-ghost">Retry settings</button></p>}
-      {!loading && !loadError && <>
-      {readinessError && <p role="status" className="admin-card p-5">Settings are available. {readinessError} <button type="button" onClick={refreshReadiness} className="admin-btn-ghost">Retry payment check</button></p>}
-      <form onSubmit={submit} className="admin-card grid gap-4 p-5 md:grid-cols-2">
-        {fields.map(([field, label, type = 'text']) => <Input key={field} type={type} label={label} value={form[field] ?? ''} onChange={(value) => update(field, value)} />)}
-        <section className="rounded-2xl border border-[#eadfd5] bg-[#fbf8f4] p-4 md:col-span-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-black text-slate-900">Online payment gateway</h2>
-              <p className="mt-1 text-sm text-slate-600">UPI, cards, net banking and wallets are processed securely by Razorpay.</p>
-            </div>
-            <GatewayStatus readiness={paymentReadiness} />
+  return <section className="store-settings">
+    <PageHeader title="Store settings" note="Everything you need to manage your business, in one place." />
+    {loading ? <div className="admin-card p-6" role="status">Loading settings...</div> : loadError ? <div role="alert" className="store-settings__notice"><p>{loadError}</p><button type="button" onClick={load} className="admin-btn-ghost">Retry settings</button></div> : <>
+      <div className="store-settings__overview">
+        <div className="store-settings__brand"><StoreLogo src={logo} name={form.storeName || 'Your store'} /><div><strong>{form.storeName || 'Your store'}</strong><span>{form.legalBusinessName || 'Business preferences and storefront identity'}</span></div></div>
+        <span className={'store-settings__status ' + (form.acceptingOrders === false ? 'is-paused' : '')}><span />{form.acceptingOrders === false ? 'New orders paused' : 'Accepting orders'}</span>
+      </div>
+      {readinessError && <div role="status" className="store-settings__notice"><p>Settings are available. {readinessError}</p><button type="button" onClick={refreshReadiness} className="admin-btn-ghost">Retry payment check</button></div>}
+      <form onSubmit={submit} noValidate>
+        <div className="store-settings__layout">
+          <aside className="store-settings__sidebar">
+            <label className="store-settings__search"><Search size={17} /><input aria-label="Find a settings section" placeholder="Find settings" value={search} onChange={event => setSearch(event.target.value)} /></label>
+            <nav aria-label="Settings sections">{sections.map(section => { const Icon = ICONS[section.icon]; return <button type="button" key={section.id} disabled={uploading} aria-current={active === section.id ? 'page' : undefined} onClick={() => setActive(section.id)}><Icon size={18} /><span>{section.title}</span><ChevronRight size={15} /></button>; })}</nav>
+            {!sections.length && <p className="store-settings__muted">No matching section. Try payments, logo or delivery.</p>}
+            <p className="store-settings__sidebar-note"><ShieldCheck size={16} /> Changes are saved securely and recorded in your audit log.</p>
+          </aside>
+          <div className="store-settings__panel">
+            <div className="store-settings__panel-heading"><span>{String(SETTINGS_SECTIONS.indexOf(selected) + 1).padStart(2, '0')} / 08</span><h2>{selected.title}</h2><p>{selected.note}</p></div>
+            <fieldset disabled={saving || uploading} className="store-settings__fields">
+              {active === 'identity' && <>
+                <Field label="Store Name" value={form.storeName || ''} onChange={value => updateIdentity('storeName', value)} required maxLength={100} note="Shown on your storefront, admin workspace and new invoices." />
+                <Field label="Tagline" value={form.tagline ?? brand.tagline ?? ''} onChange={value => updateIdentity('tagline', value)} maxLength={180} note="A short line that describes your brand." />
+                <BrandImage title="Store logo" value={form.logoUrl ?? brand.logo} onChange={value => updateIdentity('logoUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="A transparent PNG works well. Used in the header, mobile menu and new invoices." />
+                <BrandImage title="Browser icon" value={form.faviconUrl ?? brand.favicon} onChange={value => updateIdentity('faviconUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="Use a square PNG or JPG, ideally 256 x 256 pixels." />
+                <div className="store-settings__tip"><BadgeCheck size={19} /><p>Identity changes apply across desktop and mobile. Existing order invoices keep their original seller information.</p></div>
+                <Toggle label="Use this identity across all themes" checked={!!form.brandIdentityEnabled} onChange={value => value ? updateIdentity('storeName', form.storeName) : update('brandIdentityEnabled', false)} note="Turn off to use the logo and name saved in Website Designer. Business and invoice details stay in Settings." />
+              </>}
+              {active === 'business' && <>
+                {input('legalBusinessName', 'Legal business name', { maxLength: 160, note: 'Registered seller name, if different from your store name.' })}
+                {input('gstin', 'GSTIN', { maxLength: 15, note: 'Leave empty if not applicable.' })}
+                {input('invoicePrefix', 'Invoice prefix', { maxLength: 16, note: 'Used for new invoice numbers. Existing numbers stay unchanged.' })}
+                {number('gstRate', 'GST rate % (shown as inclusive)', 'Tax is included in product prices, not added a second time.', { max: 100 })}
+                {input('billingAddress', 'Billing address on invoices', { multiline: true, maxLength: 1000, note: 'Uses the store address when left empty.' })}
+                {input('invoiceNote', 'Invoice footer note', { multiline: true, maxLength: 500, note: 'Optional message printed on new invoices and PDF downloads.' })}
+              </>}
+              {active === 'contact' && <>
+                {toggle('contactDetailsEnabled', 'Use these contact details in the footer', 'Turn off to use the contact details saved in Website Designer. The contact page and invoices always use Settings.')}
+                {input('contactEmail', 'Contact Email', { type: 'email', maxLength: 254 })}
+                {input('contactPhone', 'Contact Phone', { type: 'tel', maxLength: 24 })}
+                {input('whatsappNumber', 'WhatsApp Number', { type: 'tel', maxLength: 24, note: 'Include the country code for international numbers.' })}
+                {input('supportHours', 'Support hours', { maxLength: 200, placeholder: 'Monday-Saturday, 10 AM-7 PM IST', note: 'Displayed on the contact page and in the footer.' })}
+                {input('address', 'Store Address', { multiline: true, maxLength: 1000 })}
+                {input('footerText', 'Footer Text', { multiline: true, maxLength: 1000 })}
+              </>}
+              {active === 'delivery' && <>
+                {toggle('acceptingOrders', 'Accept new orders', 'Pause new checkout while customers can still browse and view existing orders.')}
+                {input('orderPauseMessage', 'Message when orders are paused', { multiline: true, maxLength: 300 })}
+                {number('minimumOrderAmount', 'Minimum order value', 'Item total before coupon discounts and fees. 0 means no minimum.')}
+                {number('deliveryCharge', 'Delivery Charge', 'Charged below the free delivery threshold. 0 means free delivery.')}
+                {number('freeShippingMinAmount', 'Free Shipping Minimum Amount', '0 gives free delivery on every order.')}
+                {number('platformFee', 'Platform Fee', 'Shown separately in the bag, checkout and invoice. 0 removes the fee.')}
+                <DeliverySettings form={form} update={update} />
+                <div className="store-settings__tip"><Truck size={19} /><p>Checkout calculates these amounts on the server. Existing orders keep the charges agreed when they were placed.</p></div>
+              </>}
+              {active === 'payments' && <>
+                {!form.codEnabled && !(form.razorpayEnabled && paymentReadiness?.configured && ['upiEnabled', 'cardPaymentEnabled', 'netBankingEnabled', 'walletEnabled'].some(key => form[key])) && <p role="status" className="store-settings__tip">No payment method is currently available. Customers will be unable to complete checkout until a method is enabled.</p>}
+                <div className="store-settings__gateway"><div><h3>Online payments</h3><p>UPI, cards, net banking and wallets through Razorpay.</p></div><GatewayStatus readiness={paymentReadiness} />
+                  {!paymentReadiness?.configured && <p className="store-settings__wide">Your payment provider must be connected before you can enable online payments.</p>}
+                  {paymentReadiness?.configured && !paymentReadiness.webhookConfigured && <p className="store-settings__wide">Payment recovery setup is incomplete. Ask your store owner to finish the gateway connection before accepting live payments.</p>}
+                  {toggle('razorpayEnabled', 'Accept online payments', '', { disabled: !paymentReadiness?.configured && !form.razorpayEnabled })}
+                  <div className="store-settings__method-grid">{[['upiEnabled', 'UPI'], ['cardPaymentEnabled', 'Credit / Debit Card'], ['netBankingEnabled', 'Net Banking'], ['walletEnabled', 'Wallet']].map(([key, label]) => toggle(key, label))}</div>
+                </div>
+                {toggle('codEnabled', 'Cash on delivery', 'Allow customers to pay when their order arrives.')}
+                {number('codCharge', 'COD Charge', 'Additional fee for cash on delivery orders only.')}
+                {number('codMinAmount', 'COD minimum order amount', '0 means no minimum.')}
+                {number('codMaxAmount', 'COD maximum order amount', '0 means no maximum.')}
+                <Field label="COD pincodes" multiline value={Array.isArray(form.codPincodes) ? form.codPincodes.join(', ') : form.codPincodes || ''} onChange={value => update('codPincodes', value)} note="Six-digit pincodes, separated by commas. Leave empty to offer COD everywhere you deliver." />
+                {toggle('codConfirmationRequired', 'Require COD confirmation', 'New COD orders require confirmation before fulfilment.')}
+                <label className="store-settings__field"><span>Prepaid discount type</span><select value={form.prepaidDiscountType || ''} onChange={event => update('prepaidDiscountType', event.target.value)}><option value="">None</option><option value="Flat">Flat amount (INR)</option><option value="Percentage">Percentage (%)</option></select><small>Applied only to online payments.</small></label>
+                {number('prepaidDiscountValue', 'Prepaid discount value', form.prepaidDiscountType === 'Percentage' ? 'A percentage between 0 and 100.' : 'Amount in rupees for a flat discount.')}
+                <details className="store-settings__advanced"><summary>Advanced COD risk controls</summary><div className="store-settings__fields">{toggle('rtoBlockEnabled', 'RTO COD blocking', 'Restrict COD for customers with a high rate of orders returned to origin.')}{number('rtoBlockMinOrders', 'RTO block minimum orders', 'At least 1 when blocking is enabled.', { step: 1 })}{number('rtoBlockThreshold', 'RTO block rate', 'A value between 0 and 1. For example, 0.5 means 50%.', { max: 1, step: 0.01 })}</div></details>
+              </>}
+              {active === 'policies' && <>
+                {number('returnWindowDays', 'Return window (days)', 'Days after delivery. 0 means no time limit; product-specific eligibility still applies.', { max: 365, step: 1 })}
+                {POLICIES.map(([key, label]) => <div key={key} className="store-settings__wide">{input(key, label, { multiline: true, maxLength: 20000, rows: 5 })}</div>)}
+              </>}
+              {active === 'social' && <>
+                {['instagram', 'facebook', 'youtube', 'pinterest'].map(network => <Field key={network} label={network[0].toUpperCase() + network.slice(1) + ' Link'} type="url" value={form.socialLinks?.[network] || ''} onChange={value => update('socialLinks', { ...form.socialLinks, [network]: value })} placeholder="https://" />)}
+                <Field label="Google Play app link" type="url" value={form.appLinks?.googlePlay ?? form.appLinks?.playStore ?? ''} onChange={value => update('appLinks', { ...form.appLinks, googlePlay: value, playStore: '' })} placeholder="https://play.google.com/" />
+                <Field label="Apple App Store link" type="url" value={form.appLinks?.appStore ?? form.appLinks?.appleStore ?? ''} onChange={value => update('appLinks', { ...form.appLinks, appStore: value, appleStore: '' })} placeholder="https://apps.apple.com/" />
+                <div className="store-settings__tip"><Link2 size={19} /><p>These are public storefront links. Connect messaging and publishing accounts from <a href="/admin/social">Social studio</a>.</p></div>
+              </>}
+              {active === 'website' && <>
+                <Toggle label="Show announcement bar" checked={form.announcementEnabled ?? true} onChange={value => update('announcementEnabled', value)} note="Displays above the desktop navigation and in the mobile shopping menu." />
+                {input('announcementText', 'Announcement text', { maxLength: 240, placeholder: 'Leave empty for an automatic free delivery message', note: 'Clear this field to use a message based on your delivery settings.' })}
+                {input('seoTitle', 'Browser page title', { maxLength: 100, note: 'Leave empty to use your store name.' })}
+                {input('seoDescription', 'Website description', { multiline: true, maxLength: 300, note: 'Added to the page description metadata. Search engines decide how to display it.' })}
+                <div className="store-settings__tip"><Globe2 size={19} /><p>Colours, typography, navigation and homepage layouts are available in <a href="/admin/customization">Website Designer</a>.</p></div>
+              </>}
+            </fieldset>
           </div>
-
-          {paymentReadiness && !paymentReadiness.configured ? (
-            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-              Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to the backend environment, then restart the server. Online methods stay unavailable until both keys are present.
-            </p>
-          ) : null}
-          {paymentReadiness?.configured && !paymentReadiness.webhookConfigured ? (
-            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-              Add RAZORPAY_WEBHOOK_SECRET before going live so successful payments are recovered even if the customer closes the browser.
-            </p>
-          ) : null}
-
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {[
-              ['razorpayEnabled', 'Accept online payments'],
-              ['upiEnabled', 'UPI'],
-              ['cardPaymentEnabled', 'Credit / Debit Card'],
-              ['netBankingEnabled', 'Net Banking'],
-              ['walletEnabled', 'Wallet'],
-            ].map(([field, label]) => (
-              <label key={field} className="flex items-center gap-2 text-sm font-bold">
-                <input
-                  type="checkbox"
-                  checked={!!form[field]}
-                  disabled={field === 'razorpayEnabled' && !paymentReadiness?.configured}
-                  onChange={(event) => update(field, event.target.checked)}
-                  className="accent-rose disabled:cursor-not-allowed"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </section>
-
-        <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
-          {[
-            ['codEnabled', 'COD Enabled'],
-            ['codConfirmationRequired', 'COD confirmation required'],
-            ['rtoBlockEnabled', 'RTO COD blocking (only with thresholds)'],
-          ].map(([field, label]) => <label key={field} className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={!!form[field]} onChange={(event) => update(field, event.target.checked)} className="accent-rose" /> {label}</label>)}
         </div>
-        <Input label="COD pincodes (comma separated, empty = all)" value={Array.isArray(form.codPincodes) ? form.codPincodes.join(', ') : (form.codPincodes || '')} onChange={(value) => update('codPincodes', value)} />
-        <label className="text-sm font-bold">Prepaid discount type
-          <select className="mt-1 h-11 w-full rounded-xl border px-3 font-semibold" value={form.prepaidDiscountType || ''} onChange={(event) => update('prepaidDiscountType', event.target.value)}>
-            <option value="">None</option>
-            <option value="Flat">Flat</option>
-            <option value="Percentage">Percentage</option>
-          </select>
-        </label>
-        <Textarea label="Return Policy" value={form.returnPolicy || ''} onChange={(value) => update('returnPolicy', value)} />
-        <Textarea label="Shipping Policy" value={form.shippingPolicy || ''} onChange={(value) => update('shippingPolicy', value)} />
-        <Textarea label="Cancellation Policy" value={form.cancellationPolicy || ''} onChange={(value) => update('cancellationPolicy', value)} />
-        <Textarea label="Size Guide" value={form.sizeGuide || ''} onChange={(value) => update('sizeGuide', value)} />
-        <Textarea label="FAQs" value={form.faqs || ''} onChange={(value) => update('faqs', value)} />
-        <Textarea label="Our Story" value={form.ourStory || ''} onChange={(value) => update('ourStory', value)} />
-        <Textarea label="Privacy Policy" value={form.privacyPolicy || ''} onChange={(value) => update('privacyPolicy', value)} />
-        <Textarea label="Terms and Conditions" value={form.termsConditions || ''} onChange={(value) => update('termsConditions', value)} />
-        <div className="grid gap-3 rounded-2xl bg-[#fbf8f4] p-4 md:col-span-2 md:grid-cols-3">
-          <Input label="Instagram Link" value={form.socialLinks?.instagram || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, instagram: value })} />
-          <Input label="Facebook Link" value={form.socialLinks?.facebook || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, facebook: value })} />
-          <Input label="YouTube Link" value={form.socialLinks?.youtube || ''} onChange={(value) => update('socialLinks', { ...form.socialLinks, youtube: value })} />
+        <div className="store-settings__savebar">
+          <div aria-live="polite">{message ? <p className={message.error ? 'is-error' : 'is-success'} role={message.error ? 'alert' : 'status'}>{!message.error && <Check size={17} />}{message.text}</p> : <p>{dirty ? 'You have unsaved changes' : 'All changes saved'}<small>{dirty ? 'Save to apply your updates across the store.' : 'Changes apply after you save.'}</small></p>}{message?.conflict && <button type="button" disabled={saving} onClick={reloadLatest} className="text-xs font-bold text-wine underline">Reload latest and keep my edits</button>}</div>
+          <div className="store-settings__save-actions"><button type="button" className="admin-btn-ghost" disabled={!dirty || saving || uploading} onClick={discard}><RotateCcw size={16} /><span>Discard</span></button><button type="submit" className="admin-btn" disabled={!dirty || saving || uploading}><Save size={17} />{uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save Settings'}</button></div>
         </div>
-        {message && <p role="status" className="text-sm font-bold text-wine md:col-span-2">{message}</p>}
-        <button disabled={saving} className="admin-btn md:col-span-2 disabled:opacity-60">{saving ? 'Saving...' : 'Save Settings'}</button>
       </form>
-      </>}
-    </section>
-  );
+    </>}
+  </section>;
 }
-
+function Field({ label, value, onChange, note, multiline, ...props }) {
+  const Component = multiline ? 'textarea' : 'input';
+  return <label className="store-settings__field"><span>{label}{props.required && <b aria-hidden="true"> *</b>}</span><Component {...props} aria-label={label} value={value} onChange={event => onChange(event.target.value)} />{note && <small>{note}</small>}</label>;
+}
+function Toggle({ label, checked, onChange, note, disabled }) {
+  return <label className="store-settings__toggle"><span><strong>{label}</strong>{note && <small>{note}</small>}</span><input type="checkbox" aria-label={label} checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
+}
+function BrandImage({ title, value, onChange, note, onBusyChange, disabled }) {
+  return <div className="store-settings__image"><h3><ImagePlus size={18} />{title}</h3><p>{note}</p><ImageUploader value={value ? [{ url: value }] : []} onChange={files => onChange(files[0]?.url || '')} uploadContext="website-branding" showPrimaryControl={false} replaceOnUpload onBusyChange={onBusyChange} disabled={disabled} label={'Upload ' + title.toLowerCase()} maxUploadMb={5} helpText="PNG, JPG or WebP, up to 5 MB. Choose a new image to replace the current one." /><Field label={title + ' URL'} value={value || ''} onChange={onChange} placeholder="https://" /></div>;
+}
 function GatewayStatus({ readiness }) {
-  if (!readiness) return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">Checking...</span>;
-  if (readiness.ready) {
-    return (
-      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase text-emerald-800">
-        Ready · {readiness.mode} mode
-      </span>
-    );
-  }
-  return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase text-amber-900">Setup required</span>;
-}
-
-function Input({ label, value, onChange, type = 'text' }) {
-  return <label className="grid gap-2 text-sm font-semibold">{label}<input type={type} min={type === 'number' ? '0' : undefined} step={type === 'number' ? 'any' : undefined} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border border-[#eadfd5] px-4 text-sm" /></label>;
-}
-
-function Textarea({ label, value, onChange }) {
-  return <label className="grid gap-2 text-sm font-semibold md:col-span-2">{label}<textarea value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28 rounded-xl border border-[#eadfd5] p-4 text-sm" /></label>;
+  if (!readiness) return <span className="store-settings__pill">Check unavailable</span>;
+  return <span className={'store-settings__pill ' + (readiness.ready ? 'is-ready' : '')}>{readiness.ready ? 'Ready - ' + readiness.mode + ' mode' : readiness.configured ? 'Connected - disabled' : 'Setup required'}</span>;
 }

@@ -76,7 +76,8 @@ export async function openRazorpayCheckout({
   email,
   contact,
   preferredMethod,
-  description = 'Samira Collection order',
+  storeName = 'Samira Collection',
+  description = 'Store order',
   onSuccess,
   onDismiss,
 }) {
@@ -97,7 +98,7 @@ export async function openRazorpayCheckout({
       key,
       amount,
       currency,
-      name: 'Samira Collection',
+      name: storeName,
       description,
       order_id: orderId,
       prefill: {

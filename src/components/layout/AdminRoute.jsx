@@ -10,6 +10,9 @@ import AdminLayout from '../admin/AdminLayout';
 import '../admin/AdminShell.css';
 import logo from '../../assets/samira-collection-logo.png';
 import { useAuth } from '../../context/AuthContext';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { normalizeImageUrl } from '../../services/normalize';
+import StoreLogo from '../ui/StoreLogo';
 
 export default function AdminRoute({ children }) {
   const { user, switchMode } = useAuth();
@@ -63,7 +66,7 @@ export default function AdminRoute({ children }) {
         icon={<ShieldX aria-hidden="true" />}
         eyebrow="Permission required"
         title="Admin access unavailable"
-        note="This account does not have permission to access the Samira Collection admin workspace."
+        note="This account does not have permission to access the store admin workspace."
         action={(
           <a href="/" className="admin-gate__primary">
             Return to storefront
@@ -78,13 +81,14 @@ export default function AdminRoute({ children }) {
 }
 
 function AdminGate({ icon, eyebrow, title, note, action }) {
+  const brand = useBrandIdentity();
   return (
     <main className="admin-shell admin-gate">
       <header className="admin-gate__topbar">
-        <a href="/" className="admin-gate__brand" aria-label="Samira Collection storefront">
-          <img src={logo} alt="" />
+        <a href="/" className="admin-gate__brand" aria-label={brand.websiteName + ' storefront'}>
+          <StoreLogo src={normalizeImageUrl(brand.logo) || logo} name={brand.websiteName} />
           <span>
-            <strong>Samira Collection</strong>
+            <strong>{brand.websiteName}</strong>
             <small>Administration</small>
           </span>
         </a>
@@ -97,7 +101,7 @@ function AdminGate({ icon, eyebrow, title, note, action }) {
 
       <section className="admin-gate__panel" aria-labelledby="admin-gate-title">
         <div className="admin-gate__context" aria-hidden="true">
-          <p className="admin-gate__context-kicker">SAMIRA ADMIN</p>
+          <p className="admin-gate__context-kicker">{brand.websiteName} ADMIN</p>
           <h2>One secure workspace for your complete store.</h2>
           <p>
             Manage your catalogue and daily operations from a focused, protected dashboard.

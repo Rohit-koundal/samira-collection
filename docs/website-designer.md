@@ -10,7 +10,21 @@ Open the existing **Website Designer** entry in the admin panel. It uses the exi
 4. Save draft to persist privately, or choose **Review & publish**, add a version note and confirm.
 5. Restore a published version into the draft through Version history, review and publish it to roll back.
 
-Presets replace appearance only. They preserve branding, homepage selections/content, contact details, footer menus, announcement wording and handheld settings. There are nine presets: Default, Premium, Minimal, Festive, Sale, Wedding, Botanical Sage, Soft Rose and Indigo Heritage. A preset does not create products, discounts, coupons or orders.
+Presets replace appearance only. They preserve branding, homepage selections/content, contact details, footer menus and announcement wording. There are 17 presets: Default, Premium, Minimal, Festive, Sale, Wedding, Botanical Sage, Soft Rose, Indigo Heritage, Pearl Atelier, Midnight Studio, Champagne Edit, Terracotta Muse, Emerald Luxe, Lilac Bloom, Coastal Linen and Modern Graphite. Search the gallery or filter Signature, Minimal, Nature and Celebration collections. Thumbnails illustrate the palette and styling; the storefront preview shows your actual content. A preset does not create products, discounts, coupons or orders.
+
+Mobile settings stay unchanged unless **Also match mobile colors & corners** is selected. This explicitly enables mobile styling, copying the header/background palette and card corners while preserving mobile columns, image ratios, sections and catalog choices. Tablet styling remains independent.
+
+## Quick customization
+
+- **Find a design setting** searches controls by purpose, such as logo, spacing or products.
+- **Quick styling** coordinates the primary brand color, announcement, buttons and footer, offers three font pairings and three desktop layout densities, and can match the current desktop appearance on mobile. All actions use normal draft fields and are undoable.
+- **Readability check** compares flat theme color pairs against a 4.5:1 text contrast target. **Improve text contrast** adjusts eligible text colors only. Accents, photographs, hover states and Store settings overrides still need review in the preview; this is guidance, not a full accessibility audit or a publishing blocker.
+- **Restore this panel to saved** restores just the selected group from its last saved draft, preserving other edits. Undo reverses the restore.
+- **Compare with saved draft** switches the same preview frame to the saved draft without changing unsaved edits. Return to the current draft to continue; editing also exits comparison automatically.
+- **Arrange selected items** orders chosen products/categories. Footer menus have arrow controls to reorder links without retyping them.
+- On smaller screens, editing controls appear before theme management and use the page's normal scrolling.
+
+Store settings can override theme branding, contact details and announcements. The designer links to those settings; review or disable the corresponding override when you want theme values to be used on the live store.
 
 ## Device boundaries
 
@@ -40,6 +54,8 @@ Deleting an inactive theme also permanently removes its version history; it requ
 - Continuous typing/slider movement is grouped into an undo step. History keeps at most 50 structurally shared snapshots, instead of copying the entire theme for each event.
 - The initial editor no longer waits for catalog/history requests. Catalog options load on first use with only IDs/names; history loads without full configuration snapshots. Restore still retrieves the saved snapshot on the backend.
 - The preview reuses unchanged catalog data and product cards. Below-the-fold desktop images load lazily. These changes do not alter device breakpoints or storefront layouts.
+- Preset thumbnails use CSS and the existing icon/font assets, with no photo downloads, extra frames or animation library. The workspace returns appearance-only preset configurations rather than repeating homepage and menu content. Existing callers of the full presets API retain its complete configuration contract.
+- Reapplying an identical preset does not add undo snapshots; changed looks share their unchanged catalog/content branches. Identical published-config refreshes also reuse their existing state.
 - Preview render failures offer an isolated retry. This does not protect unsaved edits against closing the browser or an operating-system crash; save or export regularly.
 
 Automated regression coverage includes 1,000 continuous slider updates, a 10,000-option selector, invalid fields without iframe remounts, preview pause/resume/retry, import bounds, unchanged tenant filtering and metadata-only history. Browser frame timing/memory and live database integration still need verification on the user-managed application.

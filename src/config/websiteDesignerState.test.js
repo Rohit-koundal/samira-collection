@@ -69,3 +69,12 @@ test('preview messages reuse identical JSON branches, including equal arrays and
   expect(next.colors).not.toBe(original.colors);
   expect(reuseEqualBranches({ a: [1, 2], b: 1 }, { a: [1] })).toEqual({ a: [1] });
 });
+
+test('reapplying the same look does not grow undo history or invalidate catalog branches', () => {
+  const initial = state();
+  const changed = designerReducer(initial, { type: 'replace', draft: mergeWebsiteConfig({ colors: { primary: '#123456' } }) });
+  expect(changed.draft.homepage).toBe(initial.draft.homepage);
+  expect(changed.draft.mobile).toBe(initial.draft.mobile);
+  expect(designerReducer(changed, { type: 'replace', draft: JSON.parse(JSON.stringify(changed.draft)) })).toBe(changed);
+  expect(designerReducer(changed, { type: 'undo' }).draft).toBe(initial.draft);
+});

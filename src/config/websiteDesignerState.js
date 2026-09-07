@@ -1,3 +1,5 @@
+import { reuseEqualBranches } from '../utils/reuseEqualBranches';
+
 // Copy only the edited path. Unchanged branches are shared by the draft and its
 // bounded undo history instead of cloning the catalog/menus/images per keypress.
 export function setDesignerValue(source, path, value) {
@@ -38,7 +40,7 @@ export function designerReducer(state, action) {
     draft: redoStack[redoStack.length - 1], undoStack: append(undoStack, draft), redoStack: redoStack.slice(0, -1), lastEdit: null,
   } : state;
   if (action.type !== 'edit' && action.type !== 'replace') return state;
-  let next = action.type === 'replace' ? action.draft : setDesignerValue(draft, action.path, action.value);
+  let next = action.type === 'replace' ? reuseEqualBranches(draft, action.draft) : setDesignerValue(draft, action.path, action.value);
   if (next === draft) return state;
   if (action.type === 'edit' && ['colors', 'typography', 'header', 'layout'].includes(action.path[0])) {
     next = setDesignerValue(next, ['theme', 'enhancedStyles'], true);

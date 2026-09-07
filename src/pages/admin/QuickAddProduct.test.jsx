@@ -20,6 +20,22 @@ async function fillBasic() {
   fireEvent.change(screen.getByLabelText(/Stock/), { target: { value: '2' } });
   await act(() => Promise.resolve());
 }
+
+test('Quick Add Smart Fill keeps supported suggestions editable and persists them in the product payload', async () => {
+  api.post.mockImplementation(async path => path.endsWith('/smart-fill') ? { mode: 'notes', suggestion: { name: 'Reviewed wine saree', price: 899, fabric: 'Georgette', highlights: ['Embroidered border'], description: 'An embroidered georgette saree.' }, fieldSources: { price: { source: 'caption', quote: 'Price: 899' } } } : { _id: 'created-product' });
+  render(<QuickAddProduct />); await fillBasic();
+  fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: /Smart fill/ }));
+  fireEvent.change(screen.getByLabelText('Supplier notes or product details'), { target: { value: 'Name: Wine saree\nPrice: 899\nFabric: Georgette' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest details' }));
+  await screen.findByText('Review suggestions');
+  fireEvent.click(screen.getByRole('button', { name: /Apply \d+ selected details/ }));
+  expect(screen.getByLabelText(/Product name/)).toHaveValue('Rose saree');
+  expect(screen.getByLabelText(/Selling price/)).toHaveValue(899);
+  expect(screen.getByLabelText('Highlights')).toHaveValue('Embroidered border');
+  fireEvent.click(screen.getByRole('button', { name: 'Looks good, add product' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/products', expect.objectContaining({ name: 'Rose saree', price: 899, stock: 2, fabric: 'Georgette', highlights: ['Embroidered border'] })));
+});
 test('quick add saves reviewed free-size details and can reset for another product', async () => {
   render(<QuickAddProduct />); await fillBasic();
   fireEvent.click(screen.getByRole('button', { name: 'Looks good, add product' }));

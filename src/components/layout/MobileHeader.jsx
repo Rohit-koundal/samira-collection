@@ -23,6 +23,10 @@ import {
 import MobileSearchOverlay from './MobileSearchOverlay';
 import { parseStoreSlug } from '../../utils/attribution';
 import { storefrontPath } from '../../utils/routing';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { normalizeImageUrl } from '../../services/normalize';
+import logoFallback from '../../assets/samira-collection-logo.png';
+import StoreLogo from '../ui/StoreLogo';
 
 const categoryLinks = [
   ['Sarees', '/products?search=Saree'],
@@ -35,6 +39,7 @@ const categoryLinks = [
 ];
 
 export default function MobileHeader({ navigate, route = '/' }) {
+  const brand = useBrandIdentity();
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
@@ -73,6 +78,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5.5 w-5.5" />
           </button>
+          <button type="button" onClick={() => go('/')} aria-label={brand.websiteName + ' home'} className="min-w-0 justify-self-start"><StoreLogo src={normalizeImageUrl(brand.logo) || logoFallback} name={brand.websiteName} className="h-9 max-w-full object-contain" /></button>
           <div className="col-start-3 flex shrink-0 justify-end gap-1">
             <NotificationBell navigate={navigate} />
             <button onClick={() => setSearchOpen(true)} className="grid h-11 w-10 place-items-center text-slate-700" aria-label="Search products">
@@ -184,8 +190,9 @@ export default function MobileHeader({ navigate, route = '/' }) {
               )}
 
               <div className="px-5 pb-2 pt-5">
-                <p className="text-[9px] font-bold uppercase tracking-[.16em] text-slate-300">Samira Collection</p>
-                <p className="mt-1 text-[10px] font-medium text-slate-400">Premium ethnic fashion, made easy.</p>
+                <p className="text-[9px] font-bold uppercase tracking-[.16em] text-slate-500">{brand.websiteName}</p>
+                <p className="mt-1 text-[10px] font-medium text-slate-400">{brand.tagline}</p>
+                {brand.announcementEnabled && brand.announcementText && <p className="mt-3 rounded-lg bg-[#faf2ee] p-3 text-[11px] text-wine">{brand.announcementText}</p>}
               </div>
             </nav>
           </aside>

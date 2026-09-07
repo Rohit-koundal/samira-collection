@@ -201,5 +201,6 @@ export function buildQuickAddPayload(form) {
     tags: splitList(form.tags),
     shortDescription: String(form.shortDescription || '').trim(),
     description: String(form.description || '').trim(),
+    highlights: splitList(form.highlights),
   };
 }

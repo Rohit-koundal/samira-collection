@@ -140,11 +140,11 @@ export const samiraApi = createApi({
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
-      query: ({ path, query, silent }) => ({ url: path, ...params(query), silent }),
+      query: ({ path, query, silent, cache }) => ({ url: path, ...params(query), silent, ...(cache ? { cache } : {}) }),
       providesTags: (_result, _error, arg) => tagsForPath(arg.path),
     }),
     mutate: builder.mutation({
-      query: ({ path, method = 'POST', body }) => ({ url: path, method, body }),
+      query: ({ path, method = 'POST', body, silent }) => ({ url: path, method, body, ...(silent ? { silent } : {}) }),
       invalidatesTags: (_result, _error, arg) => tagsForPath(arg.path, true),
     }),
     upload: builder.mutation({
@@ -244,17 +244,18 @@ export const samiraApi = createApi({
 });
 
 function tagsForPath(path = '', mutation = false) {
+  if (/\/products\/(?:smart-fill|quick-analyze)(?:\/status)?$/.test(path)) return [];
   if (path.includes('/admin/social-imports')) return mutation && path.endsWith('/draft') ? ['ProductDrafts'] : [];
   if (path.includes('/admin/reel-imports')) return ['ReelImports'];
   if (path.includes('/admin/customization') || path.includes('/website-config')) return ['WebsiteCustomization'];
   if (path.includes('/auth/')) return ['Auth'];
-  if (path.includes('/admin/dashboard')) return ['AdminDashboard'];
+  if (path.includes('/admin/dashboard')) return ['AdminDashboard', 'Inventory'];
   if (path.includes('/quick-analyze')) return [];
   if (path.includes('/admin/products')) return mutation ? ['AdminProducts', 'Products', 'AdminDashboard'] : ['AdminProducts'];
   if (path.includes('/admin/categories')) return mutation ? ['AdminCategories', 'Categories'] : ['AdminCategories'];
   if (path.includes('/admin/orders')) return mutation ? ['AdminOrders', 'Orders', 'AdminDashboard'] : ['AdminOrders'];
   if (path.includes('/admin/customers') || path.includes('/admin/users')) return ['AdminCustomers'];
-  if (path.includes('/admin/settings')) return mutation ? ['AdminSettings', 'Settings'] : ['AdminSettings'];
+  if (path.includes('/admin/settings')) return mutation ? ['AdminSettings', 'Settings', 'WebsiteCustomization', 'Cart'] : ['AdminSettings'];
   if (path.includes('/admin/product-drafts')) return mutation ? ['ProductDrafts', 'Products', 'AdminProducts', 'AdminDashboard'] : ['ProductDrafts'];
   if (path.includes('/admin/variant-groups') || path.includes('/variant-groups')) return mutation ? ['VariantGroups', 'Products', 'AdminProducts'] : ['VariantGroups'];
   if (path.includes('/admin/dashboard/low-stock') || path.includes('/admin/inventory/low-stock')) return ['Inventory', 'AdminDashboard'];
@@ -267,9 +268,9 @@ function tagsForPath(path = '', mutation = false) {
   if (path.includes('/user/addresses')) return ['Addresses'];
   if (path.includes('/coupons')) return ['Coupons'];
   if (path.includes('/orders')) return mutation ? ['Orders', 'Cart', 'Products', 'AdminDashboard'] : ['Orders'];
-  if (path.includes('/payments')) return ['Payments', 'Orders'];
+  if (path.includes('/payments')) return mutation ? ['Payments', 'Orders', 'AdminDashboard', 'AdminOrders'] : ['Payments', 'Orders'];
   if (path.includes('/reviews')) return ['Reviews'];
-  if (path.includes('/returns')) return mutation ? ['Returns', 'Orders'] : ['Returns'];
+  if (path.includes('/returns')) return mutation ? ['Returns', 'Orders', 'AdminDashboard', 'AdminOrders', 'Inventory'] : ['Returns'];
   if (path.includes('/contact')) return mutation ? ['Contact'] : ['Contact'];
   if (path.includes('/newsletter')) return mutation ? ['Newsletter'] : ['Newsletter'];
   if (path.includes('/notifications')) return ['Notifications'];

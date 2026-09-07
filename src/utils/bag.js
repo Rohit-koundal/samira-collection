@@ -25,7 +25,7 @@ export function bagTotals(items, coupon, settings = {}) {
   const discount = round(Math.max(0, totalMRP - sellingTotal));
   const couponDiscount = round(Math.max(0, Math.min(sellingTotal, Number(coupon?.discount || 0))));
   // Checkout grants free delivery on the merchandise subtotal before coupons.
-  const deliveryCharge = items.length && sellingTotal < rules.freeShippingMinAmount ? Math.max(0, rules.deliveryCharge) : 0;
+  const deliveryCharge = items.length && (!rules.shippingFreeAboveEnabled || sellingTotal < rules.freeShippingMinAmount) ? Math.max(0, rules.deliveryCharge) : 0;
   const platformFee = items.length ? Math.max(0, rules.platformFee) : 0;
   return { sellingTotal, totalMRP, discount, couponDiscount, deliveryCharge, platformFee,
     taxAmount: inclusiveTax(sellingTotal - couponDiscount, rules.gstRate), taxRate: rules.gstRate,

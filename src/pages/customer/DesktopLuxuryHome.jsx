@@ -19,6 +19,7 @@ import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import { getHomepageSection } from '../../config/websiteCustomization';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import styles from './DesktopLuxuryHome.module.css';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
 
 const QuickViewModal = lazy(() => import('../../components/product/QuickViewModal'));
 
@@ -44,6 +45,7 @@ export default function DesktopLuxuryHome({
   websiteConfig,
   customerReviews = [],
 }) {
+  const brand = useBrandIdentity();
   const [heroIndex, setHeroIndex] = useState(0);
 
   const productsWithImages = useMemo(
@@ -107,7 +109,7 @@ export default function DesktopLuxuryHome({
             </div>
           </div>
           <div className={styles.heroVisual}>
-            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={activeHero.title || 'Samira festive collection'} /> : <div className={styles.imageFallback}>Samira Collection</div>}
+            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={activeHero.title || 'Festive collection'} /> : <div className={styles.imageFallback}>{websiteConfig?.branding?.websiteName || brand.websiteName}</div>}
           </div>
         </div>
         <button type="button" className={`${styles.heroArrow} ${styles.heroArrowLeft}`} onClick={() => moveHero(-1)} aria-label="Previous hero slide"><IconChevronLeft /></button>
@@ -293,11 +295,12 @@ function EditorialGrid({ products, navigate, section }) {
 }
 
 function EditorialCard({ className, product, eyebrow, text, action, navigate, actionPath, imageOverride }) {
+  const brand = useBrandIdentity();
   const productId = getProductId(product);
   const image = imageOverride ? normalizeImageUrl(imageOverride) : getProductImage(product);
   return (
     <article className={className}>
-      {image ? <img loading="lazy" decoding="async" src={image} alt={product?.name || eyebrow} /> : <div className={styles.imageFallback}>Samira Collection</div>}
+      {image ? <img loading="lazy" decoding="async" src={image} alt={product?.name || eyebrow} /> : <div className={styles.imageFallback}>{brand.websiteName}</div>}
       <div className={styles.editorialOverlay} />
       <div className={styles.editorialCopy}>
         <h3>{eyebrow}</h3>
@@ -403,7 +406,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
         )}
       </div>
       <h3 data-card-field="title" title={product.name}>{product.name}</h3>
-      <p className={styles.productCategory}>{formatCategory(product.category) || product.fabric || 'Samira Collection'}</p>
+      <p className={styles.productCategory}>{formatCategory(product.category) || product.fabric || 'Collection'}</p>
       <div className={styles.priceRow} data-card-field="price">
         <strong>Rs. {formatPrice(price)}</strong>
         {originalPrice > price && <del>Rs. {formatPrice(originalPrice)}</del>}
@@ -419,10 +422,11 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
 });
 
 function SaleBanner({ banner, fallbackProduct, navigate, section }) {
+  const brand = useBrandIdentity();
   const image = section?.image ? normalizeImageUrl(section.image) : banner?.image ? normalizeImageUrl(banner.image) : getProductImage(fallbackProduct);
   return (
     <section className={`${styles.luxuryContainer} ${styles.saleBanner}`}>
-      <div className={styles.saleCopy}><span>Samira Collection</span><h2>{section?.heading || banner?.title || 'Season Sale'}</h2><p>{section?.description || 'Discover current offers'}</p></div>
+      <div className={styles.saleCopy}><span>{brand.websiteName}</span><h2>{section?.heading || banner?.title || 'Season Sale'}</h2><p>{section?.description || 'Discover current offers'}</p></div>
       <button type="button" className="site-theme-button" onClick={() => navigate(section?.buttonLink || banner?.link || '/products?discount=20')}>{section?.buttonText || 'Shop Sale'}</button>
       <div className={styles.saleVisual}>{image && <img loading="lazy" decoding="async" src={image} alt={banner?.title || 'Festive sale'} />}</div>
     </section>

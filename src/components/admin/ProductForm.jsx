@@ -3,6 +3,8 @@ import { CircleCheck, FileText, Hash, ImagePlus, IndianRupee, Tag, Type, X } fro
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
 import VideoUploader from './VideoUploader';
+import ProductSmartFill from './ProductSmartFill';
+import { applySmartPatch } from '../../utils/productSmartFill';
 import { normalizeImageEntries, normalizeVideoEntries } from '../../services/normalize';
 import {
   applyAssistantSuggestions,
@@ -35,6 +37,7 @@ const emptyProduct = {
   subCategory: '',
   stock: 0,
   lowStockAlert: 5,
+  shippingWeightKg: 0,
   sizes: '',
   sizingMode: 'auto',
   sizeChartProfile: 'auto',
@@ -99,6 +102,7 @@ export default function ProductForm({
   const [reload, setReload] = useState(0);
   const [errors, setErrors] = useState({});
   const [draftReady, setDraftReady] = useState(() => !productId);
+  const [smartFillReset, setSmartFillReset] = useState(0);
   const [assistantMode, setAssistantMode] = useState('fill-empty');
   const [assistantSuggestions, setAssistantSuggestions] = useState(null);
   const [assistantSelection, setAssistantSelection] = useState({
@@ -311,7 +315,15 @@ export default function ProductForm({
     const sizingProduct = productForSizing(form);
     const nextErrors = validate(form, sizingProduct);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
+    if (Object.keys(nextErrors).length) {
+      if (nextErrors.sizeChart) {
+        const missingInput = Array.from(event.currentTarget.querySelectorAll('[data-garment-measurement]'))
+          .find(input => !Number.isFinite(Number(input.value)) || Number(input.value) <= 0);
+        missingInput?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
+        missingInput?.focus({ preventScroll: true });
+      }
+      return;
+    }
     setSaving(true);
     setMessage('');
     try {
@@ -327,6 +339,7 @@ export default function ProductForm({
         price,
         originalPrice,
         lowStockAlert: Number(form.lowStockAlert),
+        shippingWeightKg: Number(form.shippingWeightKg || 0),
         sizes: sizingMode === 'sized' ? selectableSizes : [],
         sizingMode: structure.features.sizing ? form.sizingMode || 'auto' : 'free-size',
         sizeChartProfile: structure.features.sizing ? form.sizeChartProfile || 'auto' : 'free-size',
@@ -406,6 +419,9 @@ export default function ProductForm({
       </div>
 
       {structureError && <div role="alert" className="admin-form-hint"><p>{structureError}</p><button type="button" onClick={reloadStructure}>Retry product configuration</button></div>}
+      <ProductSmartFill key={`${apiPrefix}-${productId || 'new'}-${smartFillReset}`} form={form} categories={categories} structure={structure} apiPrefix={apiPrefix}
+        disabled={saving || !draftReady || !!loadError || !structure}
+        onApply={(patch, undo) => { setForm(current => applySmartPatch(current, patch, undo)); setErrors({}); }} />
       {structure?.attributes?.length > 0 && <Section id="product-specifications" title="Product specifications" note="Enter values for your store’s configured attributes. Their definitions are managed by your website provider.">
         {structure.attributes.map((attribute) => <Input key={attribute.key} label={attribute.label + (attribute.unit ? ' (' + attribute.unit + ')' : '')} value={form.attributeValues?.[attribute.key] || ''} required={attribute.required} onChange={(value) => setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } }))} />)}
       </Section>}
@@ -459,6 +475,7 @@ export default function ProductForm({
         <Input label="Selling price" type="number" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
         <Input label="Stock quantity" type="number" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" />
         <Input label="Low stock alert" type="number" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} placeholder="5" />
+        <Input label="Packed unit weight (kg, 0 uses store default)" type="number" value={form.shippingWeightKg || 0} onChange={value => update('shippingWeightKg', value)} placeholder="0.5" />
         {effectiveSizingMode === 'sized' ? (
           <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
             <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
@@ -541,6 +558,7 @@ export default function ProductForm({
           </select>
           <small className="text-xs font-semibold text-slate-500">
             Current behaviour: {effectiveSizingMode === 'sized' ? 'show size choices and size chart' : 'hide size choices'}.
+            {effectiveSizingMode === 'sized' && ' For sarees or products without size options, choose No size selection / free size.'}
           </small>
         </label>
         <label className="admin-field">
@@ -573,7 +591,7 @@ export default function ProductForm({
             <div className="flex flex-col gap-3 border-b border-[#f0e5dc] bg-[#fffaf6] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-sm font-black text-charcoal">Garment size chart</h3>
-                <p className="mt-1 text-xs font-semibold text-slate-500">Enter the actual finished-garment measurement for every available size.</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Enter the actual finished-garment measurements from your supplier for every available size. Size labels such as S or M do not determine these measurements.</p>
               </div>
               <div className="inline-flex w-fit rounded-full border border-[#ead8cb] bg-white p-1" aria-label="Size chart unit">
                 {['in', 'cm'].map((unit) => (
@@ -603,6 +621,8 @@ export default function ProductForm({
                               value={row[column.key] ?? ''}
                               onChange={(event) => updateSizeMeasurement(row.size, column.key, event.target.value)}
                               aria-label={`${row.size} ${column.label}`}
+                              data-garment-measurement="true"
+                              aria-invalid={!!errors.sizeChart && (!Number.isFinite(Number(row[column.key])) || Number(row[column.key]) <= 0)}
                               className="h-10 w-28 rounded-lg border border-[#e5d8cf] px-3 font-bold outline-none focus:border-wine focus:ring-2 focus:ring-wine/10"
                               placeholder="0.0"
                             />
@@ -621,13 +641,13 @@ export default function ProductForm({
                 <span>Fit and measurement note</span>
                 <textarea value={form.sizeFitNotes || ''} onChange={(event) => update('sizeFitNotes', event.target.value)} className="admin-field__control min-h-20" placeholder="Example: Garment measurements. Choose one size larger for a relaxed fit." />
               </label>
-              {errors.sizeChart ? <p className="admin-field__error mt-2">{errors.sizeChart}</p> : null}
+              {errors.sizeChart ? <p role="alert" className="admin-field__error mt-2">{errors.sizeChart}</p> : null}
             </div>
           </div>
         ) : null}
       </Section>
 
-      {structure?.industry !== 'fashion' ? null : <Section step="04" title="Smart Product Assistant" note="Optional. Fill empty fields from a few basic details.">
+      {structure?.industry !== 'fashion' ? null : <details className="admin-form-card"><summary className="cursor-pointer font-bold text-wine">Manual copy builder</summary><Section step="04" title="Build copy from your details" note="Optional templates. Review generated wording and product options before applying.">
         <div className="admin-form-hint lg:col-span-2">
           <h3>Generate title, description, tags and SEO</h3>
           <p>Use any details you know. Existing manual values stay unless you choose to replace them.</p>
@@ -745,7 +765,7 @@ export default function ProductForm({
             Preview Suggestions
           </button>
         </div>
-      </Section>}
+      </Section></details>}
 
       <Section step="05" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
@@ -793,7 +813,7 @@ export default function ProductForm({
         ) : (
           <a href={cancelPath} className="admin-btn-ghost">Cancel</a>
         )}
-        <button type="button" onClick={() => setForm(emptyProduct)} className="admin-btn-ghost">Reset</button>
+        <button type="button" onClick={() => { setForm(emptyProduct); setSmartFillReset(value => value + 1); }} className="admin-btn-ghost">Reset</button>
         <button type="button" onClick={() => { update('isActive', false); setTimeout(() => document.querySelector('form')?.requestSubmit(), 0); }} className="admin-btn-ghost">Save Draft</button>
         <button disabled={saving} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : `${mode} Product`}</button>
       </div>

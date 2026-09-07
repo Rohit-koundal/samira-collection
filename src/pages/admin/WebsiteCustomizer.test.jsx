@@ -159,3 +159,65 @@ test('10,000 catalog options render at most 40 rows and remain searchable/select
   fireEvent.click(screen.getByLabelText('Product 9999'));
   expect(onChange).toHaveBeenLastCalledWith([]);
 });
+
+test('setting search opens quick styling; grouped changes save through the existing draft API', async () => {
+  await openDesigner();
+  fireEvent.change(screen.getByLabelText('Find a design setting'), { target: { value: 'density' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Quick styling' }));
+  fireEvent.click(screen.getByRole('button', { name: /Compact More products/ }));
+  expect(configInPreview().layout.productsPerRow.desktop).toBe(5);
+  fireEvent.click(screen.getByRole('button', { name: 'Match mobile appearance' }));
+  expect(configInPreview().mobile.enabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await screen.findByText('Draft saved. Your live storefront has not changed.');
+  expect(api.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ config: expect.objectContaining({ mobile: expect.objectContaining({ enabled: true }), layout: expect.objectContaining({ productsPerRow: expect.objectContaining({ desktop: 5 }) }) }) }));
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+test('saved comparison preserves current edits and the preview instance; restoring a panel is undoable', async () => {
+  await openDesigner();
+  const original = configInPreview();
+  const preview = screen.getByTestId('draft-preview');
+  fireEvent.click(screen.getByRole('button', { name: /Apply Botanical Sage/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Compare with saved draft' }));
+  expect(configInPreview()).toEqual(original);
+  fireEvent.click(screen.getByRole('button', { name: 'Back to current draft' }));
+  expect(configInPreview().colors.primary).toBe('#31594c');
+  expect(screen.getByTestId('draft-preview')).toBe(preview);
+  fireEvent.click(screen.getByRole('tab', { name: 'Colors' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Restore this panel to saved' }));
+  expect(configInPreview().colors).toEqual(original.colors);
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  expect(configInPreview().colors.primary).toBe('#31594c');
+});
+
+test('preset search and mobile opt-in keep content and can be undone together', async () => {
+  await openDesigner();
+  const original = configInPreview();
+  fireEvent.change(screen.getByLabelText('Search presets'), { target: { value: 'not a preset' } });
+  expect(screen.queryByRole('button', { name: /Apply Botanical Sage/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+  fireEvent.click(screen.getByLabelText('Also match mobile colors & corners'));
+  fireEvent.click(screen.getByRole('button', { name: /Apply Botanical Sage/ }));
+  expect(configInPreview().mobile.enabled).toBe(true);
+  expect(configInPreview().homepage).toEqual(original.homepage);
+  expect(configInPreview().mobile.sections).toEqual(original.mobile.sections);
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  expect(configInPreview()).toEqual(original);
+});
+
+test('selected product ordering and footer link ordering are controllable without retyping', async () => {
+  const onChange = jest.fn();
+  const { unmount } = render(<MultiSelect label="Catalog" value={['b', 'a']} options={[{ value: 'a', label: 'First' }, { value: 'b', label: 'Second' }]} onChange={onChange} />);
+  fireEvent.click(screen.getByText('Arrange selected items (2)'));
+  fireEvent.click(screen.getByRole('button', { name: 'Move selected item 2 up' }));
+  expect(onChange).toHaveBeenLastCalledWith(['a', 'b']);
+  unmount();
+  await openDesigner();
+  const menus = configInPreview().footer.menus.shopping;
+  fireEvent.click(screen.getByRole('tab', { name: 'Footer' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Shopping menu link 2 up' }));
+  expect(configInPreview().footer.menus.shopping.slice(0, 2)).toEqual([menus[1], menus[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  expect(configInPreview().footer.menus.shopping).toEqual(menus);
+});

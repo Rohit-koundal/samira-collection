@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import api from '../../services/api';
 import ImageUploader from '../../components/admin/ImageUploader';
+import ProductSmartFill from '../../components/admin/ProductSmartFill';
+import { applySmartPatch } from '../../utils/productSmartFill';
 import PageHeader from '../../components/admin/PageHeader';
 import ImportSizeFields from '../../components/admin/ImportSizeFields';
 import { asCatalogList, fetchSubcategories } from '../../utils/catalogOptions';
@@ -336,7 +338,17 @@ export default function QuickAddProduct() {
 
         <div className="admin-form-card">
           <h2>Review</h2>
-          <p className="admin-form-card__note">Price and stock still need you. Photos cannot know those.</p>
+          <p className="admin-form-card__note">Review the product details and confirm your available stock.</p>
+          <div className="mt-4"><ProductSmartFill form={form} categories={categories} structure={structure} seo={false} disabled={saving || analyzing || !structure}
+            onApply={(patch, undo) => {
+              nameTouchedRef.current = true; copyTouchedRef.current = true; categoryTouchedRef.current = true;
+              setNameTouched(true); setCopyTouched(true); setCategoryTouched(true);
+              setForm(current => {
+                const next = applySmartPatch(current, patch, undo);
+                return { ...next, categoryName: categories.find(item => item._id === next.category)?.name || '' };
+              });
+              setMoreOpen(true); setErrors({});
+            }} /></div>
 
           <div className="mt-4 grid gap-4">
             <label className="admin-field">
@@ -458,6 +470,7 @@ export default function QuickAddProduct() {
                 <span>Brand</span>
                 <input value={form.brand} onChange={(event) => update('brand', event.target.value)} className="admin-field__control" />
               </label>
+              <label className="admin-field"><span>Highlights</span><input value={form.highlights || ''} onChange={event => update('highlights', event.target.value)} className="admin-field__control" placeholder="Separate highlights with commas" /></label>
               <label className="admin-field">
                 <span>Fabric</span>
                 <input value={form.fabric} onChange={(event) => update('fabric', event.target.value)} className="admin-field__control" placeholder="Silk" />

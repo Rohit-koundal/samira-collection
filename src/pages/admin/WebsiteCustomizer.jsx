@@ -10,13 +10,11 @@ import { applyAppearancePreset, changedConfigGroups, exportThemeFile, parseTheme
 import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 import { designerReducer, initialDesignerState } from '../../config/websiteDesignerState';
 import { BEFORE_ROUTE_CHANGE_EVENT } from '../../utils/routing';
+import { DesignerControlSearch, PresetGallery, QuickStylePanel, ReadabilityReview } from '../../components/admin/WebsiteDesignerTools';
+import { DESIGNER_CONTROLS, matchMobileAppearance, reorderDesignerItems, restoreDesignerPanel } from '../../config/websiteDesignerTools';
 
 const StorefrontPreview = lazy(() => import('../../components/admin/StorefrontPreview'));
-const editorTabs = [
-  ['presets', 'Presets'], ['branding', 'Branding'], ['colors', 'Colors'], ['header', 'Desktop header'],
-  ['homepage', 'Desktop home'], ['typography', 'Typography'], ['buttons', 'Buttons'],
-  ['cards', 'Desktop cards'], ['footer', 'Footer'], ['layout', 'Desktop layout'], ['mobile', 'Mobile'], ['tablet', 'Tablet'],
-];
+const editorTabs = DESIGNER_CONTROLS.map(({ id, label }) => [id, label]);
 
 export default function WebsiteCustomizer() {
   const { refresh: refreshPublishedConfig } = useWebsiteCustomization();
@@ -41,12 +39,14 @@ export default function WebsiteCustomizer() {
   const [publishReview, setPublishReview] = useState(false);
   const [publishNote, setPublishNote] = useState('');
   const [previewOpen, setPreviewOpen] = useState(true);
+  const [compareSaved, setCompareSaved] = useState(false);
   const lock = useRef(false);
   const requestId = useRef(0);
   const savedName = useRef('');
   const historyRequest = useRef(0);
   const importInput = useRef(null);
-  const savedFingerprint = useMemo(() => JSON.stringify(mergeWebsiteConfig(selectedTheme?.draftConfig)), [selectedTheme?.draftConfig]);
+  const savedConfig = useMemo(() => mergeWebsiteConfig(selectedTheme?.draftConfig), [selectedTheme?.draftConfig]);
+  const savedFingerprint = useMemo(() => JSON.stringify(savedConfig), [savedConfig]);
   const draftFingerprint = useMemo(() => JSON.stringify(draft), [draft]);
   const dirty = !!draft && (selectedTheme?.name !== savedName.current || draftFingerprint !== savedFingerprint);
   const issues = useMemo(() => draft ? validateDesignerConfig(draft) : [], [draft]);
@@ -56,6 +56,7 @@ export default function WebsiteCustomizer() {
     setSelectedTheme(theme);
     savedName.current = theme.name;
     dispatchDraft({ type: 'reset', draft: mergeWebsiteConfig(theme.draftConfig) });
+    setCompareSaved(false);
     setPublishReview(false);
   }, []);
 
@@ -145,20 +146,24 @@ export default function WebsiteCustomizer() {
   };
   const replaceDraft = useCallback((next) => {
     dispatchDraft({ type: 'replace', draft: next });
+    setCompareSaved(false);
     setMessage(''); setPublishReview(false);
   }, []);
   const updateDraft = useCallback((path, value) => {
     dispatchDraft({ type: 'edit', path, value, time: Date.now() });
+    setCompareSaved(false);
     setMessage(''); setPublishReview(false);
   }, []);
-  const undo = () => { dispatchDraft({ type: 'undo' }); setPublishReview(false); };
-  const redo = () => { dispatchDraft({ type: 'redo' }); setPublishReview(false); };
+  const undo = () => { dispatchDraft({ type: 'undo' }); setPublishReview(false); setCompareSaved(false); };
+  const redo = () => { dispatchDraft({ type: 'redo' }); setPublishReview(false); setCompareSaved(false); };
   const updateSection = useCallback((id, field, value) => {
     dispatchDraft({ type: 'section', id, field, value, time: Date.now() });
+    setCompareSaved(false);
     setMessage(''); setPublishReview(false);
   }, []);
   const moveSection = useCallback((id, direction) => {
     dispatchDraft({ type: 'move-section', id, direction });
+    setCompareSaved(false);
     setMessage(''); setPublishReview(false);
   }, []);
   const persistDraft = async () => {
@@ -233,11 +238,23 @@ export default function WebsiteCustomizer() {
     } catch (error) { setMessage(error instanceof SyntaxError ? 'This file is not valid JSON.' : error.message); }
   };
 
+  const applyPreset = useCallback((preset, includeMobile) => {
+    const appearance = applyAppearancePreset(draft, preset.config);
+    replaceDraft(includeMobile ? matchMobileAppearance(appearance) : appearance);
+    setMessage(`${preset.name} applied to the draft.${includeMobile ? ' Mobile colors and corners matched.' : ' Mobile settings preserved.'} Your content and product selections are kept.`);
+  }, [draft, replaceDraft]);
+  const restorePanel = () => {
+    replaceDraft(restoreDesignerPanel(draft, savedConfig, activeTab));
+    setMessage('This panel now matches the last saved draft. Other edits are kept. Use Undo to bring it back.');
+  };
+  const editFromReview = (tab) => { setActiveTab(tab); setPublishReview(false); };
+
   if (loading) return <section className="admin-card p-8 text-sm text-slate-500" role="status">Loading Website Designer…</section>;
   if (!draft) return <section className="admin-card space-y-4 p-8"><h2 className="text-lg font-bold">Website Designer could not load</h2><p role="alert">{message}</p><button type="button" className="admin-btn" onClick={() => loadWorkspace()}>Try again</button></section>;
 
   return <section className="min-w-0 space-y-5">
     <PageHeader title="Website Designer" note="Your store, your style. Edit privately, preview real pages, and publish with confidence." />
+    <p className="rounded-xl border border-[#eadfd5] bg-white p-4 text-xs leading-6 text-slate-600">Shared brand identity, contact details and announcements configured in <a href="/admin/settings" className="font-bold text-wine underline">Store settings</a> take priority over theme defaults. Turn off the corresponding overrides there to use theme-specific values.</p>
     <div className="admin-card space-y-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2"><StatusDot active={selectedTheme.isActive} />
@@ -263,9 +280,10 @@ export default function WebsiteCustomizer() {
       <Field label="Version note (optional)" value={publishNote} onChange={setPublishNote} />
       <div className="flex flex-wrap gap-2"><button type="button" disabled={!!busy} className="admin-btn" onClick={publish}>{busy === 'publish' ? 'Publishing…' : 'Confirm publish'}</button><button type="button" disabled={!!busy} className="admin-btn-secondary" onClick={() => setPublishReview(false)}>Keep editing</button></div>
       <p className="text-xs text-slate-500">Publishing records a version. You can restore an earlier version to a draft at any time.</p>
+      <details><summary className="cursor-pointer text-xs font-bold text-wine">Review color readability</summary><fieldset disabled={!!busy} className="mt-3"><ReadabilityReview draft={draft} replace={replaceDraft} onSelect={editFromReview} /></fieldset></details>
     </div>}
     <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="min-w-0 space-y-4">
+      <aside className="order-2 min-w-0 space-y-4 xl:order-1">
         <div className="admin-card space-y-3 p-4">
           <h2 className="flex items-center gap-2 text-sm font-bold"><Palette className="h-4 w-4" />My themes</h2>
           <div className="max-h-64 space-y-2 overflow-y-auto">{workspace.themes.map((theme) => <button key={theme._id} disabled={!!busy} onClick={() => selectTheme(theme._id)} className={`w-full rounded-xl border p-3 text-left text-xs ${theme._id === selectedTheme._id ? 'border-wine bg-[#fff5f6]' : 'border-[#eadfd5]'}`}><span className="block truncate font-bold">{theme.name}</span><span className="mt-1 block text-slate-500">{theme.isActive ? 'Live storefront' : theme.hasPublishedVersion ? 'Published · inactive' : 'Private draft'}</span></button>)}</div>
@@ -293,20 +311,19 @@ export default function WebsiteCustomizer() {
           <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">{history.map((version) => <button key={version._id} disabled={!!busy} type="button" onClick={() => restoreVersion(version._id)} className="w-full rounded-xl border p-3 text-left"><span className="text-xs font-bold">Restore version {version.version}</span><span className="mt-1 block text-[10px] text-slate-500">{formatDate(version.createdAt)}</span><span className="mt-1 block break-words text-xs">{version.note}</span></button>)}</div>
         </details>
       </aside>
-      <div className="min-w-0 space-y-5">
+      <div className="order-1 min-w-0 space-y-5 xl:order-2">
         <div className="admin-card min-w-0 overflow-hidden">
+          <DesignerControlSearch onSelect={setActiveTab} />
           <div className="flex gap-1 overflow-x-auto border-b p-2" role="tablist" aria-label="Customization settings">
             {editorTabs.map(([id, label]) => <button key={id} role="tab" aria-selected={activeTab === id} type="button" onClick={() => setActiveTab(id)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold ${activeTab === id ? 'bg-wine text-white' : 'text-slate-500'}`}>{label}</button>)}
           </div>
+          {!['presets', 'quick'].includes(activeTab) && <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3"><span className="text-xs text-slate-500">Editing {editorTabs.find(([id]) => id === activeTab)?.[1]}</span><button type="button" disabled={!!busy} onClick={restorePanel} className="text-xs font-bold text-wine disabled:opacity-40">Restore this panel to saved</button></div>}
           {activeTab === 'homepage' && catalogStatus === 'loading' && <p role="status" className="p-4 text-xs text-slate-500">Loading catalog choices… You can keep editing other settings.</p>}
           {catalogWarning && <p className="p-4 text-xs text-amber-800">{catalogWarning} <button type="button" disabled={catalogStatus === 'loading'} onClick={loadCatalog} className="underline">Retry catalog</button></p>}
-          <fieldset disabled={!!busy} className="max-h-[700px] min-w-0 overflow-y-auto p-4 sm:p-5" role="tabpanel">
-            {activeTab === 'presets' ? <Panel title="A starting point for your brand" note="Apply a coordinated look to this draft. Your logo, content, catalog choices, footer links and mobile settings stay unchanged.">
-              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">{workspace.presets.map((preset) => <button key={preset.id} type="button" disabled={!preset.config} onClick={() => { replaceDraft(applyAppearancePreset(draft, preset.config)); setMessage(`${preset.name} applied to the draft. Your content and mobile settings are preserved.`); }} className={`rounded-xl border p-4 text-left ${draft.theme.preset === preset.id ? 'border-wine ring-1 ring-wine' : 'border-[#eadfd5]'}`}>
-                <span className="mb-3 flex gap-1.5">{Object.values(preset.swatches || {}).map((color, index) => <span key={index} className="h-7 w-7 rounded-full border border-black/10" style={{ background: color }} />)}</span>
-                <span className="block text-sm font-bold">{preset.name}</span><span className="mt-1 block text-xs text-slate-500">{preset.description || 'Coordinated storefront appearance'}</span>
-              </button>)}</div>
-            </Panel> : <EditorPanel tab={activeTab} draft={draft} update={updateDraft} updateSection={updateSection} moveSection={moveSection} catalog={catalog} categories={categories} />}
+          <fieldset disabled={!!busy} className="min-w-0 p-4 sm:p-5 lg:max-h-[700px] lg:overflow-y-auto" role="tabpanel">
+            {activeTab === 'presets' ? <PresetGallery presets={workspace.presets} currentPreset={draft.theme.preset} onApply={applyPreset} />
+              : activeTab === 'quick' ? <QuickStylePanel key={selectedTheme._id} draft={draft} replace={replaceDraft} onSelect={setActiveTab} />
+                : <EditorPanel tab={activeTab} draft={draft} update={updateDraft} updateSection={updateSection} moveSection={moveSection} catalog={catalog} categories={categories} />}
           </fieldset>
         </div>
         <div className="admin-card min-w-0 overflow-hidden">
@@ -314,7 +331,8 @@ export default function WebsiteCustomizer() {
             <button type="button" onClick={() => setPreviewOpen(!previewOpen)} aria-expanded={previewOpen} className="text-left"><h2 className="text-sm font-bold">Storefront preview</h2><span className="text-xs text-slate-500">{previewOpen ? 'Hide preview' : 'Show preview'} · Private until published</span></button>
             <div className="flex rounded-xl bg-slate-100 p-1">{[['desktop', Monitor], ['tablet', Tablet], ['mobile', Smartphone]].map(([id, Icon]) => <button key={id} type="button" onClick={() => { setDevice(id); setPreviewOpen(true); }} aria-label={`${id} preview`} aria-pressed={device === id} className={`grid h-10 w-11 place-items-center rounded-lg ${device === id ? 'bg-white text-wine shadow-sm' : 'text-slate-500'}`}><Icon className="h-4 w-4" /></button>)}</div>
           </div>
-          {previewOpen && <DeferredMount label="storefront preview"><LazyBoundary resetKey={selectedTheme?._id}><Suspense fallback={<p role="status" className="min-h-[480px] p-6 text-sm text-slate-500">Loading storefront preview…</p>}><StorefrontPreview config={draft} device={device} valid={!issues.length} /></Suspense></LazyBoundary></DeferredMount>}
+          {previewOpen && <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><span className="text-xs text-slate-500">{compareSaved ? 'Showing last saved draft. Your current edits are kept.' : 'Showing your current draft.'}</span><button type="button" aria-pressed={compareSaved} onClick={() => setCompareSaved(!compareSaved)} className="rounded-lg border px-3 py-2 text-xs font-bold text-wine">{compareSaved ? 'Back to current draft' : 'Compare with saved draft'}</button></div>}
+          {previewOpen && <DeferredMount label="storefront preview"><LazyBoundary resetKey={selectedTheme?._id}><Suspense fallback={<p role="status" className="min-h-[480px] p-6 text-sm text-slate-500">Loading storefront preview…</p>}><StorefrontPreview config={compareSaved ? savedConfig : draft} device={device} valid={compareSaved || !issues.length} /></Suspense></LazyBoundary></DeferredMount>}
         </div>
       </div>
     </div>
@@ -429,6 +447,7 @@ export function MultiSelect({ label, value = [], options = [], onChange, max = 1
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const available = useMemo(() => new Set(options.map((item) => item.value)), [options]);
+  const optionLabels = useMemo(() => new Map(options.map((item) => [item.value, item.label])), [options]);
   const filtered = useMemo(() => {
     const missing = value.filter((id) => !available.has(id)).map((id) => ({ value: id, label: 'Unavailable catalog item (selected)' }));
     const query = search.trim().toLowerCase();
@@ -440,6 +459,7 @@ export function MultiSelect({ label, value = [], options = [], onChange, max = 1
   const start = currentPage * pageSize;
   return <div className="space-y-2 rounded-xl border p-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold">{label}</p><button type="button" onClick={() => onChange([])} className="text-xs font-bold text-wine">Clear ({value.length})</button></div>
+    {!!value.length && <details className="rounded-lg bg-[#fcf7f3] p-3"><summary className="cursor-pointer text-xs font-bold text-wine">Arrange selected items ({value.length})</summary><ol className="mt-3 space-y-2">{value.map((id, index) => <li key={id} className="flex items-center gap-2 text-xs"><span className="text-slate-400">{index + 1}.</span><span className="min-w-0 flex-1 truncate" title={optionLabels.get(id) || id}>{optionLabels.get(id) || 'Unavailable catalog item'}</span><IconButton icon={ArrowUp} label={`Move selected item ${index + 1} up`} disabled={index === 0} onClick={() => onChange(reorderDesignerItems(value, index, -1))} /><IconButton icon={ArrowDown} label={`Move selected item ${index + 1} down`} disabled={index === value.length - 1} onClick={() => onChange(reorderDesignerItems(value, index, 1))} /><IconButton icon={Trash2} label={`Remove selected item ${index + 1}`} onClick={() => onChange(value.filter((item) => item !== id))} /></li>)}</ol></details>}
     <input aria-label={`Search ${label}`} placeholder="Search catalog…" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} className="h-10 w-full rounded-lg border px-3 text-sm" />
     <div className="max-h-48 space-y-1 overflow-y-auto">{filtered.slice(start, start + pageSize).map((item) => <label key={item.value} className="flex min-h-10 items-center gap-3 rounded-lg p-2 text-xs hover:bg-slate-50"><input type="checkbox" disabled={!value.includes(item.value) && value.length >= max} className="h-4 w-4 accent-wine" checked={value.includes(item.value)} onChange={(event) => onChange(event.target.checked ? [...value, item.value].slice(0, max) : value.filter((id) => id !== item.value))} /><span>{item.label}</span></label>)}
       {!filtered.length && <p className="p-2 text-xs text-slate-500">{options.length ? 'No matching catalog items.' : 'No catalog items available.'}</p>}
@@ -452,7 +472,21 @@ export function MultiSelect({ label, value = [], options = [], onChange, max = 1
     <p className="text-[11px] text-slate-500">Choose up to {max}. Search covers the full catalog. No selection uses the automatic collection. Selections keep their chosen order.</p>
   </div>;
 }
-function MenuEditor({ label, items = [], onChange }) { const edit = (index, key, value) => onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)); return <div className="space-y-2"><div className="flex items-center justify-between"><p className="text-xs font-black text-slate-600">{label}</p><button type="button" disabled={items.length >= 20} onClick={() => onChange([...items, { label: 'New link', path: '/products' }])} className="text-[10px] font-black text-wine">+ Add link</button></div>{items.map((item, index) => <div key={index} className="grid grid-cols-[1fr_1.25fr_32px] gap-2"><input value={item.label} onChange={(event) => edit(index, 'label', event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs" aria-label={`${label} link label`} /><input value={item.path} onChange={(event) => edit(index, 'path', event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs" aria-label={`${label} link path`} /><button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="grid h-9 place-items-center rounded-lg border border-rose-100 text-rose-600" aria-label="Remove footer link"><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div>; }
+function MenuEditor({ label, items = [], onChange }) {
+  const edit = (index, key, value) => onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+  return <div className="space-y-2">
+    <div className="flex items-center justify-between"><p className="text-xs font-black text-slate-600">{label}</p><button type="button" disabled={items.length >= 20} onClick={() => onChange([...items, { label: 'New link', path: '/products' }])} className="text-xs font-black text-wine">+ Add link</button></div>
+    {items.map((item, index) => <div key={index} className="rounded-xl border border-[#eadfd5] bg-white p-3">
+      <div className="mb-2 flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-500">Link {index + 1}</span><div className="flex gap-1">
+        <IconButton icon={ArrowUp} label={label + ' link ' + (index + 1) + ' up'} disabled={index === 0} onClick={() => onChange(reorderDesignerItems(items, index, -1))} />
+        <IconButton icon={ArrowDown} label={label + ' link ' + (index + 1) + ' down'} disabled={index === items.length - 1} onClick={() => onChange(reorderDesignerItems(items, index, 1))} />
+        <IconButton icon={Trash2} label="Remove footer link" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} />
+      </div></div>
+      <div className="grid gap-2 sm:grid-cols-2"><input value={item.label} onChange={(event) => edit(index, 'label', event.target.value)} placeholder="Link title" className="h-10 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs" aria-label={label + ' link label'} /><input value={item.path} onChange={(event) => edit(index, 'path', event.target.value)} placeholder="/products" className="h-10 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs" aria-label={label + ' link path'} /></div>
+    </div>)}
+    <p className="text-[11px] text-slate-500">Use a store page path, such as /products or /contact. Arrow buttons change the display order.</p>
+  </div>;
+}
 function UploadField({ label, value, onChange, context }) { return <div className="space-y-2"><p className="text-xs font-black text-slate-600">{label}</p><ImageUploader value={value ? [{ url: value, primary: true }] : []} onChange={(files) => onChange(files[0]?.url || '')} uploadContext={context} showPrimaryControl={false} label={`Upload ${label}`} helpText="JPG, PNG or WEBP. Existing store upload rules apply." /></div>; }
 function IconButton({ icon: Icon, label, ...props }) { return <button type="button" aria-label={label} title={label} className="grid h-8 w-8 place-items-center rounded-lg border border-[#eadfd5] text-slate-500 disabled:opacity-30" {...props}><Icon className="h-3.5 w-3.5" /></button>; }
 function ActionButton({ icon: Icon, label, danger = false, ...props }) { return <button type="button" className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black ${danger ? 'border-rose-200 text-rose-700' : 'border-[#eadfd5] bg-white text-slate-600'}`} {...props}><Icon className="h-4 w-4" />{label}</button>; }

@@ -7,10 +7,12 @@ import { pushAppRoute } from '../../utils/routing';
 import { clearOtpState, readOtpState, writeOtpState } from '../../utils/loginOtpStorage';
 import { digitsOnly, PHONE_VALIDATION_MESSAGE } from '../../utils/phoneInput';
 import { normalizeIndianPhone } from '../../utils/phoneFormatter';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
 
 const OTP_COOLDOWN_SECONDS = 60;
 
 export default function Login({ route = '/login' }) {
+  const brand = useBrandIdentity();
   const searchParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
   const redirectTo = searchParams.get('redirect') || '/profile';
   const autoSendOtp = searchParams.get('autoSendOtp') === '1';
@@ -326,7 +328,7 @@ export default function Login({ route = '/login' }) {
           </div>
           <div className="mt-11 flex items-end justify-between gap-4">
             <div className="max-w-[220px]">
-              <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-wine">Samira Collection</p>
+              <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-wine">{brand.websiteName}</p>
               <h1 className="mt-1.5 text-[18px] font-bold leading-[1.02] text-[#ff3f7f] sm:text-[21px]">GET 25% OFF, UP TO ₹200</h1>
               <p className="mt-2 text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-600 sm:text-[9px]">On your 1st order + exciting offers</p>
             </div>

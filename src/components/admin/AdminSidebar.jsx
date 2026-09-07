@@ -4,6 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/samira-collection-logo.png';
 import useAppPath from '../../hooks/useAppPath';
 import { reelProductImportEnabled } from '../../config/features';
+import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { normalizeImageUrl } from '../../services/normalize';
+import StoreLogo from '../ui/StoreLogo';
 
 export const ADMIN_LINKS = [
   ['Dashboard', '/admin'],
@@ -59,6 +62,7 @@ export function matchAdminHref(path = '/admin') {
 }
 
 export default function AdminSidebar({ open = false, onClose = () => {}, onOpen = () => {} }) {
+  const brand = useBrandIdentity();
   const { user } = useAuth();
   const master = user?.systemRole === 'MASTER_OWNER' && !user?.offlineSession;
   const currentPath = useAppPath();
@@ -74,7 +78,7 @@ export default function AdminSidebar({ open = false, onClose = () => {}, onOpen 
   const sidebar = (
     <aside className="admin-sidebar">
       <div className="admin-sidebar__brand">
-        <img src={logo} alt="Samira Collection" className="admin-sidebar__logo" />
+        <StoreLogo src={normalizeImageUrl(brand.logo) || logo} name={brand.websiteName} className="admin-sidebar__logo" />
         <p className="admin-sidebar__label">Admin workspace</p>
       </div>
       <nav className="admin-sidebar__nav">

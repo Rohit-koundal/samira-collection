@@ -18,8 +18,12 @@ export default function ImageUploader({
   label = 'Choose Images',
   helpText = 'Drag and drop or click to upload.',
   showPrimaryControl = true,
+  replaceOnUpload = false,
+  disabled = false,
+  onBusyChange,
 }) {
   const inputRef = useRef(null);
+  const uploadLock = useRef(false);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [phase, setPhase] = useState('');
@@ -29,6 +33,7 @@ export default function ImageUploader({
   const files = (Array.isArray(value) ? value : value ? [value] : []).filter((file) => file?.url);
 
   const addFiles = async (selected) => {
+    if (uploadLock.current || disabled) return;
     setError('');
     setPhase('');
     setProgress(0);
@@ -36,9 +41,11 @@ export default function ImageUploader({
     const incoming = Array.from(selected);
     if (!incoming.length) return;
     if (incoming.length > 8) return setError('Choose up to 8 new images at a time. Your existing photos are kept.');
-    if (files.length + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
+    if ((replaceOnUpload && !multiple ? 0 : files.length) + incoming.length > maxFiles) return setError(`Maximum ${maxFiles} image${maxFiles > 1 ? 's' : ''} allowed.`);
 
+    uploadLock.current = true;
     setUploading(true);
+    onBusyChange?.(true);
     try {
       const converted = [];
       const uploadStats = [];
@@ -82,6 +89,8 @@ export default function ImageUploader({
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setUploading(false);
+      uploadLock.current = false;
+      onBusyChange?.(false);
       setPhase('');
       setProgress(0);
     }
@@ -99,6 +108,7 @@ export default function ImageUploader({
     <div className="space-y-3">
       <button
         type="button"
+        disabled={disabled || uploading}
         onClick={() => inputRef.current?.click()}
         onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}
         onDragOver={(event) => event.preventDefault()}
@@ -124,7 +134,7 @@ export default function ImageUploader({
           </div>
         </div>
       )}
-      <input ref={inputRef} aria-label={label} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} onChange={(event) => addFiles(event.target.files)} className="hidden" />
+      <input ref={inputRef} aria-label={label} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} disabled={disabled || uploading} onChange={(event) => addFiles(event.target.files)} className="hidden" />
       {error && <p className="text-sm font-bold text-rose">{error}</p>}
       {recentUploads.length > 0 && (
         <div className="space-y-2 rounded-xl bg-white p-3 shadow-sm">
@@ -148,11 +158,11 @@ export default function ImageUploader({
             {file.sourceFrame && <div className="grid gap-2 p-2 text-xs text-slate-600"><a href={normalizeImageUrl(file.url)} target="_blank" rel="noreferrer" className="flex min-h-9 items-center text-wine underline">View full photo</a><label className="grid gap-1"><span>Product view</span><select aria-label={'Product view for image ' + (index + 1)} value={file.sourceFrame.viewType || 'unknown'} onChange={(event) => onChange(files.map((item, itemIndex) => itemIndex === index ? { ...item, sourceFrame: { ...item.sourceFrame, viewType: event.target.value } } : item))} className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2"><option value="unknown">Unspecified</option><option value="front">Front</option><option value="back">Back</option><option value="side">Side</option><option value="detail">Detail</option></select></label></div>}
             {showPrimaryControl ? (
               <div className="grid grid-cols-2">
-                <button type="button" onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>
-                <button type="button" onClick={() => remove(index)} className="h-9 text-xs font-black text-rose">Remove</button>
+                <button type="button" disabled={disabled || uploading} onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>
+                <button type="button" disabled={disabled || uploading} onClick={() => remove(index)} className="h-9 text-xs font-black text-rose">Remove</button>
               </div>
             ) : (
-              <button type="button" onClick={() => remove(index)} className="h-9 w-full text-xs font-black text-rose">Remove</button>
+              <button type="button" disabled={disabled || uploading} onClick={() => remove(index)} className="h-9 w-full text-xs font-black text-rose">Remove</button>
             )}
           </div>
         ))}

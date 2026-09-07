@@ -6,10 +6,11 @@ import StatusBadge from '../../components/admin/StatusBadge';
 import api from '../../services/api';
 import StockInput from '../../components/admin/StockInput';
 
-export default function Inventory() {
+export default function Inventory({ route = '' }) {
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState(() => new URLSearchParams(route.split('?')[1] || '').get('filter') || '');
+  useEffect(() => { setFilter(new URLSearchParams(route.split('?')[1] || '').get('filter') || ''); }, [route]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const load = () => {
@@ -25,9 +26,13 @@ export default function Inventory() {
 
   const filtered = useMemo(() => products.filter((product) => {
     const matches = [product.name, product.sku, product.category?.name].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase());
-    const low = product.stock > 0 && product.stock <= (product.lowStockAlert || 5);
-    const out = product.stock === 0;
-    return matches && (!filter || (filter === 'low' ? low : out));
+    const activeVariants = product.variants?.filter(variant => variant.isActive !== false) || [];
+    const stock = product.variants?.length ? activeVariants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) : Number(product.stock || 0);
+    const threshold = product.lowStockAlert ?? 5;
+    const low = stock > 0 && stock <= threshold;
+    const out = stock === 0;
+    const warning = stock <= threshold || activeVariants.some(variant => variant.stock <= threshold);
+    return matches && (!filter || (filter === 'attention' ? product.isActive && !product.isArchived && warning : filter === 'low' ? low : out));
   }), [filter, products, query]);
 
   const updateStock = async (product, stock, variantId) => {
@@ -66,17 +71,17 @@ export default function Inventory() {
       <PageHeader title="Inventory" note="Quickly update stock and track low-stock alerts." />
       {message && <p className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
       <SearchFilterBar search={query} onSearch={setQuery} placeholder="Search product or SKU">
-        <select value={filter} onChange={(event) => setFilter(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"><option value="">All Stock</option><option value="low">Low Stock</option><option value="out">Out of Stock</option></select>
+        <select aria-label="Stock filter" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"><option value="">All Stock</option><option value="attention">Needs stock attention</option><option value="low">Low Stock</option><option value="out">Out of Stock</option></select>
       </SearchFilterBar>
       <DataTable loading={loading} emptyTitle="No inventory records" heads={['Product', 'SKU', 'Category', 'Current Stock', 'Low Alert', 'Status', 'Quick Update']} rows={filtered.map((product) => {
-        const stockLabel = product.stock === 0 ? 'Out of Stock' : product.stock <= (product.lowStockAlert || 5) ? 'Pending' : 'Active';
+        const stockLabel = product.stock === 0 ? 'Out of Stock' : product.stock <= (product.lowStockAlert ?? 5) ? 'Pending' : 'Active';
         return (
           <tr key={product._id} className="border-t border-slate-100">
             <td className="px-4 py-4 font-black">{product.name}</td>
             <td className="px-4 py-4">{product.sku || '-'}</td>
             <td className="px-4 py-4">{product.category?.name || '-'}</td>
             <td className="px-4 py-4 font-black">{product.stock}</td>
-            <td className="px-4 py-4">{product.lowStockAlert || 5}</td>
+            <td className="px-4 py-4">{product.lowStockAlert ?? 5}</td>
             <td className="px-4 py-4"><StatusBadge value={stockLabel} /></td>
             <td className="px-4 py-4">
               <div className="flex flex-col gap-2">

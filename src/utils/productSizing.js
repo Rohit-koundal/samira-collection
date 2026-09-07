@@ -80,8 +80,10 @@ export function getSelectableSizes(product = {}) {
 }
 
 export function getSizeChartColumns(product = {}) {
+  if (resolveSizingMode(product) !== 'sized') return [];
   const profile = inferSizeChartProfile(product);
-  if (profile === 'free-size') return [];
+  // An explicit selectable-size override still needs an editable chart even
+  // when the category/name normally implies free size. Match the API fallback.
   const keys = SIZE_CHART_PROFILES[profile]?.fields || SIZE_CHART_PROFILES.apparel.fields;
   return keys.map((key) => ({ key, ...SIZE_MEASUREMENTS[key] }));
 }
@@ -125,7 +127,7 @@ export function getSizeChartValidation(product = {}) {
   const missing = [];
   rows.forEach((row) => {
     columns.forEach(({ key, label }) => {
-      if (!(Number(row[key]) > 0)) missing.push(`${row.size} ${label}`);
+      if (!Number.isFinite(Number(row[key])) || !(Number(row[key]) > 0)) missing.push(`${row.size} ${label}`);
     });
   });
   return { valid: missing.length === 0, missing };

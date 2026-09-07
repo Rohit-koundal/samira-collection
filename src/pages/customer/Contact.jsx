@@ -168,7 +168,7 @@ export default function Contact({ route = '/contact' }) {
 
               <div className="relative mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-6 sm:mt-auto sm:pt-7">
                 <SupportNote icon={Headphones} title="Thoughtful support" text="Product and order help" />
-                <SupportNote icon={Clock3} title="Quick response" text="We reply as soon as possible" />
+                <SupportNote icon={Clock3} title={settings.supportHours ? 'Support hours' : 'Quick response'} text={settings.supportHours || 'We reply as soon as possible'} />
               </div>
             </div>
           </aside>

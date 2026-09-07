@@ -5,6 +5,8 @@ import { Select, TextInput } from '../../components/ui/Field';
 import PageHeader from '../../components/admin/PageHeader';
 import EmptyState from '../../components/admin/EmptyState';
 import Loader from '../../components/admin/Loader';
+import ProductSmartFill from '../../components/admin/ProductSmartFill';
+import { applySmartPatch } from '../../utils/productSmartFill';
 import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 import { normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
@@ -279,11 +281,13 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
         <img src={normalizeImageUrl(form.image || form.images?.[0]?.url || '/uploads/placeholder.jpg')} alt={form.name || 'Draft'} className="h-44 w-full object-cover" />
       </div>
       <fieldset disabled={busy || draft.status === 'published'} className="mt-4 min-w-0 space-y-3">
+        {draft.status !== 'published' && <ProductSmartFill form={form} categories={categories} structure={structure} priceField="sellingPrice" seo={false}
+          disabled={busy || !structure} onApply={(patch, undo) => editForm(current => applySmartPatch(current, patch, undo))} />}
         <TextInput value={form.name || ''} onChange={(event) => update('name', event.target.value)} placeholder="Product name" />
+        <label className="grid gap-1 text-xs font-bold">Description<textarea rows={4} maxLength={6000} value={form.description || ''} onChange={(event) => update('description', event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm font-normal" /></label>
         {['social-import', 'reel-import'].includes(draft.sourceType) && <>
           {draft.sourceUrl && <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-wine underline">Original {draft.sourcePlatform === 'facebook' ? 'Facebook' : 'Instagram'} post</a>}
           <div className="grid grid-cols-4 gap-2">{(form.images || []).map((image, index) => <button key={image.url} type="button" onClick={() => editForm((value) => ({ ...value, image: image.url, images: value.images.map((item) => ({ ...item, primary: item.url === image.url })) }))} aria-label={'Set imported photo ' + (index + 1) + ' as cover'} aria-pressed={image.primary} className={'overflow-hidden rounded-lg border-2 ' + (image.primary ? 'border-wine' : 'border-transparent')}><img src={normalizeImageUrl(image.url)} alt={'Imported product photo ' + (index + 1)} className="aspect-[3/4] w-full object-cover" loading="lazy" /></button>)}</div>
-          <label className="grid gap-1 text-xs font-bold">Description<textarea rows={4} maxLength={6000} value={form.description || ''} onChange={(event) => update('description', event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm font-normal" /></label>
         </>}
         <Select value={form.category?._id || form.category || ''} onChange={(event) => update('category', event.target.value)}>
           <option value="">Select category</option>
@@ -334,6 +338,8 @@ function DraftCard({ draft, structure, categories, selected, onSelect, onSave, o
         <TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} placeholder="Fabric" />
         <TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} placeholder="Occasion" />
         <TextInput value={form.tags || ''} onChange={(event) => update('tags', event.target.value)} placeholder="Tags" />
+        <label className="grid gap-1 text-xs font-bold">Short description<TextInput value={form.shortDescription || ''} onChange={(event) => update('shortDescription', event.target.value)} /></label>
+        <label className="grid gap-1 text-xs font-bold">Highlights<TextInput value={form.highlights || ''} onChange={(event) => update('highlights', event.target.value)} placeholder="Separate highlights with commas" /></label>
         <button type="button" onClick={async () => { if (await onSave(form)) dirty.current = false; }} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white">
           <Check className="h-4 w-4" />
           Save Draft

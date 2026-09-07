@@ -1,29 +1,57 @@
 import logo from '../assets/samira-collection-logo.png';
 import { buildReceiptDefinition } from './receiptDocument';
 import { receiptView } from './receiptData';
+import { normalizeImageUrl } from '../services/normalize';
 
 let pdfRuntime;
-let logoPromise;
+const logoPromises = new Map();
 async function loadPdfRuntime() {
-  if (!pdfRuntime) pdfRuntime = Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')]).then(([module, fonts]) => {
+  if (!pdfRuntime) pdfRuntime = Promise.all([
+    // This browser bundle is already compiled. Its upstream source map refers
+    // to an unavailable xmldoc.ts; bypass loaders for this dependency only.
+    // eslint-disable-next-line import/no-webpack-loader-syntax
+    import('!!pdfmake/build/pdfmake'),
+    import('pdfmake/build/vfs_fonts'),
+  ]).then(([module, fonts]) => {
     const pdfMake = module.default || module;
     pdfMake.addVirtualFileSystem(fonts.default || fonts);
     return pdfMake;
   }).catch((error) => { pdfRuntime = null; throw error; });
   return pdfRuntime;
 }
-function loadLogo() {
-  if (!logoPromise) logoPromise = fetch(logo).then((response) => {
+function loadLogo(source = logo) {
+  if (!source) return Promise.resolve(null);
+  if (logoPromises.has(source)) return logoPromises.get(source);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  const promise = fetch(source, { signal: controller.signal, credentials: 'omit' }).then((response) => {
     if (!response.ok) throw new Error('Logo unavailable');
     return response.blob();
-  }).then((blob) => new Promise((resolve, reject) => {
+  }).then(async (blob) => {
+    if (blob.size > 5 * 1024 * 1024) throw new Error('Logo too large');
+    if (blob.type === 'image/webp') {
+      const bitmap = await createImageBitmap(blob);
+      try {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 1000 / Math.max(bitmap.width, bitmap.height));
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/png');
+      } finally { bitmap.close(); }
+    }
+    if (!['image/png', 'image/jpeg'].includes(blob.type)) throw new Error('Unsupported logo format');
+    return new Promise((resolve, reject) => {
     const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);
-  })).catch(() => { logoPromise = null; return null; });
-  return logoPromise;
+    });
+  }).catch(() => { logoPromises.delete(source); return null; }).finally(() => clearTimeout(timeout));
+  if (logoPromises.size > 10) logoPromises.clear();
+  logoPromises.set(source, promise);
+  return promise;
 }
 export async function createReceiptPdf(receipt) {
   if (!receipt?.orderId || !Array.isArray(receipt.items) || !receipt.items.length || receipt.finalAmount == null || !Number.isFinite(Number(receipt.finalAmount))) throw new Error('Invoice details are incomplete. Refresh the order and try again.');
-  const [pdfMake, logoData] = await Promise.all([loadPdfRuntime(), loadLogo()]);
+  const logoSource = normalizeImageUrl(receipt.storeDetails?.logoUrl) || (receiptView(receipt).storeName === 'Samira Collection' ? logo : '');
+  const [pdfMake, logoData] = await Promise.all([loadPdfRuntime(), loadLogo(logoSource)]);
   return pdfMake.createPdf(buildReceiptDefinition(receipt, logoData));
 }
 export async function downloadReceiptPdf(receipt) {
