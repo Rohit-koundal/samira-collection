@@ -20,8 +20,8 @@ automatically acquire master permissions.
 1. Start/restart the backend yourself after deploying these changes.
 2. Use the existing mobile OTP login with 9816978086. Owner login requires a
    connected database, configured JWT_SECRET and JWT_REFRESH_SECRET, and a real
-   Twilio, MSG91 or Fast2SMS SMS delivery on live deployments. Offline owner
-   access is refused. Real owner OTP delivery also works in local
+   Twilio, MSG91 or Fast2SMS SMS delivery unless the explicit demo settings
+   below are enabled. Offline owner access is refused. Real SMS also works in local
    development when a real SMS provider is configured.
 3. Switch to admin mode using the existing flow. Open **Master configuration**
    in the admin sidebar, or /master.
@@ -35,8 +35,8 @@ automatically acquire master permissions.
    to production, OTP_MODE set to production, and a real provider selected by
    the existing SMS configuration. An unset/mock OTP_PROVIDER is not ready.
 
-No .env file was changed by this implementation. Existing environment values
-must be reviewed/configured by the server owner. Use independent, strong
+Existing environment values must be reviewed/configured by the server owner.
+Use independent, strong
 session secrets for each client deployment. No password login was added.
 SMS delivery/billing and provider template approval remain provider concerns.
 
@@ -52,9 +52,43 @@ secrets remain required. Existing environment values do not need to change.
 The demo code still expires, has attempt/resend limits and can be redeemed
 once. Local demo owner sessions carry a signed marker and cannot authenticate
 on the live API or through a proxy. Client handover stays disabled in demo
-mode. Without this opt-in, or with `OTP_MODE=production`, owner login continues
-to require real SMS. This local setting also means the API cannot be reached
+mode. Without either demo opt-in below, or with `OTP_MODE=production`, owner
+login requires real SMS. This local setting means the API cannot be reached
 from another device over Wi-Fi; use real SMS for that setup.
+
+## Hosted owner demo (Render or another server)
+
+To demonstrate owner login on the deployed website, set these variables on the
+**backend service**, then deploy the updated backend:
+
+```dotenv
+OTP_MODE=demo
+ALLOW_HOSTED_OWNER_DEMO=true
+```
+
+`DEMO_OTP` can provide a custom six-digit demo code; the existing default is
+`123456`. The same mobile/desktop OTP screen displays it. No owner SMS is sent.
+Database access and session secrets remain required. Anyone who knows the
+owner number can request this displayed code and access the owner account;
+use a demo deployment without real customer data or active payment credentials.
+
+Both repository Render Blueprints include these demo settings. For a Render
+service managed directly in the dashboard, add them under **Environment** and
+redeploy; local ignored `.env` files are not deployed through Git. Frontend API
+URL and backend allowed origins must point to the deployed services as usual.
+
+Hosted demo takes precedence over `LOCAL_OWNER_DEMO`, so the API binds to
+`0.0.0.0` and uses the hosting platform's `PORT`. It works through the hosting
+proxy. Hosted and local demo OTPs/sessions have separate markers; local demo
+sessions cannot be reused remotely. Resend cooldown, expiry, attempt limits,
+single-use verification, saved admin sessions and client-handover restrictions
+remain enforced.
+
+For real operation, set `ALLOW_HOSTED_OWNER_DEMO=false` and
+`OTP_MODE=production`, configure real SMS, and redeploy. Existing hosted demo
+access and refresh tokens are then rejected; a real SMS login is required.
+Change the same values in the Blueprint if it manages the service, so a later
+Blueprint sync does not re-enable demo mode.
 
 ## Available controls
 
