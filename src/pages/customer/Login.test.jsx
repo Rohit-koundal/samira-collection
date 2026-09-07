@@ -56,6 +56,45 @@ describe('customer login', () => {
     await waitFor(() => expect(mockAuth.sendOtp).toHaveBeenCalledWith('9123456789'));
   });
 
+  test('delivery failures keep the phone editable and retry can advance to OTP entry', async () => {
+    const message = 'SMS login is unavailable because the SMS provider rejected the store credentials. Please contact support.';
+    mockAuth.sendOtp.mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce({ otpMode: 'production' });
+    render(<Login route="/login" />);
+    fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9876543210' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.getByPlaceholderText('Mobile Number*')).toHaveValue('9876543210');
+    expect(screen.queryByRole('button', { name: 'Verify OTP' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+    expect(await screen.findByRole('button', { name: 'Verify OTP' })).toBeVisible();
+    expect(mockAuth.sendOtp).toHaveBeenCalledTimes(2);
+  });
+
+  test('demo login displays its code without claiming an SMS was sent and submits the entered OTP', async () => {
+    mockAuth.sendOtp.mockResolvedValueOnce({ otpMode: 'demo', demoOtp: '123456', message: 'OTP sent successfully' });
+    mockAuth.verifyOtp.mockResolvedValueOnce({});
+    render(<Login route="/login" />);
+    fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9816978086' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText(/No SMS is needed/)).toHaveTextContent('123456');
+    expect(screen.queryByText(/^Sent to /)).not.toBeInTheDocument();
+    fireEvent.paste(screen.getByLabelText('OTP digit 1'), { clipboardData: { getData: () => '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify OTP' }));
+    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({ phone: '9816978086', otp: '123456', redirectTo: '/profile' }));
+  });
+
+  test('production login does not display a demo code even if a response contains one', async () => {
+    mockAuth.sendOtp.mockResolvedValueOnce({ otpMode: 'production', demoOtp: '123456' });
+    render(<Login route="/login" />);
+    fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9816978086' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('button', { name: 'Verify OTP' })).toBeVisible();
+    expect(screen.queryByText(/No SMS is needed/)).not.toBeInTheDocument();
+  });
+
   test('the storefront login prompt accepts local numbers beginning with 91', () => {
     const onContinue = jest.fn();
     render(<LoginPrompt open onClose={jest.fn()} onContinue={onContinue} />);

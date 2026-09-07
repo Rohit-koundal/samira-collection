@@ -4,6 +4,14 @@ import { compressImageFile, isSupportedImageFile } from './imageCompression';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 
 function customerSafeMessage(message, status, path = '', code = '') {
+  if (path.includes('/auth/')) {
+    const otpMessages = {
+      OTP_PROVIDER_AUTH_FAILED: 'SMS login is unavailable because the SMS provider rejected the store credentials. Please contact support.',
+      OTP_PROVIDER_NOT_CONFIGURED: 'SMS login has not been configured for this account. Please contact support.',
+      OTP_DELIVERY_UNAVAILABLE: 'We could not send your OTP. Please try again shortly or contact support if this continues.',
+    };
+    if (Object.prototype.hasOwnProperty.call(otpMessages, code)) return otpMessages[code];
+  }
   if (code.startsWith('SHIPPING_') && message) return message;
   if (code === 'PERSISTENT_UPLOAD_STORAGE_REQUIRED') {
     return path.includes('/videos') || path.includes('reel')

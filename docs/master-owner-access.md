@@ -20,8 +20,8 @@ automatically acquire master permissions.
 1. Start/restart the backend yourself after deploying these changes.
 2. Use the existing mobile OTP login with 9816978086. Owner login requires a
    connected database, configured JWT_SECRET and JWT_REFRESH_SECRET, and a real
-   Twilio, MSG91 or Fast2SMS SMS delivery. Fixed/demo and offline owner access
-   are intentionally refused. Real owner OTP delivery also works in local
+   Twilio, MSG91 or Fast2SMS SMS delivery on live deployments. Offline owner
+   access is refused. Real owner OTP delivery also works in local
    development when a real SMS provider is configured.
 3. Switch to admin mode using the existing flow. Open **Master configuration**
    in the admin sidebar, or /master.
@@ -39,6 +39,22 @@ No .env file was changed by this implementation. Existing environment values
 must be reviewed/configured by the server owner. Use independent, strong
 session secrets for each client deployment. No password login was added.
 SMS delivery/billing and provider template approval remain provider concerns.
+
+## Local owner demo
+
+For a demo on the development computer, add `LOCAL_OWNER_DEMO=true` to
+`backend/.env` and restart the backend. Keep OTP mode in demo (the existing
+default when unset). This binds the API to `127.0.0.1`; open the frontend with
+`localhost` or `127.0.0.1` on the same computer. The OTP screen shows the
+configured demo code, and no owner SMS is sent. Database access and session
+secrets remain required. Existing environment values do not need to change.
+
+The demo code still expires, has attempt/resend limits and can be redeemed
+once. Local demo owner sessions carry a signed marker and cannot authenticate
+on the live API or through a proxy. Client handover stays disabled in demo
+mode. Without this opt-in, or with `OTP_MODE=production`, owner login continues
+to require real SMS. This local setting also means the API cannot be reached
+from another device over Wi-Fi; use real SMS for that setup.
 
 ## Available controls
 

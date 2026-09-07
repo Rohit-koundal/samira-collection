@@ -285,6 +285,7 @@ vite.config.ts.timestamp-*
 !backend/services/productSmartFillMedia.js
 !backend/controllers/productSmartFillController.js
 !backend/routes/adminProductRoutes.js
+!backend/config/localOwnerDemo.js
 # Local environment files in every directory, including examples and backups.
 # Keep these after source allowlists so environment files stay ignored.
 .env

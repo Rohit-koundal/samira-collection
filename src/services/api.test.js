@@ -66,3 +66,13 @@ test('bag requests use separate query identities for guests and customer account
   expect(mockInitiateQuery).toHaveBeenNthCalledWith(1, { path: '/cart', silent: true, cacheScope: 'guest' }, { forceRefetch: true, subscribe: false });
   expect(mockInitiateQuery).toHaveBeenNthCalledWith(2, { path: '/cart', silent: true, cacheScope: 'customer-1' }, { forceRefetch: true, subscribe: false });
 });
+
+test.each([
+  ['OTP_PROVIDER_AUTH_FAILED', 'SMS login is unavailable because the SMS provider rejected the store credentials. Please contact support.'],
+  ['OTP_PROVIDER_NOT_CONFIGURED', 'SMS login has not been configured for this account. Please contact support.'],
+  ['OTP_DELIVERY_UNAVAILABLE', 'We could not send your OTP. Please try again shortly or contact support if this continues.'],
+  ['SERVICE_UNAVAILABLE', 'Login service is temporarily unavailable. Please try again in a few minutes.'],
+])('login preserves safe delivery guidance for %s without displaying provider data', async (code, message) => {
+  mockDispatch.mockReturnValue({ unwrap: () => Promise.reject({ status: 503, data: { code, message: 'private-provider-data' } }) });
+  await expect(api.post('/auth/send-otp', { phone: '9876543210' })).rejects.toMatchObject({ status: 503, code, message });
+});

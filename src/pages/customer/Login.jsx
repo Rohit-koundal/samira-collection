@@ -31,6 +31,7 @@ export default function Login({ route = '/login' }) {
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
+  const [demoOtp, setDemoOtp] = useState('');
   const [autoRequested, setAutoRequested] = useState(false);
   const inputs = useRef([]);
   const normalizedPhone = normalizePhone(phone, countryCode);
@@ -63,6 +64,7 @@ export default function Login({ route = '/login' }) {
     const onLoginPhone = window.location.pathname === '/login' && !new URLSearchParams(window.location.search).get('step');
 
     if (nextStep === 'phone') {
+      setDemoOtp('');
       clearOtpState();
       setStep('phone');
       setOtp(['', '', '', '', '', '']);
@@ -130,6 +132,7 @@ export default function Login({ route = '/login' }) {
         return showFeedback('Logged in successfully.', 'success');
       }
       setCooldown(OTP_COOLDOWN_SECONDS);
+      setDemoOtp(readDemoOtp(data));
       enterAuthStep('otp', normalizedPhone);
       showFeedback(otpSentMessage(data), 'success');
       setTimeout(() => inputs.current[0]?.focus(), 50);
@@ -292,6 +295,7 @@ export default function Login({ route = '/login' }) {
     try {
       const data = await resendOtp(normalizedPhone);
       setCooldown(OTP_COOLDOWN_SECONDS);
+      setDemoOtp(readDemoOtp(data));
       showFeedback(otpSentMessage(data, 'OTP resent successfully.'), 'success');
     } catch (error) {
       showFeedback(error.message, 'error');
@@ -348,9 +352,10 @@ export default function Login({ route = '/login' }) {
                 </div>
                 <div className="pt-1">
                   <h2 className="text-[17px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Verify with OTP</h2>
-                  <p className="mt-1 text-[11px] text-slate-500 sm:text-[12px]">Sent to {maskPhone(phone)}</p>
+                  <p className="mt-1 text-[11px] text-slate-500 sm:text-[12px]">{demoOtp ? 'Demo verification for' : 'Sent to'} {maskPhone(phone)}</p>
                 </div>
               </div>
+              {demoOtp && <p role="status" className="rounded-xl bg-[#fff0f5] px-4 py-3 text-sm text-wine">Demo mode: enter <strong>{demoOtp}</strong>. No SMS is needed.</p>}
               <div className="grid grid-cols-6 gap-2">
                 {otp.map((digit, index) => (
                   <input
@@ -449,7 +454,13 @@ function StatusMessage({ type, message, onRetry, loading, className = '' }) {
 }
 
 function otpSentMessage(response, fallback = 'OTP sent successfully.') {
+  if (readDemoOtp(response)) return 'Demo OTP ready. Use the code shown above.';
   return response?.message || fallback;
+}
+
+function readDemoOtp(response) {
+  const code = String(response?.demoOtp || response?.devOtp || '');
+  return response?.otpMode === 'demo' && /^\d{6}$/.test(code) ? code : '';
 }
 
 function PhoneField({ value, onChange, countryCode = '+91' }) {
