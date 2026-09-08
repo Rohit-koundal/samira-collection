@@ -67,9 +67,9 @@ services:
       # mode the fixed DEMO_OTP is accepted and returned to the client.
       - key: OTP_MODE
         value: demo
-      # Public demo access for the owner account. Disable before real sales.
+      # Keep the owner on real SMS while customer accounts use the demo OTP.
       - key: ALLOW_HOSTED_OWNER_DEMO
-        value: "true"
+        value: "false"
       - key: DEMO_OTP
         value: "123456"
       - key: OTP_PROVIDER

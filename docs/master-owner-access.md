@@ -56,25 +56,23 @@ mode. Without either demo opt-in below, or with `OTP_MODE=production`, owner
 login requires real SMS. This local setting means the API cannot be reached
 from another device over Wi-Fi; use real SMS for that setup.
 
-## Hosted owner demo (Render or another server)
+## Hosted hybrid OTP (Render or another server)
 
-To demonstrate owner login on the deployed website, set this variable on the
-**backend service**, then deploy the updated backend:
+For team testing on the deployed website, configure the **backend service** and
+deploy the updated backend:
 
 ```dotenv
 OTP_MODE=demo
+DEMO_OTP=123456
+ALLOW_HOSTED_OWNER_DEMO=false
 ```
 
-This preserves the application's original demo login behavior. The optional
-`ALLOW_HOSTED_OWNER_DEMO=true` setting is also supported for an explicit
-Blueprint configuration. Set it to `false` to disable owner demo access even
-while customer OTP remains in demo mode.
-
-`DEMO_OTP` can provide a custom six-digit demo code; the existing default is
-`123456`. The same mobile/desktop OTP screen displays it. No owner SMS is sent.
-Database access and session secrets remain required. Anyone who knows the
-owner number can request this displayed code and access the owner account;
-use a demo deployment without real customer data or active payment credentials.
+With this hybrid configuration, the owner number receives a random OTP through
+the configured real SMS provider. Every non-owner number uses the displayed
+`123456` demo OTP without making an SMS provider request. Database access,
+session secrets and working SMS credentials remain required for owner login.
+Set `ALLOW_HOSTED_OWNER_DEMO=true` only when the owner must temporarily use the
+displayed demo OTP too.
 
 Both repository Render Blueprints include these demo settings. For a Render
 service managed directly in the dashboard, add them under **Environment** and
@@ -84,12 +82,9 @@ The Blueprints use `autoDeployTrigger: commit`. An existing dashboard-managed
 service must also have **Auto-Deploy: On Commit**; if it uses **After CI Checks
 Pass** without CI checks, Render does not deploy the commit.
 
-Hosted demo takes precedence over `LOCAL_OWNER_DEMO`, so the API binds to
-`0.0.0.0` and uses the hosting platform's `PORT`. It works through the hosting
-proxy. Hosted and local demo OTPs/sessions have separate markers; local demo
+The API binds to `0.0.0.0` and uses the hosting platform's `PORT`. Local demo
 sessions cannot be reused remotely. Resend cooldown, expiry, attempt limits,
-single-use verification, saved admin sessions and client-handover restrictions
-remain enforced.
+single-use verification and saved admin sessions remain enforced.
 
 For real operation, set `ALLOW_HOSTED_OWNER_DEMO=false` and
 `OTP_MODE=production`, configure real SMS, and redeploy. Existing hosted demo
