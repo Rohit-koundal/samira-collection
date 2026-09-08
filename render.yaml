@@ -67,13 +67,9 @@ services:
       # mode the fixed DEMO_OTP is accepted and returned to the client.
       - key: OTP_MODE
         value: demo
-      # Keep the owner on real SMS while customer accounts use the demo OTP.
-      - key: ALLOW_HOSTED_OWNER_DEMO
-        value: "false"
+      # The owner always uses real SMS; customer accounts use the demo OTP.
       - key: DEMO_OTP
         value: "123456"
-      - key: OTP_PROVIDER
-        value: sms
       - key: OTP_EXPIRY_MINUTES
         value: "5"
       - key: OTP_MAX_ATTEMPTS
@@ -87,12 +83,6 @@ services:
       - key: SMS_AUTH_TOKEN
         sync: false
       - key: SMS_SENDER_ID
-        sync: false
-      - key: SMS_9999133567_ACCOUNT_SID
-        sync: false
-      - key: SMS_9999133567_AUTH_TOKEN
-        sync: false
-      - key: SMS_9999133567_SENDER_ID
         sync: false
       - key: RAZORPAY_KEY_ID
         sync: false

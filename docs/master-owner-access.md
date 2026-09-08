@@ -33,7 +33,7 @@ automatically acquire master permissions.
 6. Grant the client's own number admin access. Both this action and the older
    customer promotion endpoint require a locked configuration, NODE_ENV set
    to production, OTP_MODE set to production, and a real provider selected by
-   the existing SMS configuration. An unset/mock OTP_PROVIDER is not ready.
+   `SMS_PROVIDER`. An unset or mock SMS provider is not ready.
 
 Existing environment values must be reviewed/configured by the server owner.
 Use independent, strong
@@ -52,7 +52,7 @@ secrets remain required. Existing environment values do not need to change.
 The demo code still expires, has attempt/resend limits and can be redeemed
 once. Local demo owner sessions carry a signed marker and cannot authenticate
 on the live API or through a proxy. Client handover stays disabled in demo
-mode. Without either demo opt-in below, or with `OTP_MODE=production`, owner
+mode. Without the local demo opt-in, owner
 login requires real SMS. This local setting means the API cannot be reached
 from another device over Wi-Fi; use real SMS for that setup.
 
@@ -64,15 +64,15 @@ deploy the updated backend:
 ```dotenv
 OTP_MODE=demo
 DEMO_OTP=123456
-ALLOW_HOSTED_OWNER_DEMO=false
+SMS_PROVIDER=twilio
 ```
 
 With this hybrid configuration, the owner number receives a random OTP through
 the configured real SMS provider. Every non-owner number uses the displayed
 `123456` demo OTP without making an SMS provider request. Database access,
 session secrets and working SMS credentials remain required for owner login.
-Set `ALLOW_HOSTED_OWNER_DEMO=true` only when the owner must temporarily use the
-displayed demo OTP too.
+There is no hosted owner-demo switch, so customer demo mode cannot accidentally
+downgrade owner authentication.
 
 Both repository Render Blueprints include these demo settings. For a Render
 service managed directly in the dashboard, add them under **Environment** and
@@ -86,11 +86,8 @@ The API binds to `0.0.0.0` and uses the hosting platform's `PORT`. Local demo
 sessions cannot be reused remotely. Resend cooldown, expiry, attempt limits,
 single-use verification and saved admin sessions remain enforced.
 
-For real operation, set `ALLOW_HOSTED_OWNER_DEMO=false` and
-`OTP_MODE=production`, configure real SMS, and redeploy. Existing hosted demo
-access and refresh tokens are then rejected; a real SMS login is required.
-Change the same values in the Blueprint if it manages the service, so a later
-Blueprint sync does not re-enable demo mode.
+For real operation, set `OTP_MODE=production`, configure real SMS, and redeploy.
+The same provider then handles owner and customer OTP delivery.
 
 ## Available controls
 
