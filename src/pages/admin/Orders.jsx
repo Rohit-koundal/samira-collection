@@ -17,6 +17,7 @@ function readFilters(route) {
 }
 
 export default function Orders({ route = '' }) {
+  const apiBase = route.startsWith('/seller') ? '/seller' : '/admin';
   const [orders, setOrders] = useState([]);
   const [query, setQuery] = useState(() => readFilters(route).search);
   const [search, setSearch] = useState(() => readFilters(route).search);
@@ -46,7 +47,7 @@ export default function Orders({ route = '' }) {
   if (search.trim()) requestParams.set('search', search.trim());
   if (status) requestParams.set('status', status);
   if (payment) requestParams.set('payment', payment);
-  const requestPath = `/admin/orders?${requestParams}`;
+  const requestPath = `${apiBase}/orders?${requestParams}`;
 
   const load = useCallback(() => {
     const sequence = ++loadSequence.current;
@@ -75,7 +76,7 @@ export default function Orders({ route = '' }) {
 
   const updateOrder = async (order, orderStatus) => {
     try {
-      await api.put(`/admin/orders/${order._id}/status`, { orderStatus });
+      await api.put(`${apiBase}/orders/${order._id}/status`, { orderStatus });
       latestLoad.current();
     } catch (error) {
       setMessage(error.message);
@@ -84,7 +85,7 @@ export default function Orders({ route = '' }) {
 
   const updatePayment = async (order, paymentStatus) => {
     try {
-      await api.put(`/admin/orders/${order._id}/payment-status`, { paymentStatus });
+      await api.put(`${apiBase}/orders/${order._id}/payment-status`, { paymentStatus });
       latestLoad.current();
     } catch (error) {
       setMessage(error.message);
@@ -94,7 +95,7 @@ export default function Orders({ route = '' }) {
   const deleteOrder = async () => {
     if (!deleteTarget) return;
     try {
-      const response = await api.delete(`/admin/orders/${deleteTarget._id}`);
+      const response = await api.delete(`${apiBase}/orders/${deleteTarget._id}`);
       setOrders((current) => current.map((order) => order._id === deleteTarget._id
         ? { ...order, ...response.order, orderStatus: response.order?.orderStatus || 'Cancelled' } : order));
       setMessage('');
@@ -140,7 +141,7 @@ export default function Orders({ route = '' }) {
                 <select value={order.orderStatus} onChange={(event) => updateOrder(order, event.target.value)} className="h-10 rounded-lg border border-slate-200 px-2 font-bold">
                   {orderStatuses.map((item) => <option key={item}>{item}</option>)}
                 </select>
-                <a href={`/admin/orders/detail?id=${order._id}`} className="admin-table-action-link">View</a>
+                <a href={`${apiBase}/orders/detail?id=${order._id}`} className="admin-table-action-link">View</a>
                 {!['Delivered', 'Cancelled', 'Returned', 'Refunded'].includes(order.orderStatus) && <button type="button" onClick={() => setDeleteTarget(order)} className="admin-table-action-link is-danger">Cancel</button>}
               </div>
             </td>

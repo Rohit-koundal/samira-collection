@@ -53,11 +53,14 @@ export default function ProductDetailPage({
   helpfulBusyId = '',
   onHelpful,
   variantProducts = [],
+  managedVariants = [],
+  selectedVariant,
   selectedMedia,
   storeWhatsappNumber,
   onOpenSizeGuide,
   onViewOffers,
   onSelectVariant,
+  onSelectManagedVariant,
   onShare,
   onWriteReview,
   isSizeAvailable,
@@ -139,6 +142,9 @@ export default function ProductDetailPage({
               onCheckDelivery={onCheckDelivery}
               deliveryChecking={deliveryChecking}
               variantProducts={variantProducts}
+              managedVariants={managedVariants}
+              selectedVariant={selectedVariant}
+              onSelectManagedVariant={onSelectManagedVariant}
               storeWhatsappNumber={storeWhatsappNumber}
               onOpenSizeGuide={onOpenSizeGuide}
               onSelectVariant={onSelectVariant}

@@ -32,6 +32,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const { user } = useAuth();
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [openGallery, setOpenGallery] = useState(false);
@@ -86,6 +87,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const effectiveReviewSummary = useMemo(() => reviewSummary || buildReviewSummary(reviews), [reviewSummary, reviews]);
   const storeWhatsappNumber = formatWhatsappNumber(settingsData?.whatsappNumber || '');
   const selectableSizes = product ? getSelectableSizes(product) : [];
+  const managedOptionVariants = product ? activeVariants(product).filter((variant) => Object.keys(variant.optionValues || {}).length) : [];
 
   useEffect(() => {
     if (!productData) return;
@@ -94,6 +96,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     const availableSizes = getSelectableSizes(item);
     setSize(availableSizes.includes(inStock?.size) ? inStock.size : (availableSizes[0] || ''));
     setColor(inStock?.color || item.colors?.[0] || '');
+    setSelectedVariantId(inStock?._id || '');
     setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
     setOpenGallery(false);
     setActionMessage('');
@@ -142,7 +145,9 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     [wishlist.items, productId],
   );
   const selectedVariant = hasManagedVariants(product || {})
-    ? (selectableSizes.length
+    ? (selectedVariantId
+      ? findProductVariant(product || {}, { variantId: selectedVariantId })
+      : selectableSizes.length
       ? findProductVariant(product || {}, { size, color })
       : activeVariants(product || {}).find((variant) => (!color || String(variant.color) === String(color)) && Number(variant.stock || 0) > 0)
         || activeVariants(product || {})[0]
@@ -201,7 +206,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     };
   }, [mediaItems.length, openGallery]);
 
-  const cartItem = product ? cart.getCartItem(product, { size, color }) : null;
+  const cartItem = product ? cart.getCartItem(product, { size, color, variantId: selectedVariant?._id }) : null;
   const similarPath = product?.categoryId
     ? `/products?category=${product.categoryId}`
     : product?.category
@@ -302,6 +307,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   };
 
   const selectDesktopSize = (nextSize) => {
+    setSelectedVariantId('');
     setSize(nextSize);
     if (hasManagedVariants(product) && (!color || !isColorAvailable(product, color, nextSize))) {
       const compatible = activeVariants(product).find((variant) => String(variant.size) === String(nextSize) && Number(variant.stock || 0) > 0);
@@ -312,11 +318,20 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   };
 
   const selectDesktopColor = (nextColor) => {
+    setSelectedVariantId('');
     setColor(nextColor);
     if (selectableSizes.length && hasManagedVariants(product) && (!size || !activeVariants(product).some((variant) => String(variant.size) === String(size) && String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0))) {
       const compatible = activeVariants(product).find((variant) => String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0);
       setSize(compatible?.size || '');
     }
+    setQuantity(1);
+    setActionMessage('');
+  };
+
+  const selectManagedVariant = (variant) => {
+    setSelectedVariantId(variant?._id || '');
+    setSize(variant?.size || '');
+    setColor(variant?.color || '');
     setQuantity(1);
     setActionMessage('');
   };
@@ -558,6 +573,9 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
           helpfulBusyId={helpfulBusyId}
           onHelpful={toggleReviewHelpful}
           variantProducts={variantProducts}
+          managedVariants={managedOptionVariants}
+          selectedVariant={selectedVariant}
+          onSelectManagedVariant={selectManagedVariant}
           selectedMedia={selectedMedia}
           storeWhatsappNumber={storeWhatsappNumber}
           settings={settingsData || {}}
@@ -687,7 +705,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2.5">
                   {selectableSizes.map((item) => (
-                    <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => setSize(item)} className={`grid h-11 min-w-11 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`}>{item}</button>
+                    <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => selectDesktopSize(item)} className={`grid h-11 min-w-11 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`}>{item}</button>
                   ))}
                 </div>
               </>
@@ -701,7 +719,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                       key={item}
                       type="button"
                       disabled={!isColorAvailable(product, item, size)}
-                      onClick={() => setColor(item)}
+                      onClick={() => selectDesktopColor(item)}
                       className={`inline-flex h-10 items-center gap-2 rounded-full border px-3 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-35 ${color === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}
                       aria-label={`Select color ${item}`}
                     >
@@ -712,6 +730,23 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                 </div>
               </div>
             )}
+            {managedOptionVariants.length ? (
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <p className="text-[13px] font-bold text-charcoal">Choose product option</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {managedOptionVariants.map((variant) => {
+                    const active = String(selectedVariant?._id || '') === String(variant._id || '');
+                    const available = variant.isActive !== false && Number(variant.stock || 0) > 0;
+                    return (
+                      <button key={variant._id || formatManagedVariant(variant)} type="button" disabled={!available} onClick={() => selectManagedVariant(variant)} className={`min-h-12 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}>
+                        <span className="block">{formatManagedVariant(variant)}</span>
+                        <small className="mt-1 block text-[9px] font-medium opacity-70">{available ? `${variant.stock} available` : 'Out of stock'}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
               <div><span className="text-[13px] font-bold text-charcoal">Quantity</span><p className="mt-1 text-[10px] text-slate-500">Choose how many you need</p></div>
               <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white">
@@ -1181,6 +1216,11 @@ const colorSwatches = {
 
 function formatRupees(value) {
   return `₹${Math.max(0, Number(value || 0)).toLocaleString('en-IN')}`;
+}
+
+function formatManagedVariant(variant = {}) {
+  const values = Object.values(variant.optionValues || {}).map((value) => String(value || '').trim()).filter(Boolean);
+  return values.join(' · ') || [variant.size, variant.color].filter(Boolean).join(' · ') || variant.sku || 'Product option';
 }
 
 function buildReviewSummary(reviews = []) {

@@ -24,7 +24,8 @@ test('inventory typing saves one completed quantity and rejects blank or fractio
   fireEvent.blur(input);
   await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/products/product-1/stock', { stock: 120 }));
   await waitFor(() => expect(input).toBeEnabled());
-  expect(api.get).toHaveBeenCalledTimes(1);
+  expect(api.get.mock.calls.filter(([path]) => path === '/admin/products?admin=true')).toHaveLength(1);
+  expect(api.get.mock.calls.filter(([path]) => path === '/admin/inventory/history?limit=30')).toHaveLength(2);
   for (const invalid of ['', '1.5', '-2']) {
     fireEvent.change(input, { target: { value: invalid } });
     fireEvent.blur(input);

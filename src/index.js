@@ -10,7 +10,16 @@ import { store } from './store/store';
 
 if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${process.env.PUBLIC_URL || ''}/sw.js`).catch(() => null);
+    navigator.serviceWorker.register(`${process.env.PUBLIC_URL || ''}/sw.js`).then((registration) => {
+      const announceUpdate = () => window.dispatchEvent(new CustomEvent('samira:pwa-update', { detail: { registration } }));
+      if (registration.waiting && navigator.serviceWorker.controller) announceUpdate();
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) announceUpdate();
+        });
+      });
+    }).catch(() => null);
   });
 }
 

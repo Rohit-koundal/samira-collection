@@ -11,6 +11,7 @@ const paymentStatuses = ['Pending', 'Paid', 'Failed', 'Refunded'];
 
 export default function OrderDetail({ route = '' }) {
   const orderId = new URLSearchParams(route.split('?')[1] || '').get('id');
+  const apiBase = route.startsWith('/seller') ? '/seller' : '/admin';
   const [order, setOrder] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState('');
@@ -24,16 +25,16 @@ export default function OrderDetail({ route = '' }) {
   const loadReceipt = useCallback(async (version = loadVersion.current) => {
     setReceiptError('');
     try {
-      const data = await api.get(`/admin/orders/${orderId}/receipt`);
+      const data = await api.get(`${apiBase}/orders/${orderId}/receipt`);
       if (version === loadVersion.current) setReceipt(data);
     } catch (error) { if (version === loadVersion.current) setReceiptError(error.message || 'Invoice could not load.'); }
-  }, [orderId]);
+  }, [apiBase, orderId]);
   const load = useCallback(async () => {
     if (!orderId) { setMessage('Choose an order from the orders list.'); return; }
     const version = ++loadVersion.current;
     loadReceipt(version);
     try {
-      const data = await api.get(`/admin/orders/${orderId}`);
+      const data = await api.get(`${apiBase}/orders/${orderId}`);
       if (version !== loadVersion.current) return;
       setOrder(data);
       setMessage('');
@@ -44,7 +45,7 @@ export default function OrderDetail({ route = '' }) {
         awb: data.shipment?.awb || '',
       });
     } catch (error) { if (version === loadVersion.current) setMessage(error.message); }
-  }, [orderId, loadReceipt]);
+  }, [apiBase, orderId, loadReceipt]);
   useEffect(() => {
     setOrder(null); setReceipt(null); setMessage(''); setReceiptError(''); setSaving(false); mutationPending.current = false;
     load();
@@ -57,7 +58,7 @@ export default function OrderDetail({ route = '' }) {
     const version = ++mutationVersion.current;
     setSaving(true); setMessage('');
     try {
-      await api.put(`/admin/orders/${orderId}/${path}`, body);
+      await api.put(`${apiBase}/orders/${orderId}/${path}`, body);
       if (version === mutationVersion.current) await load();
     } catch (error) { if (version === mutationVersion.current) setMessage(error.message); }
     finally { if (version === mutationVersion.current) { mutationPending.current = false; setSaving(false); } }
@@ -76,7 +77,7 @@ export default function OrderDetail({ route = '' }) {
     await mutate('payment-status', { paymentStatus });
   };
 
-  if (message && !order) return <section className="space-y-5"><PageHeader title="Order Detail" /><p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>{orderId && <button className="admin-btn" onClick={load}>Retry loading order</button>}<a className="admin-table-action-link" href="/admin/orders">Back to orders</a></section>;
+  if (message && !order) return <section className="space-y-5"><PageHeader title="Order Detail" /><p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>{orderId && <button className="admin-btn" onClick={load}>Retry loading order</button>}<a className="admin-table-action-link" href={`${apiBase}/orders`}>Back to orders</a></section>;
   if (!order) return <section className="space-y-5"><PageHeader title="Order Detail" /><p className="rounded-xl bg-white p-6 font-bold shadow-sm">Loading order...</p></section>;
 
   return (
@@ -87,7 +88,7 @@ export default function OrderDetail({ route = '' }) {
       {receipt && <ReceiptActions receipt={receipt} />}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
-          <ShipmentPanel orderId={orderId} onChanged={load} />
+          <ShipmentPanel orderId={orderId} onChanged={load} apiBase={apiBase} />
           <div className="admin-card p-5">
             <h2>Ordered items</h2>
             <div className="mt-4 space-y-3">{order.orderItems.map((item) => <div key={`${item.product}-${item.size}-${item.color}`} className="flex justify-between gap-3 rounded-xl border border-slate-100 p-3"><span><b>{item.name}</b><br /><span className="text-xs text-slate-500">{item.size} | {item.color} x {item.quantity}</span></span><b>Rs. {item.price * item.quantity}</b></div>)}</div>

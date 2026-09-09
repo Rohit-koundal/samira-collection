@@ -19,11 +19,14 @@ import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice
 import { trackEvent } from '../../utils/analytics';
 import { useStorefront } from '../../context/StorefrontContext';
 import { storefrontPath } from '../../utils/routing';
+import SeoHead from '../../components/seo/SeoHead';
+import api from '../../services/api';
 
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
   const { storeSlug } = useStorefront();
   const [openFilters, setOpenFilters] = useState(false);
+  const [catalogStructure, setCatalogStructure] = useState(null);
   const routePath = route.split('?')[0];
   const basePath = storefrontPath(routePath.endsWith('/search') ? '/search' : '/products', storeSlug);
   const routeQuery = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
@@ -35,8 +38,25 @@ export default function Products({ navigate, route = '/products' }) {
   const catalog = useMemo(() => {
     return normalizeProducts(Array.isArray(productData) ? productData : productData?.items || []);
   }, [productData]);
+  useEffect(() => {
+    let active = true;
+    api.get('/catalog-configuration').then((value) => { if (active) setCatalogStructure(value); }).catch(() => { if (active) setCatalogStructure(null); });
+    return () => { active = false; };
+  }, [storeSlug]);
+  const dynamicFacets = useMemo(() => buildDynamicFacets(catalogStructure, catalog), [catalog, catalogStructure]);
   const visibleProducts = useSelector((state) => selectVisibleProducts(state, catalog, categories));
   const collectionLabel = useMemo(() => getCollectionLabel(routeQuery, filters), [routeQuery, filters]);
+  const categorySeo = useMemo(() => {
+    const selected = splitFilterValues(filters.category);
+    if (selected.length !== 1) return null;
+    const category = categories.find(item => selected.includes(String(item._id)) || selected.includes(item.slug) || selected.includes(item.name));
+    if (!category) return null;
+    return {
+      title: category.metaTitle || category.name,
+      description: category.metaDescription || category.description || '',
+      image: category.socialImage || category.image || '',
+    };
+  }, [categories, filters.category]);
 
   useLayoutEffect(() => {
     dispatch(replaceCatalogFilters(normalizeCatalogQuery(routeQuery)));
@@ -85,6 +105,7 @@ export default function Products({ navigate, route = '/products' }) {
 
   return (
     <section className="bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 md:p-0">
+      <SeoHead route={route} page={categorySeo || undefined} />
       {(
         <DesktopNewArrivalsLayout
           navigate={navigate}
@@ -101,6 +122,7 @@ export default function Products({ navigate, route = '/products' }) {
           updateParams={updateParams}
           clearFilterParams={clearFilterParams}
           allProducts={catalog}
+          dynamicFacets={dynamicFacets}
         />
       )}
       <div className="mb-3 flex items-center justify-between gap-2 lg:hidden">
@@ -162,9 +184,29 @@ export default function Products({ navigate, route = '/products' }) {
         updateParam={updateParam}
         clearFilters={clearFilterParams}
         applyDraftFilters={applyDraftFilters}
+        dynamicFacets={dynamicFacets}
       />
     </section>
   );
+}
+
+function buildDynamicFacets(structure, products) {
+  const configured = new Set((structure?.filters || []).filter((item) => item.enabled !== false).map((item) => item.key));
+  const definitions = new Map((structure?.attributes || []).map((attribute) => [attribute.key, attribute]));
+  (structure?.categoryDefinitions || []).forEach((category) => (category.attributes || []).forEach((attribute) => {
+    if (typeof attribute === 'object' && attribute.key) definitions.set(attribute.key, { ...(definitions.get(attribute.key) || {}), ...attribute });
+  }));
+  return Array.from(definitions.values()).filter((attribute) => attribute.filterable && (configured.has(attribute.key) || (structure?.categoryDefinitions || []).some((category) => (category.filters || []).includes(attribute.key))) && !['size', 'colour', 'color', 'fabric', 'occasion'].includes(attribute.key)).map((attribute) => {
+    const counts = new Map();
+    products.forEach((product) => {
+      const source = product.attributeValues || {};
+      const raw = source[attribute.key];
+      (Array.isArray(raw) ? raw : String(raw || '').split(',')).map((value) => String(value || '').trim()).filter(Boolean).forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+    });
+    const configuredOptions = attribute.options || [];
+    const values = configuredOptions.length ? configuredOptions : Array.from(counts.keys()).sort((a, b) => a.localeCompare(b));
+    return { key: attribute.key, label: attribute.label, type: attribute.type, options: values.map((value) => ({ value, label: value, count: counts.get(value) || 0 })) };
+  }).filter((facet) => facet.options.some((option) => option.count > 0));
 }
 
 function getCollectionLabel(routeQuery, filters) {

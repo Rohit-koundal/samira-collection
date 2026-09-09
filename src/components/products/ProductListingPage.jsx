@@ -21,6 +21,7 @@ export default function ProductListingPage({
   loading = false,
   error,
   onRetry,
+  dynamicFacets = [],
 }) {
   const facetProducts = allProducts.length ? allProducts : products;
   const facets = useMemo(
@@ -70,6 +71,7 @@ export default function ProductListingPage({
               onFilterChange={onFilterChange}
               onFiltersChange={onFiltersChange}
               onClearAll={onClearFilters}
+              dynamicFacets={dynamicFacets}
             />
 
             <div className="sc-plp__grid">

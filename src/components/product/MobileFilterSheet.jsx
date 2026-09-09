@@ -31,7 +31,7 @@ const filterConfig = {
   ],
 };
 
-export default function MobileFilterSheet({ open, onClose, categories = [], params, updateParam, clearFilters, applyDraftFilters }) {
+export default function MobileFilterSheet({ open, onClose, categories = [], params, updateParam, clearFilters, applyDraftFilters, dynamicFacets = [] }) {
   const [activeSection, setActiveSection] = useState('category');
   const [draft, setDraft] = useState(() => buildDraft(params));
   const [expanded, setExpanded] = useState({
@@ -51,9 +51,10 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
 
   const selectedCount = useMemo(() => {
     const categoryCount = splitFilterValues(draft.category).length;
-    return categoryCount + ['size', 'color', 'fabric', 'discount', 'sort', 'minPrice', 'maxPrice']
+    return categoryCount + ['size', 'color', 'fabric', 'discount', 'sort', 'minPrice', 'maxPrice', ...dynamicFacets.map((facet) => `attr_${facet.key}`)]
       .reduce((count, key) => count + (draft[key] ? 1 : 0), 0);
-  }, [draft]);
+  }, [draft, dynamicFacets]);
+  const visibleNavItems = [...navItems, ...dynamicFacets.map((facet) => ({ key: `attr_${facet.key}`, label: facet.label, icon: Tag }))];
 
   if (!open) return null;
 
@@ -92,7 +93,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
         <div className="grid h-[calc(100%-148px-env(safe-area-inset-bottom))] grid-cols-[92px_minmax(0,1fr)]">
           <aside className="border-r border-slate-100 bg-[#fbfbfc] px-2 py-3">
             <div className="space-y-1.5">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const active = activeSection === item.key;
                 return (
                   <button
@@ -207,6 +208,16 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
                 </Accordion>
               </FilterSection>
             )}
+
+            {dynamicFacets.map((facet) => activeSection === `attr_${facet.key}` ? (
+              <FilterSection key={facet.key} title={facet.label}>
+                <DynamicFilterOptions
+                  items={facet.options}
+                  value={draft[`attr_${facet.key}`] || ''}
+                  onChange={(value) => setDraft((current) => ({ ...current, [`attr_${facet.key}`]: toggleFilterValue(current[`attr_${facet.key}`], value) }))}
+                />
+              </FilterSection>
+            ) : null)}
           </div>
         </div>
 
@@ -334,8 +345,16 @@ function PriceInput({ label, value, onChange }) {
   );
 }
 
+function DynamicFilterOptions({ items = [], value, onChange }) {
+  const selected = new Set(splitFilterValues(value).map((item) => item.toLowerCase()));
+  return <div className="space-y-2">{items.map((item) => {
+    const active = selected.has(String(item.value).toLowerCase());
+    return <button key={item.value} type="button" disabled={!item.count && !active} onClick={() => onChange(item.value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-3 text-left disabled:opacity-40"><span className="text-[13px] text-[#1f2a44]">{item.label} <small className="text-slate-400">({item.count})</small></span><span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${active ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>{active ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}</span></button>;
+  })}</div>;
+}
+
 function buildDraft(params) {
-  return {
+  const draft = {
     category: params?.get?.('category') || '',
     size: params?.get?.('size') || '',
     color: params?.get?.('color') || '',
@@ -345,6 +364,8 @@ function buildDraft(params) {
     minPrice: params?.get?.('minPrice') || '',
     maxPrice: params?.get?.('maxPrice') || '',
   };
+  if (params?.entries) Array.from(params.entries()).forEach(([key, value]) => { if (key.startsWith('attr_')) draft[key] = value; });
+  return draft;
 }
 
 function digitsOnly(value) {

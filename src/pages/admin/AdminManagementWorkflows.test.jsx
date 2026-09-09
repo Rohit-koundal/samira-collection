@@ -233,6 +233,23 @@ test('optional store settings failure does not hide a successfully loaded produc
   expect(screen.queryByText('Settings temporarily unavailable')).not.toBeInTheDocument();
 });
 
+test('catalog bulk actions send only the selected products and refresh the server-backed list', async () => {
+  const product = { _id: 'product-1', name: 'Festive silk saree', sku: 'FEST-1', stock: 6, lowStockAlert: 2, price: 1299, isActive: true, images: [], category };
+  api.get.mockImplementation(async path => {
+    if (path.startsWith('/admin/products?')) return { items: [product], total: 1, totalPages: 1, summary: { total: 1, active: 1, low: 0, out: 0, archived: 0, retailValue: 7794, costValue: 0 } };
+    if (path.includes('/categories')) return [category];
+    if (path === '/settings') return {};
+    return [];
+  });
+  api.post.mockResolvedValue({ count: 1, message: '1 product updated' });
+  render(<Products />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Select Festive silk saree' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Bulk action' }), { target: { value: 'best-seller' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/products/bulk', { ids: ['product-1'], action: 'best-seller' }));
+  await waitFor(() => expect(api.get.mock.calls.filter(([path]) => path.startsWith('/admin/products?')).length).toBeGreaterThan(1));
+});
+
 test('required catalog failures show retry rather than an empty successful catalog', async () => {
   api.get.mockImplementation(async path => {
     if (path.includes('/products')) throw new Error('Catalog unavailable');

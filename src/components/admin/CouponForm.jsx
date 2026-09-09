@@ -12,12 +12,13 @@ const PAYMENT_METHODS = [
 
 const emptyCoupon = {
   code: '', title: '', description: '', terms: '', type: 'Percentage', discountValue: '',
+  activationMode: 'CODE', benefitType: 'DISCOUNT', buyQuantity: '1', getQuantity: '1',
   minOrderAmount: '0', maxDiscountAmount: '', validFrom: '', expiryDate: '', usageLimit: '',
   customerLimit: '', applicablePaymentMethods: [], applicableProducts: [], applicableCategories: [],
   firstOrderOnly: false, isPublic: true, isActive: true,
 };
 
-export default function CouponForm({ coupon, products = [], categories = [], onSaved, onCancel }) {
+export default function CouponForm({ coupon, products = [], categories = [], onSaved, onCancel, apiBase = '/admin' }) {
   const editing = Boolean(coupon?._id);
   const [form, setForm] = useState(emptyCoupon);
   const [message, setMessage] = useState(null);
@@ -38,12 +39,14 @@ export default function CouponForm({ coupon, products = [], categories = [], onS
 
   const estimatedLabel = useMemo(() => {
     const value = Number(form.discountValue || 0);
+    if (form.benefitType === 'FREE_SHIPPING') return 'Free delivery';
+    if (form.benefitType === 'BUY_X_GET_Y') return `Buy ${form.buyQuantity || 1}, get ${form.getQuantity || 1} free`;
     if (!value) return 'Set the customer saving';
     if (form.type === 'Percentage') {
       return `${value}% off${Number(form.maxDiscountAmount || 0) ? `, up to Rs. ${Number(form.maxDiscountAmount).toLocaleString('en-IN')}` : ''}`;
     }
     return `Rs. ${value.toLocaleString('en-IN')} off`;
-  }, [form.discountValue, form.maxDiscountAmount, form.type]);
+  }, [form.benefitType, form.buyQuantity, form.discountValue, form.getQuantity, form.maxDiscountAmount, form.type]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -52,8 +55,8 @@ export default function CouponForm({ coupon, products = [], categories = [], onS
     try {
       validateForm(form);
       const saved = editing
-        ? await api.put(`/admin/coupons/${coupon._id}`, toPayload(form))
-        : await api.post('/admin/coupons', toPayload(form));
+        ? await api.put(`${apiBase}/coupons/${coupon._id}`, toPayload(form))
+        : await api.post(`${apiBase}/coupons`, toPayload(form));
       setMessage({ type: 'success', text: editing ? 'Coupon updated successfully.' : 'Coupon created successfully.' });
       if (!editing) setForm({ ...emptyCoupon });
       onSaved?.(saved, editing ? 'updated' : 'created');
@@ -81,10 +84,13 @@ export default function CouponForm({ coupon, products = [], categories = [], onS
         <FormSection title="Offer details" note="Shown to customers in the coupon picker.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Coupon code" required><input value={form.code} onChange={(event) => update('code', sanitizeCode(event.target.value))} maxLength={32} className="admin-coupon-input uppercase" placeholder="SAMIRA20" /></Field>
-            <Field label="Discount type" required><select value={form.type} onChange={(event) => update('type', event.target.value)} className="admin-coupon-input"><option value="Percentage">Percentage</option><option value="Flat">Flat amount</option></select></Field>
+            <Field label="Activation" required><select value={form.activationMode} onChange={(event) => update('activationMode', event.target.value)} className="admin-coupon-input"><option value="CODE">Customer enters code</option><option value="AUTOMATIC">Apply automatically</option></select></Field>
+            <Field label="Offer benefit" required><select value={form.benefitType} onChange={(event) => update('benefitType', event.target.value)} className="admin-coupon-input"><option value="DISCOUNT">Price discount</option><option value="FREE_SHIPPING">Free delivery</option><option value="BUY_X_GET_Y">Buy X get Y</option></select></Field>
+            {form.benefitType === 'DISCOUNT' && <Field label="Discount type" required><select value={form.type} onChange={(event) => update('type', event.target.value)} className="admin-coupon-input"><option value="Percentage">Percentage</option><option value="Flat">Flat amount</option></select></Field>}
             <Field label="Customer-facing title" className="sm:col-span-2"><input value={form.title} onChange={(event) => update('title', event.target.value)} maxLength={120} className="admin-coupon-input" placeholder="Extra savings on your order" /></Field>
             <Field label="Short description" className="sm:col-span-2"><textarea value={form.description} onChange={(event) => update('description', event.target.value)} maxLength={500} rows={2} className="admin-coupon-input min-h-[76px] py-3" placeholder="A short explanation customers can understand." /></Field>
-            <Field label={form.type === 'Percentage' ? 'Discount percentage' : 'Flat discount (Rs.)'} required><NumberInput value={form.discountValue} onChange={(value) => update('discountValue', value)} min="0.01" max={form.type === 'Percentage' ? '100' : undefined} step="0.01" placeholder={form.type === 'Percentage' ? '20' : '500'} /></Field>
+            {form.benefitType === 'DISCOUNT' && <Field label={form.type === 'Percentage' ? 'Discount percentage' : 'Flat discount (Rs.)'} required><NumberInput value={form.discountValue} onChange={(value) => update('discountValue', value)} min="0.01" max={form.type === 'Percentage' ? '100' : undefined} step="0.01" placeholder={form.type === 'Percentage' ? '20' : '500'} /></Field>}
+            {form.benefitType === 'BUY_X_GET_Y' && <><Field label="Customer buys" required><NumberInput value={form.buyQuantity} onChange={(value) => update('buyQuantity', value)} min="1" max="100" step="1" /></Field><Field label="Customer gets free" required><NumberInput value={form.getQuantity} onChange={(value) => update('getQuantity', value)} min="1" max="100" step="1" /></Field></>}
             <Field label="Minimum bag value (Rs.)"><NumberInput value={form.minOrderAmount} onChange={(value) => update('minOrderAmount', value)} min="0" step="0.01" placeholder="0" /></Field>
             <Field label="Maximum saving (Rs.)" hint="Useful for percentage coupons"><NumberInput value={form.maxDiscountAmount} onChange={(value) => update('maxDiscountAmount', value)} min="0" step="0.01" placeholder="No cap" /></Field>
           </div>
@@ -177,13 +183,16 @@ function couponToForm(coupon) {
     applicableProducts: (coupon.applicableProducts || []).map((item) => String(item?._id || item)),
     applicableCategories: (coupon.applicableCategories || []).map((item) => String(item?._id || item)),
     firstOrderOnly: Boolean(coupon.firstOrderOnly), isPublic: coupon.isPublic !== false, isActive: coupon.isActive !== false,
+    activationMode: coupon.activationMode || 'CODE', benefitType: coupon.benefitType || 'DISCOUNT',
+    buyQuantity: coupon.buyQuantity ?? '1', getQuantity: coupon.getQuantity ?? '1',
   };
 }
 
 function validateForm(form) {
   if (!form.code.trim()) throw new Error('Coupon code is required.');
-  if (Number(form.discountValue) <= 0) throw new Error('Discount value must be positive.');
-  if (form.type === 'Percentage' && Number(form.discountValue) > 100) throw new Error('Percentage discount cannot exceed 100.');
+  if (form.benefitType === 'DISCOUNT' && Number(form.discountValue) <= 0) throw new Error('Discount value must be positive.');
+  if (form.benefitType === 'DISCOUNT' && form.type === 'Percentage' && Number(form.discountValue) > 100) throw new Error('Percentage discount cannot exceed 100.');
+  if (form.benefitType === 'BUY_X_GET_Y' && (!Number.isInteger(Number(form.buyQuantity)) || !Number.isInteger(Number(form.getQuantity)) || Number(form.buyQuantity) < 1 || Number(form.getQuantity) < 1)) throw new Error('Buy and free quantities must be whole numbers of 1 or more.');
   if (Number(form.minOrderAmount || 0) < 0 || Number(form.maxDiscountAmount || 0) < 0) throw new Error('Coupon amounts cannot be negative.');
   if (!form.expiryDate) throw new Error('Expiry date is required.');
   if (form.validFrom && new Date(form.expiryDate) <= new Date(form.validFrom)) throw new Error('Expiry date must be after the start date.');
@@ -195,7 +204,9 @@ function validateForm(form) {
 function toPayload(form) {
   return {
     code: sanitizeCode(form.code), title: form.title, description: form.description, terms: form.terms,
-    type: form.type, discountValue: Number(form.discountValue),
+    activationMode: form.activationMode, benefitType: form.benefitType,
+    type: form.type, discountValue: form.benefitType === 'DISCOUNT' ? Number(form.discountValue) : 0,
+    buyQuantity: Number(form.buyQuantity || 1), getQuantity: Number(form.getQuantity || 1),
     minOrderAmount: Number(form.minOrderAmount || 0), maxDiscountAmount: form.maxDiscountAmount === '' ? 0 : Number(form.maxDiscountAmount),
     usageLimit: form.usageLimit === '' ? 0 : Number(form.usageLimit), customerLimit: form.customerLimit === '' ? 0 : Number(form.customerLimit),
     validFrom: form.validFrom || null, expiryDate: form.expiryDate,

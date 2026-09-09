@@ -25,6 +25,11 @@ const rawBaseQuery = fetchBaseQuery({
       const storeSlug = hasParamScope ? arg.params.store : queryScope.has('store') ? queryScope.get('store') : sessionStorage.getItem('samira_store_slug');
       if (storeSlug) headers.set('x-store-slug', storeSlug);
       else if (hasStoreScope) headers.delete('x-store-slug');
+      const requestPath = String(typeof arg === 'string' ? arg : arg?.url || '').split('?')[0];
+      if (requestPath.startsWith('/seller/') || requestPath === '/stores/me/current') {
+        const sellerStoreId = sessionStorage.getItem('samira_seller_store_id');
+        if (sellerStoreId) headers.set('x-store-id', sellerStoreId);
+      }
     } catch {
       // ignore
     }

@@ -18,6 +18,7 @@ import { buildWebsiteCssVariables } from './config/websiteCustomization';
 import { reelProductImportEnabled } from './config/features';
 import { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './utils/loginPromptStorage';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
+import MobileAppCompanion from './components/pwa/MobileAppCompanion';
 import { useAuth } from './context/AuthContext';
 import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
 import { createStoragePlan } from './utils/userStorage';
@@ -27,6 +28,9 @@ const AdminRoute = lazy(() => import('./components/layout/AdminRoute'));
 const SellerRoute = lazy(() => import('./components/layout/SellerRoute'));
 const LoginPrompt = lazy(() => import('./components/auth/LoginPrompt'));
 const MasterConfiguration = lazy(() => import('./pages/admin/MasterConfiguration'));
+const PlatformStores = lazy(() => import('./pages/admin/PlatformStores'));
+const ClientInstallations = lazy(() => import('./pages/admin/ClientInstallations'));
+const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
 const StoreContent = lazy(() => import('./pages/admin/StoreContent'));
 const WebsitePreview = lazy(() => import('./pages/admin/WebsitePreview'));
 const Home = lazy(() => import('./pages/customer/Home'));
@@ -59,6 +63,9 @@ const SocialWorkspace = lazy(() => import('./pages/admin/SocialWorkspace'));
 const SellerAudit = lazy(() => import('./pages/seller/Audit'));
 const SellerAnalytics = lazy(() => import('./pages/seller/Analytics'));
 const SellerProductForm = lazy(() => import('./pages/seller/ProductFormPage'));
+const BusinessCenter = lazy(() => import('./pages/seller/BusinessCenter'));
+const StoreDesigner = lazy(() => import('./pages/seller/StoreDesigner'));
+const SellerSubscription = lazy(() => import('./pages/seller/Subscription'));
 const SeoHead = lazy(() => import('./components/seo/SeoHead'));
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -122,17 +129,25 @@ const customerRoutes = {
 
 const sellerRoutes = {
   '/seller': SellerDashboard,
+  '/seller/notifications': Notifications,
   '/seller/onboarding': SellerOnboarding,
   '/seller/products': SellerProducts,
   '/seller/products/add': SellerProductForm,
   '/seller/products/edit': SellerProductForm,
+  '/seller/inventory': Inventory,
   '/seller/orders': SellerOrders,
+  '/seller/orders/detail': AdminOrderDetail,
   '/seller/crm': SellerCrm,
+  '/seller/offers': Coupons,
   '/seller/inbox': SellerInbox,
   '/seller/instagram': SellerInstagram,
   '/seller/social': SocialWorkspace,
   '/seller/audit': SellerAudit,
   '/seller/analytics': SellerAnalytics,
+  '/seller/business': BusinessCenter,
+  '/seller/subscription': SellerSubscription,
+  '/seller/settings': Settings,
+  '/seller/design': StoreDesigner,
 };
 
 const adminRoutes = {
@@ -162,8 +177,16 @@ const adminRoutes = {
   '/admin/settings': Settings,
   '/admin/customization': WebsiteCustomizer,
   '/admin/store-content': StoreContent,
+  '/admin/system': SystemStatus,
   ...(reelProductImportEnabled ? { '/admin/reel-import': ReelProductImport } : {}),
   '/admin/social': SocialWorkspace,
+  '/admin/business': BusinessCenter,
+};
+
+const masterPages = {
+  '/master': MasterConfiguration,
+  '/master/stores': PlatformStores,
+  '/master/clients': ClientInstallations,
 };
 
 const samiraTheme = createTheme({
@@ -281,7 +304,7 @@ function AppShell({ route, navigate }) {
   const Page = useMemo(() => {
     // Legacy admin-login links use the same mobile + OTP flow as every account.
     if (routePath === '/admin/login') return AdminLogin;
-    if (isMaster) return MasterConfiguration;
+    if (isMaster) return masterPages[routePath] || MasterConfiguration;
     if (isAdmin) return adminRoutes[routePath] || Dashboard;
     if (isSeller) return sellerRoutes[routePath] || SellerDashboard;
     if (logicalPath.startsWith('/store/')) {
@@ -385,6 +408,7 @@ function AppShell({ route, navigate }) {
     >
       <CartProvider key={cartStoragePlan.storageName} storageName={cartStoragePlan.storageName} legacyStorageNames={cartStoragePlan.legacyStorageNames}>
         <WishlistProvider key={wishlistStoragePlan.storageName} storageName={wishlistStoragePlan.storageName} legacyStorageNames={wishlistStoragePlan.legacyStorageNames}>
+          <MobileAppCompanion enabled={!isAdmin && !isSeller} />
           {isAdmin ? (
             routePath === '/admin/login' ? (
               page

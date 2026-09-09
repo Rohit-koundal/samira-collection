@@ -79,7 +79,13 @@
 
 @media (min-width: 1024px) {
   .admin-kpi-strip {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  .admin-kpi-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -186,6 +192,8 @@
 .admin-kpi-tile.is-rose .admin-kpi-tile__bar i { background: #c23b4b; width: var(--kpi-pct, 0%); }
 .admin-kpi-tile.is-gold .admin-kpi-tile__icon { background: #f8f1e4; color: #b88945; }
 .admin-kpi-tile.is-gold .admin-kpi-tile__bar i { background: #b88945; width: var(--kpi-pct, 0%); }
+.admin-kpi-tile.is-slate .admin-kpi-tile__icon { background: #eef1f4; color: #52606d; }
+.admin-kpi-tile.is-slate .admin-kpi-tile__bar i { background: #64748b; width: var(--kpi-pct, 0%); }
 
 .admin-btn {
   display: inline-flex;

@@ -15,7 +15,7 @@ function upsertMeta(attr, key, content) {
   tag.setAttribute('content', content);
 }
 
-export default function SeoHead({ route = '', product } = {}) {
+export default function SeoHead({ route = '', product, page } = {}) {
   const { store } = useStorefront();
   const path = String(route).split('?')[0];
 
@@ -27,6 +27,9 @@ export default function SeoHead({ route = '', product } = {}) {
     if (product?.name) {
       title = product.metaTitle || `${product.name} | ${storeName}`;
       description = product.metaDescription || product.shortDescription || product.description || description;
+    } else if (page?.title) {
+      title = `${page.title} | ${storeName}`;
+      description = page.description || description;
     } else if (path.startsWith('/products')) title = `Shop | ${storeName}`;
     else if (path.startsWith('/cart')) title = `Bag | ${storeName}`;
     else if (path.startsWith('/checkout')) title = `Checkout | ${storeName}`;
@@ -41,7 +44,7 @@ export default function SeoHead({ route = '', product } = {}) {
     upsertMeta('name', 'twitter:card', product ? 'summary_large_image' : 'summary');
     upsertMeta('name', 'twitter:title', title);
     upsertMeta('name', 'twitter:description', String(description).slice(0, 180));
-    const image = product?.images?.find((item) => item.primary)?.url || product?.images?.[0]?.url || store?.logo;
+    const image = product?.images?.find((item) => item.primary)?.url || product?.images?.[0]?.url || page?.image || store?.logo;
     if (image) {
       upsertMeta('property', 'og:image', image);
       upsertMeta('name', 'twitter:image', image);
@@ -77,7 +80,7 @@ export default function SeoHead({ route = '', product } = {}) {
       });
       document.head.appendChild(script);
     }
-  }, [path, product, store]);
+  }, [page, path, product, store]);
 
   return null;
 }

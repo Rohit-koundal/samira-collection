@@ -911,8 +911,9 @@ function DesktopCheckout({
 }
 
 function ShippingAvailability({ shipping }) {
-  if (!shipping?.serviceable || shipping.provider !== 'bluedart') return null;
-  return <div role="status" className="my-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>Blue Dart delivery available</strong><p>PIN {shipping.destinationPincode} · Delivery {Number(shipping.deliveryCharge) === 0 ? 'FREE' : `₹${Number(shipping.deliveryCharge).toLocaleString('en-IN')}`}</p></div>;
+  if (!shipping?.serviceable || shipping.provider === 'manual') return null;
+  const provider = ({ bluedart: 'Blue Dart', shiprocket: 'Shiprocket', delhivery: 'Delhivery', xpressbees: 'Xpressbees' })[shipping.provider] || 'Courier';
+  return <div role="status" className="my-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>{provider} delivery available</strong><p>PIN {shipping.destinationPincode} · Delivery {Number(shipping.deliveryCharge) === 0 ? 'FREE' : `₹${Number(shipping.deliveryCharge).toLocaleString('en-IN')}`}{shipping.serviceName && ` · ${shipping.serviceName}`}</p></div>;
 }
 
 function CheckoutSteps() {

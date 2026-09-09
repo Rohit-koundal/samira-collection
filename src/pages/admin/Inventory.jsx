@@ -1,28 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import DataTable from '../../components/admin/DataTable';
 import PageHeader from '../../components/admin/PageHeader';
 import SearchFilterBar from '../../components/admin/SearchFilterBar';
 import StatusBadge from '../../components/admin/StatusBadge';
 import api from '../../services/api';
 import StockInput from '../../components/admin/StockInput';
+import { Clock3 } from 'lucide-react';
 
 export default function Inventory({ route = '' }) {
+  const base = route.startsWith('/seller') ? '/seller' : '/admin';
   const [products, setProducts] = useState([]);
+  const [history, setHistory] = useState([]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState(() => new URLSearchParams(route.split('?')[1] || '').get('filter') || '');
   useEffect(() => { setFilter(new URLSearchParams(route.split('?')[1] || '').get('filter') || ''); }, [route]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
-    api.get('/admin/products?admin=true').then((items) => {
-      setProducts(items);
+    Promise.all([api.get(`${base}/products?admin=true`), api.get(`${base}/inventory/history?limit=30`)]).then(([productData, movements]) => {
+      setProducts(Array.isArray(productData) ? productData : productData.items || []);
+      setHistory(movements.items || []);
       setMessage('');
     }).catch((error) => setMessage(error.message)).finally(() => setLoading(false));
-  };
+  }, [base]);
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const filtered = useMemo(() => products.filter((product) => {
     const matches = [product.name, product.sku, product.category?.name].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase());
@@ -37,8 +41,10 @@ export default function Inventory({ route = '' }) {
 
   const updateStock = async (product, stock, variantId) => {
     try {
-      const saved = await api.patch(`/admin/products/${product._id}/stock`, { stock: Number(stock), ...(variantId ? { variantId } : {}) });
+      const saved = await api.patch(`${base}/products/${product._id}/stock`, { stock: Number(stock), ...(variantId ? { variantId } : {}) });
       setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
+      const movements = await api.get(`${base}/inventory/history?limit=30`);
+      setHistory(movements.items || []);
       setMessage('');
     } catch (error) {
       setMessage(error.message);
@@ -48,8 +54,10 @@ export default function Inventory({ route = '' }) {
 
   const markOutOfStock = async (product) => {
     try {
-      const saved = await api.patch(`/admin/products/${product._id}/mark-out-of-stock`, {});
+      const saved = await api.patch(`${base}/products/${product._id}/mark-out-of-stock`, {});
       setProducts((items) => items.map((item) => item._id === product._id ? { ...item, stock: saved.stock, variants: saved.variants } : item));
+      const movements = await api.get(`${base}/inventory/history?limit=30`);
+      setHistory(movements.items || []);
     } catch (error) {
       setMessage(error.message);
     }
@@ -59,7 +67,7 @@ export default function Inventory({ route = '' }) {
     const confirmed = window.confirm(`Hide ${product.name} from store?`);
     if (!confirmed) return;
     try {
-      await api.patch(`/admin/products/${product._id}/hide`, {});
+      await api.patch(`${base}/products/${product._id}/hide`, {});
       setProducts((items) => items.map((item) => item._id === product._id ? { ...item, isActive: false } : item));
     } catch (error) {
       setMessage(error.message);
@@ -102,6 +110,10 @@ export default function Inventory({ route = '' }) {
           </tr>
         );
       })} />
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="flex items-center gap-3 border-b bg-[#fffaf7] px-5 py-4"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f4e5e9] text-[#751d39]"><Clock3 size={17} /></span><div><h2 className="font-black">Inventory history</h2><p className="text-xs text-slate-500">Latest sales, returns and manual stock changes.</p></div></header>
+        {!history.length ? <p className="p-6 text-sm text-slate-500">Stock movements will appear here after an order or stock update.</p> : <div className="divide-y">{history.map((movement) => <div key={movement._id} className="grid gap-2 px-5 py-4 text-sm sm:grid-cols-[minmax(180px,1fr)_140px_90px_140px] sm:items-center"><div className="min-w-0"><p className="truncate font-black">{movement.product?.name || movement.sku || 'Removed product'}</p><p className="text-xs text-slate-500">{movement.reason || movement.type}{movement.variantId ? ` · Variant ${movement.variantId.slice(-6)}` : ''}</p></div><span className="text-xs font-bold text-slate-500">{movement.type.replaceAll('_', ' ')}</span><strong className={movement.quantity < 0 ? 'text-rose-700' : 'text-emerald-700'}>{movement.quantity > 0 ? '+' : ''}{movement.quantity}</strong><time className="text-xs text-slate-500">{new Date(movement.createdAt).toLocaleString('en-IN')}</time></div>)}</div>}
+      </section>
     </section>
   );
 }

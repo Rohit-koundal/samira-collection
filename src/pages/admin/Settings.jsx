@@ -15,8 +15,10 @@ import DeliverySettings from '../../components/admin/DeliverySettings';
 const ICONS = { brand: Building2, invoice: ReceiptText, contact: Mail, delivery: Truck, payment: CreditCard, policy: ShieldCheck, social: Link2, website: Globe2 };
 const POLICIES = [['returnPolicy', 'Return Policy'], ['shippingPolicy', 'Shipping Policy'], ['cancellationPolicy', 'Cancellation Policy'], ['privacyPolicy', 'Privacy Policy'], ['termsConditions', 'Terms and Conditions'], ['sizeGuide', 'Size Guide'], ['faqs', 'FAQs'], ['ourStory', 'Our Story']];
 
-export default function Settings() {
+export default function Settings({ route = '' }) {
   const brand = useBrandIdentity();
+  const settingsApi = route.startsWith('/seller') ? '/seller/settings' : '/admin/settings';
+  const uploadPath = route.startsWith('/seller') ? '/seller/uploads' : '/admin/uploads';
   const [form, setForm] = useState({});
   const [baseline, setBaseline] = useState(null);
   const [active, setActive] = useState('identity');
@@ -43,15 +45,15 @@ export default function Settings() {
     }));
   };
   const refreshReadiness = useCallback(async () => {
-    try { setPaymentReadiness(await api.get('/admin/settings/payment-readiness')); setReadinessError(''); }
+    try { setPaymentReadiness(await api.get(`${settingsApi}/payment-readiness`)); setReadinessError(''); }
     catch (error) { setPaymentReadiness(null); setReadinessError(error.message || 'Payment availability could not be checked.'); }
-  }, []);
+  }, [settingsApi]);
   const load = useCallback(async () => {
     setLoading(true); setLoadError('');
-    try { const value = settingsForm(await api.get('/admin/settings')); setForm(value); setBaseline(value); }
+    try { const value = settingsForm(await api.get(settingsApi)); setForm(value); setBaseline(value); }
     catch (error) { setLoadError(error.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [settingsApi]);
   useEffect(() => { load(); refreshReadiness(); }, [load, refreshReadiness]);
 
   const submit = async event => {
@@ -59,7 +61,7 @@ export default function Settings() {
     if (lock.current || uploadLock.current || loading || loadError || !dirty) return;
     lock.current = true; setSaving(true); setMessage(null);
     try {
-      const saved = settingsForm(await api.put('/admin/settings', settingsPayload(form)));
+      const saved = settingsForm(await api.put(settingsApi, settingsPayload(form)));
       setForm(saved); setBaseline(saved); announceSettingsSaved();
       setMessage({ text: 'Settings saved successfully.', error: false });
       await refreshReadiness();
@@ -71,7 +73,7 @@ export default function Settings() {
     lock.current = true; setSaving(true);
     try {
       const edits = Object.fromEntries(Object.entries(form).filter(([key, value]) => !['_id', '__v', 'createdAt', 'updatedAt', 'storeId'].includes(key) && JSON.stringify(value) !== JSON.stringify(baseline?.[key])));
-      const latest = settingsForm(await api.get('/admin/settings'));
+      const latest = settingsForm(await api.get(settingsApi));
       setBaseline(latest); setForm({ ...latest, ...edits });
       setMessage({ text: 'Latest settings loaded. Your edits have been kept; review them before saving.', error: false });
     } catch (error) { setMessage({ text: error.message, error: true, conflict: true }); }
@@ -107,8 +109,8 @@ export default function Settings() {
               {active === 'identity' && <>
                 <Field label="Store Name" value={form.storeName || ''} onChange={value => updateIdentity('storeName', value)} required maxLength={100} note="Shown on your storefront, admin workspace and new invoices." />
                 <Field label="Tagline" value={form.tagline ?? brand.tagline ?? ''} onChange={value => updateIdentity('tagline', value)} maxLength={180} note="A short line that describes your brand." />
-                <BrandImage title="Store logo" value={form.logoUrl ?? brand.logo} onChange={value => updateIdentity('logoUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="A transparent PNG works well. Used in the header, mobile menu and new invoices." />
-                <BrandImage title="Browser icon" value={form.faviconUrl ?? brand.favicon} onChange={value => updateIdentity('faviconUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="Use a square PNG or JPG, ideally 256 x 256 pixels." />
+                <BrandImage title="Store logo" value={form.logoUrl ?? brand.logo} onChange={value => updateIdentity('logoUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="A transparent PNG works well. Used in the header, mobile menu and new invoices." uploadPath={uploadPath} />
+                <BrandImage title="Browser icon" value={form.faviconUrl ?? brand.favicon} onChange={value => updateIdentity('faviconUrl', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="Use a square PNG or JPG, ideally 256 x 256 pixels." uploadPath={uploadPath} />
                 <div className="store-settings__tip"><BadgeCheck size={19} /><p>Identity changes apply across desktop and mobile. Existing order invoices keep their original seller information.</p></div>
                 <Toggle label="Use this identity across all themes" checked={!!form.brandIdentityEnabled} onChange={value => value ? updateIdentity('storeName', form.storeName) : update('brandIdentityEnabled', false)} note="Turn off to use the logo and name saved in Website Designer. Business and invoice details stay in Settings." />
               </>}
@@ -136,7 +138,7 @@ export default function Settings() {
                 {number('deliveryCharge', 'Delivery Charge', 'Charged below the free delivery threshold. 0 means free delivery.')}
                 {number('freeShippingMinAmount', 'Free Shipping Minimum Amount', '0 gives free delivery on every order.')}
                 {number('platformFee', 'Platform Fee', 'Shown separately in the bag, checkout and invoice. 0 removes the fee.')}
-                <DeliverySettings form={form} update={update} />
+                <DeliverySettings form={form} update={update} apiBase={settingsApi} />
                 <div className="store-settings__tip"><Truck size={19} /><p>Checkout calculates these amounts on the server. Existing orders keep the charges agreed when they were placed.</p></div>
               </>}
               {active === 'payments' && <>
@@ -172,6 +174,8 @@ export default function Settings() {
                 {input('announcementText', 'Announcement text', { maxLength: 240, placeholder: 'Leave empty for an automatic free delivery message', note: 'Clear this field to use a message based on your delivery settings.' })}
                 {input('seoTitle', 'Browser page title', { maxLength: 100, note: 'Leave empty to use your store name.' })}
                 {input('seoDescription', 'Website description', { multiline: true, maxLength: 300, note: 'Added to the page description metadata. Search engines decide how to display it.' })}
+                <BrandImage title="Social sharing image" value={form.socialShareImage || ''} onChange={value => update('socialShareImage', value)} onBusyChange={uploadBusy} disabled={saving || uploading} note="Shown when your store link is shared on WhatsApp, Facebook and other social apps." uploadPath={uploadPath} />
+                {toggle('searchIndexingEnabled', 'Allow search engine indexing', 'Turn this off while a store is being prepared. Search crawlers will be asked not to index the storefront.')}
                 <div className="store-settings__tip"><Globe2 size={19} /><p>Colours, typography, navigation and homepage layouts are available in <a href="/admin/customization">Website Designer</a>.</p></div>
               </>}
             </fieldset>
@@ -192,8 +196,8 @@ function Field({ label, value, onChange, note, multiline, ...props }) {
 function Toggle({ label, checked, onChange, note, disabled }) {
   return <label className="store-settings__toggle"><span><strong>{label}</strong>{note && <small>{note}</small>}</span><input type="checkbox" aria-label={label} checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 }
-function BrandImage({ title, value, onChange, note, onBusyChange, disabled }) {
-  return <div className="store-settings__image"><h3><ImagePlus size={18} />{title}</h3><p>{note}</p><ImageUploader value={value ? [{ url: value }] : []} onChange={files => onChange(files[0]?.url || '')} uploadContext="website-branding" showPrimaryControl={false} replaceOnUpload onBusyChange={onBusyChange} disabled={disabled} label={'Upload ' + title.toLowerCase()} maxUploadMb={5} helpText="PNG, JPG or WebP, up to 5 MB. Choose a new image to replace the current one." /><Field label={title + ' URL'} value={value || ''} onChange={onChange} placeholder="https://" /></div>;
+function BrandImage({ title, value, onChange, note, onBusyChange, disabled, uploadPath }) {
+  return <div className="store-settings__image"><h3><ImagePlus size={18} />{title}</h3><p>{note}</p><ImageUploader value={value ? [{ url: value }] : []} onChange={files => onChange(files[0]?.url || '')} uploadContext="website-branding" uploadPath={uploadPath} showPrimaryControl={false} replaceOnUpload onBusyChange={onBusyChange} disabled={disabled} label={'Upload ' + title.toLowerCase()} maxUploadMb={5} helpText="PNG, JPG or WebP, up to 5 MB. Choose a new image to replace the current one." /><Field label={title + ' URL'} value={value || ''} onChange={onChange} placeholder="https://" /></div>;
 }
 function GatewayStatus({ readiness }) {
   if (!readiness) return <span className="store-settings__pill">Check unavailable</span>;

@@ -9,6 +9,7 @@ const NotificationContext = createContext({ unreadCount: 0, revision: 0, refresh
 export function NotificationProvider({ children, navigate }) {
   const { user } = useAuth();
   const userId = String(user?._id || user?.id || '');
+  const notificationBase = user?.activeMode === 'seller' ? '/seller/notifications' : '/notifications';
   const [summary, setSummary] = useState({ userId: '', unreadCount: 0 });
   const [revision, setRevision] = useState(0);
   const [banner, setBanner] = useState(null);
@@ -20,7 +21,7 @@ export function NotificationProvider({ children, navigate }) {
     if (!userId || document.visibilityState === 'hidden') return;
     const request = ++sequence.current;
     try {
-      const data = await api.get('/notifications/summary', { silent: true });
+      const data = await api.get(`${notificationBase}/summary`, { silent: true });
       if (activeUser.current !== userId || request !== sequence.current) return;
       const timestamp = data.latest?.createdAt ? new Date(data.latest.createdAt).getTime() : 0;
       if (latestSeen.current !== null && timestamp > latestSeen.current) {
@@ -31,7 +32,7 @@ export function NotificationProvider({ children, navigate }) {
     } catch {
       // Keep the last known count when the service is temporarily unavailable.
     }
-  }, [userId]);
+  }, [notificationBase, userId]);
 
   useEffect(() => {
     latestSeen.current = null; setBanner(null); sequence.current += 1;
@@ -64,7 +65,7 @@ export function NotificationProvider({ children, navigate }) {
   }, [refresh, userId]);
   const value = useMemo(() => ({ unreadCount: summary.userId === userId ? summary.unreadCount : 0, revision, refresh, changed }), [summary, userId, revision, refresh, changed]);
   return <NotificationContext.Provider value={value}>{children}
-    {banner && banner.userId === userId && <div className="sc-notification-banner" role="status" aria-live="polite"><Bell size={21} /><div><strong>{banner.title || 'New notification'}</strong><p>{banner.message}</p><button onClick={() => { setBanner(null); navigate('/notifications'); }}>View notification</button></div><button aria-label="Dismiss notification alert" onClick={() => setBanner(null)}><X size={18} /></button></div>}
+    {banner && banner.userId === userId && <div className="sc-notification-banner" role="status" aria-live="polite"><Bell size={21} /><div><strong>{banner.title || 'New notification'}</strong><p>{banner.message}</p><button onClick={() => { setBanner(null); navigate(user?.activeMode === 'seller' ? '/seller/notifications' : '/notifications'); }}>View notification</button></div><button aria-label="Dismiss notification alert" onClick={() => setBanner(null)}><X size={18} /></button></div>}
   </NotificationContext.Provider>;
 }
 export const useNotifications = () => useContext(NotificationContext);
@@ -73,7 +74,8 @@ export function useOpenNotification(navigate) {
   const { changed } = useNotifications();
   return async (item) => {
     if (!item.readAt) {
-      try { await api.patch(`/notifications/${item._id}/read`, {}); await changed(); }
+      const notificationBase = user?.activeMode === 'seller' ? '/seller/notifications' : '/notifications';
+      try { await api.patch(`${notificationBase}/${item._id}/read`, {}); await changed(); }
       catch (error) { notify?.(error.message || 'Unable to mark this notification as read.', 'error'); }
     }
     const path = notificationDestination(item, user);

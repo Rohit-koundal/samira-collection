@@ -1,57 +1,17 @@
-const CACHE = 'samira-spa-v2';
+const CACHE = 'samira-phone-shell-v3';
+const APP_SHELL = ['/', '/index.html', '/offline.html', '/manifest.json', '/favicon.ico', '/logo192.png', '/logo512.png'];
 const STATIC_PATTERN = /\.(?:js|css|woff2?|png|jpe?g|gif|svg|ico|webp)$/i;
+const PRIVATE_PATH = /^\/(?:api|uploads|admin|seller|checkout|orders|order-detail|order-success|payment-failed|profile|returns|notifications)(?:\/|$)/;
 
-async function precacheAppShell() {
+async function cacheShell() {
   const cache = await caches.open(CACHE);
-  try {
-    const index = await fetch('/index.html', { cache: 'reload' });
-    if (index.ok) {
-      await cache.put('/index.html', index.clone());
-      await cache.put('/', index.clone());
-    }
-  } catch (_) {
-    /* Offline or first install on a host that has not rewritten yet. */
-  }
+  await Promise.allSettled(APP_SHELL.map(async (path) => {
+    const response = await fetch(path, { cache: 'reload' });
+    if (response.ok) await cache.put(path, response);
+  }));
 }
 
-async function serveAppShell(request) {
-  const cache = await caches.open(CACHE);
-
-  try {
-    const fresh = await fetch(request);
-    const type = fresh.headers.get('content-type') || '';
-    if (fresh.ok && type.includes('text/html')) {
-      await cache.put('/index.html', fresh.clone());
-      await cache.put('/', fresh.clone());
-      return fresh;
-    }
-  } catch (_) {
-    /* Host may 404 this path until the SPA rewrite is in place. */
-  }
-
-  const cached = (await cache.match('/index.html')) || (await cache.match('/'));
-  if (cached) return cached;
-
-  try {
-    const index = await fetch('/index.html');
-    if (index.ok) {
-      await cache.put('/index.html', index.clone());
-      await cache.put('/', index.clone());
-      return index;
-    }
-  } catch (_) {
-    /* Last resort: let the original navigation request fail. */
-  }
-
-  return fetch(request);
-}
-
-self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    await precacheAppShell();
-    await self.skipWaiting();
-  })());
-});
+self.addEventListener('install', (event) => event.waitUntil(cacheShell()));
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
@@ -61,25 +21,42 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (event.request.method !== 'GET') return;
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads')) return;
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(serveAppShell(event.request));
+async function navigationResponse(request) {
+  const cache = await caches.open(CACHE);
+  try {
+    const response = await fetch(request);
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('text/html') && !PRIVATE_PATH.test(new URL(request.url).pathname)) {
+      await cache.put('/index.html', response.clone());
+    }
+    return response;
+  } catch (_) {
+    return (await cache.match('/index.html')) || (await cache.match('/offline.html')) || Response.error();
+  }
+}
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(navigationResponse(request));
     return;
   }
-
   if (!STATIC_PATTERN.test(url.pathname)) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const cached = await cache.match(event.request);
+    const cached = await cache.match(request);
     if (cached) return cached;
-    const response = await fetch(event.request);
-    if (response.ok) cache.put(event.request, response.clone());
+    const response = await fetch(request);
+    if (response.ok && response.type === 'basic') await cache.put(request, response.clone());
     return response;
   })());
 });

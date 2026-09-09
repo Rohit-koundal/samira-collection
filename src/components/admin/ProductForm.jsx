@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleCheck, FileText, Hash, ImagePlus, IndianRupee, Tag, Type, X } from 'lucide-react';
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
@@ -31,13 +31,29 @@ const emptyProduct = {
   shortDescription: '',
   price: '',
   originalPrice: '',
+  costPrice: 0,
+  gstRate: 0,
+  hsnCode: '',
+  barcode: '',
   sku: '',
   brand: 'Samira Collection',
   category: '',
   subCategory: '',
+  categoryDefinitionKey: '',
   stock: 0,
   lowStockAlert: 5,
+  reorderQuantity: 0,
   shippingWeightKg: 0,
+  packageDimensions: { lengthCm: 0, widthCm: 0, heightCm: 0 },
+  countryOfOrigin: 'India',
+  manufacturerDetails: '',
+  warranty: '',
+  supplierName: '',
+  supplierSku: '',
+  restockAt: '',
+  publishAt: '',
+  saleStartAt: '',
+  saleEndAt: '',
   sizes: '',
   sizingMode: 'auto',
   sizeChartProfile: 'auto',
@@ -65,6 +81,7 @@ const emptyProduct = {
   showInFestive: false,
   isActive: true,
   trackVariants: false,
+  variantOptionValues: {},
   variants: [],
 };
 
@@ -81,7 +98,7 @@ export default function ProductForm({
   const [structureError, setStructureError] = useState('');
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-  const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraft(productId, apiPrefix) || emptyProduct)));
+  const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraftForm(productId, apiPrefix) || emptyProduct)));
   const [assistant, setAssistant] = useState({
     category: '',
     subCategory: '',
@@ -128,6 +145,9 @@ export default function ProductForm({
     flags: false,
   });
   const [assistantPreviewOpen, setAssistantPreviewOpen] = useState(false);
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState('');
+  const [recoveryDraft, setRecoveryDraft] = useState(null);
+  const baselineRef = useRef(JSON.stringify(emptyProduct));
   const draftKey = getDraftKey(productId, apiPrefix);
   const reloadStructure = () => { setStructureError(''); return api.get('/catalog-configuration').then(setStructure).catch((error) => setStructureError(error.message)); };
   useEffect(() => {
@@ -167,8 +187,9 @@ export default function ProductForm({
     api.get(`${apiPrefix}/products/${productId}`).then((product) => {
       if (!alive) return;
       const savedDraft = readDraft(productId, apiPrefix);
-      const mergedDraft = mergeDraftIntoProduct(savedDraft);
-      setForm({
+      const cachedForm = draftFormOf(savedDraft);
+      const mergedDraft = {};
+      const serverForm = {
         ...emptyProduct,
         ...product,
         ...mergedDraft,
@@ -185,11 +206,21 @@ export default function ProductForm({
           : (product.highlights?.length ? product.highlights : emptyProduct.highlights),
         images: normalizeImageEntries((Array.isArray(mergedDraft.images) && mergedDraft.images.length ? mergedDraft.images : product.images) || []),
         videos: normalizeVideoEntries((Array.isArray(mergedDraft.videos) && mergedDraft.videos.length ? mergedDraft.videos : product.videos) || []),
+        packageDimensions: { ...emptyProduct.packageDimensions, ...(product.packageDimensions || {}), ...(mergedDraft.packageDimensions || {}) },
+        restockAt: toDateTimeInput(mergedDraft.restockAt ?? product.restockAt),
+        publishAt: toDateTimeInput(mergedDraft.publishAt ?? product.publishAt),
+        saleStartAt: toDateTimeInput(mergedDraft.saleStartAt ?? product.saleStartAt),
+        saleEndAt: toDateTimeInput(mergedDraft.saleEndAt ?? product.saleEndAt),
         trackVariants: hasManagedVariants(product) || Boolean(mergedDraft.trackVariants),
+        variantOptionValues: Object.keys(mergedDraft.variantOptionValues || {}).length
+          ? mergedDraft.variantOptionValues
+          : readVariantOptionValues(product.variants || []),
         variants: Array.isArray(mergedDraft.variants) && mergedDraft.variants.length
           ? mergedDraft.variants
           : (product.variants || []),
-      });
+      };
+      setForm(serverForm);
+      baselineRef.current = JSON.stringify(serverForm);
       setAssistant({
         category: product.category?.name || product.category || '',
         subCategory: product.subCategory || '',
@@ -199,23 +230,37 @@ export default function ProductForm({
         occasion: product.occasion || '',
         style: product.shortDescription || '',
       });
+      setBaseUpdatedAt(product.updatedAt || '');
+      const recovery = JSON.stringify(cachedForm || {}) === JSON.stringify(serverForm)
+        ? {}
+        : mergeDraftIntoProduct(cachedForm);
+      if (!Object.keys(recovery).length && savedDraft) clearDraft(productId, apiPrefix);
+      setRecoveryDraft(Object.keys(recovery).length ? {
+        form: cachedForm,
+        savedAt: savedDraft?.__draftMeta?.savedAt || '',
+        stale: Boolean(savedDraft?.__draftMeta?.baseUpdatedAt && product.updatedAt && savedDraft.__draftMeta.baseUpdatedAt !== product.updatedAt),
+      } : null);
       setDraftReady(true);
     }).catch((error) => { if (alive) setLoadError(error.message); });
     return () => { alive = false; };
   }, [apiPrefix, productId, reload]);
 
   useEffect(() => {
-    if (!draftReady) return undefined;
+    if (!draftReady || recoveryDraft) return undefined;
     if (typeof window === 'undefined' || !window.localStorage) return undefined;
+    if (JSON.stringify(form) === baselineRef.current) return undefined;
     const timer = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(draftKey, JSON.stringify(form));
+        window.localStorage.setItem(draftKey, JSON.stringify({
+          __draftMeta: { version: 2, savedAt: new Date().toISOString(), baseUpdatedAt },
+          form,
+        }));
       } catch {
         // ignore storage quota or privacy mode errors
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [draftKey, draftReady, form]);
+  }, [baseUpdatedAt, draftKey, draftReady, form, recoveryDraft]);
 
   const update = (field, value) => setForm((current) => {
     const next = { ...current, [field]: value };
@@ -232,6 +277,19 @@ export default function ProductForm({
         variantIndex === index ? { ...variant, stock: Math.max(0, Number(stock || 0)) } : variant
       ));
       return { ...current, variants, stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) };
+    });
+  };
+
+  const updateVariant = (index, field, value) => {
+    setForm((current) => {
+      const variants = current.variants.map((variant, variantIndex) => (
+        variantIndex === index ? { ...variant, [field]: value } : variant
+      ));
+      return {
+        ...current,
+        variants,
+        stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0),
+      };
     });
   };
 
@@ -313,7 +371,7 @@ export default function ProductForm({
     if (saving || !draftReady || loadError || (mode === 'Update' && !productId)) return;
     if (!structure) { setMessage('Load the store product configuration before saving.'); return; }
     const sizingProduct = productForSizing(form);
-    const nextErrors = validate(form, sizingProduct);
+    const nextErrors = validate(form, sizingProduct, getActiveAttributeDefinitions(structure, categories, form));
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       if (nextErrors.sizeChart) {
@@ -331,15 +389,28 @@ export default function ProductForm({
       const originalPrice = Number(form.originalPrice || form.price);
       const sizingMode = resolveSizingMode(sizingProduct);
       const selectableSizes = getSelectableSizes(sizingProduct);
-      const tracksVariants = sizingMode === 'sized' && form.trackVariants;
+      const tracksVariants = form.trackVariants && (sizingMode === 'sized' || getEffectiveVariantConfig(structure, categories, form).enabled);
+      const selectedCategory = categories.find((category) => String(category._id) === String(form.category));
       const payload = {
         ...form,
         images: prepareImages(form.images),
         videos: prepareVideos(form.videos),
         price,
         originalPrice,
+        costPrice: Number(form.costPrice || 0),
+        gstRate: Number(form.gstRate || 0),
+        reorderQuantity: Number(form.reorderQuantity || 0),
         lowStockAlert: Number(form.lowStockAlert),
         shippingWeightKg: Number(form.shippingWeightKg || 0),
+        packageDimensions: {
+          lengthCm: Number(form.packageDimensions?.lengthCm || 0),
+          widthCm: Number(form.packageDimensions?.widthCm || 0),
+          heightCm: Number(form.packageDimensions?.heightCm || 0),
+        },
+        restockAt: nullableDate(form.restockAt),
+        publishAt: nullableDate(form.publishAt),
+        saleStartAt: nullableDate(form.saleStartAt),
+        saleEndAt: nullableDate(form.saleEndAt),
         sizes: sizingMode === 'sized' ? selectableSizes : [],
         sizingMode: structure.features.sizing ? form.sizingMode || 'auto' : 'free-size',
         sizeChartProfile: structure.features.sizing ? form.sizeChartProfile || 'auto' : 'free-size',
@@ -351,7 +422,11 @@ export default function ProductForm({
           ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0)
           : Number(form.stock),
         discountPercentage: originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0,
+        industry: structure.industry,
+        industryRevision: structure.revision,
+        categoryDefinitionKey: activeCategoryDefinition?.key || form.categoryDefinitionKey || selectedCategory?.definitionKey || definitionKey(form.subCategory || selectedCategory?.name),
       };
+      if (productId && !tracksVariants && sizingMode !== 'sized' && !getEffectiveVariantConfig(structure, categories, form).enabled) delete payload.variants;
       if (!payload.category) delete payload.category;
       if (productId) await api.put(`${apiPrefix}/products/${productId}`, payload);
       else await api.post(`${apiPrefix}/products`, payload);
@@ -366,6 +441,48 @@ export default function ProductForm({
     }
   };
 
+  const saveServerDraft = async () => {
+    if (saving || mode !== 'Add') return;
+    setSaving(true);
+    setMessage('');
+    try {
+      const sizingProduct = productForSizing(form);
+      const sizingMode = resolveSizingMode(sizingProduct);
+      const tracksVariants = form.trackVariants && (sizingMode === 'sized' || getEffectiveVariantConfig(structure, categories, form).enabled);
+      const payload = {
+        ...form,
+        images: prepareImages(form.images),
+        videos: prepareVideos(form.videos),
+        price: Number(form.price || 0),
+        sellingPrice: Number(form.price || 0),
+        originalPrice: Number(form.originalPrice || form.price || 0),
+        costPrice: Number(form.costPrice || 0),
+        gstRate: Number(form.gstRate || 0),
+        stock: tracksVariants ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) : Number(form.stock || 0),
+        lowStockAlert: Number(form.lowStockAlert || 5),
+        reorderQuantity: Number(form.reorderQuantity || 0),
+        shippingWeightKg: Number(form.shippingWeightKg || 0),
+        sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
+        colors: splitList(form.colors),
+        tags: splitList(form.tags),
+        variants: tracksVariants ? form.variants : [],
+        restockAt: nullableDate(form.restockAt),
+        publishAt: nullableDate(form.publishAt),
+        saleStartAt: nullableDate(form.saleStartAt),
+        saleEndAt: nullableDate(form.saleEndAt),
+      };
+      if (!payload.category) delete payload.category;
+      await api.post(`${apiPrefix}/product-drafts`, payload);
+      clearDraft(productId, apiPrefix);
+      setMessage('Draft saved safely. Open Product Drafts whenever you are ready to complete it.');
+      onSaved?.({ draft: true });
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const previewImage = (form.images || []).find((image) => image?.primary)?.url || form.images?.[0]?.url || '';
   const sizingProduct = productForSizing(form);
   const effectiveSizingMode = resolveSizingMode(sizingProduct);
@@ -373,6 +490,10 @@ export default function ProductForm({
   const sizeChartColumns = getSizeChartColumns(sizingProduct);
   const selectableSizes = getSelectableSizes(sizingProduct);
   const sizeChartRows = reconcileSizeChartRows(form.sizeChart?.rows, selectableSizes, sizeChartColumns);
+  const activeAttributeDefinitions = getActiveAttributeDefinitions(structure, categories, form);
+  const effectiveVariantConfiguration = getEffectiveVariantConfig(structure, categories, form);
+  const activeCategoryDefinition = findCategoryDefinition(structure, categories, form);
+  const availableSubcategories = getConfiguredSubcategories(structure, categories, form, subcategories);
   const checklist = [
     { id: 'photo', label: 'Photo', done: Boolean(previewImage), target: 'product-media', icon: ImagePlus },
     { id: 'name', label: 'Name', done: String(form.name || '').trim().length >= 3, target: 'product-basics', icon: Type },
@@ -418,12 +539,20 @@ export default function ProductForm({
         </div>
       </div>
 
+      {recoveryDraft && <div role="alert" className={`admin-form-hint ${recoveryDraft.stale ? 'border-amber-300 bg-amber-50' : ''}`}>
+        <div><h3>Unsaved browser draft found</h3><p>{recoveryDraft.stale ? 'The saved product changed after this browser draft was created. Review carefully before applying it.' : `Restore edits${recoveryDraft.savedAt ? ` saved ${new Date(recoveryDraft.savedAt).toLocaleString('en-IN')}` : ''}, or discard them and keep the latest server version.`}</p></div>
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="admin-btn" onClick={() => { setForm((current) => ({ ...current, ...mergeDraftIntoProduct(recoveryDraft.form) })); setRecoveryDraft(null); }}>Restore browser edits</button><button type="button" className="admin-btn-ghost" onClick={() => { clearDraft(productId, apiPrefix); setRecoveryDraft(null); }}>Discard browser draft</button></div>
+      </div>}
+
+      {Object.keys(errors).length > 0 && <div role="status" aria-live="polite" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Review {Object.keys(errors).length} highlighted section{Object.keys(errors).length === 1 ? '' : 's'} before saving.</strong><ul className="mt-2 list-disc space-y-1 pl-5">{Object.values(errors).slice(0, 5).map((error, index) => <li key={`${error}-${index}`}>{error}</li>)}</ul></div>}
+
       {structureError && <div role="alert" className="admin-form-hint"><p>{structureError}</p><button type="button" onClick={reloadStructure}>Retry product configuration</button></div>}
       <ProductSmartFill key={`${apiPrefix}-${productId || 'new'}-${smartFillReset}`} form={form} categories={categories} structure={structure} apiPrefix={apiPrefix}
         disabled={saving || !draftReady || !!loadError || !structure}
         onApply={(patch, undo) => { setForm(current => applySmartPatch(current, patch, undo)); setErrors({}); }} />
-      {structure?.attributes?.length > 0 && <Section id="product-specifications" title="Product specifications" note="Enter values for your store’s configured attributes. Their definitions are managed by your website provider.">
-        {structure.attributes.map((attribute) => <Input key={attribute.key} label={attribute.label + (attribute.unit ? ' (' + attribute.unit + ')' : '')} value={form.attributeValues?.[attribute.key] || ''} required={attribute.required} onChange={(value) => setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } }))} />)}
+      {structure?.attributes?.length > 0 && <Section id="product-specifications" title={`${structure.name || 'Product'} specifications`} note="These fields, validation and customer-facing sections come from the active industry and category definition.">
+        {errors.attributes && <p role="alert" className="admin-form-hint lg:col-span-2">{errors.attributes}</p>}
+        {activeAttributeDefinitions.map((attribute) => <DynamicAttributeField key={attribute.key} attribute={attribute} value={form.attributeValues?.[attribute.key] ?? attribute.defaultValue ?? ''} onChange={(value) => setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } }))} />)}
       </Section>}
       <Section id="product-basics" step="01" title="Basic Information" note="Name, SKU and the story customers will read.">
         <Input label="Product name" value={form.name} onChange={(value) => update('name', value)} error={errors.name} placeholder="Royal Zari Silk Saree" required />
@@ -448,7 +577,10 @@ export default function ProductForm({
           <span>Category<em>*</em></span>
           <select
             value={form.category}
-            onChange={(event) => update('category', event.target.value)}
+            onChange={(event) => {
+              const category = categories.find((item) => String(item._id) === String(event.target.value));
+              setForm((current) => ({ ...current, category: event.target.value, subCategory: '', categoryDefinitionKey: category?.definitionKey || definitionKey(category?.name) }));
+            }}
             className={`admin-field__control${errors.category ? ' is-error' : ''}`}
           >
             <option value="">Select category</option>
@@ -461,26 +593,44 @@ export default function ProductForm({
           <input
             list="product-subcategories"
             value={form.subCategory}
-            onChange={(event) => update('subCategory', event.target.value)}
+            onChange={(event) => {
+              const subCategory = event.target.value;
+              const definition = findCategoryDefinition(structure, categories, { ...form, subCategory, categoryDefinitionKey: '' });
+              setForm((current) => ({ ...current, subCategory, categoryDefinitionKey: definition?.key || current.categoryDefinitionKey }));
+            }}
             className="admin-field__control"
-            placeholder={subcategories.length ? 'Select or type a subcategory' : 'Festive Wear'}
+            placeholder={availableSubcategories.length ? 'Select or type a subcategory' : 'Optional subcategory'}
           />
           <datalist id="product-subcategories">
-            {subcategories.map((item) => <option key={item} value={item} />)}
+            {availableSubcategories.map((item) => <option key={item} value={item} />)}
           </datalist>
         </label>
         <Input label="Occasion" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding" />
         <Input label="Fabric" value={form.fabric} onChange={(value) => update('fabric', value)} placeholder="Silk" />
         <Input label="Original price" type="number" value={form.originalPrice} onChange={(value) => update('originalPrice', value)} error={errors.originalPrice} placeholder="2499" />
         <Input label="Selling price" type="number" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
+        <Input label="Cost price" type="number" min="0" value={form.costPrice || 0} onChange={(value) => update('costPrice', value)} error={errors.costPrice} placeholder="700" />
+        <Input label="GST rate (%)" type="number" min="0" max="100" step="0.01" value={form.gstRate || 0} onChange={(value) => update('gstRate', value)} error={errors.gstRate} placeholder="5" />
+        <Input label="HSN code" value={form.hsnCode || ''} onChange={(value) => update('hsnCode', value)} placeholder="6204" />
+        <Input label="Barcode / GTIN" value={form.barcode || ''} onChange={(value) => update('barcode', value)} placeholder="Scan or enter barcode" />
         <Input label="Stock quantity" type="number" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" />
         <Input label="Low stock alert" type="number" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} placeholder="5" />
+        <Input label="Suggested reorder quantity" type="number" min="0" step="1" value={form.reorderQuantity || 0} onChange={(value) => update('reorderQuantity', value)} error={errors.reorderQuantity} placeholder="10" />
         <Input label="Packed unit weight (kg, 0 uses store default)" type="number" value={form.shippingWeightKg || 0} onChange={value => update('shippingWeightKg', value)} placeholder="0.5" />
+        {Number(form.costPrice || 0) > 0 && Number(form.price || 0) > 0 && <div className="admin-form-hint lg:col-span-2"><h3>Estimated gross margin</h3><p>Rs. {Math.max(0, Number(form.price) - Number(form.costPrice)).toLocaleString('en-IN')} per unit · {Math.round(((Number(form.price) - Number(form.costPrice)) / Number(form.price)) * 100)}% before tax, shipping and payment charges.</p></div>}
         {effectiveSizingMode === 'sized' ? (
           <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
             <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
             Track stock by size and colour
           </label>
+        ) : effectiveVariantConfiguration.enabled ? (
+          <DynamicVariantEditor
+            variantConfiguration={effectiveVariantConfiguration}
+            attributes={activeAttributeDefinitions}
+            form={form}
+            setForm={setForm}
+            onUpdateVariant={updateVariant}
+          />
         ) : (
           <div className="admin-form-hint lg:col-span-2">
             <h3>One-size inventory</h3>
@@ -647,7 +797,22 @@ export default function ProductForm({
         ) : null}
       </Section>
 
-      {structure?.industry !== 'fashion' ? null : <details className="admin-form-card"><summary className="cursor-pointer font-bold text-wine">Manual copy builder</summary><Section step="04" title="Build copy from your details" note="Optional templates. Review generated wording and product options before applying.">
+      <Section id="product-fulfilment" step="04" title="Shipping, Supplier and Schedule" note="Operational details used for courier planning, restocking and controlled publishing.">
+        <Input label="Package length (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.lengthCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'lengthCm', value)} error={errors.packageDimensions} />
+        <Input label="Package width (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.widthCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'widthCm', value)} />
+        <Input label="Package height (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.heightCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'heightCm', value)} />
+        <Input label="Country of origin" value={form.countryOfOrigin || ''} onChange={(value) => update('countryOfOrigin', value)} placeholder="India" />
+        <Input label="Supplier name" value={form.supplierName || ''} onChange={(value) => update('supplierName', value)} placeholder="Optional internal reference" />
+        <Input label="Supplier SKU" value={form.supplierSku || ''} onChange={(value) => update('supplierSku', value)} placeholder="Supplier item code" />
+        <Input label="Expected restock" type="datetime-local" value={form.restockAt || ''} onChange={(value) => update('restockAt', value)} />
+        <Input label="Publish on" type="datetime-local" value={form.publishAt || ''} onChange={(value) => update('publishAt', value)} />
+        <Input label="Sale starts" type="datetime-local" value={form.saleStartAt || ''} onChange={(value) => update('saleStartAt', value)} />
+        <Input label="Sale ends" type="datetime-local" value={form.saleEndAt || ''} onChange={(value) => update('saleEndAt', value)} error={errors.saleEndAt} />
+        <label className="admin-field lg:col-span-2"><span>Manufacturer / importer details</span><textarea value={form.manufacturerDetails || ''} onChange={(event) => update('manufacturerDetails', event.target.value)} className="admin-field__control" placeholder="Name and address shown where legally required" /></label>
+        <Input label="Warranty / guarantee" value={form.warranty || ''} onChange={(value) => update('warranty', value)} placeholder="Example: 6 months manufacturer warranty" />
+      </Section>
+
+      {structure?.industry !== 'fashion' ? null : <details className="admin-form-card"><summary className="cursor-pointer font-bold text-wine">Manual copy builder</summary><Section step="05" title="Build copy from your details" note="Optional templates. Review generated wording and product options before applying.">
         <div className="admin-form-hint lg:col-span-2">
           <h3>Generate title, description, tags and SEO</h3>
           <p>Use any details you know. Existing manual values stay unless you choose to replace them.</p>
@@ -767,7 +932,7 @@ export default function ProductForm({
         </div>
       </Section></details>}
 
-      <Section step="05" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
+      <Section step="06" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
         <Input label="Return Policy" value={form.returnPolicy} onChange={(value) => update('returnPolicy', value)} placeholder="7 days return/exchange" />
         <Input label="Meta Title" value={form.metaTitle} onChange={(value) => update('metaTitle', value)} />
@@ -813,8 +978,8 @@ export default function ProductForm({
         ) : (
           <a href={cancelPath} className="admin-btn-ghost">Cancel</a>
         )}
-        <button type="button" onClick={() => { setForm(emptyProduct); setSmartFillReset(value => value + 1); }} className="admin-btn-ghost">Reset</button>
-        <button type="button" onClick={() => { update('isActive', false); setTimeout(() => document.querySelector('form')?.requestSubmit(), 0); }} className="admin-btn-ghost">Save Draft</button>
+        <button type="button" onClick={() => { setForm(JSON.parse(baselineRef.current)); clearDraft(productId, apiPrefix); setRecoveryDraft(null); setSmartFillReset(value => value + 1); }} className="admin-btn-ghost">Reset</button>
+        {mode === 'Add' && apiPrefix === '/admin' && <button type="button" disabled={saving || !structure} onClick={saveServerDraft} className="admin-btn-ghost disabled:opacity-60">Save Draft</button>}
         <button disabled={saving} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : `${mode} Product`}</button>
       </div>
     </form>
@@ -923,13 +1088,16 @@ function Section({ id, title, note, step, children }) {
   );
 }
 
-function Input({ label, value, onChange, placeholder, type = 'text', required = false, error }) {
+function Input({ label, value, onChange, placeholder, type = 'text', required = false, error, min, max, step }) {
   return (
     <label className="admin-field">
       <span>{label}{required ? <em>*</em> : null}</span>
       <input
         required={required}
         type={type}
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={`admin-field__control${error ? ' is-error' : ''}`}
@@ -940,11 +1108,236 @@ function Input({ label, value, onChange, placeholder, type = 'text', required = 
   );
 }
 
+function DynamicAttributeField({ attribute, value, onChange }) {
+  const label = (
+    <span>
+      {attribute.label}{attribute.unit ? ` (${attribute.unit})` : ''}{attribute.required ? <em>*</em> : null}
+    </span>
+  );
+  const common = {
+    value: value ?? '',
+    required: Boolean(attribute.required),
+    onChange: (event) => onChange(event.target.value),
+    className: 'admin-field__control',
+  };
+
+  if (attribute.type === 'boolean') {
+    return <label className="admin-field">{label}<select {...common}><option value="">Choose</option><option value="Yes">Yes</option><option value="No">No</option></select></label>;
+  }
+  if (attribute.type === 'dropdown') {
+    return <label className="admin-field">{label}<select {...common}><option value="">Choose {attribute.label.toLowerCase()}</option>{(attribute.options || []).map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+  }
+  if (attribute.type === 'multi_select') {
+    const selected = new Set(splitList(value));
+    if (attribute.options?.length) {
+      return (
+        <fieldset className="admin-field">
+          <legend>{label}</legend>
+          <div className="flex flex-wrap gap-2 rounded-xl border border-[#eadfd5] bg-white p-3">
+            {attribute.options.map((option) => (
+              <label key={option} className={`admin-flag ${selected.has(option) ? 'is-on' : ''}`}>
+                <input type="checkbox" checked={selected.has(option)} onChange={() => {
+                  const next = new Set(selected);
+                  if (next.has(option)) next.delete(option); else next.add(option);
+                  onChange(Array.from(next).join(', '));
+                }} />
+                {option}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      );
+    }
+    return <label className="admin-field">{label}<input {...common} placeholder="Enter comma-separated values" /></label>;
+  }
+  if (attribute.type === 'textarea') {
+    return <label className="admin-field lg:col-span-2">{label}<textarea {...common} rows={4} /></label>;
+  }
+  const numeric = ['number', 'measurement', 'range'].includes(attribute.type);
+  return (
+    <label className="admin-field">
+      {label}
+      <input
+        {...common}
+        type={attribute.type === 'date' ? 'date' : attribute.type === 'color' ? 'text' : numeric ? 'number' : 'text'}
+        min={numeric ? attribute.validation?.min : undefined}
+        max={numeric ? attribute.validation?.max : undefined}
+        minLength={!numeric ? attribute.validation?.minLength : undefined}
+        maxLength={!numeric ? attribute.validation?.maxLength : undefined}
+        placeholder={attribute.type === 'color' ? 'Example: Midnight Blue or #14213d' : ''}
+      />
+    </label>
+  );
+}
+
+function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm, onUpdateVariant }) {
+  const variantKeys = variantConfiguration?.attributes || [];
+  const definitions = variantKeys.map((key) => attributes.find((item) => item.key === key)).filter(Boolean);
+  const optionValues = form.variantOptionValues || {};
+  const maxCombinations = Number(variantConfiguration?.maxCombinations || 120);
+  const generate = () => {
+    const variants = buildDynamicVariantMatrix(definitions, optionValues, form.variants, form.sku, maxCombinations);
+    setForm((current) => ({
+      ...current,
+      trackVariants: true,
+      variants,
+      stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0),
+    }));
+  };
+
+  return (
+    <div className="lg:col-span-2 rounded-2xl border border-[#eadfd5] bg-[#fffaf6] p-4 sm:p-5">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div><h3 className="font-bold text-charcoal">Variant inventory</h3><p className="mt-1 text-xs text-slate-500">Create only the combinations you sell. Every row can have its own SKU, price and stock.</p></div>
+        <button type="button" onClick={generate} className="admin-btn-secondary h-10">Generate combinations</button>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {definitions.map((definition) => (
+          <label key={definition.key} className="admin-field">
+            <span>{definition.label} options</span>
+            <input
+              value={optionValues[definition.key] || ''}
+              onChange={(event) => setForm((current) => ({ ...current, variantOptionValues: { ...(current.variantOptionValues || {}), [definition.key]: event.target.value } }))}
+              className="admin-field__control"
+              placeholder={(definition.options || []).slice(0, 3).join(', ') || 'Comma-separated values'}
+            />
+          </label>
+        ))}
+      </div>
+      {form.trackVariants && form.variants?.length ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {form.variants.map((variant, index) => (
+            <article key={dynamicVariantKey(variant.optionValues)} className="rounded-xl border border-[#eadfd5] bg-white p-3">
+              <strong className="block truncate text-sm text-charcoal" title={formatVariantOptions(variant.optionValues)}>{formatVariantOptions(variant.optionValues)}</strong>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <CompactVariantInput label="SKU" value={variant.sku} onChange={(value) => onUpdateVariant(index, 'sku', value)} />
+                <CompactVariantInput label="Stock" type="number" value={variant.stock} onChange={(value) => onUpdateVariant(index, 'stock', Math.max(0, Number(value || 0)))} />
+                <CompactVariantInput label="Selling price" type="number" value={variant.price} onChange={(value) => onUpdateVariant(index, 'price', value)} />
+                <CompactVariantInput label="MRP" type="number" value={variant.originalPrice} onChange={(value) => onUpdateVariant(index, 'originalPrice', value)} />
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => onUpdateVariant(index, 'isActive', event.target.checked)} /> Available for sale</label>
+            </article>
+          ))}
+        </div>
+      ) : <p className="mt-4 text-xs font-semibold text-slate-500">Add option values and generate combinations. Nothing is created automatically.</p>}
+    </div>
+  );
+}
+
+function CompactVariantInput({ label, value, onChange, type = 'text' }) {
+  return <label className="grid gap-1 text-[11px] font-semibold text-slate-500"><span>{label}</span><input type={type} min={type === 'number' ? 0 : undefined} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs text-charcoal" /></label>;
+}
+
+function getActiveAttributeDefinitions(structure, categories = [], form = {}) {
+  const categoryDefinition = findCategoryDefinition(structure, categories, form);
+  const merged = new Map((structure?.attributes || []).map((item) => [item.key, item]));
+  const chain = [];
+  let cursor = categoryDefinition;
+  while (cursor && chain.length < 12) {
+    chain.unshift(cursor);
+    const parentKey = cursor.parentKey;
+    cursor = parentKey ? (structure?.categoryDefinitions || []).find((item) => item.key === parentKey) : null;
+  }
+  chain.forEach((layer) => (layer.attributes || []).forEach((item) => {
+    if (typeof item === 'object' && item.key) merged.set(item.key, { ...(merged.get(item.key) || {}), ...item });
+  }));
+  return Array.from(merged.values()).filter((item) => item.active !== false).sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+}
+
+function getEffectiveVariantConfig(structure, categories = [], form = {}) {
+  const attributes = getActiveAttributeDefinitions(structure, categories, form);
+  const categoryDefinition = findCategoryDefinition(structure, categories, form);
+  const inheritedVariantKeys = [];
+  let cursor = categoryDefinition;
+  while (cursor && inheritedVariantKeys.length < 12) {
+    if (cursor.variantAttributes?.length) inheritedVariantKeys.unshift(...cursor.variantAttributes);
+    const parentKey = cursor.parentKey;
+    cursor = parentKey ? (structure?.categoryDefinitions || []).find((item) => item.key === parentKey) : null;
+  }
+  const requested = inheritedVariantKeys.length ? Array.from(new Set(inheritedVariantKeys)) : (structure?.variantConfig?.attributes || []);
+  const allowed = new Set(attributes.filter((attribute) => attribute.variant).map((attribute) => attribute.key));
+  const selected = requested.filter((key) => allowed.has(key));
+  return { ...(structure?.variantConfig || {}), enabled: selected.length > 0, attributes: selected };
+}
+
+function findCategoryDefinition(structure, categories = [], form = {}) {
+  const definitions = structure?.categoryDefinitions || [];
+  const selectedCategory = categories.find((category) => String(category._id) === String(form.category));
+  const subcategory = String(form.subCategory || '').trim().toLowerCase();
+  if (subcategory) {
+    const child = definitions.find((item) => item.key === definitionKey(subcategory) || String(item.name || '').trim().toLowerCase() === subcategory);
+    if (child) return child;
+  }
+  const lookupKeys = [form.categoryDefinitionKey, selectedCategory?.definitionKey, definitionKey(selectedCategory?.name)].filter(Boolean);
+  for (const lookupKey of lookupKeys) {
+    const match = definitions.find((item) => item.key === lookupKey);
+    if (match) return match;
+  }
+  return null;
+}
+
+function getConfiguredSubcategories(structure, categories = [], form = {}, saved = []) {
+  const selectedCategory = categories.find((category) => String(category._id) === String(form.category));
+  const parent = (structure?.categoryDefinitions || []).find((item) => (
+    item.key === selectedCategory?.definitionKey
+    || item.key === definitionKey(selectedCategory?.name)
+  ));
+  const configured = parent
+    ? (structure?.categoryDefinitions || []).filter((item) => item.parentKey === parent.key && item.active !== false).map((item) => item.name)
+    : [];
+  return Array.from(new Set([...(saved || []), ...configured].map((item) => String(item || '').trim()).filter(Boolean)));
+}
+
+function buildDynamicVariantMatrix(definitions, values, existing = [], baseSku = '', max = 120) {
+  const lists = definitions.map((definition) => splitList(values[definition.key]));
+  if (!lists.length || lists.some((list) => !list.length)) return [];
+  const combinations = lists.reduce((rows, options, index) => rows.flatMap((row) => options.map((option) => ({ ...row, [definitions[index].key]: option }))), [{}]).slice(0, max);
+  const byKey = new Map((existing || []).map((variant) => [dynamicVariantKey(variant.optionValues || {}), variant]));
+  return combinations.map((optionValues) => {
+    const current = byKey.get(dynamicVariantKey(optionValues));
+    const suffix = Object.values(optionValues).map((value) => String(value).replace(/[^a-z0-9]+/gi, '').toUpperCase()).filter(Boolean).join('-');
+    const colour = optionValues.colour || optionValues.color || optionValues.shade || '';
+    const size = optionValues.size || '';
+    return {
+      ...(current?._id ? { _id: current._id } : {}),
+      optionValues,
+      size,
+      color: colour,
+      sku: current?.sku || [baseSku, suffix].filter(Boolean).join('-'),
+      stock: current?.stock ?? 0,
+      price: current?.price ?? '',
+      originalPrice: current?.originalPrice ?? '',
+      images: current?.images || [],
+      isActive: current?.isActive !== false,
+    };
+  });
+}
+
+function readVariantOptionValues(variants = []) {
+  const result = {};
+  variants.forEach((variant) => Object.entries(variant.optionValues || {}).forEach(([key, value]) => {
+    result[key] = Array.from(new Set([...(splitList(result[key])), String(value || '').trim()].filter(Boolean))).join(', ');
+  }));
+  return result;
+}
+
+function dynamicVariantKey(values = {}) {
+  return Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${key}:${String(value).trim().toLowerCase()}`).join('|');
+}
+
+function formatVariantOptions(values = {}) {
+  return Object.values(values || {}).filter(Boolean).join(' · ') || 'Variant';
+}
+
+function definitionKey(value = '') {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
 function splitList(value) {
   return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 }
 
-function validate(form, sizingProduct = form) {
+function validate(form, sizingProduct = form, attributes = []) {
   const errors = {};
   if (form.name.trim().length < 3) errors.name = 'Product name must be at least 3 characters.';
   if (!form.sku.trim()) errors.sku = 'SKU is required.';
@@ -953,8 +1346,15 @@ function validate(form, sizingProduct = form) {
   if (!Number(form.price)) errors.price = 'Selling price is required.';
   if (Number(form.price) > Number(form.originalPrice)) errors.price = 'Selling price cannot exceed original price.';
   if (Number(form.stock) < 0) errors.stock = 'Stock cannot be negative.';
+  if (!Number.isFinite(Number(form.costPrice || 0)) || Number(form.costPrice || 0) < 0) errors.costPrice = 'Cost price must be zero or more.';
+  if (!Number.isFinite(Number(form.gstRate || 0)) || Number(form.gstRate || 0) < 0 || Number(form.gstRate || 0) > 100) errors.gstRate = 'GST rate must be between 0 and 100.';
+  if (!Number.isSafeInteger(Number(form.reorderQuantity || 0)) || Number(form.reorderQuantity || 0) < 0) errors.reorderQuantity = 'Use a whole number of zero or more.';
+  if (Object.values(form.packageDimensions || {}).some((value) => !Number.isFinite(Number(value || 0)) || Number(value || 0) < 0 || Number(value || 0) > 1000)) errors.packageDimensions = 'Package dimensions must be between 0 and 1000 cm.';
+  if (form.saleStartAt && form.saleEndAt && new Date(form.saleStartAt) >= new Date(form.saleEndAt)) errors.saleEndAt = 'Sale end must be after sale start.';
   if (!form.images.length) errors.images = 'Upload at least one product image.';
   if (form.description.trim().length < 20) errors.description = 'Description must be at least 20 characters.';
+  const missingAttribute = attributes.find((attribute) => attribute.required && !String(form.attributeValues?.[attribute.key] ?? '').trim());
+  if (missingAttribute) errors.attributes = `Enter ${missingAttribute.label}.`;
   if (resolveSizingMode(sizingProduct) === 'sized') {
     const sizeValidation = getSizeChartValidation(sizingProduct);
     if (!getSelectableSizes(sizingProduct).length) errors.sizes = 'Add at least one selectable size.';
@@ -980,6 +1380,24 @@ function prepareImages(images) {
   }));
 }
 
+function updateNested(setter, parent, field, value) {
+  setter((current) => ({ ...current, [parent]: { ...(current[parent] || {}), [field]: value } }));
+}
+
+function nullableDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function toDateTimeInput(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
 function getDraftKey(productId, apiPrefix = '/admin') {
   return `${DRAFT_PREFIX}${apiPrefix === '/admin' ? '' : ':' + apiPrefix}:${productId || 'new'}`;
 }
@@ -992,6 +1410,14 @@ function readDraft(productId, apiPrefix) {
   } catch {
     return null;
   }
+}
+
+function draftFormOf(record) {
+  return record?.__draftMeta && record.form && typeof record.form === 'object' ? record.form : record;
+}
+
+function readDraftForm(productId, apiPrefix) {
+  return draftFormOf(readDraft(productId, apiPrefix));
 }
 
 function clearDraft(productId, apiPrefix) {

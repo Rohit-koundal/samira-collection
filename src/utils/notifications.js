@@ -1,6 +1,11 @@
 export function notificationDestination(item, user) {
   const metadata = item.metadata || {};
   const admin = item.audience === 'ADMIN';
+  if (admin && user?.activeMode === 'seller') {
+    if (metadata.contactId) return '/seller/inbox';
+    if (metadata.orderId || metadata.returnId) return '/seller/orders';
+    return '/seller/notifications';
+  }
   if (admin && user?.role !== 'admin') return '';
   if (admin) {
     if (metadata.returnId) return `/admin/returns?search=${encodeURIComponent(metadata.returnId)}`;

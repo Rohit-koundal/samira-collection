@@ -9,6 +9,34 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin-allow-popups
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: http://localhost:5000 http://127.0.0.1:5000; frame-src 'self' https://*.razorpay.com https://*.facebook.com https://*.instagram.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; manifest-src 'self'"
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /static/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
     envVars:
       - key: REACT_APP_API_URL
         value: https://samira-collection-backend-1.onrender.com/api
@@ -90,6 +118,46 @@ services:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      # Central control-plane identity and signed entitlement responses.
+      # Generate the key pair once with: npm run keys:license
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: CONTROL_PLANE_PUBLIC_URL
+        value: https://samira-collection-backend-1.onrender.com
+      - key: LICENSE_SIGNING_PRIVATE_KEY
+        sync: false
+      - key: LICENSE_SIGNING_PUBLIC_KEY
+        sync: false
+      - key: PLATFORM_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: DEPLOY_HOOK_ALLOWED_HOSTS
+        value: api.render.com,api.vercel.com,api.netlify.com,hooks.netlify.com
+      - key: LICENSE_VALID_MINUTES
+        value: "15"
+      - key: LICENSE_GRACE_HOURS
+        value: "72"
+      # Platform subscription defaults. Change these values in Render when
+      # pricing changes; checkout amounts are always decided by this backend.
+      - key: SUBSCRIPTION_TRIAL_DAYS
+        value: "30"
+      - key: SUBSCRIPTION_BASIC_MONTHLY_INR
+        value: "999"
+      - key: SUBSCRIPTION_BASIC_YEARLY_INR
+        value: "9990"
+      - key: SUBSCRIPTION_BASIC_LIFETIME_INR
+        value: "24999"
+      - key: SUBSCRIPTION_PROFESSIONAL_MONTHLY_INR
+        value: "1999"
+      - key: SUBSCRIPTION_PROFESSIONAL_YEARLY_INR
+        value: "19990"
+      - key: SUBSCRIPTION_PROFESSIONAL_LIFETIME_INR
+        value: "49999"
+      - key: SUBSCRIPTION_PREMIUM_MONTHLY_INR
+        value: "3499"
+      - key: SUBSCRIPTION_PREMIUM_YEARLY_INR
+        value: "34990"
+      - key: SUBSCRIPTION_PREMIUM_LIFETIME_INR
+        value: "89999"
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -114,6 +182,78 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.0-flash
+      # Courier accounts are optional. Add credentials only for providers this
+      # store has onboarded, then select the active provider in store Settings.
+      - key: BLUEDART_MODE
+        value: sandbox
+      - key: BLUEDART_CLIENT_ID
+        sync: false
+      - key: BLUEDART_CLIENT_SECRET
+        sync: false
+      - key: BLUEDART_LOGIN_ID
+        sync: false
+      - key: BLUEDART_LICENCE_KEY
+        sync: false
+      - key: BLUEDART_CUSTOMER_CODE
+        sync: false
+      - key: BLUEDART_ORIGIN_AREA
+        sync: false
+      - key: BLUEDART_PRODUCT_CODE
+        sync: false
+      - key: BLUEDART_PACK_TYPE
+        sync: false
+      - key: BLUEDART_FEATURE
+        sync: false
+      - key: BLUEDART_LIVE_BOOKING_ENABLED
+        value: "false"
+      - key: BLUEDART_COD_ENABLED
+        value: "false"
+      - key: BLUEDART_REVERSE_ENABLED
+        value: "false"
+      - key: SHIPROCKET_EMAIL
+        sync: false
+      - key: SHIPROCKET_PASSWORD
+        sync: false
+      - key: SHIPROCKET_PICKUP_LOCATION
+        sync: false
+      - key: SHIPROCKET_FALLBACK_EMAIL
+        sync: false
+      - key: SHIPROCKET_LIVE_BOOKING_ENABLED
+        value: "false"
+      - key: SHIPROCKET_COD_ENABLED
+        value: "false"
+      - key: SHIPROCKET_REVERSE_ENABLED
+        value: "false"
+      - key: SHIPROCKET_SELECTION_STRATEGY
+        value: recommended
+      - key: DELHIVERY_MODE
+        value: sandbox
+      - key: DELHIVERY_TOKEN
+        sync: false
+      - key: DELHIVERY_CLIENT_NAME
+        sync: false
+      - key: DELHIVERY_WAREHOUSE_NAME
+        sync: false
+      - key: DELHIVERY_LIVE_BOOKING_ENABLED
+        value: "false"
+      - key: DELHIVERY_COD_ENABLED
+        value: "false"
+      - key: DELHIVERY_REVERSE_ENABLED
+        value: "false"
+      - key: DELHIVERY_SHIPPING_MODE
+        value: Surface
+      - key: XPRESSBEES_EMAIL
+        sync: false
+      - key: XPRESSBEES_PASSWORD
+        sync: false
+      - key: XPRESSBEES_WAREHOUSE_NAME
+        sync: false
+      - key: XPRESSBEES_LIVE_BOOKING_ENABLED
+        value: "false"
+      - key: XPRESSBEES_COD_ENABLED
+        value: "false"
+      - key: XPRESSBEES_REVERSE_ENABLED
+        value: "false"
 
   - type: pserv
     name: samira-reel-ai-worker

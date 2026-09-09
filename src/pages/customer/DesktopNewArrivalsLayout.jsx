@@ -15,6 +15,7 @@ export default function DesktopNewArrivalsLayout({
   updateParams,
   clearFilterParams,
   allProducts,
+  dynamicFacets,
 }) {
   const breadcrumbs = buildBreadcrumbs(route, routeQuery, collectionLabel);
   const title = collectionLabel || 'Products';
@@ -38,6 +39,7 @@ export default function DesktopNewArrivalsLayout({
       onFiltersChange={updateParams}
       onClearFilters={clearFilterParams}
       allProducts={allProducts}
+      dynamicFacets={dynamicFacets}
     />
   );
 }

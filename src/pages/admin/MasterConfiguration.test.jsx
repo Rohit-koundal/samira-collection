@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MasterConfiguration from './MasterConfiguration';
 import api from '../../services/api';
 import { BEFORE_ROUTE_CHANGE_EVENT } from '../../utils/routing';
-jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn(), delete: jest.fn() }));
+jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn(), delete: jest.fn(), download: jest.fn() }));
 const structure = { industry: 'fashion', attributes: [{ key: 'material', label: 'Material', unit: '', required: false }], features: { sizing: true, specifications: true }, clientPermissions: { content: true, payments: true } };
 const workspace = (locked = true) => ({
   configuration: { revision: 2, locked, structure, history: [] }, presets: [], admins: [],
@@ -15,7 +15,7 @@ afterEach(() => { jest.restoreAllMocks(); });
 test('locked store cannot change industry, edit attributes or import a structure', async () => {
   render(<MasterConfiguration />);
   expect(await screen.findByText('Configuration locked')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Electronics/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Electronics/ })).toBeEnabled();
   expect(screen.getByLabelText('Field key')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Import structure' })).toBeDisabled();
   expect(api.put).not.toHaveBeenCalled();
@@ -31,14 +31,38 @@ test('unlock explicitly sends current revision and enables the editor', async ()
   expect(screen.getByRole('button', { name: 'Grant client admin access' })).toBeDisabled();
 });
 
-test('preset selection only changes local draft until explicitly saved', async () => {
+test('industry selection opens an isolated project builder without changing the current structure', async () => {
   api.get.mockResolvedValue(workspace(false));
   render(<MasterConfiguration />);
   fireEvent.click(await screen.findByRole('button', { name: /Electronics/ }));
-  expect(screen.getByLabelText('Customer-facing label')).toHaveValue('RAM');
+  expect(screen.getByRole('dialog', { name: 'Generate a separate project' })).toBeInTheDocument();
+  expect(screen.getByText('Electronics blueprint')).toBeInTheDocument();
+  expect(screen.getByLabelText('Customer-facing label')).toHaveValue('Material');
   expect(api.put).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Save structure' })).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Lock for handover' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save structure' })).toBeDisabled();
+});
+
+test('standalone project can be reviewed and downloaded without store data', async () => {
+  api.get.mockResolvedValue(workspace(false));
+  api.post.mockResolvedValue({
+    projectName: 'Rohit Mobiles', projectSlug: 'rohit-mobiles', downloadName: 'rohit-mobiles.zip',
+    sourceFiles: 500, approximateSourceBytes: 5242880,
+    includes: ['Frontend application', 'Backend API'], excludes: ['Existing products and orders', 'Environment secrets'],
+  });
+  api.download.mockResolvedValue(new Blob(['PK'], { type: 'application/zip' }));
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: jest.fn(() => 'blob:project') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: jest.fn() });
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  render(<MasterConfiguration />);
+  fireEvent.click(await screen.findByRole('button', { name: /Electronics/ }));
+  fireEvent.change(screen.getByLabelText('Company / store name'), { target: { value: 'Rohit Mobiles' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review package' }));
+  expect(await screen.findByText('rohit-mobiles.zip')).toBeInTheDocument();
+  expect(api.post).toHaveBeenCalledWith('/master/projects/preview', expect.objectContaining({ companyName: 'Rohit Mobiles', industry: 'electronics' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Generate project ZIP' }));
+  await waitFor(() => expect(api.download).toHaveBeenCalledWith('/master/projects/generate', expect.objectContaining({ companyName: 'Rohit Mobiles', industry: 'electronics' })));
+  expect(click).toHaveBeenCalled();
+  expect(api.put).not.toHaveBeenCalled();
 });
 
 test('conflict retains local edits and prevents accidental navigation', async () => {
@@ -75,9 +99,9 @@ test('private presets save a copy and failed deletion leaves both active structu
   expect(api.post).toHaveBeenCalledWith('/master/clone', { name: 'My fashion preset', structure });
   fireEvent.click(remove);
   await screen.findByText('Preset deletion failed');
-  expect(screen.getByRole('button', { name: 'My fashion preset' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^My fashion preset fashion/i })).toBeInTheDocument();
   fireEvent.click(remove);
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'My fashion preset' })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('button', { name: /^My fashion preset fashion/i })).not.toBeInTheDocument());
   expect(screen.getByLabelText('Customer-facing label')).toHaveValue('Material');
   expect(api.put).not.toHaveBeenCalled();
 });

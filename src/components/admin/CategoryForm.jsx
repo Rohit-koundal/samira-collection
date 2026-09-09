@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
 
-const emptyCategory = { name: '', slug: '', description: '', image: '', displayOrder: 0, isActive: true };
+const emptyCategory = {
+  name: '', slug: '', description: '', image: '', metaTitle: '', metaDescription: '', socialImage: '', displayOrder: 0, isActive: true,
+};
 
 export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
   const [form, setForm] = useState(emptyCategory);
@@ -32,6 +34,9 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
           slug: category.slug || '',
           description: category.description || '',
           image: category.image || '',
+          metaTitle: category.metaTitle || '',
+          metaDescription: category.metaDescription || '',
+          socialImage: category.socialImage || '',
           displayOrder: Number(category.displayOrder || 0),
           isActive: Boolean(category.isActive),
         });
@@ -61,6 +66,9 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
         name: form.name.trim(),
         slug: form.slug.trim(),
         description: form.description.trim(),
+        metaTitle: form.metaTitle.trim(),
+        metaDescription: form.metaDescription.trim(),
+        socialImage: form.socialImage || '',
         image: form.image || '',
         displayOrder: Number(form.displayOrder || 0),
       };
@@ -87,6 +95,8 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
       <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="auto if empty" />
       <Input label="Description" value={form.description} onChange={(value) => update('description', value)} />
       <Input label="Display Order" type="number" value={form.displayOrder} onChange={(value) => update('displayOrder', value)} />
+      <Input label="SEO title" value={form.metaTitle} onChange={(value) => update('metaTitle', value)} placeholder="Uses category name when empty" maxLength={100} />
+      <Input label="SEO description" value={form.metaDescription} onChange={(value) => update('metaDescription', value)} placeholder="Short description for search results" maxLength={300} />
       <div className="md:col-span-2">
         <div className="mb-3 rounded-xl bg-[#fbf8f4] p-4">
           <h3 className="text-sm font-black text-charcoal">Category Image</h3>
@@ -98,6 +108,22 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
           uploadContext="categories"
           value={form.image ? [{ url: form.image }] : []}
           onChange={(images) => update('image', images[0]?.url || '')}
+          compressAboveMb={2}
+          maxUploadMb={20}
+          targetSizeMb={0.5}
+        />
+      </div>
+      <div className="md:col-span-2">
+        <div className="mb-3 rounded-xl bg-[#fbf8f4] p-4">
+          <h3 className="text-sm font-black text-charcoal">Social sharing image</h3>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Optional image for category links shared on social apps.</p>
+        </div>
+        <ImageUploader
+          label="Choose Social Image"
+          helpText="Use a clear landscape image. The category image is used when this is empty."
+          uploadContext="categories"
+          value={form.socialImage ? [{ url: form.socialImage }] : []}
+          onChange={(images) => update('socialImage', images[0]?.url || '')}
           compressAboveMb={2}
           maxUploadMb={20}
           targetSizeMb={0.5}
@@ -116,11 +142,11 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved }) {
   );
 }
 
-function Input({ label, value, onChange, placeholder = label, type = 'text', required = false }) {
+function Input({ label, value, onChange, placeholder = label, type = 'text', required = false, ...props }) {
   return (
     <label className="grid gap-2 text-sm font-black">
       {label}
-      <input required={required} type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder={placeholder} />
+      <input {...props} required={required} type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-xl border border-slate-200 px-4 text-sm font-semibold" placeholder={placeholder} />
     </label>
   );
 }

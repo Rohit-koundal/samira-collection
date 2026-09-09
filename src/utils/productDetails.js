@@ -19,20 +19,25 @@ export function buildProductDetails(product = {}) {
   ];
   const rows = [];
   const usedLabels = new Set();
+  const groupsByLabel = new Map();
 
-  const configured = (Array.isArray(product.specifications) ? product.specifications : []).filter((item) => item?.label && item?.value).map((item) => [item.label, [item.value, item.unit].filter(Boolean).join(' ')]);
-  [...explicit, ...configured, ...parsed.specifications].forEach(([label, value]) => {
+  const configured = (Array.isArray(product.specifications) ? product.specifications : [])
+    .filter((item) => item?.label && item?.value && item.active !== false && item.showOnDetail !== false)
+    .map((item) => [item.label, [item.value, item.unit].filter(Boolean).join(' '), item.group || 'Specifications']);
+  [...explicit, ...configured, ...parsed.specifications].forEach(([label, value, group]) => {
     const cleanLabel = cleanText(label);
     const cleanValue = cleanText(value);
     const key = normalizeLabel(cleanLabel);
     if (!cleanLabel || !cleanValue || usedLabels.has(key)) return;
     usedLabels.add(key);
     rows.push({ label: cleanLabel, value: cleanValue });
+    groupsByLabel.set(key, cleanText(group) || 'Product information');
   });
 
   return {
     description: parsed.description,
     specifications: rows,
+    specificationGroups: buildSpecificationGroups(rows, groupsByLabel),
     highlights: uniqueList(product.highlights),
     tags: uniqueList(product.tags),
     sizes: uniqueList(selectableSizes),
@@ -40,6 +45,16 @@ export function buildProductDetails(product = {}) {
     fabric: cleanText(product.fabric),
     careInstructions: cleanText(product.careInstructions),
   };
+}
+
+function buildSpecificationGroups(rows, groupsByLabel) {
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const group = groupsByLabel.get(normalizeLabel(row.label)) || 'Product information';
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(row);
+  });
+  return Array.from(grouped.entries()).map(([group, items]) => ({ group, items }));
 }
 
 export function hasMeaningfulProductCopy(value = '') {

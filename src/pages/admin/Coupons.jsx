@@ -8,8 +8,11 @@ import SearchFilterBar from '../../components/admin/SearchFilterBar';
 import StatusBadge from '../../components/admin/StatusBadge';
 import api from '../../services/api';
 import { asCatalogList, fetchCategories } from '../../utils/catalogOptions';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Coupons() {
+  const { user } = useAuth();
+  const base = user?.activeMode === 'seller' ? '/seller' : '/admin';
   const [coupons, setCoupons] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -30,9 +33,9 @@ export default function Coupons() {
     if (!quiet) setLoading(true);
     try {
       const [couponData, productData, categoryData] = await Promise.all([
-        api.get('/admin/coupons?admin=true'),
-        api.get('/admin/products?admin=true'),
-        fetchCategories(api),
+        api.get(`${base}/coupons?admin=true`),
+        api.get(`${base}/products?admin=true`),
+        fetchCategories(api, base),
       ]);
       if (sequence !== loadSequence.current) return;
       setCoupons(asList(couponData));
@@ -43,7 +46,7 @@ export default function Coupons() {
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, []);
+  }, [base]);
 
   useEffect(() => { load(); return () => { loadSequence.current += 1; }; }, [load]);
 
@@ -90,7 +93,7 @@ export default function Coupons() {
     setActionId(coupon._id);
     setMessage(null);
     try {
-      const updated = await api.put(`/admin/coupons/${coupon._id}`, { isActive: !coupon.isActive });
+      const updated = await api.put(`${base}/coupons/${coupon._id}`, { isActive: !coupon.isActive });
       setCoupons((current) => current.map((item) => item._id === coupon._id ? updated : item));
       if (editingCoupon?._id === coupon._id) setEditingCoupon(updated);
       setMessage({ type: 'success', text: `${coupon.code} ${updated.isActive ? 'activated' : 'paused'} successfully.` });
@@ -107,7 +110,7 @@ export default function Coupons() {
     setActionId(target._id);
     setMessage(null);
     try {
-      const result = await api.delete(`/admin/coupons/${target._id}`);
+      const result = await api.delete(`${base}/coupons/${target._id}`);
       if (result?.archived && result.coupon) {
         setCoupons((current) => current.map((item) => item._id === target._id ? result.coupon : item));
       } else {
@@ -139,7 +142,7 @@ export default function Coupons() {
         <Metric icon={Users} label="Redemptions" value={stats.redemptions} tone="blue" />
       </div>
 
-      {showEditor ? <div id="coupon-editor"><CouponForm coupon={editingCoupon} products={products} categories={categories} onSaved={handleSaved} onCancel={() => { setEditingCoupon(null); setShowEditor(false); }} /></div> : null}
+      {showEditor ? <div id="coupon-editor"><CouponForm coupon={editingCoupon} products={products} categories={categories} apiBase={base} onSaved={handleSaved} onCancel={() => { setEditingCoupon(null); setShowEditor(false); }} /></div> : null}
 
       {message ? <p role="status" className={`rounded-xl p-3 text-sm font-bold ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose/10 text-rose'}`}>{message.text}</p> : null}
 
@@ -165,7 +168,7 @@ export default function Coupons() {
           return (
             <tr key={coupon._id} className="border-t border-slate-100 align-top">
               <td className="px-4 py-4"><span className="inline-flex rounded-md border border-dashed border-wine px-2 py-1 text-xs font-black text-wine">{coupon.code}</span>{coupon.title ? <span className="mt-2 block max-w-[190px] font-bold text-charcoal">{coupon.title}</span> : null}{coupon.description ? <span className="mt-1 block max-w-[220px] text-xs leading-4 text-slate-500">{shorten(coupon.description, 75)}</span> : null}</td>
-              <td className="px-4 py-4"><strong className="text-charcoal">{coupon.type === 'Percentage' ? `${coupon.discountValue}%` : `Rs. ${formatNumber(coupon.discountValue)}`}</strong>{coupon.maxDiscountAmount ? <span className="mt-1 block text-xs text-slate-500">Up to Rs. {formatNumber(coupon.maxDiscountAmount)}</span> : null}</td>
+              <td className="px-4 py-4"><strong className="text-charcoal">{benefitLabel(coupon)}</strong><span className="mt-1 block text-xs text-slate-500">{coupon.activationMode === 'AUTOMATIC' ? 'Automatic' : 'Code required'}</span>{coupon.maxDiscountAmount ? <span className="mt-1 block text-xs text-slate-500">Up to Rs. {formatNumber(coupon.maxDiscountAmount)}</span> : null}</td>
               <td className="px-4 py-4 text-xs leading-5 text-slate-600"><span className="block">Min. Rs. {formatNumber(coupon.minOrderAmount || 0)}</span>{coupon.firstOrderOnly ? <span className="block font-bold text-wine">First order only</span> : null}<span className="block">{restrictionLabel(coupon)}</span></td>
               <td className="px-4 py-4"><strong>{formatNumber(coupon.usedCount || 0)}</strong><span className="block text-xs text-slate-500">of {coupon.usageLimit ? formatNumber(coupon.usageLimit) : 'unlimited'}</span>{coupon.customerLimit ? <span className="mt-1 block text-xs text-slate-500">{coupon.customerLimit}/customer</span> : null}</td>
               <td className="whitespace-nowrap px-4 py-4 text-xs"><span className="block text-slate-500">Starts {coupon.validFrom ? formatDate(coupon.validFrom) : 'immediately'}</span><span className="mt-1 block font-bold text-charcoal">Ends {formatDate(coupon.expiryDate)}</span></td>
@@ -202,6 +205,12 @@ function restrictionLabel(coupon) {
   if (coupon.applicableProducts?.length) rules.push(`${coupon.applicableProducts.length} products`);
   if (coupon.applicablePaymentMethods?.length) rules.push(coupon.applicablePaymentMethods.join(', '));
   return rules.length ? rules.join(' · ') : 'All products & payments';
+}
+
+function benefitLabel(coupon) {
+  if (coupon.benefitType === 'FREE_SHIPPING') return 'Free delivery';
+  if (coupon.benefitType === 'BUY_X_GET_Y') return `Buy ${coupon.buyQuantity || 1}, get ${coupon.getQuantity || 1}`;
+  return coupon.type === 'Percentage' ? `${coupon.discountValue}%` : `Rs. ${formatNumber(coupon.discountValue)}`;
 }
 
 function asList(value) {

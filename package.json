@@ -34,7 +34,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node scripts/build-production.js",
     "postbuild": "node scripts/copy-spa-fallback.js",
     "start:web": "node scripts/serve-frontend.js",
     "server": "node backend/server.js",

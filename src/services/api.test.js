@@ -30,7 +30,7 @@ jest.mock('../store/apiSlice', () => ({
     },
   },
 }));
-jest.mock('../store/store', () => ({ store: { dispatch: (...args) => mockDispatch(...args) } }));
+jest.mock('../store/store', () => ({ store: { dispatch: (...args) => mockDispatch(...args), getState: () => ({ auth: { token: 'master-token' } }) } }));
 jest.mock('../utils/mobileLoader', () => ({ startMobileLoader: jest.fn(), stopMobileLoader: jest.fn() }));
 jest.mock('./imageCompression', () => ({ compressImageFile: jest.fn(), isSupportedImageFile: jest.fn() }));
 
@@ -65,6 +65,17 @@ test('bag requests use separate query identities for guests and customer account
   await api.get('/cart', { silent: true, cacheScope: 'customer-1' });
   expect(mockInitiateQuery).toHaveBeenNthCalledWith(1, { path: '/cart', silent: true, cacheScope: 'guest' }, { forceRefetch: true, subscribe: false });
   expect(mockInitiateQuery).toHaveBeenNthCalledWith(2, { path: '/cart', silent: true, cacheScope: 'customer-1' }, { forceRefetch: true, subscribe: false });
+});
+
+test('project downloads use bearer authentication without credentialed CORS mode', async () => {
+  const archive = new Blob(['PK'], { type: 'application/zip' });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, blob: jest.fn().mockResolvedValue(archive) });
+  await expect(api.download('/master/projects/generate', { industry: 'mobile' })).resolves.toBe(archive);
+  expect(global.fetch).toHaveBeenCalledWith('http://localhost:5000/api/master/projects/generate', expect.objectContaining({
+    method: 'POST',
+    headers: expect.objectContaining({ Authorization: 'Bearer master-token' }),
+  }));
+  expect(global.fetch.mock.calls[0][1]).not.toHaveProperty('credentials');
 });
 
 test.each([

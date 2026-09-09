@@ -8,6 +8,7 @@ import { SETTINGS_CHANGED_EVENT, SETTINGS_STORAGE_KEY } from '../config/storeSet
 import { BrandIdentityContext } from './BrandIdentityContext';
 import { store } from '../store/store';
 import { samiraApi } from '../store/apiSlice';
+import { parseStoreSlug } from '../utils/attribution';
 
 const WebsiteCustomizationContext = createContext(null);
 
@@ -22,7 +23,8 @@ export function WebsiteCustomizationProvider({ children }) {
   const refresh = useCallback(async () => {
     const id = ++requestId.current;
     try {
-      const data = await api.get('/website-config');
+      const storeSlug = parseStoreSlug(typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}`);
+      const data = await api.get(`/website-config${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`);
       if (id !== requestId.current) return data;
       setConfig((current) => reuseEqualBranches(current, mergeWebsiteConfig(data.config)));
       setTheme((current) => reuseEqualBranches(current, data.theme || null));
@@ -74,6 +76,31 @@ export function WebsiteCustomizationProvider({ children }) {
     if (!description) { description = document.createElement('meta'); description.name = 'description'; document.head.appendChild(description); }
     if (description.dataset.originalContent === undefined) description.dataset.originalContent = description.content || '';
     description.content = metadata.description || description.dataset.originalContent;
+    const setMeta = (attribute, key, value) => {
+      let tag = document.head.querySelector(`meta[${attribute}="${key}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(attribute, key);
+        document.head.appendChild(tag);
+      }
+      tag.content = value;
+    };
+    const shareImage = normalizeImageUrl(metadata.image || config.branding.logo);
+    setMeta('name', 'robots', metadata.indexing === false ? 'noindex,nofollow' : 'index,follow');
+    if (name) {
+      setMeta('property', 'og:title', name);
+      setMeta('name', 'twitter:title', name);
+    }
+    if (description.content) {
+      setMeta('property', 'og:description', description.content);
+      setMeta('name', 'twitter:description', description.content);
+    }
+    if (shareImage) {
+      setMeta('property', 'og:image', shareImage);
+      setMeta('name', 'twitter:image', shareImage);
+    }
+    setMeta('property', 'og:type', 'website');
+    setMeta('name', 'twitter:card', shareImage ? 'summary_large_image' : 'summary');
     const href = normalizeImageUrl(config.branding.favicon);
     let favicon = document.querySelector('link[rel="icon"]');
     if (!href) {
@@ -87,7 +114,7 @@ export function WebsiteCustomizationProvider({ children }) {
     }
     if (!favicon.dataset.originalHref) favicon.dataset.originalHref = favicon.getAttribute('href') || '/favicon.ico';
     favicon.href = href;
-  }, [config.branding.favicon, config.branding.websiteName, metadata.title, metadata.description]);
+  }, [config.branding.favicon, config.branding.logo, config.branding.websiteName, metadata.title, metadata.description, metadata.image, metadata.indexing]);
 
   const value = useMemo(() => ({ config, theme, loading, refresh, brandIdentityManaged }), [config, loading, refresh, theme, brandIdentityManaged]);
   const identity = useMemo(() => ({ ...config.branding, announcementEnabled: config.header.announcementEnabled, announcementText: config.header.announcementText, managed: brandIdentityManaged }), [config.branding, config.header.announcementEnabled, config.header.announcementText, brandIdentityManaged]);

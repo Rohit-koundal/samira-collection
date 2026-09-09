@@ -29,9 +29,12 @@ export default function ProductInfoPanel({
   onCheckDelivery,
   deliveryChecking = false,
   variantProducts = [],
+  managedVariants = [],
+  selectedVariant,
   storeWhatsappNumber,
   onOpenSizeGuide,
   onSelectVariant,
+  onSelectManagedVariant,
   onShare,
   onViewReviews,
   rating,
@@ -172,6 +175,24 @@ export default function ProductInfoPanel({
           </section>
         </div>
 
+        {managedVariants.length ? (
+          <section className="sc-info__section">
+            <div className="sc-info__section-head"><h2>Choose product option</h2></div>
+            <div className="sc-info__variants">
+              {managedVariants.map((variant) => {
+                const selected = String(selectedVariant?._id || '') === String(variant._id || '');
+                const available = variant.isActive !== false && Number(variant.stock || 0) > 0;
+                const label = formatManagedVariant(variant);
+                return (
+                  <button key={variant._id || label} type="button" disabled={!available} onClick={() => onSelectManagedVariant?.(variant)} className={`sc-info__variant${selected ? ' sc-info__variant--active' : ''}`} title={label}>
+                    {label}{available ? '' : ' · Out of stock'}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         {variantProducts.length > 0 ? (
           <section className="sc-info__section">
             <div className="sc-info__section-head"><h2>Available variants</h2></div>
@@ -249,6 +270,11 @@ export default function ProductInfoPanel({
 
 function uniqueValues(values) {
   return Array.from(new Set((Array.isArray(values) ? values : []).map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+function formatManagedVariant(variant = {}) {
+  const values = Object.values(variant.optionValues || {}).map((value) => String(value || '').trim()).filter(Boolean);
+  return values.join(' · ') || [variant.size, variant.color].filter(Boolean).join(' · ') || variant.sku || 'Product option';
 }
 
 function formatIndian(value) {

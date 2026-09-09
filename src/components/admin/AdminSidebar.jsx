@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Bell, ChevronRight, LayoutDashboard, Package, PlusCircle, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Zap, Palette } from 'lucide-react';
+import { Bell, ChevronRight, LayoutDashboard, Package, Tags, ShoppingBag, Users, Ticket, Image, Star, RefreshCcw, Boxes, BarChart3, Settings, FilePlus2, GitBranch, Video, MessageCircle, Mail, ClipboardList, Menu, Palette, HeartPulse, Store, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/samira-collection-logo.png';
 import useAppPath from '../../hooks/useAppPath';
@@ -12,8 +12,6 @@ export const ADMIN_LINKS = [
   ['Dashboard', '/admin'],
   ['Notifications', '/admin/notifications'],
   ['Products', '/admin/products'],
-  ['Add Product', '/admin/products/add'],
-  ['Quick Add', '/admin/products/quick-add'],
   ['Product Drafts', '/admin/product-drafts'],
   ['Import social link', '/admin/social-import'],
   ['Social studio', '/admin/social'],
@@ -28,12 +26,16 @@ export const ADMIN_LINKS = [
   ['Returns / Exchange', '/admin/returns'],
   ['Inventory', '/admin/inventory'],
   ['Reports', '/admin/reports'],
+  ['Business Center', '/admin/business'],
   ['Support', '/admin/support'],
   ['Subscribers', '/admin/subscribers'],
   ['Audit log', '/admin/audit'],
   ['Website Designer', '/admin/customization'],
   ['Store content', '/admin/store-content'],
+  ['System & updates', '/admin/system'],
   ['Master configuration', '/master'],
+  ['Store portfolio', '/master/stores'],
+  ['Client control', '/master/clients'],
   ['Settings', '/admin/settings'],
 ];
 
@@ -68,7 +70,7 @@ export default function AdminSidebar({ open = false, onClose = () => {}, onOpen 
   const currentPath = useAppPath();
   const activeHref = matchAdminHref(currentPath);
 
-  const items = useMemo(() => ADMIN_LINKS.filter(([, path]) => master || !['/master', '/admin/customization'].includes(path)).map(([label, path]) => ({
+  const items = useMemo(() => ADMIN_LINKS.filter(([, path]) => master || (!path.startsWith('/master') && path !== '/admin/customization')).map(([label, path]) => ({
     label,
     path,
     active: path === activeHref,
@@ -136,8 +138,6 @@ function iconForLabel(label) {
     Notifications: <Bell className="h-4 w-4" />,
     Dashboard: <LayoutDashboard className="h-4 w-4" />,
     Products: <Package className="h-4 w-4" />,
-    'Add Product': <PlusCircle className="h-4 w-4" />,
-    'Quick Add': <Zap className="h-4 w-4" />,
     'Product Drafts': <FilePlus2 className="h-4 w-4" />,
     'Import social link': <Package className="h-4 w-4" />,
     'Reel Product Import': <Video className="h-4 w-4" />,
@@ -151,11 +151,15 @@ function iconForLabel(label) {
     'Returns / Exchange': <RefreshCcw className="h-4 w-4" />,
     Inventory: <Boxes className="h-4 w-4" />,
     Reports: <BarChart3 className="h-4 w-4" />,
+    'Business Center': <HeartPulse className="h-4 w-4" />,
     Support: <MessageCircle className="h-4 w-4" />,
     'Social studio': <MessageCircle className="h-4 w-4" />,
     Subscribers: <Mail className="h-4 w-4" />,
     'Audit log': <ClipboardList className="h-4 w-4" />,
     'Website Designer': <Palette className="h-4 w-4" />,
+    'Store portfolio': <Store className="h-4 w-4" />,
+    'Client control': <ShieldCheck className="h-4 w-4" />,
+    'System & updates': <ShieldCheck className="h-4 w-4" />,
     Settings: <Settings className="h-4 w-4" />,
   };
   return map[label] || <LayoutDashboard className="h-4 w-4" />;

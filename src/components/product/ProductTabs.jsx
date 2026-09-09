@@ -51,14 +51,14 @@ export default function ProductTabs({
         {details.specifications.length ? (
           <section className="sc-tabs__specifications">
             <h3>Specifications</h3>
-            <dl className="sc-tabs__details">
-              {details.specifications.map(({ label, value }) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
+            {(details.specificationGroups || groupSpecifications(details.specifications)).map(({ group, items: rows }) => (
+              <div key={group} className="mb-5 last:mb-0">
+                {group !== 'Product information' ? <h4 className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{group}</h4> : null}
+                <dl className="sc-tabs__details">
+                  {rows.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+                </dl>
+              </div>
+            ))}
           </section>
         ) : null}
 
@@ -106,4 +106,8 @@ export default function ProductTabs({
 
 function SectionTitle({ icon: Icon, children }) {
   return <h3 className="sc-tabs__section-title"><Icon aria-hidden="true" />{children}</h3>;
+}
+
+function groupSpecifications(rows = []) {
+  return [{ group: 'Product information', items: rows }];
 }

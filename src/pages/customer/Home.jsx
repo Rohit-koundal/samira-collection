@@ -21,10 +21,50 @@ const serviceHighlights = [
   { icon: ShieldCheck, title: 'Secure Payment', subtitle: '100% safe' },
 ];
 
-export default function Home({ navigate, storeSlug = '' }) {
+const SHARED_HOME_SECTIONS = new Set(['services', 'reviews', 'newsletter']);
+const INDUSTRY_SECTION_ALIASES = {
+  sale: ['offers'],
+  promotional: ['wedding', 'artistSpotlight', 'todaySpecial', 'customOrders'],
+};
+
+function applyIndustryHomepageVisibility(config, industry, configuredSections) {
+  if (!config || industry === 'fashion' || !Array.isArray(configuredSections) || !configuredSections.length) return config;
+  const enabled = new Set(configuredSections);
+  const isAllowed = (id) => SHARED_HOME_SECTIONS.has(id)
+    || enabled.has(id)
+    || (INDUSTRY_SECTION_ALIASES[id] || []).some((alias) => enabled.has(alias));
+  const restrict = (sections = []) => sections.map((section) => ({
+    ...section,
+    visible: section.visible !== false && isAllowed(section.id),
+  }));
+  return {
+    ...config,
+    homepage: { ...config.homepage, sections: restrict(config.homepage?.sections) },
+    mobile: { ...config.mobile, sections: restrict(config.mobile?.sections) },
+  };
+}
+
+function isIndustryHomepageSectionAllowed(industry, configuredSections, id) {
+  if (industry === 'fashion' || !Array.isArray(configuredSections) || !configuredSections.length) return true;
+  const enabled = new Set(configuredSections);
+  return SHARED_HOME_SECTIONS.has(id)
+    || enabled.has(id)
+    || (INDUSTRY_SECTION_ALIASES[id] || []).some((alias) => enabled.has(alias));
+}
+
+function industryLabel(industry) {
+  const labels = { mobile: 'mobile', electronics: 'electronics', jewellery: 'jewellery', cosmetics: 'beauty', art: 'art', bakery: 'bakery', footwear: 'footwear', home: 'home & decor' };
+  return labels[industry] || 'product';
+}
+
+export default function Home({ navigate, storeSlug = '', industry = 'fashion', industrySections = [] }) {
   const isDesktop = useMediaQuery('(min-width: 1024px)', false, { getInitialValueInEffect: false });
   const isTablet = useMediaQuery('(min-width: 768px)', false, { getInitialValueInEffect: false });
-  const { config: websiteConfig } = useWebsiteCustomization();
+  const { config: baseWebsiteConfig } = useWebsiteCustomization();
+  const websiteConfig = useMemo(
+    () => applyIndustryHomepageVisibility(baseWebsiteConfig, industry, industrySections),
+    [baseWebsiteConfig, industry, industrySections],
+  );
   const mobileCustom = websiteConfig.mobile.enabled && !isTablet;
   const mobileSection = (id) => mobileCustom ? websiteConfig.mobile.sections.find((section) => section.id === id) : null;
   const { data: productData = emptyList, isLoading, isError, refetch } = useGetProductsQuery({ store: storeSlug });
@@ -79,7 +119,7 @@ export default function Home({ navigate, storeSlug = '' }) {
     <>
       {!isDesktop && <div className={`mobile-home bg-[#fcfaf7] ${mobileCustom ? 'mobile-home--custom' : ''}`}>
         {[
-          ['hero', <MobileHero banner={heroBanners[0] || promoBanner} heading={mobileSection('hero')?.heading} navigate={navigate} />],
+          ['hero', <MobileHero banner={heroBanners[0] || promoBanner} heading={mobileSection('hero')?.heading} navigate={navigate} industry={industry} />],
           ['services', <MobileServices />],
           ['categories', <MobileCategoryScroller categories={mobileCustom && websiteConfig.mobile.useDesktopCatalog ? themedCategories : categories} navigate={navigate} />],
           ['sale', <MobileOfferStrip navigate={navigate} />],
@@ -87,6 +127,10 @@ export default function Home({ navigate, storeSlug = '' }) {
           ...[
             ['trending', 'Trending Now', 'Fast-moving styles', trendingProducts.length ? trendingProducts : featuredProducts, '/products?trending=true&collection=trending-now'],
             ['newArrivals', 'New Arrivals', 'Fresh drops this week', newArrivalProducts.length ? newArrivalProducts : featuredProducts, '/products?newArrival=true&collection=new-arrivals'],
+            ...(industry !== 'fashion' ? [
+              ['featured', 'Featured', 'Handpicked for you', featuredProducts, '/products?featured=true'],
+              ['bestSellers', 'Best Sellers', 'Customer favourites', collections.bestSellers, '/products?bestSeller=true'],
+            ] : []),
             ['ethnicSets', 'Ethnic Sets', 'Complete occasion-ready looks', ethnicSetProducts, '/products?search=Set'],
             ['accessories', 'Accessories', 'Finishing touches', accessoryProducts, '/products?search=Accessory'],
           ].map(([id, eyebrow, title, products, viewAllPath]) => [id, <MobileProductSection
@@ -95,7 +139,7 @@ export default function Home({ navigate, storeSlug = '' }) {
             navigate={navigate} viewAllPath={viewAllPath}
             emptyMessage={id === 'ethnicSets' ? 'No ethnic sets are published yet. Browse the complete collection while new sets are added.' : id === 'accessories' ? 'No accessories are published yet. Browse the complete collection while accessories are added.' : ''}
           />]),
-        ].filter(([id]) => mobileSection(id)?.visible !== false)
+        ].filter(([id]) => mobileSection(id)?.visible !== false && isIndustryHomepageSectionAllowed(industry, industrySections, id))
           .map(([id, content]) => <MobileSection key={id} section={mobileSection(id)}>{content}</MobileSection>)}
       </div>}
 
@@ -114,6 +158,7 @@ export default function Home({ navigate, storeSlug = '' }) {
           ethnicSetProducts={desktopEthnicSetProducts}
           accessoryProducts={desktopAccessoryProducts}
           websiteConfig={websiteConfig}
+          industry={industry}
           customerReviews={customerReviews}
         />
         </Suspense>
@@ -126,8 +171,9 @@ function MobileSection({ section, children }) {
   return section ? <div style={{ order: section.order }}>{children}</div> : children;
 }
 
-function MobileHero({ banner, heading, navigate }) {
+function MobileHero({ banner, heading, navigate, industry = 'fashion' }) {
   const brand = useBrandIdentity();
+  const fashion = industry === 'fashion';
   return (
     <section className="px-3 pb-4 pt-3">
       <button
@@ -144,12 +190,12 @@ function MobileHero({ banner, heading, navigate }) {
         )}
         <div className="relative grid min-h-[178px] grid-cols-[1.2fr_124px] items-center gap-3 px-4 py-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#9d3154]">New festive collection</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#9d3154]">{fashion ? 'New festive collection' : `New ${industryLabel(industry)} collection`}</p>
             <h1 className="mt-2 text-[20px] font-semibold leading-[1.12] text-[#6d1f34]">
               {heading || banner?.title || 'Celebrate in Style'}
             </h1>
             <p className="mt-1.5 max-w-[190px] text-[12px] leading-[1.35] text-[#6a5761]">
-              {banner?.subtitle || 'Elegant sarees, suits & kurtis for every occasion.'}
+              {banner?.subtitle || (fashion ? 'Elegant sarees, suits & kurtis for every occasion.' : `Discover quality ${industryLabel(industry).toLowerCase()} products selected for you.`)}
             </p>
             <div className="mt-3 inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6d1f34]">
               Up to 50% off

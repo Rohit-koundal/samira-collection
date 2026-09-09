@@ -46,6 +46,8 @@ export default function MobileHeader({ navigate, route = '/' }) {
   const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const compactUtilityRoute = ['/wishlist', '/profile', '/orders', '/notifications', '/cart', '/checkout']
+    .includes(route.split('?')[0]);
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
           <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center text-slate-600" aria-label="Open menu">
             <Icon name="menu" className="h-5.5 w-5.5" />
           </button>
-          <button type="button" onClick={() => go('/')} aria-label={brand.websiteName + ' home'} className="min-w-0 justify-self-start"><StoreLogo src={normalizeImageUrl(brand.logo) || logoFallback} name={brand.websiteName} className="h-9 max-w-full object-contain" /></button>
+          {compactUtilityRoute ? <span aria-hidden="true" /> : <button type="button" onClick={() => go('/')} aria-label={brand.websiteName + ' home'} className="min-w-0 justify-self-start"><StoreLogo src={normalizeImageUrl(brand.logo) || logoFallback} name={brand.websiteName} className="h-9 max-w-full object-contain" /></button>}
           <div className="col-start-3 flex shrink-0 justify-end gap-1">
             <NotificationBell navigate={navigate} />
             <button onClick={() => setSearchOpen(true)} className="grid h-11 w-10 place-items-center text-slate-700" aria-label="Search products">

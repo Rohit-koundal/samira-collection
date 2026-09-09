@@ -2,6 +2,7 @@ import { samiraApi } from '../store/apiSlice';
 import { store } from '../store/store';
 import { compressImageFile, isSupportedImageFile } from './imageCompression';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
+import { getApiBaseUrl } from '../store/apiBaseUrl';
 
 function customerSafeMessage(message, status, path = '', code = '') {
   if (path.includes('/auth/')) {
@@ -98,12 +99,34 @@ async function prepareUploadFiles(files, fieldName) {
   return prepared;
 }
 
+async function download(path, body) {
+  startMobileLoader();
+  try {
+    const token = store.getState().auth.token || localStorage.getItem('samira_token');
+    const response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      let data = {};
+      try { data = await response.json(); } catch { data = { message: 'Unable to download the generated project.' }; }
+      throw toCustomerError({ status: response.status, data }, path);
+    }
+    return response.blob();
+  } catch (error) {
+    if (error?.status) throw error;
+    throw toCustomerError({ status: 'FETCH_ERROR', message: error?.message }, path, 'Unable to download the generated project.');
+  } finally { stopMobileLoader(); }
+}
+
 const api = {
   get: (path, options = {}) => request(path, options),
   post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  download,
   upload: async (path, files, { fieldName = 'images', onRequest } = {}) => {
     startMobileLoader();
     try {

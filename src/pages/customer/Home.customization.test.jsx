@@ -13,7 +13,7 @@ jest.mock('../../context/CartContext', () => ({ useCart: () => ({ getCartItem: j
 jest.mock('../../context/WishlistContext', () => ({ useWishlist: () => ({ items: [], toggleWishlist: jest.fn() }) }));
 jest.mock('./DesktopLuxuryHome', () => {
   mockDesktopModuleLoaded();
-  return () => <div>Desktop home layout</div>;
+  return ({ industry, websiteConfig }) => <div data-testid="desktop-home" data-industry={industry} data-ethnic-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'ethnicSets')?.visible)}>Desktop home layout</div>;
 });
 jest.mock('../../store/apiSlice', () => ({
   useGetProductsQuery: () => ({ data: [mockProduct] }),
@@ -59,6 +59,23 @@ test('enabled mobile sections can hide the hero and change only mobile headings'
   expect(screen.queryByText('Celebrate in Style')).not.toBeInTheDocument();
   expect(screen.getByText('Mobile edit')).toBeInTheDocument();
   expect(container.querySelector('.mobile-home--custom')).not.toBeNull();
+});
+
+test('a non-fashion store uses its industry sections on mobile without fashion-only rails', () => {
+  render(<Home navigate={jest.fn()} industry="electronics" industrySections={['hero', 'categories', 'featured', 'bestSellers', 'offers']} />);
+  expect(screen.getByText('New electronics collection')).toBeInTheDocument();
+  expect(screen.getByText('Featured')).toBeInTheDocument();
+  expect(screen.getByText('Best Sellers')).toBeInTheDocument();
+  expect(screen.queryByText('Ethnic Sets')).not.toBeInTheDocument();
+  expect(screen.queryByText('Accessories')).not.toBeInTheDocument();
+});
+
+test('a non-fashion desktop store receives the same industry visibility rules', async () => {
+  mockWidth = 1440;
+  render(<Home navigate={jest.fn()} industry="electronics" industrySections={['hero', 'categories', 'featured', 'bestSellers', 'offers']} />);
+  const desktop = await screen.findByTestId('desktop-home');
+  expect(desktop).toHaveAttribute('data-industry', 'electronics');
+  expect(desktop).toHaveAttribute('data-ethnic-visible', 'false');
 });
 
 test('mobile settings never render a second layout on desktop or affect tablet section content', async () => {

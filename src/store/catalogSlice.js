@@ -51,7 +51,7 @@ export const selectVisibleProducts = createSelector(
 
 export function normalizeCatalogQuery(query = {}) {
   const source = query instanceof URLSearchParams ? Object.fromEntries(query.entries()) : query;
-  return {
+  const normalized = {
     search: normalizeText(source.search),
     sort: normalizeSort(source.sort),
     category: normalizeText(source.category),
@@ -69,6 +69,10 @@ export function normalizeCatalogQuery(query = {}) {
     bestSeller: normalizeToggle(source.bestSeller),
     trending: normalizeToggle(source.trending),
   };
+  Object.entries(source).forEach(([key, value]) => {
+    if (/^attr_[a-z0-9_]{1,40}$/.test(key)) normalized[key] = normalizeText(value);
+  });
+  return normalized;
 }
 
 export function createCatalogSearchParams(filters = initialState) {
@@ -95,6 +99,7 @@ export function clearCatalogFilters(filters) {
   clearableCatalogFilterKeys.forEach((key) => {
     next[key] = initialState[key];
   });
+  Object.keys(next).filter((key) => key.startsWith('attr_')).forEach((key) => { next[key] = ''; });
   return next;
 }
 
@@ -115,6 +120,12 @@ export function matchesCatalogFilters(product, filters, categories, ignoredKeys 
   if (!ignored.has('newArrival') && filters.newArrival === 'true' && !product.isNewArrival) return false;
   if (!ignored.has('bestSeller') && filters.bestSeller === 'true' && !product.isBestSeller) return false;
   if (!ignored.has('trending') && filters.trending === 'true' && !product.showInTrending) return false;
+  for (const [filterKey, activeValue] of Object.entries(filters)) {
+    if (!filterKey.startsWith('attr_') || !activeValue || ignored.has(filterKey)) continue;
+    const attributeKey = filterKey.slice(5);
+    const source = product.attributeValues instanceof Map ? Object.fromEntries(product.attributeValues) : (product.attributeValues || {});
+    if (!matchesDelimitedTextValue(source[attributeKey], activeValue)) return false;
+  }
   return true;
 }
 
@@ -128,6 +139,7 @@ function matchesSearch(product, search) {
     product.occasion,
     product.sku,
     product.description,
+    ...Object.values(product.attributeValues || {}),
     ...(product.tags || []),
   ]
     .filter(Boolean)

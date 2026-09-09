@@ -12,9 +12,11 @@ const filters = [['', 'All updates'], ['orders', 'Orders'], ['returns', 'Returns
 const icons = { orders: Package, returns: RotateCcw, payments: CreditCard, support: Headphones, updates: Bell };
 export default function Notifications({ navigate, route = '/notifications' }) {
   const { user, logout } = useAuth();
+  const notificationBase = user?.activeMode === 'seller' ? '/seller/notifications' : '/notifications';
   const { unreadCount, revision, changed, refresh } = useNotifications();
   const openNotification = useOpenNotification(navigate);
   const admin = route.startsWith('/admin');
+  const workspace = admin || route.startsWith('/seller');
   const [data, setData] = useState({ items: [], total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ export default function Notifications({ navigate, route = '/notifications' }) {
     if (category) query.set('category', category);
     if (read) query.set('read', read);
     if (!userId) { setData({ items: [], total: 0, totalPages: 1 }); setLoading(false); return undefined; }
-    api.get(`/notifications?${query}`, { silent: true }).then((result) => {
+    api.get(`${notificationBase}?${query}`, { silent: true }).then((result) => {
       if (!active) return;
       const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
       if (!Array.isArray(next?.items) || next.items.some((item) => !item || !item._id)) {
@@ -43,7 +45,7 @@ export default function Notifications({ navigate, route = '/notifications' }) {
       if (page > totalPages) setPage(totalPages);
     }).catch((err) => { if (active) setError(err.message || 'Unable to load notifications.'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [userId, page, category, read, revision, reload]);
+  }, [userId, page, category, read, revision, reload, notificationBase]);
   const groups = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
@@ -55,13 +57,13 @@ export default function Notifications({ navigate, route = '/notifications' }) {
   }, [data.items]);
   const markAll = async () => {
     if (busy) return; setBusy('all'); setActionError('');
-    try { await api.patch('/notifications/read-all', {}); await changed(); setReload((value) => value + 1); }
+    try { await api.patch(`${notificationBase}/read-all`, {}); await changed(); setReload((value) => value + 1); }
     catch (err) { setActionError(err.message || 'Unable to mark notifications as read.'); }
     finally { setBusy(''); }
   };
   const toggleRead = async (item) => {
     if (busy) return; setBusy(item._id); setActionError('');
-    try { await api.patch(`/notifications/${item._id}/read`, { read: !item.readAt }); await changed(); setReload((value) => value + 1); }
+    try { await api.patch(`${notificationBase}/${item._id}/read`, { read: !item.readAt }); await changed(); setReload((value) => value + 1); }
     catch (err) { setActionError(err.message || 'Unable to update this notification.'); }
     finally { setBusy(''); }
   };
@@ -72,13 +74,13 @@ export default function Notifications({ navigate, route = '/notifications' }) {
     catch (err) { setActionError(err.message || 'Unable to open this notification.'); }
     finally { setBusy(''); }
   };
-  return <section className={`sc-notifications${admin ? ' sc-notifications--admin' : ''}`}>
+  return <section className={`sc-notifications${workspace ? ' sc-notifications--admin' : ''}`}>
     <div className="sc-notifications__shell">
-      {!admin && <nav className="sc-notifications__breadcrumb" aria-label="Breadcrumb"><button onClick={() => navigate('/')}>Home</button><ChevronRight size={13} /><button onClick={() => navigate('/profile')}>My Account</button><ChevronRight size={13} /><span>Notifications</span></nav>}
-      <div className="sc-notifications__layout">{!admin && <AccountSidebar user={user} navigate={navigate} logout={logout} activePath="/notifications" />}
+      {!workspace && <nav className="sc-notifications__breadcrumb" aria-label="Breadcrumb"><button onClick={() => navigate('/')}>Home</button><ChevronRight size={13} /><button onClick={() => navigate('/profile')}>My Account</button><ChevronRight size={13} /><span>Notifications</span></nav>}
+      <div className="sc-notifications__layout">{!workspace && <AccountSidebar user={user} navigate={navigate} logout={logout} activePath="/notifications" />}
         <div className="sc-notifications__main">
-          <header className="sc-notifications__heading"><button className="sc-notifications__back" onClick={() => navigate(admin ? '/admin' : '/profile')} aria-label={admin ? 'Back to dashboard' : 'Back to profile'}><ArrowLeft size={21} /></button>
-            <div><p className="sc-notifications__eyebrow">{admin ? 'STORE UPDATES' : 'MY ACCOUNT'}</p><h1>Notifications</h1><p>{unreadCount} unread update{unreadCount === 1 ? '' : 's'}</p></div>
+          <header className="sc-notifications__heading"><button className="sc-notifications__back" onClick={() => navigate(workspace ? (admin ? '/admin' : '/seller') : '/profile')} aria-label={workspace ? 'Back to dashboard' : 'Back to profile'}><ArrowLeft size={21} /></button>
+            <div><p className="sc-notifications__eyebrow">{workspace ? 'STORE UPDATES' : 'MY ACCOUNT'}</p><h1>Notifications</h1><p>{unreadCount} unread update{unreadCount === 1 ? '' : 's'}</p></div>
             <button className="sc-notifications__mark-all" disabled={!!busy || !unreadCount} onClick={markAll}><CheckCheck size={17} />{busy === 'all' ? 'Updating...' : 'Mark all read'}</button>
           </header>
           <div className="sc-notifications__toolbar"><div className="sc-notifications__filters" role="group" aria-label="Notification categories">{filters.map(([value, label]) => <button key={value} aria-pressed={category === value} onClick={() => { setCategory(value); setPage(1); }}>{label}</button>)}</div>

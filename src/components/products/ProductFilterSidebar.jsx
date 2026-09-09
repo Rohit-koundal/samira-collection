@@ -12,6 +12,7 @@ export default function ProductFilterSidebar({
   onFilterChange,
   onFiltersChange,
   onClearAll,
+  dynamicFacets = [],
 }) {
   const [categorySearch, setCategorySearch] = useState('');
   const [colorSearch, setColorSearch] = useState('');
@@ -22,7 +23,7 @@ export default function ProductFilterSidebar({
     fabric: toSelectionSet(filters.fabric),
     occasion: toSelectionSet(filters.occasion),
   }), [filters.category, filters.size, filters.color, filters.fabric, filters.occasion]);
-  const appliedFilters = useMemo(() => buildAppliedFilters(filters, facets), [filters, facets]);
+  const appliedFilters = useMemo(() => buildAppliedFilters(filters, facets, dynamicFacets), [filters, facets, dynamicFacets]);
   const activeCount = appliedFilters.length;
   const update = (key, value) => onFilterChange?.(key, value);
   const updateMany = (values) => {
@@ -35,7 +36,7 @@ export default function ProductFilterSidebar({
       updateMany({ minPrice: '', maxPrice: '' });
       return;
     }
-    if (MULTI_FILTERS.includes(item.key)) {
+    if (MULTI_FILTERS.includes(item.key) || item.key.startsWith('attr_')) {
       toggleMulti(item.key, item.value);
       return;
     }
@@ -187,6 +188,17 @@ export default function ProductFilterSidebar({
         </FilterSection>
       ) : null}
 
+      {dynamicFacets.map((facet) => (
+        <FilterSection key={facet.key} title={facet.label}>
+          <CheckboxList
+            options={facet.options}
+            selected={toSelectionSet(filters[`attr_${facet.key}`])}
+            onToggle={(value) => toggleMulti(`attr_${facet.key}`, value)}
+            limit={8}
+          />
+        </FilterSection>
+      ))}
+
       {facets.ratings?.some((option) => option.count > 0) ? (
         <FilterSection title="Customer ratings">
           <RadioList
@@ -321,7 +333,7 @@ function filterOptions(options = [], query = '') {
   return options.filter((option) => option.label.toLowerCase().includes(term));
 }
 
-function buildAppliedFilters(filters, facets) {
+function buildAppliedFilters(filters, facets, dynamicFacets = []) {
   const labelsByKey = {
     category: toLabelMap(facets.categories),
     size: toLabelMap(facets.sizes),
@@ -334,6 +346,14 @@ function buildAppliedFilters(filters, facets) {
   MULTI_FILTERS.forEach((key) => {
     splitFilterValues(filters[key]).forEach((value) => {
       applied.push({ key, value, label: labelsByKey[key].get(normalizeKey(value)) || value });
+    });
+  });
+
+  dynamicFacets.forEach((facet) => {
+    const filterKey = `attr_${facet.key}`;
+    const labels = toLabelMap(facet.options);
+    splitFilterValues(filters[filterKey]).forEach((value) => {
+      applied.push({ key: filterKey, value, label: `${facet.label}: ${labels.get(normalizeKey(value)) || value}` });
     });
   });
 

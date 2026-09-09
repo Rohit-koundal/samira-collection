@@ -11,7 +11,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'website', title: 'Website & announcement', note: 'Announcement, browser title and store description.', icon: 'website', keywords: 'SEO metadata banner' },
 ];
 export const NUMBER_DEFAULTS = { freeShippingMinAmount: 999, deliveryCharge: 99, platformFee: 23, gstRate: 5, codCharge: 0, codMaxAmount: 0, codMinAmount: 0, prepaidDiscountValue: 0, rtoBlockMinOrders: 0, rtoBlockThreshold: 0, returnWindowDays: 7, minimumOrderAmount: 0 };
-export const BOOLEAN_DEFAULTS = { acceptingOrders: true, brandIdentityEnabled: false, contactDetailsEnabled: false, razorpayEnabled: false, upiEnabled: true, cardPaymentEnabled: true, netBankingEnabled: true, walletEnabled: true, codEnabled: true, codConfirmationRequired: false, rtoBlockEnabled: false };
+export const BOOLEAN_DEFAULTS = { acceptingOrders: true, brandIdentityEnabled: false, contactDetailsEnabled: false, razorpayEnabled: false, upiEnabled: true, cardPaymentEnabled: true, netBankingEnabled: true, walletEnabled: true, codEnabled: true, codConfirmationRequired: false, rtoBlockEnabled: false, searchIndexingEnabled: true };
 export function settingsForm(data = {}) {
   return { ...NUMBER_DEFAULTS, ...BOOLEAN_DEFAULTS, invoicePrefix: 'SC', ...data, socialLinks: { ...data.socialLinks }, appLinks: { ...data.appLinks } };
 }

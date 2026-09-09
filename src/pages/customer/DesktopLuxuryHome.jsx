@@ -44,8 +44,10 @@ export default function DesktopLuxuryHome({
   instagramProducts = [],
   websiteConfig,
   customerReviews = [],
+  industry = 'fashion',
 }) {
   const brand = useBrandIdentity();
+  const fashion = industry === 'fashion';
   const [heroIndex, setHeroIndex] = useState(0);
 
   const productsWithImages = useMemo(
@@ -93,17 +95,17 @@ export default function DesktopLuxuryHome({
       <ThemedDesktopSection config={websiteConfig} id="hero"><section className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <p className={styles.heroEyebrow}>New Festive Collection '24</p>
+            <p className={styles.heroEyebrow}>{fashion ? 'New Festive Collection' : `New ${industryLabel(industry)} Collection`}</p>
             <h1>{heroSection.heading}</h1>
             <p className={styles.heroDescription}>
-              {heroSection.description || activeHero.subtitle || 'Premium ethnic wear crafted for weddings, festive moments, and everyday elegance.'}
+              {heroSection.description || activeHero.subtitle || (fashion ? 'Premium ethnic wear crafted for weddings, festive moments, and everyday elegance.' : `Explore quality ${industryLabel(industry).toLowerCase()} products selected for your needs.`)}
             </p>
             <div className={styles.heroButtons}>
               <button type="button" className={`${styles.primaryButton} site-theme-button`} onClick={() => navigate(heroSection.buttonLink || activeHero.link || '/products?newArrival=true')}>{heroSection.buttonText || 'Shop New Arrivals'}</button>
               <button type="button" className={styles.secondaryButton} onClick={() => navigate('/products')}>Explore Collections</button>
             </div>
             <div className={styles.trustPoints}>
-              <TrustPoint icon={IconShieldCheck} title="Premium Fabric" text="Finest quality assured" />
+              <TrustPoint icon={IconShieldCheck} title={fashion ? 'Premium Fabric' : 'Quality Assured'} text="Finest quality assured" />
               <TrustPoint icon={IconRefresh} title="Easy Exchange" text="Hassle-free exchange" />
               <TrustPoint icon={IconTruckDelivery} title="Fast Delivery" text="Across India in 2-5 days" />
             </div>
@@ -534,6 +536,11 @@ function uniqueProducts(products) {
     seen.add(id);
     return true;
   });
+}
+
+function industryLabel(industry) {
+  const labels = { mobile: 'Mobile', electronics: 'Electronics', jewellery: 'Jewellery', cosmetics: 'Beauty', art: 'Art', bakery: 'Bakery', footwear: 'Footwear', home: 'Home & Decor' };
+  return labels[industry] || 'Product';
 }
 
 function getProductId(product) {
