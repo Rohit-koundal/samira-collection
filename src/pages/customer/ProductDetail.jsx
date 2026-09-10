@@ -65,10 +65,15 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
   const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating', store: storeSlug } : skipToken);
   const { data: reviewsData = [], refetch: refetchReviews } = useGetReviewsQuery(productId || skipToken);
-  const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId || skipToken);
+  const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId ? { id: product.variantGroupId, store: storeSlug } : skipToken);
+  const variantMembers = useMemo(() => {
+    const group = variantGroupData?.data;
+    if (Array.isArray(group?.members) && group.members.length) return group.members.filter((member) => member?.product);
+    return (Array.isArray(group?.products) ? group.products : []).map((entry) => ({ product: entry, productId: entry?._id || entry?.id, label: entry?.variantColor || entry?.variantName || entry?.name }));
+  }, [variantGroupData?.data]);
   const variantProducts = useMemo(
-    () => (Array.isArray(variantGroupData?.data?.products) ? variantGroupData.data.products : []),
-    [variantGroupData?.data?.products],
+    () => variantMembers.map((member) => member.product),
+    [variantMembers],
   );
   const related = useMemo(() => {
     const byId = new Map();
@@ -94,7 +99,8 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     const item = normalizeProduct(productData);
     const inStock = firstInStockVariant(item);
     const availableSizes = getSelectableSizes(item);
-    setSize(availableSizes.includes(inStock?.size) ? inStock.size : (availableSizes[0] || ''));
+    const requestedSize = new URLSearchParams(String(route).split('?')[1] || '').get('size') || '';
+    setSize(availableSizes.includes(requestedSize) ? requestedSize : availableSizes.includes(inStock?.size) ? inStock.size : (availableSizes[0] || ''));
     setColor(inStock?.color || item.colors?.[0] || '');
     setSelectedVariantId(inStock?._id || '');
     setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
@@ -102,7 +108,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     setActionMessage('');
     setDeliveryResult(null);
     setQuantity(1);
-  }, [productData]);
+  }, [productData, route]);
 
   useEffect(() => {
     if (!product?._id) return;
@@ -761,21 +767,39 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             </div>
           </section>
 
-          {variantGroupData?.data?.products?.length ? (
-            <section className="rounded-[14px] bg-white p-4 md:rounded-2xl">
-              <h2 className="text-[13px] font-semibold text-charcoal md:text-xl">More variants</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(variantGroupData.data.products || []).map((variantProduct) => {
+          {variantMembers.length > 1 ? (
+            <section className="rounded-[14px] bg-white p-4 md:rounded-2xl md:border md:border-[#eadfd5]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[.12em] text-[#9b3150]">Product family</p>
+                  <h2 className="mt-1 text-[14px] font-bold text-charcoal md:text-xl">Choose {variantGroupData?.data?.optionDefinitions?.map((item) => item.label).join(' / ') || 'a style'}</h2>
+                </div>
+                <span className="rounded-full bg-[#f8eef1] px-2.5 py-1 text-[9px] font-bold text-[#7a1f36]">{variantMembers.length} choices</span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {variantMembers.map((member) => {
+                  const variantProduct = normalizeProduct(member.product);
                   const variantId = variantProduct._id || variantProduct.id;
                   const isCurrent = String(variantId) === String(productId);
+                  const available = Number(variantProduct.stock || 0) > 0;
+                  const image = variantProduct.primaryImageUrl;
+                  const difference = Number(variantProduct.price || 0) - Number(product.price || 0);
+                  const compatibleSize = size && getSelectableSizes(variantProduct).includes(size) ? size : '';
                   return (
                     <button
                       key={variantId}
                       type="button"
-                      onClick={() => navigate(`/product?id=${variantId}`)}
-                      className={`rounded-full border px-3 py-2 text-[11px] font-semibold ${isCurrent ? 'border-[#7a1f36] bg-[#7a1f36] text-white' : 'border-slate-200 bg-white text-charcoal'}`}
+                      disabled={!available && !isCurrent}
+                      onClick={() => navigate(`/product?id=${encodeURIComponent(variantId)}${compatibleSize ? `&size=${encodeURIComponent(compatibleSize)}` : ''}`)}
+                      aria-current={isCurrent ? 'true' : undefined}
+                      className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${isCurrent ? 'border-[#7a1f36] bg-[#fff2f6] shadow-[inset_0_0_0_1px_#7a1f36]' : 'border-slate-200 bg-white hover:border-[#bd7589]'}`}
                     >
-                      {variantProduct.variantColor || variantProduct.variantName || variantProduct.name}
+                      {member.swatch && /^#[0-9a-f]{3,8}$/i.test(member.swatch) ? <span className="h-9 w-9 shrink-0 rounded-lg border border-black/10" style={{ backgroundColor: member.swatch }} /> : image ? <img src={image} alt="" className="h-11 w-9 shrink-0 rounded-lg object-cover" /> : <span className="grid h-11 w-9 shrink-0 place-items-center rounded-lg bg-[#f5e9e4] text-[9px] font-black text-[#8c2947]">SC</span>}
+                      <span className="min-w-0 flex-1">
+                        <b className="block truncate text-[10px] font-bold text-charcoal md:text-[11px]" title={member.label}>{member.label || variantProduct.variantColor || variantProduct.name}</b>
+                        <small className={`mt-1 block text-[9px] font-semibold ${available ? 'text-emerald-700' : 'text-rose'}`}>{available ? `₹${Number(variantProduct.price || 0).toLocaleString('en-IN')}${difference ? ` · ${difference > 0 ? '+' : '−'}₹${Math.abs(difference).toLocaleString('en-IN')}` : ''}` : 'Out of stock'}</small>
+                      </span>
+                      {isCurrent && <CheckCircle2 className="h-4 w-4 shrink-0 text-[#7a1f36]" />}
                     </button>
                   );
                 })}

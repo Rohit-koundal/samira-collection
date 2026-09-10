@@ -184,11 +184,32 @@ export const samiraApi = createApi({
     getAdminCustomers: builder.query({ query: () => '/admin/customers', providesTags: ['AdminCustomers'] }),
     getAdminSettings: builder.query({ query: () => '/admin/settings', providesTags: ['AdminSettings'] }),
     getAdminLowStock: builder.query({ query: () => '/admin/dashboard/low-stock', providesTags: ['Inventory'] }),
-    getProductDrafts: builder.query({ query: () => '/admin/product-drafts', providesTags: ['ProductDrafts'] }),
-    getVariantGroups: builder.query({ query: () => '/variant-groups', providesTags: ['VariantGroups'] }),
-    getVariantGroup: builder.query({ query: (id) => `/variant-groups/${id}`, providesTags: ['VariantGroups'] }),
+    getProductDrafts: builder.query({
+      query: ({ apiPrefix = '/admin', ...query } = {}) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/product-drafts`, ...params(query) }),
+      providesTags: ['ProductDrafts'],
+    }),
+    getVariantGroups: builder.query({
+      query: ({ apiPrefix = '', ...query } = {}) => ({ url: apiPrefix === '/seller' ? '/seller/variant-groups' : apiPrefix === '/admin' ? '/admin/variant-groups' : '/variant-groups', ...params(query) }),
+      providesTags: ['VariantGroups'],
+    }),
+    getVariantGroup: builder.query({
+      query: (value) => {
+        const input = typeof value === 'object' ? value : { id: value };
+        const prefix = input.apiPrefix === '/seller' ? '/seller' : input.apiPrefix === '/admin' ? '/admin' : '';
+        return { url: `${prefix}/variant-groups/${encodeURIComponent(input.id)}`, params: input.store ? { store: input.store } : undefined };
+      },
+      providesTags: ['VariantGroups'],
+    }),
+    getVariantGroupCandidates: builder.query({
+      query: ({ apiPrefix = '/admin', ...query } = {}) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/candidates`, ...params(query) }),
+      providesTags: ['AdminProducts', 'VariantGroups'],
+    }),
+    getManagementCategories: builder.query({
+      query: ({ apiPrefix = '/admin' } = {}) => `${apiPrefix === '/seller' ? '/seller' : '/admin'}/categories`,
+      providesTags: ['AdminCategories'],
+    }),
     bulkUploadProductDrafts: builder.mutation({
-      async queryFn({ files }, api, extraOptions, baseQuery) {
+      async queryFn({ files, groupMode = 'separate', apiPrefix = '/admin' }, api, extraOptions, baseQuery) {
         const preparedFiles = [];
         for (const file of Array.from(files || [])) {
           if (!file) continue;
@@ -207,42 +228,71 @@ export const samiraApi = createApi({
         }
         const formData = new FormData();
         preparedFiles.forEach((file) => formData.append('images', file));
-        const result = await baseQuery({ url: '/admin/product-drafts/bulk-upload', method: 'POST', body: formData }, api, extraOptions);
+        formData.append('groupMode', groupMode === 'single' ? 'single' : 'separate');
+        const prefix = apiPrefix === '/seller' ? '/seller' : '/admin';
+        const result = await baseQuery({ url: `${prefix}/product-drafts/bulk-upload`, method: 'POST', body: formData }, api, extraOptions);
         if (result.error) return { error: result.error };
         return { data: result.data };
       },
       invalidatesTags: ['ProductDrafts'],
     }),
     updateProductDraft: builder.mutation({
-      query: ({ id, body }) => ({ url: `/admin/product-drafts/${id}`, method: 'PUT', body }),
+      query: ({ id, body, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/product-drafts/${id}`, method: 'PUT', body }),
+      invalidatesTags: ['ProductDrafts'],
+    }),
+    archiveProductDraft: builder.mutation({
+      query: ({ id, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/product-drafts/${id}/archive`, method: 'PATCH' }),
+      invalidatesTags: ['ProductDrafts'],
+    }),
+    restoreProductDraft: builder.mutation({
+      query: ({ id, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/product-drafts/${id}/restore`, method: 'PATCH' }),
       invalidatesTags: ['ProductDrafts'],
     }),
     deleteProductDraft: builder.mutation({
-      query: (id) => ({ url: `/admin/product-drafts/${id}`, method: 'DELETE' }),
+      query: (input) => {
+        const value = typeof input === 'object' ? input : { id: input };
+        const prefix = value.apiPrefix === '/seller' ? '/seller' : '/admin';
+        return { url: `${prefix}/product-drafts/${value.id}`, method: 'DELETE', params: value.confirm ? { confirm: value.confirm } : undefined };
+      },
       invalidatesTags: ['ProductDrafts'],
     }),
     publishSelectedDrafts: builder.mutation({
-      query: (body) => ({ url: '/admin/product-drafts/publish-selected', method: 'POST', body }),
+      query: ({ apiPrefix = '/admin', ...body }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/product-drafts/publish-selected`, method: 'POST', body }),
       invalidatesTags: ['ProductDrafts', 'Products', 'AdminProducts', 'AdminDashboard', 'Inventory'],
     }),
     createVariantGroup: builder.mutation({
-      query: (body) => ({ url: '/admin/variant-groups', method: 'POST', body }),
+      query: ({ apiPrefix = '/admin', ...body }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups`, method: 'POST', body }),
       invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
     }),
     updateVariantGroup: builder.mutation({
-      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}`, method: 'PUT', body }),
+      query: ({ id, body, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}`, method: 'PUT', body }),
       invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
     }),
     deleteVariantGroup: builder.mutation({
-      query: (id) => ({ url: `/admin/variant-groups/${id}`, method: 'DELETE' }),
+      query: (value) => {
+        const input = typeof value === 'object' ? value : { id: value };
+        return { url: `${input.apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${input.id}`, method: 'DELETE', params: input.confirm ? { confirm: input.confirm } : undefined };
+      },
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    archiveVariantGroup: builder.mutation({
+      query: ({ id, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}/archive`, method: 'PATCH' }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    restoreVariantGroup: builder.mutation({
+      query: ({ id, body = {}, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}/restore`, method: 'PATCH', body }),
+      invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
+    }),
+    reconcileVariantGroup: builder.mutation({
+      query: ({ id, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}/reconcile`, method: 'POST' }),
       invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
     }),
     addVariantGroupProducts: builder.mutation({
-      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}/add-products`, method: 'POST', body }),
+      query: ({ id, body, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}/add-products`, method: 'POST', body }),
       invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
     }),
     removeVariantGroupProducts: builder.mutation({
-      query: ({ id, body }) => ({ url: `/admin/variant-groups/${id}/remove-products`, method: 'POST', body }),
+      query: ({ id, body, apiPrefix = '/admin' }) => ({ url: `${apiPrefix === '/seller' ? '/seller' : '/admin'}/variant-groups/${id}/remove-products`, method: 'POST', body }),
       invalidatesTags: ['VariantGroups', 'Products', 'AdminProducts'],
     }),
   }),
@@ -301,21 +351,28 @@ export const {
   useGetProductDraftsQuery,
   useGetProductsQuery,
   useGetVariantGroupQuery,
+  useGetVariantGroupCandidatesQuery,
+  useGetManagementCategoriesQuery,
   useGetVariantGroupsQuery,
   useGetReviewsQuery,
   useGetFeaturedReviewsQuery,
   useGetSettingsQuery,
   useGetWishlistQuery,
   useBulkUploadProductDraftsMutation,
+  useArchiveProductDraftMutation,
+  useArchiveVariantGroupMutation,
   useCreateVariantGroupMutation,
   useDeleteProductDraftMutation,
   useDeleteVariantGroupMutation,
   usePublishSelectedDraftsMutation,
+  useRestoreProductDraftMutation,
+  useRestoreVariantGroupMutation,
   useResendOtpMutation,
   useSendOtpMutation,
   useAddVariantGroupProductsMutation,
   useSwitchModeMutation,
   useRemoveVariantGroupProductsMutation,
+  useReconcileVariantGroupMutation,
   useUpdateProductDraftMutation,
   useUpdateVariantGroupMutation,
   useVerifyOtpMutation,

@@ -129,7 +129,7 @@ export default function DesktopLuxuryHome({
         </div>
       </section></ThemedDesktopSection>
 
-      <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={categories.slice(0, 8)} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
+      <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={(categories.some((category) => !category.parent) ? categories.filter((category) => !category.parent) : categories).slice(0, 8)} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
 
       <ThemedDesktopSection config={websiteConfig} id="promotional"><section className={styles.luxuryContainer}>
         <EditorialGrid products={editorialProducts} navigate={navigate} section={getHomepageSection(websiteConfig, 'promotional')} />

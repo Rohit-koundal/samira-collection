@@ -1,7 +1,8 @@
 import { normalizeImageUrl } from '../../services/normalize';
 
 export default function CategoryStrip({ navigate, categories = [] }) {
-  const visibleCategories = (categories || []).slice(0, 8);
+  const rootCategories = (categories || []).filter((category) => !category.parent);
+  const visibleCategories = (rootCategories.length ? rootCategories : categories || []).slice(0, 8);
 
   return (
     <section className="grid gap-3 xl:grid-cols-[150px_1fr_120px] xl:items-stretch">

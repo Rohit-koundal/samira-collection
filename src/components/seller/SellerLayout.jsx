@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, CreditCard, LayoutDashboard, Store, Package, ShoppingBag, Users, MessageCircle, Camera, ClipboardList, BarChart3, HeartPulse, Settings } from 'lucide-react';
+import { ChevronRight, CreditCard, GitBranch, LayoutDashboard, Store, Package, ShoppingBag, Users, MessageCircle, Camera, ClipboardList, BarChart3, HeartPulse, Settings } from 'lucide-react';
 import useAppPath from '../../hooks/useAppPath';
 import { useAuth } from '../../context/AuthContext';
+import '../admin/AdminShell.css';
 
 const links = [
   ['Dashboard', '/seller'],
   ['Notifications', '/seller/notifications'],
   ['Onboarding', '/seller/onboarding'],
   ['Products', '/seller/products'],
+  ['Variant Families', '/seller/variant-groups'],
   ['Inventory', '/seller/inventory'],
   ['Orders', '/seller/orders'],
   ['Customers', '/seller/crm'],
@@ -27,6 +29,7 @@ const icons = {
   Notifications: HeartPulse,
   Onboarding: Store,
   Products: Package,
+  'Variant Families': GitBranch,
   Inventory: Package,
   Orders: ShoppingBag,
   Customers: Users,
@@ -80,7 +83,7 @@ export default function SellerLayout({ children }) {
   })), [enabledFeatures, licenceRestricted, path]);
 
   return (
-    <div className="min-h-screen bg-[#f7f2eb] lg:pl-[260px]">
+    <div className="admin-shell min-h-screen bg-[#f7f2eb] lg:pl-[260px]">
       <aside className="fixed inset-y-0 left-0 hidden w-[260px] overflow-y-auto bg-[#171018] p-4 text-white lg:block">
         <p className="font-display text-2xl font-black">Boutique</p>
         <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/50">Seller workspace</p>

@@ -25,13 +25,14 @@ const mockProduct = {
   careInstructions: '',
   returnPolicy: '',
 };
+let mockVariantGroupData = null;
 
 jest.mock('../../store/apiSlice', () => ({
   useGetProductQuery: () => ({ data: mockProduct, isLoading: false, error: null }),
   useGetProductsQuery: () => ({ data: [] }),
   useGetReviewsQuery: () => ({ data: [] }),
   useGetSettingsQuery: () => ({ data: { freeShippingMinAmount: 999, returnWindowDays: 7 } }),
-  useGetVariantGroupQuery: () => ({ data: null }),
+  useGetVariantGroupQuery: () => ({ data: mockVariantGroupData }),
 }));
 
 jest.mock('../../context/AuthContext', () => ({
@@ -61,7 +62,11 @@ jest.mock('../../components/product/ProductDetailPage', () => ({ onBuyNow, onAdd
 jest.mock('../../components/seo/SeoHead', () => () => null);
 jest.mock('../../utils/analytics', () => ({ trackEvent: jest.fn() }));
 
-beforeEach(() => { mockAddConfirmed.mockReset(); });
+beforeEach(() => {
+  mockAddConfirmed.mockReset();
+  mockVariantGroupData = null;
+  delete mockProduct.variantGroupId;
+});
 
 describe('mobile product details', () => {
   test('shows factual API information without adding generic product claims', async () => {
@@ -78,6 +83,26 @@ describe('mobile product details', () => {
     expect(screen.queryByText('Everyday festive')).not.toBeInTheDocument();
     expect(screen.queryByText('Designer')).not.toBeInTheDocument();
   });
+});
+
+test('storefront family selector shows live choices and switches to the selected product', async () => {
+  mockProduct.variantGroupId = 'family-1';
+  mockVariantGroupData = {
+    data: {
+      optionDefinitions: [{ key: 'color', label: 'Colour' }, { key: 'storage', label: 'Storage' }],
+      members: [
+        { productId: 'product-1', label: 'Navy / 128 GB', swatch: '#111827', product: mockProduct },
+        { productId: 'product-2', label: 'Black / 256 GB', swatch: '#111111', product: { ...mockProduct, _id: 'product-2', slug: 'black-256', name: 'Black 256 GB Saree', price: 1499, stock: 3 } },
+      ],
+    },
+  };
+  const navigate = jest.fn();
+  render(<ProductDetail navigate={navigate} route="/product?id=product-1" />);
+
+  expect(await screen.findByRole('heading', { name: 'Choose Colour / Storage' })).toBeInTheDocument();
+  expect(screen.getByText('2 choices')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Black / 256 GB'));
+  expect(navigate).toHaveBeenCalledWith('/product?id=product-2');
 });
 
 describe.each(['mobile', 'desktop'])('%s purchase confirmation', (view) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, Package, RefreshCw, Truck } from 'lucide-react';
+import { AlertTriangle, Download, Package, RefreshCw, Truck } from 'lucide-react';
 import api from '../../services/api';
 
 const human = value => String(value || 'WAITING').replaceAll('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
@@ -18,6 +18,7 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
   const [pickupToken, setPickupToken] = useState('');
   const [carrierConfirmed, setCarrierConfirmed] = useState(false);
   const [confirmedNoRequest, setConfirmedNoRequest] = useState(false);
+  const [exceptionForm, setExceptionForm] = useState({ action: 'CONTACTED_CUSTOMER', note: '', reference: '' });
   const generation = useRef(0);
   const lock = useRef(false);
   const load = useCallback(async (refresh = false) => {
@@ -30,19 +31,20 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
     } catch (e) { if (version === generation.current) setError(e.message); }
   }, [base]);
   useEffect(() => {
-    generation.current += 1; setData(null); setMessage(''); setError(''); setChecked(false); setCancelConfirmed(false); setCarrierConfirmed(false); setConfirmedNoRequest(false); setPickupToken('');
+    generation.current += 1; setData(null); setMessage(''); setError(''); setChecked(false); setCancelConfirmed(false); setCarrierConfirmed(false); setConfirmedNoRequest(false); setPickupToken(''); setExceptionForm({ action: 'CONTACTED_CUSTOMER', note: '', reference: '' });
     setParcel({ weightKg: '', lengthCm: '', widthCm: '', heightCm: '' });
     load();
     return () => { generation.current += 1; };
   }, [load]);
-  const act = async action => {
+  const act = async (action, extra = {}) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(''); setMessage('');
     const version = generation.current;
     try {
-      await api.post(`${base}/${action}`, { ...slot, parcel, pickupToken, confirmedWithCarrier: carrierConfirmed, confirmedNoRequest });
+      await api.post(`${base}/${action}`, { ...slot, parcel, pickupToken, confirmedWithCarrier: carrierConfirmed, confirmedNoRequest, ...extra });
       if (version !== generation.current) return;
-      setMessage({ book: 'Shipment created. Download the label, attach it to your packed parcel and follow the confirmed pickup status.', pickup: 'Pickup request confirmed by the courier.', cancel: 'Courier shipment cancelled. The order and payment remain available to manage separately.', reconcile: 'Booking outcome checked.' }[action]);
+      setMessage({ book: 'Shipment created. Download the label, attach it to your packed parcel and follow the confirmed pickup status.', pickup: 'Pickup request confirmed by the courier.', cancel: 'Courier shipment cancelled. The order and payment remain available to manage separately.', exception: 'Delivery issue follow-up saved. Refresh tracking after the courier processes the request.', reconcile: 'Booking outcome checked.' }[action]);
+      if (action === 'exception') setExceptionForm(current => ({ ...current, note: '', reference: '' }));
       await load(); onChanged?.();
     } catch (e) { if (version === generation.current) { await load(); setError(e.message); } }
     finally { lock.current = false; if (version === generation.current) setBusy(false); }
@@ -80,7 +82,15 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
       {Number.isFinite(Number(shipment?.providerCharge)) && <p className="admin-note mt-2">Carrier quote at booking: ₹{Number(shipment.providerCharge).toLocaleString('en-IN', { maximumFractionDigits: 2 })}. The customer delivery amount remains the total agreed at checkout.</p>}
       {shipment?.lastError && <p role="status" className="admin-note mt-2">{shipment.lastError}</p>}
       {shipment?.lastSyncedAt && <p className="admin-note mt-2">Last checked: {new Date(shipment.lastSyncedAt).toLocaleString('en-IN')}</p>}
+      {shipment?.expectedDeliveryAt && <p className="mt-2 text-sm font-bold text-emerald-800">Expected delivery: {new Date(shipment.expectedDeliveryAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>}
       {shipment?.pickup?.token && <p className="mt-3 text-sm">Pickup {shipment.pickup.cancelled ? 'cancelled' : 'confirmed'} · {shipment.pickup.date} at {shipment.pickup.time} IST · Token {shipment.pickup.token}</p>}
+      {['EXCEPTION', 'FAILED'].includes(shipment?.status) && <form className="order-delivery-exception" onSubmit={event => { event.preventDefault(); act('exception', exceptionForm); }}>
+        <header><AlertTriangle size={18} /><div><h3>Resolve delivery issue</h3><p>Record the customer or courier follow-up. Tracking remains carrier-controlled.</p></div></header>
+        <label>Follow-up<select className={inputClass} value={exceptionForm.action} onChange={event => setExceptionForm(value => ({ ...value, action: event.target.value }))}><option value="CONTACTED_CUSTOMER">Customer contacted</option><option value="CONFIRMED_ADDRESS">Address confirmed</option><option value="REQUESTED_REDELIVERY">Redelivery requested</option><option value="REQUESTED_RTO">Return to origin requested</option><option value="OTHER">Other courier follow-up</option></select></label>
+        <label>Courier reference (optional)<input className={inputClass} maxLength={120} value={exceptionForm.reference} onChange={event => setExceptionForm(value => ({ ...value, reference: event.target.value }))} /></label>
+        <label className="is-wide">Action note<textarea className={`${inputClass} min-h-20`} minLength={3} maxLength={500} required value={exceptionForm.note} onChange={event => setExceptionForm(value => ({ ...value, note: event.target.value }))} /></label>
+        <button className="admin-btn is-wide" type="submit" disabled={busy || exceptionForm.note.trim().length < 3}>Save follow-up</button>
+      </form>}
       {!integrated && <p className="admin-note">Shipping is managed manually. Select and connect a courier in <a className="admin-table-action-link" href={`${apiBase}/settings`}>Store settings → Orders & delivery</a>.</p>}
       {integrated && !connection?.liveBooking && !shipment?.awb && <p role="status" className="admin-note">{connection?.note}</p>}
       <fieldset disabled={busy}>
@@ -93,6 +103,7 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
         {integrated && shipment?.awb && !uncertain && ['READY_TO_SHIP', 'PICKUP_SCHEDULED'].includes(shipment.status) && <details className="mt-5 text-sm"><summary className="cursor-pointer text-wine">Cancel courier booking</summary><p className="admin-note mt-2">{carrier} must confirm cancellation before the parcel is handed over. Manage the order cancellation and customer refund separately.</p><label className="my-3 flex items-start gap-2"><input type="checkbox" checked={cancelConfirmed} onChange={e => setCancelConfirmed(e.target.checked)} /><span>I want to cancel this courier booking and its pickup.</span></label><button type="button" disabled={!cancelConfirmed} className="admin-btn-ghost" onClick={() => act('cancel')}>Cancel shipment & pickup</button></details>}
       </fieldset>
       {shipment?.events?.length > 0 && <details className="mt-5 text-sm"><summary className="cursor-pointer font-bold">Courier history</summary><ol className="mt-3 space-y-3">{[...shipment.events].reverse().map((event, i) => <li key={i} className="border-l-2 border-rose/20 pl-3"><strong>{human(event.status)}</strong><p>{event.note}</p><time className="admin-note">{new Date(event.date).toLocaleString('en-IN')}</time></li>)}</ol></details>}
+      {shipment?.exceptionActions?.length > 0 && <details className="mt-4 text-sm"><summary className="cursor-pointer font-bold">Delivery issue follow-ups ({shipment.exceptionActions.length})</summary><ol className="mt-3 space-y-3">{[...shipment.exceptionActions].reverse().map((entry, index) => <li key={`${entry.date}-${index}`} className="rounded-xl bg-amber-50 p-3"><strong>{human(entry.action)}</strong><p>{entry.note}</p>{entry.reference && <p className="admin-note">Reference: {entry.reference}</p>}<time className="admin-note">{entry.actor?.name || 'Staff'} · {new Date(entry.date).toLocaleString('en-IN')}</time></li>)}</ol></details>}
     </>}
   </section>;
 }

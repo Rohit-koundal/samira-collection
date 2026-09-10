@@ -54,8 +54,11 @@ export function firstInStockVariant(product = {}) {
 export function buildVariantMatrix(sizes = [], colors = [], existing = []) {
   const byKey = new Map((existing || []).map((variant) => [variantKey(variant.size, variant.color), variant]));
   const rows = [];
-  for (const size of sizes) {
-    for (const color of colors) {
+  const sizeOptions = sizes.length ? sizes : [''];
+  const colorOptions = colors.length ? colors : [''];
+  if (!sizes.length && !colors.length) return rows;
+  for (const size of sizeOptions) {
+    for (const color of colorOptions) {
       const current = byKey.get(variantKey(size, color));
       rows.push({
         ...(current?._id ? { _id: current._id } : {}),

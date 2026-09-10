@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn() }));
 jest.mock('../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 const a = { _id: 'a', subject: 'Ananya order' }, b = { _id: 'b', subject: 'Meera return' };
-const existing = { _id: 'order-1', orderStatus: 'Exchange Requested', paymentMethod: 'COD', finalAmount: 1299, shipment: { trackingNumber: 'AWB123' } };
+const existing = { _id: 'order-1', orderStatus: 'Confirmed', paymentStatus: 'Pending', paymentMethod: 'COD', finalAmount: 1299, createdAt: '2026-09-06T00:00:00Z', orderItems: [{ name: 'Rose kurta', quantity: 1 }], shipment: { trackingNumber: 'AWB123' } };
 const mine = { store: { id: 'store-1', name: 'My boutique' }, role: 'OWNER', progress: { percent: 50, steps: {} } };
 beforeEach(() => { jest.resetAllMocks(); useAuth.mockReturnValue({ user: { role: 'customer' }, refreshProfile: jest.fn() }); });
 
@@ -66,30 +66,30 @@ test('saved notes are identified as internal and customer delivery is never impl
   expect(input).toHaveValue('');
 });
 
-test('seller orders save the displayed existing AWB and retain tracking after failure', async () => {
-  api.get.mockImplementation(async path => path === '/seller/orders' ? [existing] : {});
-  api.put.mockRejectedValueOnce(new Error('Temporary shipment failure')).mockResolvedValueOnce(existing.shipment);
+test('seller order actions use the same safe workflow and remain retryable', async () => {
+  api.get.mockImplementation(async path => path.includes('workspace-summary') ? {} : path.startsWith('/seller/orders?') ? [existing] : {});
+  api.put.mockRejectedValueOnce(new Error('Temporary order failure')).mockResolvedValueOnce({ ...existing, orderStatus: 'Packed' });
   render(<Orders />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Save tracking' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Temporary shipment failure');
-  expect(api.put).toHaveBeenCalledWith('/seller/orders/order-1/shipment', { trackingNumber: 'AWB123', awb: 'AWB123' });
-  expect(screen.getByRole('textbox')).toHaveValue('AWB123');
-  expect(screen.getByRole('combobox')).toHaveValue('Exchange Requested');
-  fireEvent.click(screen.getByRole('button', { name: 'Save tracking' }));
-  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark packed' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Temporary order failure');
+  expect(api.put).toHaveBeenCalledWith('/seller/orders/order-1/status', expect.objectContaining({ orderStatus: 'Packed', revision: 0 }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark packed' }));
+  await waitFor(() => expect(screen.queryByText('Temporary order failure')).not.toBeInTheDocument());
+  expect(api.put).toHaveBeenCalledTimes(2);
 });
 
 test('seller order load retry clears stale errors once the orders arrive', async () => {
   let fail = true;
   api.get.mockImplementation(async path => {
-    if (path !== '/seller/orders') return {};
+    if (path.includes('workspace-summary')) return {};
+    if (!path.startsWith('/seller/orders?')) return {};
     if (fail) throw new Error('Orders unavailable');
     return [existing];
   });
   render(<Orders />);
   const retry = await screen.findByRole('button', { name: 'Try again' });
   fail = false; fireEvent.click(retry);
-  expect(await screen.findByRole('button', { name: 'Save tracking' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Mark packed' })).toBeInTheDocument();
   expect(screen.queryByText('Orders unavailable')).not.toBeInTheDocument();
 });
 

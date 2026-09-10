@@ -85,6 +85,7 @@ backend/services/*
 !backend/services/paymentSettingsService.js
 !backend/services/returnEligibilityService.js
 !backend/services/orderSnapshotService.js
+!backend/services/orderWorkflowService.js
 !backend/services/notificationService.js
 !backend/services/shippingService.js
 !backend/services/quickAddVision.service.js
@@ -321,6 +322,18 @@ backend/scripts/*
 !backend/scripts/generate-license-keys.js
 !backend/tests/clientPlatform.unit.test.js
 !backend/tests/clientPlatform.integration.test.js
+# Store-scoped customer workspace source. Runtime environment files remain ignored below.
+!backend/models/CustomerCrm.js
+!backend/models/StoreMember.js
+!backend/models/Conversation.js
+!backend/models/Message.js
+!backend/controllers/crmController.js
+!backend/routes/customerCrmRoutes.js
+!backend/services/crmService.js
+!backend/services/customerAccessService.js
+!backend/middleware/storeMiddleware.js
+!backend/tests/customerCrm.integration.test.js
+!backend/utils/apiError.js
 # Local environment files in every directory, including examples and backups.
 # Keep these after source allowlists so environment files stay ignored.
 .env

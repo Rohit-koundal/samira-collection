@@ -23,6 +23,13 @@ test('removing an unrelated imported photo does not create two main photos',()=>
   fireEvent.click(screen.getAllByRole('button',{name:'Remove'})[1]);
   expect(JSON.parse(screen.getByTestId('images').textContent)[0].primary).toBe(true);
 });
+test('gallery order can be changed without losing the selected main photo',()=>{
+  render(<Harness/>);
+  fireEvent.click(screen.getByRole('button',{name:'Move image 3 earlier'}));
+  const images=JSON.parse(screen.getByTestId('images').textContent);
+  expect(images.map(image=>image.url)).toEqual(['/uploads/front.jpg','/uploads/detail.jpg','/uploads/side.jpg']);
+  expect(images.find(image=>image.primary)?.url).toBe('/uploads/side.jpg');
+});
 test('oversized upload batches are rejected locally while saved images remain intact',()=>{
   render(<Harness/>);
   fireEvent.change(screen.getByLabelText('Choose Images'),{target:{files:Array.from({length:9},(_,index)=>new File(['photo'],index+'.jpg',{type:'image/jpeg'}))}});

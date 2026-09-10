@@ -7,11 +7,34 @@ import Returns from './Returns';
 import Reports from './Reports';
 import Settings from './Settings';
 import api from '../../services/api';
+const mockVariantRefetch = jest.fn();
+const mockVariantArchive = jest.fn();
+const mockVariantCreate = jest.fn();
+const mockVariantUpdate = jest.fn();
+const mockVariantDelete = jest.fn();
+const mockVariantRestore = jest.fn();
+const mockVariantReconcile = jest.fn();
+let mockVariantResponse;
 jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn(), delete: jest.fn() }));
-jest.mock('../../components/admin/ImageUploader', () => () => <div>Photo picker</div>);
+jest.mock('../../store/apiSlice', () => ({
+  useGetVariantGroupsQuery: () => ({ data: mockVariantResponse, isLoading: false, isFetching: false, error: null, refetch: mockVariantRefetch }),
+  useGetVariantGroupCandidatesQuery: () => ({ data: { items: [], totalPages: 1 }, isLoading: false, isFetching: false, error: null, refetch: jest.fn() }),
+  useGetManagementCategoriesQuery: () => ({ data: [] }),
+  useCreateVariantGroupMutation: () => [mockVariantCreate, { isLoading: false }],
+  useUpdateVariantGroupMutation: () => [mockVariantUpdate, { isLoading: false }],
+  useDeleteVariantGroupMutation: () => [mockVariantDelete, { isLoading: false }],
+  useArchiveVariantGroupMutation: () => [mockVariantArchive, { isLoading: false }],
+  useRestoreVariantGroupMutation: () => [mockVariantRestore, { isLoading: false }],
+  useReconcileVariantGroupMutation: () => [mockVariantReconcile, { isLoading: false }],
+}));
+jest.mock('../../components/admin/ImageUploader', () => ({ label, value = [], onChange }) => <div>Photo picker{value[0]?.url ? <><span>{value[0].url}</span><button type="button" aria-label={`Remove ${label}`} onClick={() => onChange([])}>Remove</button></> : null}</div>);
 jest.mock('../../components/admin/VideoUploader', () => () => <div>Video picker</div>);
 jest.mock('../../utils/catalogOptions', () => ({ fetchCategories: async () => [{ _id: 'cat', name: 'Sarees' }], fetchSubcategories: async () => [] }));
-beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); api.get.mockResolvedValue({ features: { sizing: false }, attributes: [] }); jest.spyOn(window, 'confirm').mockReturnValue(true); });
+beforeEach(() => {
+  jest.clearAllMocks(); localStorage.clear(); api.get.mockResolvedValue({ features: { sizing: false }, attributes: [] }); jest.spyOn(window, 'confirm').mockReturnValue(true);
+  mockVariantResponse = { data: [], meta: { page: 1, totalPages: 1, total: 0, summary: { total: 0, active: 0, draft: 0, archived: 0 } } };
+  [mockVariantArchive, mockVariantCreate, mockVariantUpdate, mockVariantDelete, mockVariantRestore, mockVariantReconcile].forEach((mock) => mock.mockReturnValue({ unwrap: () => Promise.resolve({ message: 'Saved' }) }));
+});
 afterEach(() => jest.restoreAllMocks());
 
 test('missing product or category edit IDs never turn into create forms', () => {
@@ -52,26 +75,37 @@ test('late product reads cannot replace another selected edit target', async () 
   expect(screen.getByDisplayValue('Current green saree')).toBeInTheDocument();
 });
 
-test('category editing retries reads then saves a controlled update payload', async () => {
-  api.get.mockRejectedValueOnce(new Error('Category unavailable')).mockResolvedValueOnce({ name: 'Sarees', slug: 'sarees', isActive: true });
+test('category editing retries reads, preserves both images and only removes the chosen image', async () => {
+  api.get.mockRejectedValueOnce(new Error('Category unavailable')).mockResolvedValueOnce({ name: 'Sarees', slug: 'sarees', image: '/uploads/category.jpg', socialImage: '/uploads/category-social.jpg', isActive: true });
   api.put.mockResolvedValue({});
   render(<CategoryForm mode="Update" categoryId="cat" />);
   fireEvent.click(await screen.findByRole('button', { name: 'Retry loading category' }));
   fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Festive sarees' } });
+  expect(screen.getByText('/uploads/category.jpg')).toBeInTheDocument();
+  expect(screen.getByText('/uploads/category-social.jpg')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Update Category' }));
-  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/categories/cat', expect.objectContaining({ name: 'Festive sarees', isActive: true })));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/categories/cat', expect.objectContaining({ name: 'Festive sarees', image: '/uploads/category.jpg', socialImage: '/uploads/category-social.jpg', isActive: true })));
+  expect(api.put.mock.calls[0][1]).not.toHaveProperty('removeImage');
+  expect(api.put.mock.calls[0][1]).not.toHaveProperty('removeSocialImage');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Choose Category Image' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Update Category' }));
+  await waitFor(() => expect(api.put).toHaveBeenLastCalledWith('/admin/categories/cat', expect.objectContaining({ image: '', removeImage: true, socialImage: '/uploads/category-social.jpg' })));
+  expect(api.put.mock.calls.at(-1)[1]).not.toHaveProperty('removeSocialImage');
   expect(api.post).not.toHaveBeenCalled();
 });
 
-test('variant group delete failures are actionable and preserve the group for retry', async () => {
-  api.get.mockImplementation(async path => path === '/admin/variant-groups' ? { data: [{ _id: 'group', name: 'Rose family', products: [], sizes: [], colors: [] }] } : []);
-  api.delete.mockRejectedValueOnce(new Error('Group deletion failed')).mockResolvedValueOnce({ success: true });
+test('variant family archive failures are actionable and preserve the family for retry', async () => {
+  mockVariantResponse = { data: [{ _id: 'group', name: 'Rose family', products: [{ _id: 'p1', name: 'Rose saree', images: [], stock: 2 }], members: [], optionDefinitions: [], status: 'draft', isArchived: false, health: { state: 'review', score: 70, issues: [], warnings: ['Add an option'] } }], meta: { page: 1, totalPages: 1, total: 1, summary: { total: 1, active: 0, draft: 1, archived: 0 } } };
+  mockVariantArchive.mockReturnValueOnce({ unwrap: () => Promise.reject({ data: { message: 'Family archive failed' } }) }).mockReturnValueOnce({ unwrap: () => Promise.resolve({ message: 'Family archived' }) });
   render(<VariantGroups />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete group' }));
-  expect(await screen.findByRole('status')).toHaveTextContent('Group deletion failed');
+  fireEvent.click(screen.getByRole('button', { name: 'Archive Rose family' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Archive family' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Family archive failed');
   expect(screen.getByRole('heading', { name: 'Rose family' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Delete group' }));
-  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Rose family' })).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Archive Rose family' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Archive family' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Family archived');
+  expect(mockVariantArchive).toHaveBeenCalledTimes(2);
 });
 
 test('a failed return update cannot undo a successful update on a different request', async () => {

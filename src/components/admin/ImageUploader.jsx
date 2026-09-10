@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
 import { compressImageFile, isSupportedImageFile } from '../../services/imageCompression';
+import { inspectProductImage } from '../../utils/imageQuality';
 
 const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
@@ -29,6 +31,7 @@ export default function ImageUploader({
   const [phase, setPhase] = useState('');
   const [progress, setProgress] = useState(0);
   const [recentUploads, setRecentUploads] = useState([]);
+  const [qualityChecks, setQualityChecks] = useState([]);
 
   const files = (Array.isArray(value) ? value : value ? [value] : []).filter((file) => file?.url);
 
@@ -38,6 +41,7 @@ export default function ImageUploader({
     setPhase('');
     setProgress(0);
     setRecentUploads([]);
+    setQualityChecks([]);
     const incoming = Array.from(selected);
     if (!incoming.length) return;
     if (incoming.length > 8) return setError('Choose up to 8 new images at a time. Your existing photos are kept.');
@@ -49,6 +53,7 @@ export default function ImageUploader({
     try {
       const converted = [];
       const uploadStats = [];
+      const inspections = [];
       for (const file of incoming) {
         if (!isSupportedImageFile(file) || !allowedTypes.includes(file.type)) {
           throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
@@ -56,6 +61,7 @@ export default function ImageUploader({
         if (file.size > maxUploadMb * 1024 * 1024) {
           throw new Error(`Each image must be under ${maxUploadMb}MB before compression.`);
         }
+        inspections.push(await inspectProductImage(file));
         setPhase('compressing');
         const compressedFile = await compressImageFile(file, {
           maxOriginalSizeMb: compressAboveMb,
@@ -72,6 +78,7 @@ export default function ImageUploader({
         });
       }
       setRecentUploads(uploadStats);
+      setQualityChecks(inspections.filter(Boolean));
 
       setPhase('uploading');
       setProgress(100);
@@ -103,6 +110,13 @@ export default function ImageUploader({
   };
 
   const markPrimary = (index) => onChange(files.map((item, itemIndex) => ({ ...item, primary: itemIndex === index })));
+  const move = (index, direction) => {
+    const destination = index + direction;
+    if (destination < 0 || destination >= files.length) return;
+    const next = [...files];
+    [next[index], next[destination]] = [next[destination], next[index]];
+    onChange(next);
+  };
 
   return (
     <div className="space-y-3">
@@ -136,6 +150,7 @@ export default function ImageUploader({
       )}
       <input ref={inputRef} aria-label={label} type="file" accept=".jpg,.jpeg,.png,.webp" multiple={multiple} disabled={disabled || uploading} onChange={(event) => addFiles(event.target.files)} className="hidden" />
       {error && <p className="text-sm font-bold text-rose">{error}</p>}
+      {qualityChecks.some((item) => item.warnings.length) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" role="status"><strong>Photo quality review</strong>{qualityChecks.filter((item) => item.warnings.length).map((item) => <p key={item.name} className="mt-1"><b>{item.name}:</b> {item.warnings.join(', ')}{item.width && item.height ? ` (${item.width}×${item.height})` : ''}. You may continue, but a clearer portrait photo will look better.</p>)}</div>}
       {recentUploads.length > 0 && (
         <div className="space-y-2 rounded-xl bg-white p-3 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Compression Summary</p>
@@ -157,8 +172,10 @@ export default function ImageUploader({
             {file.primary && <span className="absolute left-2 top-2 rounded-full bg-wine px-2 py-1 text-[10px] font-black text-white">Primary</span>}
             {file.sourceFrame && <div className="grid gap-2 p-2 text-xs text-slate-600"><a href={normalizeImageUrl(file.url)} target="_blank" rel="noreferrer" className="flex min-h-9 items-center text-wine underline">View full photo</a><label className="grid gap-1"><span>Product view</span><select aria-label={'Product view for image ' + (index + 1)} value={file.sourceFrame.viewType || 'unknown'} onChange={(event) => onChange(files.map((item, itemIndex) => itemIndex === index ? { ...item, sourceFrame: { ...item.sourceFrame, viewType: event.target.value } } : item))} className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2"><option value="unknown">Unspecified</option><option value="front">Front</option><option value="back">Back</option><option value="side">Side</option><option value="detail">Detail</option></select></label></div>}
             {showPrimaryControl ? (
-              <div className="grid grid-cols-2">
-                <button type="button" disabled={disabled || uploading} onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine">Main</button>
+              <div className="grid grid-cols-4 border-t border-slate-100">
+                <button type="button" disabled={disabled || uploading || index === 0} onClick={() => move(index, -1)} aria-label={`Move image ${index + 1} earlier`} title="Move earlier" className="grid h-9 place-items-center text-slate-500 disabled:opacity-30"><ChevronLeft size={15} /></button>
+                <button type="button" disabled={disabled || uploading || index === files.length - 1} onClick={() => move(index, 1)} aria-label={`Move image ${index + 1} later`} title="Move later" className="grid h-9 place-items-center text-slate-500 disabled:opacity-30"><ChevronRight size={15} /></button>
+                <button type="button" disabled={disabled || uploading || file.primary} onClick={() => markPrimary(index)} className="h-9 text-xs font-black text-wine disabled:opacity-50">Main</button>
                 <button type="button" disabled={disabled || uploading} onClick={() => remove(index)} className="h-9 text-xs font-black text-rose">Remove</button>
               </div>
             ) : (

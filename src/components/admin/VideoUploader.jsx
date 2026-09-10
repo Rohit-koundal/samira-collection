@@ -14,15 +14,19 @@ export default function VideoUploader({
   uploadPath = '/admin/uploads/videos',
   label = 'Choose Videos',
   helpText = 'Upload optional product videos in MP4, WEBM, or MOV format.',
+  disabled = false,
+  onBusyChange,
 }) {
   const { notify } = useAuth();
   const inputRef = useRef(null);
+  const uploadLock = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
   const videos = (Array.isArray(value) ? value : value ? [value] : []).filter((item) => item?.url);
 
   const addFiles = async (selected) => {
+    if (uploadLock.current || disabled) return;
     setProgress(0);
     const incoming = Array.from(selected || []);
     if (!incoming.length) return;
@@ -42,7 +46,9 @@ export default function VideoUploader({
       }
     }
 
+    uploadLock.current = true;
     setUploading(true);
+    onBusyChange?.(true);
     try {
       setProgress(35);
       const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
@@ -56,6 +62,8 @@ export default function VideoUploader({
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       setUploading(false);
+      uploadLock.current = false;
+      onBusyChange?.(false);
       setProgress(0);
     }
   };
@@ -69,8 +77,9 @@ export default function VideoUploader({
     <div className="space-y-3">
       <button
         type="button"
+        disabled={disabled || uploading}
         onClick={() => inputRef.current?.click()}
-        className="grid min-h-36 w-full place-items-center rounded-2xl border-2 border-dashed border-wine/30 bg-[#fbf8f4] p-5 text-center transition hover:border-wine"
+        className="grid min-h-36 w-full place-items-center rounded-2xl border-2 border-dashed border-wine/30 bg-[#fbf8f4] p-5 text-center transition hover:border-wine disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span>
           <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-wine text-lg font-black text-white">+</span>
@@ -97,6 +106,7 @@ export default function VideoUploader({
         type="file"
         accept=".mp4,.webm,.mov"
         multiple={multiple}
+        disabled={disabled || uploading}
         onChange={(event) => addFiles(event.target.files)}
         className="hidden"
       />
@@ -106,7 +116,7 @@ export default function VideoUploader({
             <video controls preload="metadata" src={normalizeImageUrl(video.url)} className="h-40 w-full bg-black object-cover" />
             <div className="flex items-center justify-between gap-3 p-3">
               <p className="min-w-0 truncate text-xs font-semibold text-slate-600">{video.originalName || video.publicId || 'Uploaded video'}</p>
-              <button type="button" onClick={() => remove(index)} className="text-xs font-black text-rose">
+              <button type="button" disabled={disabled || uploading} onClick={() => remove(index)} className="text-xs font-black text-rose disabled:opacity-50">
                 Remove
               </button>
             </div>

@@ -1,371 +1,472 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CopyPlus, Trash2, Upload, X } from 'lucide-react';
+import {
+  Archive, ArchiveRestore, Check, ChevronLeft, ChevronRight, CopyPlus, Eye,
+  FilePenLine, Filter, ImagePlus, PackageCheck, RefreshCw, Search, Trash2, Upload, X,
+} from 'lucide-react';
 import api from '../../services/api';
-import { Select, TextInput } from '../../components/ui/Field';
+import { Select, TextArea, TextInput } from '../../components/ui/Field';
 import PageHeader from '../../components/admin/PageHeader';
 import EmptyState from '../../components/admin/EmptyState';
 import Loader from '../../components/admin/Loader';
 import ProductSmartFill from '../../components/admin/ProductSmartFill';
+import ProductPreviewModal from '../../components/admin/ProductPreviewModal';
+import ImageUploader from '../../components/admin/ImageUploader';
+import VideoUploader from '../../components/admin/VideoUploader';
+import BarcodeScanner from '../../components/admin/BarcodeScanner';
 import { applySmartPatch } from '../../utils/productSmartFill';
 import { fetchCategories, fetchSubcategories } from '../../utils/catalogOptions';
 import { normalizeImageUrl } from '../../services/normalize';
 import useDesktopFeedback from '../../hooks/useDesktopFeedback';
+import { buildVariantMatrix } from '../../utils/variants';
 import {
-  useBulkUploadProductDraftsMutation,
-  useDeleteProductDraftMutation,
-  useGetProductDraftsQuery,
-  usePublishSelectedDraftsMutation,
+  useArchiveProductDraftMutation, useBulkUploadProductDraftsMutation,
+  useDeleteProductDraftMutation, useGetProductDraftsQuery,
+  usePublishSelectedDraftsMutation, useRestoreProductDraftMutation,
   useUpdateProductDraftMutation,
 } from '../../store/apiSlice';
 import {
-  buildSizeChartPayload,
-  getSelectableSizes,
-  getSizeChartColumns,
-  inferSizeChartProfile,
-  reconcileSizeChartRows,
-  resolveSizingMode,
+  buildSizeChartPayload, getSelectableSizes, getSizeChartColumns,
+  inferSizeChartProfile, reconcileSizeChartRows, resolveSizingMode,
   SIZE_CHART_PROFILES,
 } from '../../utils/productSizing';
+import './ProductDrafts.css';
+
+const PAGE_SIZE = 24;
 
 export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   const focusedDraftId = new URLSearchParams(route.split('?')[1] || '').get('draftId') || '';
+  const apiPrefix = route.startsWith('/seller/') ? '/seller' : '/admin';
   const [categories, setCategories] = useState([]);
+  const [categoryError, setCategoryError] = useState('');
   const [structure, setStructure] = useState(null);
   const [structureError, setStructureError] = useState('');
-  const loadStructure = () => api.get('/catalog-configuration').then((value) => { setStructure(value); setStructureError(''); }).catch((error) => setStructureError(error.message));
-  useEffect(() => { loadStructure(); }, []);
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState([]);
   const [files, setFiles] = useState([]);
+  const [groupMode, setGroupMode] = useState('single');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchValue, setSearchValue] = useState('');
+  const [status, setStatus] = useState('active');
+  const [sourceType, setSourceType] = useState('');
+  const [category, setCategory] = useState('');
+  const [readiness, setReadiness] = useState('');
+  const [sort, setSort] = useState('updated');
+  const [page, setPage] = useState(1);
+  const [editorDraft, setEditorDraft] = useState(null);
+  const [previewDraft, setPreviewDraft] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [bulkCategory, setBulkCategory] = useState('');
   const [publishing, setPublishing] = useState(false);
-  const forms = useRef(new Map());
+  const [actionBusy, setActionBusy] = useState(false);
   const publishingRef = useRef(false);
-  const rememberForm = useCallback((id, form) => { forms.current.set(id, form); }, []);
   const { notify } = useDesktopFeedback();
-  const { data: draftResponse, isLoading, error: listError, refetch } = useGetProductDraftsQuery();
-  const [bulkUploadProductDrafts, { isLoading: uploading }] = useBulkUploadProductDraftsMutation();
-  const [updateProductDraft, { isLoading: saving }] = useUpdateProductDraftMutation();
-  const [deleteProductDraft, { isLoading: deleting }] = useDeleteProductDraftMutation();
-  const [publishSelectedDrafts] = usePublishSelectedDraftsMutation();
 
-  const drafts = useMemo(() => draftResponse?.data || [], [draftResponse]);
-  const visibleDrafts = focusedDraftId ? drafts.filter((draft) => String(draft._id || draft.id) === focusedDraftId) : drafts;
-
+  const loadStructure = useCallback(() => api.get('/catalog-configuration')
+    .then((value) => { setStructure(value); setStructureError(''); })
+    .catch((error) => setStructureError(error.message || 'Product configuration could not be loaded.')), []);
+  const loadCategories = useCallback(() => fetchCategories(api, apiPrefix)
+    .then((value) => { setCategories(value.filter((item) => !item.isArchived)); setCategoryError(''); })
+    .catch((error) => { setCategories([]); setCategoryError(error.message || 'Categories could not be loaded.'); }), [apiPrefix]);
+  useEffect(() => { loadStructure(); loadCategories(); }, [loadCategories, loadStructure]);
   useEffect(() => {
-    setSelected((current) => current.filter((id) => drafts.some((draft) => (draft._id || draft.id) === id)));
-  }, [drafts]);
+    const timer = window.setTimeout(() => { setQuery(searchValue.trim()); setPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchValue]);
 
-  useEffect(() => {
-    fetchCategories(api).then(setCategories).catch(() => setCategories([]));
-  }, []);
-
-  const selectedCount = useMemo(() => selected.length, [selected]);
-  const busy = saving || publishing || deleting;
-  const showFeedback = (text, type = 'info') => {
-    if (!text) return;
-    if (!notify(text, type, 'Product Drafts')) {
-      setMessage(text);
-    } else {
-      setMessage('');
-    }
+  const queryArgs = {
+    apiPrefix, page, limit: PAGE_SIZE, status, sort,
+    ...(query ? { q: query } : {}), ...(sourceType ? { sourceType } : {}),
+    ...(category ? { category } : {}), ...(readiness ? { readiness } : {}),
   };
+  const { data: draftResponse, isLoading, isFetching, error: listError, refetch } = useGetProductDraftsQuery(queryArgs);
+  const [bulkUploadProductDrafts, { isLoading: uploading }] = useBulkUploadProductDraftsMutation();
+  const [updateProductDraft] = useUpdateProductDraftMutation();
+  const [archiveProductDraft] = useArchiveProductDraftMutation();
+  const [restoreProductDraft] = useRestoreProductDraftMutation();
+  const [deleteProductDraft] = useDeleteProductDraftMutation();
+  const [publishSelectedDrafts] = usePublishSelectedDraftsMutation();
+  const drafts = useMemo(() => Array.isArray(draftResponse?.data) ? draftResponse.data : [], [draftResponse]);
+  const meta = draftResponse?.meta || { page: 1, total: drafts.length, totalPages: 1, summary: summarizeLocal(drafts) };
+  const summary = meta.summary || summarizeLocal(drafts);
+
+  useEffect(() => {
+    if (Number(meta.totalPages) > 0 && page > Number(meta.totalPages)) setPage(Number(meta.totalPages));
+  }, [meta.totalPages, page]);
+
+  useEffect(() => {
+    setSelected((current) => current.filter((id) => drafts.some((draft) => draftId(draft) === id && draft.status === 'draft')));
+  }, [drafts]);
+  useEffect(() => {
+    if (!focusedDraftId || editorDraft) return;
+    const visible = drafts.find((draft) => draftId(draft) === focusedDraftId);
+    if (visible) { setEditorDraft(visible); return; }
+    api.get(`${apiPrefix}/product-drafts/${encodeURIComponent(focusedDraftId)}`, { silent: true })
+      .then((value) => setEditorDraft(value?.data || value))
+      .catch(() => setMessage('The requested draft was not found or is no longer available.'));
+  }, [apiPrefix, drafts, editorDraft, focusedDraftId]);
+
+  const showFeedback = useCallback((text, type = 'info') => {
+    if (!text) return;
+    if (!notify(text, type, 'Product Drafts')) setMessage(text);
+    else setMessage('');
+  }, [notify]);
 
   const onUpload = async () => {
-    if (!files.length) return showFeedback('Please choose one or more images first.', 'warning');
-    setMessage('');
+    if (!files.length) return showFeedback('Choose one or more product photos first.', 'warning');
     try {
-      await bulkUploadProductDrafts({ files }).unwrap();
-      setFiles([]);
-      showFeedback('Drafts created successfully.', 'success');
+      const result = await bulkUploadProductDrafts({ files, groupMode, apiPrefix }).unwrap();
+      const created = result?.data?.drafts?.length || (groupMode === 'single' ? 1 : files.length);
+      setFiles([]); setUploadOpen(false); setPage(1);
+      showFeedback(`${created} product draft${created === 1 ? '' : 's'} created.`, 'success');
+    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft upload failed.', 'error'); }
+  };
+
+  const saveDraft = useCallback(async (form, { silent = false } = {}) => {
+    try {
+      const response = await updateProductDraft({ id: draftId(form), body: { ...normalizeDraftBody(form, categories, structure), saveMode: silent ? 'auto' : 'manual' }, apiPrefix }).unwrap();
+      if (!silent) showFeedback('Draft saved successfully.', 'success');
+      return response?.data || response;
     } catch (error) {
-      showFeedback(error.data?.message || error.message || 'Draft upload failed. Please try again.', 'error');
+      if (!silent || error?.data?.code === 'DRAFT_STALE') showFeedback(error.data?.message || error.message || 'Draft could not be saved.', 'error');
+      throw error;
     }
-  };
+  }, [apiPrefix, categories, showFeedback, structure, updateProductDraft]);
 
-  const saveDraft = async (draft) => {
-    if (busy) return false;
+  const archiveOne = async (draft) => {
+    if (actionBusy) return;
+    setActionBusy(true);
     try {
-      await updateProductDraft({
-        id: draft._id || draft.id,
-        body: normalizeDraftBody(draft, categories, structure),
-      }).unwrap();
-      showFeedback('Draft saved successfully.', 'success');
-      return true;
-    } catch (error) {
-      showFeedback(error.data?.message || error.message || 'Draft could not be saved. Please try again.', 'error');
-      return false;
-    }
+      await archiveProductDraft({ id: draftId(draft), apiPrefix }).unwrap();
+      setSelected((current) => current.filter((id) => id !== draftId(draft)));
+      if (draftId(editorDraft) === draftId(draft)) setEditorDraft(null);
+      showFeedback('Draft archived. You can restore it from Archived.', 'success');
+    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be archived.', 'error'); }
+    finally { setActionBusy(false); }
   };
 
-  const removeDraft = async (draftId) => {
-    if (busy) return;
-    if (!window.confirm('Delete this draft?')) return;
+  const restoreOne = async (draft) => {
+    if (actionBusy) return;
+    setActionBusy(true);
+    try { await restoreProductDraft({ id: draftId(draft), apiPrefix }).unwrap(); showFeedback('Draft restored.', 'success'); }
+    catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be restored.', 'error'); }
+    finally { setActionBusy(false); }
+  };
+
+  const permanentlyDelete = async () => {
+    if (!pendingDelete || actionBusy) return;
+    const expected = String(pendingDelete.name || draftId(pendingDelete)).trim();
+    if (deleteConfirmation.trim() !== expected) return;
+    setActionBusy(true);
     try {
-      await deleteProductDraft(draftId).unwrap();
-      forms.current.delete(draftId);
-      showFeedback('Draft deleted successfully.', 'success');
-    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be deleted. Please try again.', 'error'); }
+      await deleteProductDraft({ id: draftId(pendingDelete), confirm: expected, apiPrefix }).unwrap();
+      setPendingDelete(null); setDeleteConfirmation('');
+      showFeedback('Archived draft deleted permanently.', 'success');
+    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be deleted.', 'error'); }
+    finally { setActionBusy(false); }
   };
 
-  const publishSelected = async () => {
-    if (busy || publishingRef.current) return;
-    if (!selected.length) return showFeedback('Select at least one draft to publish.', 'warning');
-    if (!structure) return showFeedback('Load product configuration before publishing.', 'error');
+  const publishIds = async (ids) => {
+    if (!ids.length || publishingRef.current) return null;
     publishingRef.current = true; setPublishing(true);
     try {
-      const selectedForms = selected.map(id => ({ id, form: forms.current.get(id) || drafts.find(draft => (draft._id || draft.id) === id) }));
-      // Persist the reviewed card values before publishing; stop if any save fails.
-      for (const item of selectedForms) {
-        if (!item.form) throw new Error('A selected draft is no longer available. Refresh the list.');
-        await updateProductDraft({ id: item.id, body: normalizeDraftBody(item.form, categories, structure) }).unwrap();
-      }
-      await publishSelectedDrafts({ ids: selectedForms.map(item => item.id) }).unwrap();
-      setSelected([]);
-      showFeedback('Selected drafts published.', 'success');
+      const response = await publishSelectedDrafts({ ids, apiPrefix }).unwrap();
+      const results = response?.data?.results || [];
+      const failed = results.filter((item) => item.status === 'failed');
+      setSelected(failed.map((item) => item.id));
+      showFeedback(response?.message || 'Selected drafts published.', failed.length ? 'warning' : 'success');
+      return response;
     } catch (error) {
-      showFeedback(error.data?.message || error.message || 'Selected drafts could not be published. Please try again.', 'error');
+      const results = error?.data?.data?.results || [];
+      if (results.length) setSelected(results.filter((item) => item.status === 'failed').map((item) => item.id));
+      showFeedback(error.data?.message || error.message || 'Selected drafts could not be published.', 'error');
+      throw error;
     } finally { publishingRef.current = false; setPublishing(false); }
   };
 
-  return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Product Drafts"
-        note="Bulk upload images, create draft cards, edit fields, and publish when ready."
-      ><a href="/admin/social-import" className="admin-btn-ghost">Import Instagram / Facebook link</a></PageHeader>
+  const publishFromEditor = async (form) => {
+    const saved = await saveDraft(form, { silent: true });
+    const response = await publishIds([draftId(form)]);
+    if (!response?.data?.results?.some((item) => item.status === 'failed')) setEditorDraft(null);
+    return saved;
+  };
 
-      {focusedDraftId && <p className="admin-note">Showing your imported draft. <a className="text-wine underline" href="/admin/product-drafts">View all drafts</a></p>}
+  const applyBulkCategory = async () => {
+    if (!bulkCategory || !selected.length || actionBusy) return;
+    setActionBusy(true); let failures = 0;
+    for (const id of selected) {
+      const draft = drafts.find((item) => draftId(item) === id);
+      if (!draft) continue;
+      try { await saveDraft({ ...draft, category: bulkCategory }, { silent: true }); } catch { failures += 1; }
+    }
+    setActionBusy(false);
+    if (failures) showFeedback(`${failures} selected draft${failures === 1 ? '' : 's'} could not be updated.`, 'error');
+    else { setBulkCategory(''); showFeedback('Category applied to selected drafts.', 'success'); }
+  };
 
-      {structureError && <p role="alert" className="admin-card p-4">{structureError} <button type="button" onClick={loadStructure}>Retry product configuration</button></p>}
-      {listError && <p role="alert" className="admin-card p-4">{listError.data?.message || listError.message || 'Drafts could not be loaded.'} <button type="button" onClick={refetch}>Retry loading drafts</button></p>}
-      <div className="admin-card p-4 md:p-5">
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-          <label className="grid gap-2">
-            <span className="text-sm font-black text-charcoal">Bulk upload draft images</span>
-            <input
-              type="file"
-              multiple
-              accept="image/jpeg,image/jpg,image/png,image/webp"
-              onChange={(event) => setFiles(Array.from(event.target.files || []))}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-            />
-          </label>
-          <div className="flex items-end gap-2">
-            <button type="button" onClick={onUpload} disabled={uploading} className="inline-flex h-12 items-center gap-2 rounded-xl bg-wine px-5 text-sm font-black text-white disabled:opacity-60">
-              <Upload className="h-4 w-4" />
-              {uploading ? 'Uploading...' : 'Create Drafts'}
-            </button>
-            <button type="button" onClick={() => setFiles([])} className="inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-black text-slate-600">
-              <X className="h-4 w-4" />
-              Clear
-            </button>
-          </div>
-        </div>
-        {files.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {files.map((file) => <span key={`${file.name}-${file.size}`} className="rounded-full bg-[#fff5f7] px-3 py-1 text-xs font-bold text-wine">{file.name}</span>)}
-          </div>
-        )}
-      </div>
+  const archiveSelected = async () => {
+    if (!selected.length || actionBusy) return;
+    setActionBusy(true); let failures = 0;
+    for (const id of selected) { try { await archiveProductDraft({ id, apiPrefix }).unwrap(); } catch { failures += 1; } }
+    setActionBusy(false); setSelected([]);
+    showFeedback(failures ? `${failures} selected draft${failures === 1 ? '' : 's'} could not be archived.` : 'Selected drafts archived.', failures ? 'warning' : 'success');
+  };
 
-      <div className="flex flex-wrap items-center justify-between gap-3 admin-card p-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-wine/60">Selected drafts</p>
-          <p className="mt-1 text-sm font-semibold text-slate-500">{selectedCount} selected · {drafts.length} total</p>
-        </div>
-        <button type="button" onClick={publishSelected} disabled={!selected.length || busy || !structure} className="admin-btn disabled:opacity-60">
-          <CopyPlus className="h-4 w-4" />
-          {publishing ? 'Publishing...' : 'Publish Selected'}
-        </button>
-      </div>
+  const chooseSummary = (nextReadiness, nextStatus = 'active') => {
+    setStatus(nextStatus); setReadiness(nextReadiness); setPage(1); setSelected([]);
+  };
+  const selectable = drafts.filter((draft) => draft.status === 'draft').map(draftId);
+  const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id));
 
-      {message && <p role="status" className="rounded-2xl bg-[#fdf4f6] px-4 py-3 text-sm font-bold text-wine">{message}</p>}
+  return <section className="product-drafts-page">
+    <PageHeader title="Product Drafts" note="Prepare, review and publish catalog products from one focused workspace.">
+      <a href={`${apiPrefix}/social-import`} className="admin-btn-ghost">Import social link</a>
+      <button type="button" className="admin-btn" onClick={() => setUploadOpen((value) => !value)}><ImagePlus size={16} />Create from photos</button>
+    </PageHeader>
+    {focusedDraftId && <p className="admin-note">Opened from an import. <a className="text-wine underline" href={`${apiPrefix}/product-drafts`}>Return to all drafts</a></p>}
+    {(structureError || categoryError) && <div role="alert" className="draft-alert is-error"><span>{structureError || categoryError}</span><button type="button" onClick={() => { loadStructure(); loadCategories(); }}>Retry</button></div>}
+    {listError && <div role="alert" className="draft-alert is-error"><span>{listError.data?.message || listError.message || 'Drafts could not be loaded.'}</span><button type="button" onClick={refetch}>Retry</button></div>}
+    {message && <p role="status" className="draft-alert">{message}</p>}
+    {uploadOpen && <UploadPanel files={files} setFiles={setFiles} groupMode={groupMode} setGroupMode={setGroupMode} uploading={uploading} onUpload={onUpload} onClose={() => { setUploadOpen(false); setFiles([]); }} />}
 
-      <div className="admin-card overflow-hidden">
-        {isLoading ? (
-          <Loader label="Loading drafts..." />
-        ) : !visibleDrafts.length ? (
-          <div className="p-5"><EmptyState title="No product drafts found" note="Upload product images to create draft records." /></div>
-        ) : (
-          <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleDrafts.map((draft) => (
-              <DraftCard
-                key={draft._id || draft.id}
-                draft={draft}
-                categories={categories}
-                structure={structure}
-                selected={selected.includes(draft._id || draft.id)}
-                onSelect={() => setSelected((current) => current.includes(draft._id || draft.id) ? current.filter((id) => id !== (draft._id || draft.id)) : [...current, draft._id || draft.id])}
-                onSave={saveDraft}
-                onDelete={removeDraft}
-                onFormChange={rememberForm}
-                busy={busy}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
+    <div className="draft-summary-grid" aria-label="Draft summary">
+      <SummaryButton label="All active" value={Number(summary.draft || 0) + Number(summary.published || 0)} active={status === 'active' && !readiness} onClick={() => chooseSummary('', 'active')} />
+      <SummaryButton label="Needs details" value={summary.incomplete || 0} tone="danger" active={readiness === 'incomplete'} onClick={() => chooseSummary('incomplete')} />
+      <SummaryButton label="Needs review" value={summary.review || 0} active={readiness === 'review'} onClick={() => chooseSummary('review')} />
+      <SummaryButton label="Ready" value={summary.ready || 0} tone="success" active={readiness === 'ready'} onClick={() => chooseSummary('ready')} />
+      <SummaryButton label="Published" value={summary.published || 0} active={status === 'published'} onClick={() => chooseSummary('', 'published')} />
+      <SummaryButton label="Archived" value={summary.archived || 0} active={status === 'archived'} onClick={() => chooseSummary('', 'archived')} />
+    </div>
+
+    <div className="admin-card draft-toolbar">
+      <label className="draft-search"><Search size={18} /><input value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Search name, SKU or barcode" aria-label="Search product drafts" />{searchValue && <button type="button" onClick={() => setSearchValue('')} aria-label="Clear search"><X size={15} /></button>}</label>
+      <div className="draft-filters"><Filter size={16} /><Select value={sourceType} onChange={(event) => { setSourceType(event.target.value); setPage(1); }} aria-label="Filter by draft source"><option value="">All sources</option><option value="manual">Manual / upload</option><option value="social-import">Social import</option><option value="reel-import">Reel import</option></Select><Select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }} aria-label="Filter by category"><option value="">All categories</option>{categories.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</Select><Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} aria-label="Sort drafts"><option value="updated">Recently updated</option><option value="oldest">Oldest first</option><option value="name">Product name</option></Select><button type="button" onClick={refetch} className="admin-btn-ghost" disabled={isFetching}><RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />Refresh</button></div>
+    </div>
+
+    {!!selected.length && <div className="draft-bulk-bar"><strong>{selected.length} selected</strong><div><Select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)} aria-label="Category for selected drafts"><option value="">Assign category...</option>{categories.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</Select><button type="button" className="admin-btn-ghost" disabled={!bulkCategory || actionBusy} onClick={applyBulkCategory}><Check size={15} />Apply</button></div><button type="button" className="admin-btn-ghost" disabled={actionBusy} onClick={archiveSelected}><Archive size={15} />Archive</button><button type="button" className="admin-btn" disabled={publishing || actionBusy || !structure} onClick={() => publishIds(selected)}><CopyPlus size={16} />{publishing ? 'Publishing...' : 'Publish selected'}</button></div>}
+
+    <div className="admin-card draft-queue"><div className="draft-queue__heading"><label><input type="checkbox" checked={allSelected} disabled={!selectable.length} onChange={() => setSelected(allSelected ? [] : selectable)} />Select page</label><span>{meta.total || 0} result{Number(meta.total) === 1 ? '' : 's'}</span></div>{isLoading ? <Loader label="Loading product drafts..." /> : !drafts.length ? <EmptyState title={status === 'archived' ? 'No archived drafts' : 'No product drafts found'} note={query ? 'Try a different search or clear the filters.' : 'Create drafts from photos or import a social product link.'} /> : <div className="draft-card-grid">{drafts.map((draft) => <DraftQueueCard key={draftId(draft)} draft={draft} selected={selected.includes(draftId(draft))} busy={actionBusy || publishing} onSelect={() => setSelected((current) => current.includes(draftId(draft)) ? current.filter((id) => id !== draftId(draft)) : [...current, draftId(draft)])} onEdit={() => setEditorDraft(draft)} onPreview={() => setPreviewDraft(draft)} onArchive={() => archiveOne(draft)} onRestore={() => restoreOne(draft)} onDelete={() => { setPendingDelete(draft); setDeleteConfirmation(''); }} />)}</div>}{Number(meta.totalPages || 1) > 1 && <div className="draft-pagination"><button type="button" disabled={page <= 1 || isFetching} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={16} />Previous</button><span>Page {meta.page || page} of {meta.totalPages}</span><button type="button" disabled={page >= meta.totalPages || isFetching} onClick={() => setPage((value) => value + 1)}>Next<ChevronRight size={16} /></button></div>}</div>
+
+    {editorDraft && <DraftEditor draft={editorDraft} categories={categories} structure={structure} apiPrefix={apiPrefix} onClose={() => setEditorDraft(null)} onSave={saveDraft} onPublish={publishFromEditor} onPreview={setPreviewDraft} />}
+    {previewDraft && <ProductPreviewModal product={normalizeDraftBody(previewDraft, categories, structure)} onClose={() => setPreviewDraft(null)} />}
+    {pendingDelete && <ConfirmDelete draft={pendingDelete} value={deleteConfirmation} onChange={setDeleteConfirmation} busy={actionBusy} onCancel={() => { setPendingDelete(null); setDeleteConfirmation(''); }} onDelete={permanentlyDelete} />}
+  </section>;
 }
 
-function DraftCard({ draft, structure, categories, selected, onSelect, onSave, onDelete, onFormChange, busy }) {
-  const dirty = useRef(false);
-  const [form, setForm] = useState(() => ({
-    ...draft,
-    sizes: Array.isArray(draft.sizes) ? draft.sizes.join(', ') : '',
-    colors: Array.isArray(draft.colors) ? draft.colors.join(', ') : '',
-    tags: Array.isArray(draft.tags) ? draft.tags.join(', ') : '',
-    highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
-    sizingMode: draft.sizingMode || 'auto',
-    sizeChartProfile: draft.sizeChartProfile || 'auto',
-    sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
-  }));
-  const [subcategories, setSubcategories] = useState([]);
-  const draftId = draft._id || draft.id;
-  useEffect(() => { onFormChange(draftId, form); }, [draftId, form, onFormChange]);
+function SummaryButton({ label, value, active, tone = '', onClick }) {
+  return <button type="button" onClick={onClick} className={`draft-summary ${active ? 'is-active' : ''} ${tone ? `is-${tone}` : ''}`}><span>{label}</span><strong>{value}</strong></button>;
+}
 
-  useEffect(() => {
-    if (dirty.current) return;
-    setForm({
-      ...draft,
-      sizes: Array.isArray(draft.sizes) ? draft.sizes.join(', ') : '',
-      colors: Array.isArray(draft.colors) ? draft.colors.join(', ') : '',
-      tags: Array.isArray(draft.tags) ? draft.tags.join(', ') : '',
-      highlights: Array.isArray(draft.highlights) ? draft.highlights.join(', ') : '',
-      sizingMode: draft.sizingMode || 'auto',
-      sizeChartProfile: draft.sizeChartProfile || 'auto',
-      sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
-    });
-  }, [draft]);
+function UploadPanel({ files, setFiles, groupMode, setGroupMode, uploading, onUpload, onClose }) {
+  const previews = useMemo(() => files.map((file) => ({ file, url: URL.createObjectURL(file) })), [files]);
+  useEffect(() => () => previews.forEach((item) => URL.revokeObjectURL(item.url)), [previews]);
+  const add = (incoming) => setFiles((current) => [...current, ...Array.from(incoming || [])].slice(0, 30));
+  return <section className="admin-card draft-upload-panel" aria-label="Create drafts from photos"><div className="draft-panel-heading"><div><p>FAST CATALOG SETUP</p><h2>Create drafts from product photos</h2><span>Photos stay editable before anything is published.</span></div><button type="button" onClick={onClose} aria-label="Close upload panel"><X /></button></div><div className="draft-upload-options"><label className={groupMode === 'single' ? 'is-selected' : ''}><input type="radio" name="draft-group" checked={groupMode === 'single'} onChange={() => setGroupMode('single')} /><strong>One product, multiple photos</strong><span>Use when every photo shows the same item.</span></label><label className={groupMode === 'separate' ? 'is-selected' : ''}><input type="radio" name="draft-group" checked={groupMode === 'separate'} onChange={() => setGroupMode('separate')} /><strong>One draft per photo</strong><span>Use when each photo is a different item.</span></label></div><label className="draft-dropzone"><Upload size={24} /><strong>Choose up to 30 product photos</strong><span>JPG, PNG or WEBP. Each photo can be up to 2MB.</span><input type="file" multiple accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => add(event.target.files)} /></label>{!!previews.length && <div className="draft-upload-previews">{previews.map(({ file, url }, index) => <figure key={`${file.name}-${file.size}-${index}`}><img src={url} alt="" /><figcaption title={file.name}>{file.name}</figcaption><button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}><X size={14} /></button>{index === 0 && groupMode === 'single' && <b>Cover</b>}</figure>)}</div>}<div className="draft-upload-actions"><span>{files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} selected` : 'No photos selected'}</span><button type="button" className="admin-btn-ghost" disabled={!files.length || uploading} onClick={() => setFiles([])}>Clear</button><button type="button" className="admin-btn" disabled={!files.length || uploading} onClick={onUpload}>{uploading ? 'Creating drafts...' : groupMode === 'single' ? 'Create one draft' : `Create ${files.length} drafts`}</button></div></section>;
+}
+
+function DraftQueueCard({ draft, selected, busy, onSelect, onEdit, onPreview, onArchive, onRestore, onDelete }) {
+  const readiness = draft.readiness || localReadiness(draft);
+  const image = draft.images?.find((item) => item.primary)?.url || draft.images?.[0]?.url || draft.image;
+  const published = draft.status === 'published'; const archived = draft.status === 'archived';
+  const statusLabel = published ? 'Published' : archived ? 'Archived' : readiness.state === 'incomplete' ? 'Needs details' : readiness.state === 'ready' ? 'Ready' : 'Review';
+  return <article className={`draft-queue-card ${selected ? 'is-selected' : ''}`}><div className="draft-queue-card__image">{image ? <img src={normalizeImageUrl(image)} alt={draft.name || 'Product draft'} loading="lazy" /> : <ImagePlus size={30} />}<span className={`draft-status is-${readiness.state}`}>{statusLabel}</span>{draft.status === 'draft' && <label aria-label={`Select ${draft.name || 'draft'}`}><input type="checkbox" checked={selected} disabled={busy} onChange={onSelect} /></label>}</div><div className="draft-queue-card__body"><div><p>{sourceLabel(draft.sourceType)}</p><h3 title={draft.name || 'Unnamed product'}>{draft.name || 'Unnamed product'}</h3><span>{categoryName(draft.category) || 'Category not selected'} · Updated {formatRelative(draft.updatedAt)}</span></div><div className="draft-progress"><span><i style={{ width: `${readiness.score || 0}%` }} /></span><b>{readiness.score || 0}% complete</b></div>{(draft.lastPublishError || readiness.issues?.[0]) && <p className="draft-first-issue">{draft.lastPublishError || readiness.issues[0]}</p>}</div><div className="draft-queue-card__actions">{published && draft.publishedProductId ? <a className="admin-btn" href={`/admin/products/edit?id=${encodeURIComponent(draft.publishedProductId)}`}><FilePenLine size={15} />Edit product</a> : archived ? <><button type="button" className="admin-btn" onClick={onRestore} disabled={busy}><ArchiveRestore size={15} />Restore</button><button type="button" className="draft-danger-button" onClick={onDelete} disabled={busy || draft.publishedProductId} title={draft.publishedProductId ? 'Published draft history is retained' : ''}><Trash2 size={15} />Delete</button></> : <><button type="button" className="admin-btn" onClick={onEdit} disabled={busy}><FilePenLine size={15} />Review</button><button type="button" className="admin-btn-ghost" onClick={onPreview}><Eye size={15} />Preview</button><button type="button" className="draft-icon-button" onClick={onArchive} disabled={busy} aria-label="Archive draft"><Archive size={16} /></button></>}</div></article>;
+}
+
+function DraftEditor({ draft, categories, structure, apiPrefix, onClose, onSave, onPublish, onPreview }) {
+  const [form, setForm] = useState(() => draftToForm(draft));
+  const [tab, setTab] = useState('basic');
+  const [subcategories, setSubcategories] = useState([]);
+  const [dirty, setDirty] = useState(false);
+  const [saveState, setSaveState] = useState('saved');
+  const [error, setError] = useState('');
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [recovery, setRecovery] = useState(null);
+  const saveLock = useRef(false);
+  const editVersion = useRef(0);
+  const initialized = useRef(false);
+  const storageKey = `samira-product-draft:${draftId(draft)}`;
+  const published = draft.status === 'published';
 
   useEffect(() => {
     const categoryId = form.category?._id || form.category || '';
-    fetchSubcategories(api, categoryId).then(setSubcategories);
-  }, [form.category]);
+    fetchSubcategories(api, categoryId, apiPrefix).then(setSubcategories);
+  }, [apiPrefix, form.category]);
+  useEffect(() => {
+    try {
+      const local = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (local?.form && Number(local.revision) === Number(draft.revision || 0) && new Date(local.savedAt) > new Date(draft.updatedAt || 0)) setRecovery(local);
+    } catch { /* Ignore damaged local recovery state. */ }
+    initialized.current = true;
+  }, [draft.revision, draft.updatedAt, storageKey]);
+  useEffect(() => {
+    if (!initialized.current || !dirty) return;
+    try { localStorage.setItem(storageKey, JSON.stringify({ form, revision: form.revision || 0, savedAt: new Date().toISOString() })); } catch { /* Browser storage may be unavailable. */ }
+  }, [dirty, form, storageKey]);
+  useEffect(() => {
+    const beforeUnload = (event) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event) => { if (event.key === 'Escape') { if (!dirty || window.confirm('Discard unsaved changes and close this draft?')) onClose(); } };
+    window.addEventListener('keydown', onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKeyDown); };
+  }, [dirty, onClose]);
 
-  const editForm = (updater) => { dirty.current = true; setForm(updater); };
-  const update = (field, value) => editForm((current) => ({ ...current, [field]: value }));
-  const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
-  const sizingProduct = { ...form, category: categoryName, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
+  const edit = useCallback((updater) => {
+    editVersion.current += 1;
+    setDirty(true); setSaveState('unsaved'); setStale(false); setError('');
+    setForm((current) => typeof updater === 'function' ? updater(current) : updater);
+  }, []);
+  const update = (field, value) => edit((current) => ({ ...current, [field]: value }));
+  const save = useCallback(async ({ silent = false } = {}) => {
+    if (saveLock.current || published || uploadBusy) return null;
+    saveLock.current = true; setSaveState('saving'); setError('');
+    const version = editVersion.current;
+    try {
+      const saved = await onSave(form, { silent });
+      setForm((current) => ({ ...current, revision: saved?.revision ?? current.revision, updatedAt: saved?.updatedAt || current.updatedAt }));
+      if (version === editVersion.current) {
+        setDirty(false); setSaveState('saved');
+        try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+      } else setSaveState('unsaved');
+      return saved;
+    } catch (failure) {
+      setSaveState('error'); setError(failure.data?.message || failure.message || 'Draft could not be saved.');
+      if (failure.data?.code === 'DRAFT_STALE') setStale(true);
+      throw failure;
+    } finally { saveLock.current = false; }
+  }, [form, onSave, published, storageKey, uploadBusy]);
+  useEffect(() => {
+    if (!dirty || published || stale || uploadBusy || saveState === 'saving') return undefined;
+    const timer = window.setTimeout(() => save({ silent: true }).catch(() => null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [dirty, form, published, save, saveState, stale, uploadBusy]);
+
+  const close = () => { if (!dirty || window.confirm('Discard unsaved changes and close this draft?')) onClose(); };
+  const publish = async () => {
+    setError(''); setSaveState('saving');
+    try {
+      await onPublish(form);
+      try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+    } catch (failure) {
+      setSaveState('error'); setError(failure.data?.message || failure.message || 'Draft could not be published.');
+    }
+  };
+  const categoryLabel = categories.find((item) => String(item._id) === String(form.category?._id || form.category))?.name || '';
+  const sizingProduct = { ...form, category: categoryLabel, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
   const sizingMode = resolveSizingMode(sizingProduct);
-  const profile = inferSizeChartProfile(sizingProduct);
   const sizes = getSelectableSizes(sizingProduct);
+  const colors = list(form.colors);
   const columns = getSizeChartColumns(sizingProduct);
   const rows = reconcileSizeChartRows(form.sizeChart?.rows, sizes, columns);
-  const updateMeasurement = (size, field, value) => {
-    editForm((current) => ({
-      ...current,
-      sizeChart: {
-        unit: current.sizeChart?.unit === 'cm' ? 'cm' : 'in',
-        columns: columns.map((column) => column.key),
-        rows: reconcileSizeChartRows(current.sizeChart?.rows, getSelectableSizes({ ...current, category: categoryName }), columns)
-          .map((row) => row.size === size ? { ...row, [field]: value } : row),
-      },
-    }));
-  };
+  const syncVariants = () => edit((current) => ({ ...current, variants: buildVariantMatrix(sizes, colors, current.variants || []) }));
+  const updateVariant = (index, field, value) => edit((current) => ({ ...current, variants: (current.variants || []).map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item) }));
+  const updateMeasurement = (size, field, value) => edit((current) => ({ ...current, sizeChart: {
+    unit: current.sizeChart?.unit === 'cm' ? 'cm' : 'in', columns: columns.map((item) => item.key),
+    rows: reconcileSizeChartRows(current.sizeChart?.rows, getSelectableSizes({ ...current, category: categoryLabel }), columns).map((row) => row.size === size ? { ...row, [field]: value } : row),
+  } }));
+  const readiness = localReadiness(normalizeDraftBody(form, categories, structure));
+  const common = { form, update, edit, categories, structure, apiPrefix, subcategories, sizingMode, sizingProduct, sizes, colors, columns, rows, syncVariants, updateVariant, updateMeasurement, setUploadBusy };
 
-  return (
-    <article className="rounded-[22px] border border-[#f0e5db] bg-[#fffdfa] p-4 shadow-[0_10px_24px_rgba(111,74,52,0.05)]">
-      <div className="flex items-start justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm font-black text-charcoal">
-          <input type="checkbox" disabled={busy || draft.status === 'published'} checked={selected} onChange={onSelect} className="accent-wine" />
-          Draft
-        </label>
-        <button type="button" disabled={busy} onClick={() => onDelete(draft._id || draft.id)} className="text-rose" aria-label="Delete draft">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-      {draft.status === 'published' && draft.publishedProductId && <a href={'/admin/products/edit?id=' + encodeURIComponent(draft.publishedProductId)} className="admin-btn-ghost mt-3 w-full">Edit published product</a>}
-      <div className="mt-3 overflow-hidden rounded-2xl bg-[#f7efe8]">
-        <img src={normalizeImageUrl(form.image || form.images?.[0]?.url || '/uploads/placeholder.jpg')} alt={form.name || 'Draft'} className="h-44 w-full object-cover" />
-      </div>
-      <fieldset disabled={busy || draft.status === 'published'} className="mt-4 min-w-0 space-y-3">
-        {draft.status !== 'published' && <ProductSmartFill form={form} categories={categories} structure={structure} priceField="sellingPrice" seo={false}
-          disabled={busy || !structure} onApply={(patch, undo) => editForm(current => applySmartPatch(current, patch, undo))} />}
-        <TextInput value={form.name || ''} onChange={(event) => update('name', event.target.value)} placeholder="Product name" />
-        <label className="grid gap-1 text-xs font-bold">Description<textarea rows={4} maxLength={6000} value={form.description || ''} onChange={(event) => update('description', event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm font-normal" /></label>
-        {['social-import', 'reel-import'].includes(draft.sourceType) && <>
-          {draft.sourceUrl && <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-wine underline">Original {draft.sourcePlatform === 'facebook' ? 'Facebook' : 'Instagram'} post</a>}
-          <div className="grid grid-cols-4 gap-2">{(form.images || []).map((image, index) => <button key={image.url} type="button" onClick={() => editForm((value) => ({ ...value, image: image.url, images: value.images.map((item) => ({ ...item, primary: item.url === image.url })) }))} aria-label={'Set imported photo ' + (index + 1) + ' as cover'} aria-pressed={image.primary} className={'overflow-hidden rounded-lg border-2 ' + (image.primary ? 'border-wine' : 'border-transparent')}><img src={normalizeImageUrl(image.url)} alt={'Imported product photo ' + (index + 1)} className="aspect-[3/4] w-full object-cover" loading="lazy" /></button>)}</div>
-        </>}
-        <Select value={form.category?._id || form.category || ''} onChange={(event) => update('category', event.target.value)}>
-          <option value="">Select category</option>
-          {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
-        </Select>
-        <Select value={form.subCategory || ''} onChange={(event) => update('subCategory', event.target.value)}>
-          <option value="">{subcategories.length ? 'Select subcategory' : 'No subcategories yet'}</option>
-          {form.subCategory && !subcategories.includes(form.subCategory) ? <option value={form.subCategory}>{form.subCategory}</option> : null}
-          {subcategories.map((item) => <option key={item} value={item}>{item}</option>)}
-        </Select>
-        <div className="grid grid-cols-2 gap-2">
-          <TextInput type="number" value={form.originalPrice || ''} onChange={(event) => update('originalPrice', event.target.value)} placeholder="Original price" />
-          <TextInput type="number" value={form.sellingPrice ?? form.price ?? ''} onChange={(event) => update('sellingPrice', event.target.value)} placeholder="Selling price" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <TextInput type="number" value={form.stock ?? ''} onChange={(event) => update('stock', event.target.value)} placeholder="Stock" />
-          {sizingMode === 'sized' ? <TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="Sizes: S, M, L" /> : <div className="grid place-items-center rounded-xl bg-emerald-50 px-2 text-center text-[10px] font-black text-emerald-700">No size selection</div>}
-        </div>
-        {structure?.features?.sizing !== false && <Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}>
-          <option value="auto">Automatic sizing</option>
-          <option value="sized">Selectable sizes</option>
-          <option value="free-size">No size selection / free size</option>
-        </Select>}
-        {sizingMode === 'sized' ? (
-          <details className="rounded-xl border border-[#eadfd5] bg-white">
-            <summary className="cursor-pointer px-3 py-3 text-xs font-black text-charcoal">Edit garment size chart</summary>
-            <div className="border-t border-[#eee5de] p-3">
-              <Select value={form.sizeChartProfile || 'auto'} onChange={(event) => update('sizeChartProfile', event.target.value)}>
-                <option value="auto">Automatic ({SIZE_CHART_PROFILES[profile]?.label || 'apparel'})</option>
-                {Object.entries(SIZE_CHART_PROFILES).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
-              </Select>
-              <div className="mt-3 flex justify-end gap-1">
-                {['in', 'cm'].map((unit) => <button key={unit} type="button" onClick={() => update('sizeChart', { ...(form.sizeChart || {}), unit })} className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${form.sizeChart?.unit === unit ? 'bg-wine text-white' : 'bg-slate-100 text-slate-500'}`}>{unit}</button>)}
-              </div>
-              {sizes.length ? (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-max text-left text-[10px]">
-                    <thead><tr><th className="p-2">Size</th>{columns.map((column) => <th key={column.key} className="min-w-28 p-2">{column.shortLabel}</th>)}</tr></thead>
-                    <tbody>{rows.map((row) => <tr key={row.size} className="border-t"><th className="p-2">{row.size}</th>{columns.map((column) => <td key={column.key} className="p-1"><input type="number" min="0.1" step="0.1" value={row[column.key] ?? ''} onChange={(event) => updateMeasurement(row.size, column.key, event.target.value)} aria-label={`${row.size} ${column.label}`} className="h-9 w-24 rounded-lg border px-2" /></td>)}</tr>)}</tbody>
-                  </table>
-                </div>
-              ) : <p className="mt-3 text-[10px] font-bold text-amber-700">Add size labels to generate the chart.</p>}
-            </div>
-          </details>
-        ) : null}
-        {structure?.attributes?.map((attribute) => <label key={attribute.key} className="grid gap-1 text-xs font-bold">{attribute.label}{attribute.unit ? ' (' + attribute.unit + ')' : ''}{attribute.required ? ' *' : ''}<TextInput value={form.attributeValues?.[attribute.key] ?? ''} maxLength={500} onChange={(event) => update('attributeValues', { ...form.attributeValues, [attribute.key]: event.target.value })} /></label>)}
-        <TextInput value={form.colors || ''} onChange={(event) => update('colors', event.target.value)} placeholder="Colors" />
-        <TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} placeholder="Fabric" />
-        <TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} placeholder="Occasion" />
-        <TextInput value={form.tags || ''} onChange={(event) => update('tags', event.target.value)} placeholder="Tags" />
-        <label className="grid gap-1 text-xs font-bold">Short description<TextInput value={form.shortDescription || ''} onChange={(event) => update('shortDescription', event.target.value)} /></label>
-        <label className="grid gap-1 text-xs font-bold">Highlights<TextInput value={form.highlights || ''} onChange={(event) => update('highlights', event.target.value)} placeholder="Separate highlights with commas" /></label>
-        <button type="button" onClick={async () => { if (await onSave(form)) dirty.current = false; }} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-wine px-4 text-sm font-black text-white">
-          <Check className="h-4 w-4" />
-          Save Draft
-        </button>
-      </fieldset>
-    </article>
-  );
+  return <div className="draft-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="draft-editor-title"><aside className="draft-editor">
+    <header className="draft-editor__header"><div><p>PRODUCT REVIEW</p><h2 id="draft-editor-title">{form.name || 'Unnamed product draft'}</h2><span className={`draft-editor-save is-${saveState}`}>{saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Save failed' : 'Unsaved changes'}</span></div><button type="button" onClick={close} aria-label="Close draft editor"><X /></button></header>
+    {recovery && <div className="draft-recovery"><span>Newer unsaved changes were found on this device.</span><button type="button" onClick={() => { setForm(recovery.form); setDirty(true); setRecovery(null); }}>Restore</button><button type="button" onClick={() => { localStorage.removeItem(storageKey); setRecovery(null); }}>Discard</button></div>}
+    {stale && <div className="draft-alert is-error"><span>This draft changed elsewhere. Reload the latest version before editing again.</span><button type="button" onClick={() => window.location.reload()}>Reload</button></div>}
+    {error && <p role="alert" className="draft-alert is-error">{error}</p>}
+    <div className="draft-editor__score"><span><i style={{ width: `${readiness.score}%` }} /></span><strong>{readiness.score}% complete</strong>{readiness.issues[0] && <em>{readiness.issues[0]}</em>}</div>
+    <nav className="draft-editor__tabs" aria-label="Draft sections">{[['basic', 'Basics'], ['media', 'Photos & video'], ['inventory', 'Inventory'], ['shipping', 'Shipping'], ['content', 'Content & SEO'], ['visibility', 'Visibility']].map(([key, label]) => <button type="button" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => setTab(key)}>{label}</button>)}</nav>
+    <div className="draft-editor__content"><fieldset disabled={published || stale}>{tab === 'basic' && <BasicFields {...common} />}{tab === 'media' && <MediaFields {...common} draft={draft} />}{tab === 'inventory' && <InventoryFields {...common} />}{tab === 'shipping' && <ShippingFields {...common} />}{tab === 'content' && <ContentFields {...common} />}{tab === 'visibility' && <VisibilityFields {...common} />}</fieldset></div>
+    <footer className="draft-editor__footer"><button type="button" className="admin-btn-ghost" onClick={() => onPreview({ ...form, category: categories.find((item) => String(item._id) === String(form.category)) || form.category })}><Eye size={16} />Preview</button><span /><button type="button" className="admin-btn-ghost" onClick={close}>Close</button>{!published && <button type="button" className="admin-btn-ghost" disabled={!dirty || saveState === 'saving' || stale || uploadBusy} onClick={() => save().catch(() => null)}><Check size={16} />Save draft</button>}{!published && <button type="button" className="admin-btn" disabled={saveState === 'saving' || stale || uploadBusy || !structure} onClick={publish}><PackageCheck size={16} />Save & publish</button>}</footer>
+  </aside></div>;
 }
 
-function normalizeDraftBody(form, categories = [], structure) {
-  const categoryName = categories.find((category) => String(category._id) === String(form.category?._id || form.category))?.name || '';
-  const sizingProduct = { ...form, category: categoryName, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
-  const sizingMode = resolveSizingMode(sizingProduct);
+function BasicFields({ form, update, edit, categories, structure, apiPrefix, subcategories }) {
+  return <div className="draft-form-section"><ProductSmartFill form={form} categories={categories} structure={structure} apiPrefix={apiPrefix} priceField="sellingPrice" onApply={(patch, undo) => edit((current) => applySmartPatch(current, patch, undo))} disabled={!structure} /><SectionTitle title="Product identity" note="Customer-facing name, category and commercial identifiers." />{!categories.length && <p className="draft-inline-note">Create an active category before publishing this product.</p>}<Field label="Product name" required><TextInput value={form.name || ''} maxLength={180} onChange={(event) => update('name', event.target.value)} /></Field><div className="draft-form-grid"><Field label="Category" required><Select value={form.category?._id || form.category || ''} onChange={(event) => edit((current) => ({ ...current, category: event.target.value, subCategory: '' }))}><option value="">Select category</option>{categories.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</Select></Field><Field label="Subcategory"><Select value={form.subCategory || ''} onChange={(event) => update('subCategory', event.target.value)}><option value="">{subcategories.length ? 'Select subcategory' : 'No subcategories yet'}</option>{form.subCategory && !subcategories.includes(form.subCategory) && <option value={form.subCategory}>{form.subCategory}</option>}{subcategories.map((item) => <option key={item} value={item}>{item}</option>)}</Select></Field></div><div className="draft-form-grid"><Field label="SKU"><TextInput value={form.sku || ''} maxLength={100} onChange={(event) => update('sku', event.target.value)} /></Field><Field label="Barcode"><div className="draft-input-action"><TextInput value={form.barcode || ''} maxLength={100} onChange={(event) => update('barcode', event.target.value)} /><BarcodeScanner onDetected={(value) => update('barcode', value)} /></div></Field><Field label="Supplier SKU"><TextInput value={form.supplierSku || ''} maxLength={100} onChange={(event) => update('supplierSku', event.target.value)} /></Field><Field label="HSN code"><TextInput value={form.hsnCode || ''} maxLength={20} onChange={(event) => update('hsnCode', event.target.value)} /></Field></div><SectionTitle title="Pricing" /><div className="draft-form-grid four"><NumberField label="Selling price" required value={form.sellingPrice ?? form.price ?? ''} onChange={(value) => update('sellingPrice', value)} /><NumberField label="MRP" required value={form.originalPrice ?? ''} onChange={(value) => update('originalPrice', value)} /><NumberField label="Cost price" value={form.costPrice ?? ''} onChange={(value) => update('costPrice', value)} /><NumberField label="GST rate (%)" value={form.gstRate ?? ''} max="100" onChange={(value) => update('gstRate', value)} /></div>{structure?.attributes?.map((attribute) => <Field key={attribute.key} label={`${attribute.label}${attribute.unit ? ` (${attribute.unit})` : ''}`} required={attribute.required}><TextInput value={form.attributeValues?.[attribute.key] ?? ''} maxLength={500} onChange={(event) => update('attributeValues', { ...form.attributeValues, [attribute.key]: event.target.value })} /></Field>)}</div>;
+}
+
+function MediaFields({ form, edit, update, apiPrefix, setUploadBusy, draft }) {
+  return <div className="draft-form-section"><SectionTitle title="Product photos" note="Reorder photos and choose the storefront cover. Removed photos disappear only after saving." /><ImageUploader value={form.images || []} onChange={(value) => edit((current) => ({ ...current, images: value, image: value.find((item) => item.primary)?.url || value[0]?.url || '' }))} multiple maxFiles={12} uploadPath={`${apiPrefix}/uploads`} uploadContext="products" label="Add product photos" onBusyChange={setUploadBusy} /><SectionTitle title="Product video" note="Optional short videos help customers understand fabric and fit." /><VideoUploader value={form.videos || []} onChange={(value) => update('videos', value)} maxFiles={3} uploadPath={`${apiPrefix}/uploads/videos`} onBusyChange={setUploadBusy} />{draft.sourceUrl && <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="draft-source-link">Open original {draft.sourcePlatform || 'social'} post</a>}</div>;
+}
+
+function InventoryFields({ form, update, structure, sizingMode, sizingProduct, sizes, columns, rows, syncVariants, updateVariant, updateMeasurement }) {
+  return <div className="draft-form-section"><SectionTitle title="Inventory controls" /><div className="draft-form-grid four"><NumberField label="Total stock" required step="1" value={form.stock ?? ''} onChange={(value) => update('stock', value)} /><NumberField label="Low stock alert" step="1" value={form.lowStockAlert ?? ''} onChange={(value) => update('lowStockAlert', value)} /><NumberField label="Reorder quantity" step="1" value={form.reorderQuantity ?? ''} onChange={(value) => update('reorderQuantity', value)} /><Field label="Restock date"><TextInput type="datetime-local" value={toLocalDate(form.restockAt)} onChange={(event) => update('restockAt', event.target.value)} /></Field></div>{structure?.features?.sizing !== false && <><SectionTitle title="Sizing" note="Free-size products such as sarees do not require a size chart." /><div className="draft-form-grid"><Field label="Sizing mode"><Select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)}><option value="auto">Automatic from product type</option><option value="sized">Customer selects a size</option><option value="free-size">No size selection / free size</option></Select></Field>{sizingMode === 'sized' && <Field label="Available sizes" required><TextInput value={form.sizes || ''} onChange={(event) => update('sizes', event.target.value)} placeholder="S, M, L, XL" /></Field>}</div></>}{sizingMode === 'sized' && <div className="draft-size-chart"><div className="draft-form-grid"><Field label="Size chart profile"><Select value={form.sizeChartProfile || 'auto'} onChange={(event) => update('sizeChartProfile', event.target.value)}><option value="auto">Automatic ({SIZE_CHART_PROFILES[inferSizeChartProfile(sizingProduct)]?.label || 'apparel'})</option>{Object.entries(SIZE_CHART_PROFILES).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</Select></Field><Field label="Measurement unit"><Select value={form.sizeChart?.unit || 'in'} onChange={(event) => update('sizeChart', { ...(form.sizeChart || {}), unit: event.target.value })}><option value="in">Inches</option><option value="cm">Centimetres</option></Select></Field></div>{sizes.length ? <div className="draft-table-wrap"><table><thead><tr><th>Size</th>{columns.map((item) => <th key={item.key}>{item.shortLabel}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.size}><th>{row.size}</th>{columns.map((item) => <td key={item.key}><input type="number" min="0.1" step="0.1" value={row[item.key] ?? ''} onChange={(event) => updateMeasurement(row.size, item.key, event.target.value)} aria-label={`${row.size} ${item.label}`} /></td>)}</tr>)}</tbody></table></div> : <p className="draft-inline-note">Add size labels to generate the chart.</p>}<Field label="Fit notes"><TextArea value={form.sizeFitNotes || ''} onChange={(event) => update('sizeFitNotes', event.target.value)} /></Field></div>}<SectionTitle title="Options and variant stock" note="Create combinations after entering sizes and colours, then set stock or price for each option." /><Field label="Colours"><TextInput value={form.colors || ''} onChange={(event) => update('colors', event.target.value)} placeholder="Wine, Ivory, Black" /></Field><button type="button" className="admin-btn-ghost" onClick={syncVariants}>Build / refresh variant combinations</button>{form.variants?.length > 0 && <VariantTable variants={form.variants} updateVariant={updateVariant} />}</div>;
+}
+
+function VariantTable({ variants, updateVariant }) {
+  return <div className="draft-table-wrap"><table><thead><tr><th>Option</th><th>SKU</th><th>Stock</th><th>Price</th><th>MRP</th><th>Active</th></tr></thead><tbody>{variants.map((variant, index) => <tr key={`${variant.size}-${variant.color}-${index}`}><th>{[variant.size, variant.color].filter(Boolean).join(' / ')}</th><td><input value={variant.sku || ''} onChange={(event) => updateVariant(index, 'sku', event.target.value)} /></td><td><input type="number" min="0" step="1" value={variant.stock ?? 0} onChange={(event) => updateVariant(index, 'stock', event.target.value)} /></td><td><input type="number" min="0" value={variant.price || ''} onChange={(event) => updateVariant(index, 'price', event.target.value)} /></td><td><input type="number" min="0" value={variant.originalPrice || ''} onChange={(event) => updateVariant(index, 'originalPrice', event.target.value)} /></td><td><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => updateVariant(index, 'isActive', event.target.checked)} /></td></tr>)}</tbody></table></div>;
+}
+
+function ShippingFields({ form, update }) {
+  return <div className="draft-form-section"><SectionTitle title="Package and delivery" note="These values support courier availability and accurate shipping charges." /><div className="draft-form-grid four"><NumberField label="Packed weight (kg)" value={form.shippingWeightKg ?? ''} step="0.01" onChange={(value) => update('shippingWeightKg', value)} /><NumberField label="Length (cm)" value={form.packageDimensions?.lengthCm ?? ''} onChange={(value) => update('packageDimensions', { ...form.packageDimensions, lengthCm: value })} /><NumberField label="Width (cm)" value={form.packageDimensions?.widthCm ?? ''} onChange={(value) => update('packageDimensions', { ...form.packageDimensions, widthCm: value })} /><NumberField label="Height (cm)" value={form.packageDimensions?.heightCm ?? ''} onChange={(value) => update('packageDimensions', { ...form.packageDimensions, heightCm: value })} /></div><SectionTitle title="Sourcing and compliance" /><div className="draft-form-grid"><Field label="Country of origin"><TextInput value={form.countryOfOrigin || ''} onChange={(event) => update('countryOfOrigin', event.target.value)} /></Field><Field label="Supplier name"><TextInput value={form.supplierName || ''} onChange={(event) => update('supplierName', event.target.value)} /></Field><Field label="Manufacturer / importer details"><TextArea value={form.manufacturerDetails || ''} onChange={(event) => update('manufacturerDetails', event.target.value)} /></Field><Field label="Warranty"><TextArea value={form.warranty || ''} onChange={(event) => update('warranty', event.target.value)} /></Field></div></div>;
+}
+
+function ContentFields({ form, update }) {
+  return <div className="draft-form-section"><SectionTitle title="Customer content" /><Field label="Short description"><TextArea value={form.shortDescription || ''} maxLength={500} onChange={(event) => update('shortDescription', event.target.value)} /></Field><Field label="Full description"><TextArea rows={7} value={form.description || ''} maxLength={6000} onChange={(event) => update('description', event.target.value)} /></Field><div className="draft-form-grid"><Field label="Highlights"><TextArea value={form.highlights || ''} onChange={(event) => update('highlights', event.target.value)} placeholder="Separate highlights with commas" /></Field><Field label="Tags"><TextArea value={form.tags || ''} onChange={(event) => update('tags', event.target.value)} placeholder="Separate tags with commas" /></Field><Field label="Fabric / material"><TextInput value={form.fabric || ''} onChange={(event) => update('fabric', event.target.value)} /></Field><Field label="Occasion"><TextInput value={form.occasion || ''} onChange={(event) => update('occasion', event.target.value)} /></Field><Field label="Care instructions"><TextArea value={form.careInstructions || ''} onChange={(event) => update('careInstructions', event.target.value)} /></Field><Field label="Return policy"><TextArea value={form.returnPolicy || ''} onChange={(event) => update('returnPolicy', event.target.value)} /></Field></div><SectionTitle title="Search preview" /><Field label="Meta title"><TextInput value={form.metaTitle || ''} maxLength={100} onChange={(event) => update('metaTitle', event.target.value)} /></Field><Field label="Meta description"><TextArea value={form.metaDescription || ''} maxLength={300} onChange={(event) => update('metaDescription', event.target.value)} /></Field><Field label="Search keywords"><TextInput value={form.metaKeywords || ''} onChange={(event) => update('metaKeywords', event.target.value)} /></Field></div>;
+}
+
+function VisibilityFields({ form, update }) {
+  return <div className="draft-form-section"><SectionTitle title="Storefront placement" note="Choose where the product should appear after publication." /><div className="draft-check-grid">{[['isFeatured', 'Featured product'], ['isNewArrival', 'New arrival'], ['isBestSeller', 'Best seller'], ['showOnHomepage', 'Show on homepage'], ['showInTrending', 'Show in trending'], ['showInFestive', 'Show in festive collection']].map(([key, label]) => <label key={key}><input type="checkbox" checked={Boolean(form[key])} onChange={(event) => update(key, event.target.checked)} /><span>{label}</span></label>)}</div><SectionTitle title="Publishing schedule" /><div className="draft-form-grid"><Field label="Publish date"><TextInput type="datetime-local" value={toLocalDate(form.publishAt)} onChange={(event) => update('publishAt', event.target.value)} /></Field><NumberField label="Scheduled sale price" value={form.salePrice ?? ''} onChange={(value) => update('salePrice', value)} /><Field label="Sale starts"><TextInput type="datetime-local" value={toLocalDate(form.saleStartAt)} onChange={(event) => update('saleStartAt', event.target.value)} /></Field><Field label="Sale ends"><TextInput type="datetime-local" value={toLocalDate(form.saleEndAt)} onChange={(event) => update('saleEndAt', event.target.value)} /></Field></div></div>;
+}
+
+function ConfirmDelete({ draft, value, onChange, busy, onCancel, onDelete }) {
+  const expected = String(draft.name || draftId(draft)).trim();
+  return <div className="draft-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title"><div className="draft-confirm"><span className="draft-confirm__icon"><Trash2 /></span><h2 id="delete-draft-title">Delete archived draft permanently?</h2><p>This cannot be undone. Its published product is never deleted by this action.</p><label>Type <strong>{expected}</strong> to confirm<TextInput autoFocus value={value} onChange={(event) => onChange(event.target.value)} /></label><div><button type="button" className="admin-btn-ghost" onClick={onCancel}>Cancel</button><button type="button" className="draft-danger-button" disabled={busy || value.trim() !== expected} onClick={onDelete}>Delete permanently</button></div></div></div>;
+}
+
+function Field({ label, required, children }) { return <label className="draft-field"><span>{label}{required && <b>Required</b>}</span>{children}</label>; }
+function NumberField({ label, required, value, onChange, step = '0.01', max }) { return <Field label={label} required={required}><TextInput type="number" min="0" step={step} max={max} value={value} onChange={(event) => onChange(event.target.value)} /></Field>; }
+function SectionTitle({ title, note }) { return <div className="draft-section-title"><h3>{title}</h3>{note && <p>{note}</p>}</div>; }
+
+function draftToForm(draft) {
   return {
-    ...form,
-    category: form.category?._id || form.category || undefined,
-    images: Array.isArray(form.images) ? form.images : [],
-    videos: Array.isArray(form.videos) ? form.videos : [],
-    price: Number(form.sellingPrice ?? form.price ?? 0),
-    originalPrice: Number(form.originalPrice || form.sellingPrice || form.price || 0),
-    sellingPrice: Number(form.sellingPrice ?? form.price ?? 0),
-    stock: Number(form.stock || 0),
-    sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
-    sizingMode: sizingProduct.sizingMode || 'auto',
-    sizeChartProfile: sizingProduct.sizeChartProfile || 'auto',
-    sizeChart: buildSizeChartPayload(sizingProduct),
-    sizeFitNotes: form.sizeFitNotes || '',
+    ...draft, category: draft.category?._id || draft.category || '',
+    sizes: list(draft.sizes).join(', '), colors: list(draft.colors).join(', '),
+    tags: list(draft.tags).join(', '), highlights: list(draft.highlights).join(', '),
+    images: Array.isArray(draft.images) ? draft.images : [], videos: Array.isArray(draft.videos) ? draft.videos : [],
+    variants: Array.isArray(draft.variants) ? draft.variants : [],
+    sizeChart: draft.sizeChart || { unit: 'in', columns: [], rows: [] },
+    packageDimensions: draft.packageDimensions || { lengthCm: '', widthCm: '', heightCm: '' },
   };
 }
+
+export function normalizeDraftBody(form, categories = [], structure) {
+  const category = form.category?._id || form.category || '';
+  const categoryLabel = categories.find((item) => String(item._id) === String(category))?.name || categoryName(form.category);
+  const sizingProduct = { ...form, category: categoryLabel, ...(structure?.features?.sizing === false ? { sizingMode: 'free-size', sizeChartProfile: 'free-size' } : {}) };
+  const mode = resolveSizingMode(sizingProduct);
+  const sellingPrice = numeric(form.sellingPrice ?? form.price, 0);
+  const payload = {
+    ...form, baseRevision: Number(form.revision || 0), category: category || undefined,
+    images: Array.isArray(form.images) ? form.images : [], videos: Array.isArray(form.videos) ? form.videos : [],
+    price: sellingPrice, sellingPrice, originalPrice: numeric(form.originalPrice, sellingPrice),
+    costPrice: numeric(form.costPrice, 0), gstRate: numeric(form.gstRate, 0),
+    stock: integer(form.stock), lowStockAlert: integer(form.lowStockAlert), reorderQuantity: integer(form.reorderQuantity),
+    shippingWeightKg: numeric(form.shippingWeightKg, 0),
+    packageDimensions: { lengthCm: numeric(form.packageDimensions?.lengthCm, 0), widthCm: numeric(form.packageDimensions?.widthCm, 0), heightCm: numeric(form.packageDimensions?.heightCm, 0) },
+    sizes: mode === 'sized' ? getSelectableSizes(sizingProduct) : [], colors: list(form.colors), tags: list(form.tags), highlights: list(form.highlights),
+    sizingMode: sizingProduct.sizingMode || 'auto', sizeChartProfile: sizingProduct.sizeChartProfile || 'auto',
+    sizeChart: buildSizeChartPayload(sizingProduct), sizeFitNotes: form.sizeFitNotes || '',
+    variants: mode === 'sized' ? normalizeVariants(form.variants) : [],
+    salePrice: numeric(form.salePrice, 0), restockAt: form.restockAt || null, publishAt: form.publishAt || null,
+    saleStartAt: form.saleStartAt || null, saleEndAt: form.saleEndAt || null,
+  };
+  ['_id', 'id', '__v', 'readiness', 'status', 'archivedAt', 'publishedProductId', 'createdAt', 'updatedAt', 'createdBy', 'lastSavedBy', 'lastPublishAttemptAt', 'lastPublishError', 'sourceType', 'sourceSocialImportId', 'sourceJobId', 'sourceCandidateId', 'sourceUrl', 'sourcePlatform', 'importContext', 'storeId'].forEach((key) => delete payload[key]);
+  return payload;
+}
+
+function normalizeVariants(variants) { return (Array.isArray(variants) ? variants : []).map((item) => ({ ...item, stock: integer(item.stock), price: item.price === '' ? undefined : numeric(item.price, 0), originalPrice: item.originalPrice === '' ? undefined : numeric(item.originalPrice, 0), isActive: item.isActive !== false })); }
+function list(value) { return Array.from(new Set((Array.isArray(value) ? value : String(value || '').split(',')).map((item) => String(item || '').trim()).filter(Boolean))); }
+function numeric(value, fallback = 0) { if (value === '' || value === null || value === undefined) return fallback; const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+function integer(value) { const number = Number(value); return Number.isFinite(number) ? number : 0; }
+function draftId(draft) { return String(draft?._id || draft?.id || ''); }
+function categoryName(value) { return typeof value === 'object' ? value?.name || '' : ''; }
+function sourceLabel(value) { return value === 'reel-import' ? 'Reel import' : value === 'social-import' ? 'Social import' : 'Manual draft'; }
+function toLocalDate(value) { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return local.toISOString().slice(0, 16); }
+function formatRelative(value) { const time = new Date(value).getTime(); if (!time) return 'recently'; const minutes = Math.max(0, Math.round((Date.now() - time) / 60000)); if (minutes < 1) return 'just now'; if (minutes < 60) return `${minutes}m ago`; if (minutes < 1440) return `${Math.round(minutes / 60)}h ago`; return new Date(time).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+function localReadiness(draft = {}) { const issues = []; const warnings = []; const price = Number(draft.sellingPrice ?? draft.price); const mrp = Number(draft.originalPrice ?? price); if (String(draft.name || '').trim().length < 3) issues.push('Add a product name'); if (!draft.category) issues.push('Choose a category'); if (!(draft.images?.length || draft.image)) issues.push('Add at least one product photo'); if (!(price > 0)) issues.push('Add a valid selling price'); if (!Number.isFinite(mrp) || mrp < price) issues.push('MRP must be equal to or above the selling price'); if (!Number.isSafeInteger(Number(draft.stock)) || Number(draft.stock) < 0) issues.push('Add a whole-number stock quantity'); if (String(draft.description || '').trim().length < 20) warnings.push('Add a useful description'); if (!draft.sku) warnings.push('Add a SKU'); if (!(Number(draft.shippingWeightKg) > 0)) warnings.push('Add packed weight'); const score = Math.max(0, Math.min(100, Math.round(((6 - Math.min(6, issues.length)) / 6) * 80 + ((3 - Math.min(3, warnings.length)) / 3) * 20))); return { state: issues.length ? 'incomplete' : warnings.length ? 'review' : 'ready', score, issues, warnings }; }
+function summarizeLocal(drafts) { return drafts.reduce((summary, draft) => { summary[draft.status] = (summary[draft.status] || 0) + 1; const state = draft.readiness?.state || localReadiness(draft).state; if (draft.status === 'draft') summary[state] = (summary[state] || 0) + 1; return summary; }, { draft: 0, published: 0, archived: 0, ready: 0, review: 0, incomplete: 0 }); }

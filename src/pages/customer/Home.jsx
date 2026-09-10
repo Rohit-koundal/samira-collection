@@ -243,7 +243,8 @@ function MobileServices() {
 }
 
 function MobileCategoryScroller({ categories, navigate }) {
-  const visibleCategories = (categories || []).slice(0, 8);
+  const rootCategories = (categories || []).filter((category) => !category.parent);
+  const visibleCategories = (rootCategories.length ? rootCategories : categories || []).slice(0, 8);
 
   return (
     <section className="px-3 pb-4">

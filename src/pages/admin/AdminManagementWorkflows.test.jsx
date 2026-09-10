@@ -15,16 +15,17 @@ import api from '../../services/api';
 import { applySmartPatch, selectedSmartPatch, suggestionRows } from '../../utils/productSmartFill';
 jest.mock('../../services/api', () => ({ get: jest.fn(), put: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() }));
 jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { name: 'Owner', systemRole: 'MASTER_OWNER' } }) }));
-jest.mock('../../components/admin/ImageUploader', () => ({ onChange, uploadPath }) => <button type="button" onClick={() => onChange([{ url: 'https://media.example/photo.jpg' }])}>Upload photo {uploadPath}</button>);
+jest.mock('../../components/admin/ImageUploader', () => ({ onChange, uploadPath, onBusyChange }) => <><button type="button" onClick={() => onChange([{ url: 'https://media.example/photo.jpg' }])}>Upload photo {uploadPath}</button>{onBusyChange ? <><button type="button" onClick={() => onBusyChange(true)}>Begin photo upload</button><button type="button" onClick={() => onBusyChange(false)}>Finish photo upload</button></> : null}</>);
 jest.mock('../../components/admin/VideoUploader', () => () => null);
 const category = { _id: 'cat', name: 'Sarees', isActive: false };
 
 test.each(['/admin', '/seller'])('Smart Fill uses %s permissions and saves reviewed listing fields through the normal product endpoint', async (prefix) => {
-  const configuration = { features: { sizing: false }, attributes: [{ key: 'material', label: 'Material' }] };
+  const configuration = { features: { sizing: false }, attributes: [{ key: 'material', label: 'Material', required: true }] };
   api.get.mockImplementation(async path => path === '/catalog-configuration' ? configuration : path.includes('/categories') ? [category] : path.includes('/smart-fill/status') ? { enabled: true } : []);
   api.post.mockImplementation(async path => path.endsWith('/smart-fill') ? { mode: 'ai', suggestion: { name: 'Wine embroidered saree', category: 'cat', price: 899, originalPrice: 1299, description: 'A wine saree with an embroidered border.', shortDescription: 'Wine saree with an embroidered border.', highlights: ['Embroidered border'], attributeValues: { material: 'Georgette' } }, fieldSources: { price: { quote: 'Price: 899', source: 'caption' }, originalPrice: { quote: 'MRP: 1299', source: 'caption' } } } : { _id: 'created' });
   render(<ProductForm apiPrefix={prefix} uploadPrefix={prefix + '/uploads'} />);
-  await screen.findByLabelText('Material');
+  fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
+  await screen.findByLabelText(/^Material/);
   fireEvent.click(screen.getByRole('button', { name: 'Upload photo ' + prefix + '/uploads' }));
   fireEvent.click(screen.getByRole('button', { name: /Smart fill/ }));
   fireEvent.change(screen.getByLabelText('Supplier notes or product details'), { target: { value: 'Name: Wine saree\nPrice: 899\nMRP: 1299' } });
@@ -33,7 +34,7 @@ test.each(['/admin', '/seller'])('Smart Fill uses %s permissions and saves revie
   expect(api.post).toHaveBeenCalledWith(prefix + '/products/smart-fill', expect.objectContaining({ imageUrls: ['https://media.example/photo.jpg'] }), expect.objectContaining({ silent: true }));
   fireEvent.click(screen.getByRole('button', { name: /Apply \d+ selected details/ }));
   expect(screen.getByLabelText(/Product name/)).toHaveValue('Wine embroidered saree');
-  expect(screen.getByLabelText('Material')).toHaveValue('Georgette');
+  expect(screen.getByLabelText(/^Material/)).toHaveValue('Georgette');
   fireEvent.change(screen.getByLabelText('Stock quantity'), { target: { value: '3' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith(prefix + '/products', expect.objectContaining({ name: 'Wine embroidered saree', price: 899, originalPrice: 1299, stock: 3, sizes: [], highlights: ['Embroidered border'], metaTitle: 'Wine embroidered saree', attributeValues: { material: 'Georgette' } })));
@@ -79,6 +80,51 @@ test('a selectable-size saree exposes missing bust, focuses it on save and can s
   fireEvent.click(screen.getByRole('button', { name: 'Update Product' }));
   await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/products/product', expect.objectContaining({ sizingMode: 'free-size', sizes: [], sizeChart: { unit: 'in', columns: [], rows: [] }, stock: 3 })));
 });
+test('add product points to the first invalid field and cannot save during a media upload', async () => {
+  api.get.mockImplementation(async path => path === '/catalog-configuration' ? { features: { sizing: false }, attributes: [] } : path.includes('/categories') ? [category] : []);
+  render(<ProductForm />);
+  await screen.findByRole('button', { name: 'Add Product' });
+  fireEvent.change(screen.getByLabelText(/Product name/), { target: { value: 'A' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
+  expect(screen.getByLabelText(/Product name/)).toHaveFocus();
+  expect(screen.getAllByText('Product name must be at least 3 characters.').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Begin photo upload' }));
+  expect(screen.getByRole('button', { name: 'Uploading media...' })).toBeDisabled();
+  expect(screen.getByText('Media upload in progress. Saving will be available when it finishes.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Finish photo upload' }));
+  expect(screen.getByRole('button', { name: 'Add Product' })).toBeEnabled();
+});
+test('enabling size-level inventory preserves existing stock and supports products without a colour option', async () => {
+  const dressCategory = { _id: 'dress', name: 'Dresses', isActive: true };
+  api.get.mockImplementation(async path => path === '/catalog-configuration' ? { features: { sizing: true }, attributes: [] } : path.includes('/categories') ? [dressCategory] : []);
+  render(<ProductForm />);
+  await screen.findByRole('option', { name: 'Dresses' });
+  fireEvent.change(screen.getByRole('combobox', { name: /Category/ }), { target: { value: 'dress' } });
+  fireEvent.change(screen.getByLabelText('Stock quantity'), { target: { value: '7' } });
+  fireEvent.change(screen.getByLabelText('Selectable sizes'), { target: { value: 'S' } });
+  fireEvent.click(screen.getByLabelText('Track stock by size and/or colour'));
+  expect(screen.getByLabelText('Total stock (calculated from variants)')).toBeDisabled();
+  expect(await screen.findByLabelText('S default stock')).toHaveValue(7);
+});
+
+test('copy existing product creates a safe new listing without reusing inventory or unique identifiers', async () => {
+  const source = { _id: 'source', name: 'Classic silk saree', sku: 'SILK-1', barcode: '890100000001', category, price: 1200, originalPrice: 1800, stock: 9, description: 'A complete silk saree description for reuse.', images: [{ url: 'https://media.example/silk.jpg', primary: true }], sizes: [], colors: ['Wine'], tags: ['silk'], variants: [] };
+  api.get.mockImplementation(async path => {
+    if (path === '/catalog-configuration') return { features: { sizing: false }, attributes: [] };
+    if (path.includes('/categories')) return [category];
+    if (path.includes('page=1&limit=100')) return { items: [source] };
+    if (path.includes('/duplicate-check')) return { conflicts: [] };
+    return [];
+  });
+  render(<ProductForm />);
+  fireEvent.click(await screen.findByRole('button', { name: /Copy existing/ }));
+  const useProduct = await screen.findByRole('button', { name: 'Use product' });
+  await act(async () => { fireEvent.click(useProduct); await Promise.resolve(); });
+  expect(screen.getByLabelText(/Product name/)).toHaveValue('Classic silk saree copy');
+  expect(screen.getByLabelText(/^SKU/)).toHaveValue('');
+  expect(screen.getByLabelText('Stock quantity')).toHaveValue(0);
+  expect(screen.getByText(/Add a unique SKU/)).toBeInTheDocument();
+});
 beforeEach(() => { jest.clearAllMocks(); localStorage.clear(); jest.spyOn(window, 'confirm').mockReturnValue(true); api.get.mockResolvedValue([]); });
 afterEach(() => jest.restoreAllMocks());
 
@@ -99,18 +145,43 @@ test('banner typing, upload and placement submit real text values; failed save r
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith('/admin/banners', expect.objectContaining({ title: 'Festive edit', subtitle: 'Elegant festive styles', buttonText: 'Shop festive', link: '/products', displayOrder: 2, image: 'https://media.example/photo.jpg' })));
   await waitFor(() => expect(screen.queryByLabelText('Banner Title')).not.toBeInTheDocument());
 });
-test('categories load failures retry authenticated data and failed delete retains an inactive category', async () => {
-  api.get.mockRejectedValueOnce(new Error('Categories offline')).mockResolvedValue([category]);
-  api.delete.mockRejectedValueOnce(new Error('Category has products')).mockResolvedValueOnce({});
+test('category manager retries reads and keeps the category when archive fails', async () => {
+  let firstList = true;
+  let archived = false;
+  api.get.mockImplementation(async path => {
+    if (path.includes('/impact')) return { productCount: 2, activeProductCount: 1, draftCount: 0, couponCount: 0, childCount: 0, canDelete: false };
+    if (firstList) { firstList = false; throw new Error('Categories offline'); }
+    return [{ ...category, slug: 'sarees', isArchived: archived }];
+  });
+  api.patch.mockRejectedValueOnce(new Error('Category archive failed')).mockImplementationOnce(async () => { archived = true; return { message: 'Category archived' }; });
   render(<Categories />);
   fireEvent.click(await screen.findByRole('button', { name: 'Retry categories' }));
-  expect(await screen.findByText('Sarees', { selector: 'td' })).toBeInTheDocument();
-  expect(api.get).toHaveBeenLastCalledWith('/admin/categories?admin=true');
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Category has products');
-  expect(screen.getByText('Sarees', { selector: 'td' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-  await waitFor(() => expect(screen.queryByText('Sarees', { selector: 'td' })).not.toBeInTheDocument());
+  expect(await screen.findByText('Sarees')).toBeInTheDocument();
+  expect(api.get).toHaveBeenLastCalledWith('/admin/categories?admin=true&archive=all');
+  fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Archive category' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Category archive failed');
+  expect(screen.getAllByText('Sarees').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Archive category' }));
+  await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole('button', { name: /Restore/ })).toBeInTheDocument();
+});
+test('category editor creates a normalized child category from the list-first drawer', async () => {
+  const parentCategory = { _id: 'parent', name: 'Clothing', slug: 'clothing', isActive: true, isArchived: false, level: 0 };
+  api.get.mockImplementation(async path => path === '/catalog-configuration'
+    ? { categoryDefinitions: [{ key: 'sarees', name: 'Sarees', active: true }] }
+    : [parentCategory]);
+  api.post.mockResolvedValue({ _id: 'child', name: 'Festive Sarees', slug: 'festive-sarees', parent: 'parent', isActive: true });
+  render(<Categories />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add category' }));
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Festive Sarees' } });
+  expect(screen.getByLabelText('Slug')).toHaveValue('festive-sarees');
+  fireEvent.change(screen.getByLabelText('Parent category'), { target: { value: 'parent' } });
+  await screen.findByRole('option', { name: 'Sarees' });
+  fireEvent.change(screen.getByLabelText('Product field template'), { target: { value: 'sarees' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Category' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/categories', expect.objectContaining({ name: 'Festive Sarees', slug: 'festive-sarees', parent: 'parent', definitionKey: 'sarees' })));
+  expect(await screen.findByRole('status')).toHaveTextContent('Category added successfully');
 });
 test('coupon pause preserves redeemed history and delete archives a used coupon', async () => {
   const coupon = { _id: 'coupon', code: 'FESTIVE', discountType: 'percentage', discountValue: 10, isActive: true, usedCount: 2 };
@@ -181,19 +252,16 @@ test('dashboard read failures retry and legacy responses never appear as current
   expect(screen.queryByText('12')).not.toBeInTheDocument();
   expect(screen.queryByText('Live data connected')).not.toBeInTheDocument();
 });
-test('customer promotion requires confirmation and failed block retains the customer', async () => {
-  const customer = { _id: 'customer', name: 'Asha', role: 'customer', phone: '9000000001', createdAt: '2026-09-01' };
-  api.get.mockResolvedValue([customer]);
-  api.patch.mockRejectedValueOnce(new Error('Blocking failed')).mockResolvedValueOnce({});
+test('customer workspace opens a store-scoped 360 profile and saves internal notes', async () => {
+  const row = { userId: '64b000000000000000000001', name: 'Asha', phoneMasked: '••••0001', orders: 2, paidOrders: 2, netSpend: 1800, aov: 900, returns: 0, rtoCount: 0, returnRate: 0, rtoRate: 0, tags: ['Repeat Customer'] };
+  api.get.mockImplementation(async path => path.startsWith('/admin/customer-crm?') ? { items: [row], total: 1, page: 1, totalPages: 1, summary: { total: 1, repeat: 1, netRevenue: 1800 }, segments: ['All customers', 'Repeat Customer'], rules: {}, capabilities: { canWrite: true, canViewPii: true, canExport: true, canMarket: true, canManageRules: true } } : path === `/admin/customer-crm/${row.userId}` ? { customer: { id: row.userId, name: 'Asha', phone: '9000000001' }, metrics: row, profile: { revision: 0, manualTags: [], notes: '', channelConsents: {}, restrictions: {} }, orders: [], returns: [], conversations: [], notifications: [], insights: {}, capabilities: { canWrite: true } } : []);
+  api.put.mockResolvedValue({ revision: 1 });
   render(<Customers />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Block' }));
-  expect(await screen.findByText('Blocking failed')).toBeInTheDocument();
-  window.confirm.mockReturnValue(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Promote' }));
-  expect(api.patch).toHaveBeenCalledTimes(1);
-  window.confirm.mockReturnValue(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Promote' }));
-  await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/customers/customer/promote-admin', {}));
+  fireEvent.click(await screen.findByRole('button', { name: 'View' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Profile' }));
+  fireEvent.change(screen.getByLabelText('Internal notes'), { target: { value: 'Prefers evening delivery' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith(`/admin/customer-crm/${row.userId}`, expect.objectContaining({ notes: 'Prefers evening delivery', revision: 0 })));
 });
 test('seller product editing uses seller endpoints and never restores an admin creation draft', async () => {
   localStorage.setItem('samira-admin-product-draft:new', JSON.stringify({ name: 'Private admin draft' }));

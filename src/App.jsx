@@ -132,6 +132,7 @@ const sellerRoutes = {
   '/seller/notifications': Notifications,
   '/seller/onboarding': SellerOnboarding,
   '/seller/products': SellerProducts,
+  '/seller/variant-groups': VariantGroups,
   '/seller/products/add': SellerProductForm,
   '/seller/products/edit': SellerProductForm,
   '/seller/inventory': Inventory,

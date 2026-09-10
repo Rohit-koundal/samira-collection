@@ -5,7 +5,7 @@ import Orders from './Orders';
 import OrderDetail from './OrderDetail';
 import api from '../../services/api';
 
-jest.mock('../../services/api', () => ({ get: jest.fn(), patch: jest.fn(), put: jest.fn(), delete: jest.fn() }));
+jest.mock('../../services/api', () => ({ get: jest.fn(), post: jest.fn(), patch: jest.fn(), put: jest.fn(), delete: jest.fn() }));
 jest.mock('../../components/order/Receipt', () => () => null);
 jest.mock('../../components/order/ReceiptActions', () => () => null);
 const product = { _id: 'product-1', name: 'Rose kurta', stock: 8, variants: [], isActive: true };
@@ -68,29 +68,49 @@ test('variant stock writes target the chosen size and update the returned total'
 });
 
 test('cancelling an order keeps the server-confirmed record in order history', async () => {
-  api.get.mockResolvedValue([order]);
-  api.delete.mockResolvedValue({ success: true, order: { ...order, orderStatus: 'Cancelled' } });
+  let current = order;
+  api.get.mockImplementation(async path => path.includes('workspace-summary') ? {} : [current]);
+  api.put.mockImplementation(async () => { current = { ...current, orderStatus: 'Cancelled', revision: 1, allowedActions: [] }; return current; });
   render(<Orders />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancel', exact: true }));
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel order', exact: true }));
-  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Cancel order?' })).not.toBeInTheDocument());
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancel order', exact: true }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Cancellation reason'), { target: { value: 'Customer requested cancellation' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel order', exact: true }));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Cancel this order?' })).not.toBeInTheDocument());
+  expect(api.put).toHaveBeenCalledWith('/admin/orders/order12345678/status', expect.objectContaining({ orderStatus: 'Cancelled', revision: 0, note: 'Customer requested cancellation' }));
   const row = screen.getByRole('row', { name: /12345678/ });
   expect(within(row).getByText('Cancelled', { selector: 'span' })).toBeInTheDocument();
-  expect(within(row).queryByRole('button', { name: 'Cancel', exact: true })).not.toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: 'Cancel order', exact: true })).not.toBeInTheDocument();
   expect(screen.getByText('1 record')).toBeInTheDocument();
 });
 
+test('selected booked shipments can request pickup once through the bulk toolbar', async () => {
+  const ready = { ...order, allowedActions: [], shipment: { provider: 'delhivery', status: 'READY_TO_SHIP', bookingState: 'BOOKED', awb: 'AWB-1', labelAvailable: true, pickup: {} } };
+  api.get.mockImplementation(async path => path.includes('workspace-summary') ? {} : { items: [ready], page: 1, limit: 25, total: 1, totalPages: 1 });
+  api.post.mockResolvedValue({ shipment: { ...ready.shipment, status: 'PICKUP_SCHEDULED' } });
+  render(<Orders />);
+
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Select/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Request pickup (1)' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Request pickups' }));
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/orders/order12345678/delivery/pickup', expect.objectContaining({ date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), time: '10:00', closeTime: '18:00' })));
+  expect(await screen.findByRole('status')).toHaveTextContent('pickup request confirmed');
+});
+
 test('shipment validation failures preserve order controls and entered tracking for retry', async () => {
-  api.get.mockImplementation(async path => path.endsWith('/receipt') ? null : order);
+  const confirmed = { ...order, orderStatus: 'Confirmed', allowedActions: ['MARK_PACKED', 'CANCEL_ORDER'] };
+  api.get.mockImplementation(async path => path.endsWith('/receipt') ? null : confirmed);
   api.put.mockRejectedValueOnce(new Error('Tracking URL must use HTTPS')).mockResolvedValueOnce({ ...order, shipment: {} });
   render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
   const tracking = await screen.findByPlaceholderText('AWB / tracking number');
   fireEvent.change(tracking, { target: { value: 'AWB123' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save shipment' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save manual shipment' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Tracking URL');
   expect(tracking).toHaveValue('AWB123');
   expect(screen.getByRole('heading', { name: 'Ordered items' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Save shipment' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save manual shipment' }));
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   expect(api.put).toHaveBeenCalledTimes(2);
 });
@@ -115,10 +135,57 @@ test('invoice fetch errors remain retryable without blocking order controls', as
   });
   render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Retry invoice' }));
-  expect(screen.getByRole('combobox', { name: 'Order status' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Confirm order' })).toBeEnabled();
   failReceipt = false;
   fireEvent.click(await screen.findByRole('button', { name: 'Retry invoice' }));
   await waitFor(() => expect(screen.queryByText('Invoice unavailable')).not.toBeInTheDocument());
+});
+
+test('a completed COD return records an audited refund amount from order detail', async () => {
+  const refundable = {
+    ...order,
+    orderStatus: 'Delivered',
+    paymentStatus: 'Paid',
+    paymentState: 'PAID',
+    refundedAmount: 300,
+    revision: 4,
+    allowedActions: ['RECORD_COD_REFUND'],
+  };
+  api.get.mockImplementation(async path => path.endsWith('/receipt') ? null : refundable);
+  api.put.mockResolvedValue({ ...refundable, paymentStatus: 'Refunded', paymentState: 'REFUNDED', refundedAmount: 1299, revision: 5, allowedActions: [] });
+  render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Record refund' }));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('Refund amount')).toHaveValue(999);
+  fireEvent.change(within(dialog).getByLabelText('Receipt/reference (optional)'), { target: { value: 'cash-refund-final' } });
+  fireEvent.change(within(dialog).getByLabelText('Refund note'), { target: { value: 'Remaining cash refund paid to customer' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Record refund' }));
+
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/orders/order12345678/payment-status', {
+    paymentStatus: 'Refunded',
+    amount: 999,
+    revision: 4,
+    reference: 'cash-refund-final',
+    note: 'Remaining cash refund paid to customer',
+  }));
+});
+
+test('delivery exceptions expose a focused staff follow-up without changing carrier status', async () => {
+  const exceptionOrder = { ...order, orderStatus: 'Shipped', allowedActions: ['RESOLVE_DELIVERY_EXCEPTION'], shipment: { _id: 'shipment-1', provider: 'delhivery', courierName: 'Delhivery', status: 'EXCEPTION', bookingState: 'BOOKED', awb: 'AWB-1' } };
+  const delivery = { shipment: { ...exceptionOrder.shipment, exceptionActions: [] }, readiness: { configured: true, liveBooking: true, name: 'delhivery', label: 'Delhivery' } };
+  api.get.mockImplementation(async path => path.endsWith('/receipt') ? null : path.endsWith('/delivery') ? delivery : exceptionOrder);
+  api.post.mockResolvedValue({ shipment: delivery.shipment });
+  render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Resolve delivery issue' }));
+  fireEvent.change(await screen.findByLabelText('Follow-up'), { target: { value: 'REQUESTED_REDELIVERY' } });
+  fireEvent.change(screen.getByLabelText('Courier reference (optional)'), { target: { value: 'NDR-22' } });
+  fireEvent.change(screen.getByLabelText('Action note'), { target: { value: 'Customer confirmed delivery availability.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save follow-up' }));
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/orders/order12345678/delivery/exception', expect.objectContaining({ action: 'REQUESTED_REDELIVERY', reference: 'NDR-22', note: 'Customer confirmed delivery availability.' })));
+  expect(screen.getByText('Exception')).toBeInTheDocument();
 });
 
 test('order mutations are serialized and late old failures cannot affect another order', async () => {
@@ -127,14 +194,14 @@ test('order mutations are serialized and late old failures cannot affect another
   let failMutation;
   api.put.mockImplementation(() => new Promise((_resolve, reject) => { failMutation = reject; }));
   const view = render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
-  const status = await screen.findByRole('combobox', { name: 'Order status' });
-  fireEvent.change(status, { target: { value: 'Confirmed' } });
-  fireEvent.change(status, { target: { value: 'Packed' } });
+  const confirm = await screen.findByRole('button', { name: 'Confirm order' });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
   expect(api.put).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('combobox', { name: 'Payment status' })).toBeDisabled();
+  expect(confirm).toBeDisabled();
   view.rerender(<OrderDetail route={'/admin/orders/detail?id=' + next._id} />);
-  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Order status' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm order' })).toBeEnabled());
   await act(async () => { failMutation(new Error('Stale order failure')); });
   expect(screen.queryByText('Stale order failure')).not.toBeInTheDocument();
-  expect(screen.getByRole('combobox', { name: 'Order status' })).toHaveValue('Pending');
+  expect(screen.getByRole('button', { name: 'Confirm order' })).toBeEnabled();
 });

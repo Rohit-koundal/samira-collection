@@ -51,7 +51,6 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
   const [settings, setSettings] = useState(null);
   const [posterProduct, setPosterProduct] = useState(null);
   const [captionProduct, setCaptionProduct] = useState(null);
-  const [refreshRevision, setRefreshRevision] = useState(0);
   const requestRevision = useRef(0);
   const isDesktop = useResponsiveDesktop();
 
@@ -81,7 +80,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
     } finally {
       if (revision === requestRevision.current) setLoading(false);
     }
-  }, [activeFilters, page, pageSize, productsPath, refreshRevision, sort]);
+  }, [activeFilters, page, pageSize, productsPath, sort]);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
   useEffect(() => {
@@ -99,7 +98,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
   useEffect(() => { setQuery(routeSearch); setPage(1); }, [routeSearch]);
   useEffect(() => { setPage((current) => Math.min(current, pageCount)); }, [pageCount]);
 
-  const reload = () => setRefreshRevision((value) => value + 1);
+  const reload = loadCatalog;
   const clearFilters = () => {
     setQuery(''); setCategory(''); setStatus(''); setStock(''); setArchive(''); setCompleteness(''); setSort('newest'); setPage(1);
   };
@@ -197,7 +196,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
 
       <div className="admin-kpi-strip">
         <KpiTile icon={Package} tone="wine" label="Current catalog" value={summary.total} note="All current products" active={!archive && !status && !stock} onClick={() => applyMetric('total')} />
-        <KpiTile icon={PackageCheck} tone="green" label="Active" value={summary.active} note="Visible on storefront" active={!archive && status === 'active'} onClick={() => applyMetric('active')} />
+        <KpiTile icon={PackageCheck} tone="green" label="Active" value={summary.active} note="Enabled listings" active={!archive && status === 'active'} onClick={() => applyMetric('active')} />
         <KpiTile icon={AlertTriangle} tone="amber" label="Low stock" value={summary.low} note="Needs attention" active={!archive && stock === 'low'} onClick={() => applyMetric('low')} />
         <KpiTile icon={PackageX} tone="rose" label="Out of stock" value={summary.out} note="No units available" active={!archive && stock === 'out'} onClick={() => applyMetric('out')} />
         <KpiTile icon={Archive} tone="slate" label="Archived" value={summary.archived} note="Restorable products" active={archive === 'only'} onClick={() => applyMetric('archived')} />
@@ -330,8 +329,8 @@ function summarize(items) {
 
 function productState(product) {
   if (product.isArchived) return { label: 'Archived', note: 'Recoverable', tone: 'text-slate-500' };
-  if (product.publishAt && new Date(product.publishAt) > new Date()) return { label: 'Scheduled', note: `Publishes ${formatDate(product.publishAt)}`, tone: 'text-violet-700' };
   if (!product.isActive) return { label: 'Inactive', note: 'Hidden from store', tone: 'text-slate-500' };
+  if (product.publishAt && new Date(product.publishAt) > new Date()) return { label: 'Scheduled', note: `Publishes ${formatDate(product.publishAt)}`, tone: 'text-violet-700' };
   if (Number(product.stock || 0) <= 0) return { label: 'Out of Stock', note: 'Visible, unavailable', tone: 'text-rose-700' };
   return { label: 'Active', note: 'Visible on store', tone: 'text-emerald-700' };
 }

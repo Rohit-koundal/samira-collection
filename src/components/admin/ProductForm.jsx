@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { CircleCheck, FileText, Hash, ImagePlus, IndianRupee, Tag, Type, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CircleCheck, Copy, Eye, FileText, Hash, ImagePlus, IndianRupee, Search, SlidersHorizontal, Tag, Type, X } from 'lucide-react';
 import api from '../../services/api';
 import ImageUploader from './ImageUploader';
 import VideoUploader from './VideoUploader';
 import ProductSmartFill from './ProductSmartFill';
+import ProductPreviewModal from './ProductPreviewModal';
+import BarcodeScanner from './BarcodeScanner';
 import { applySmartPatch } from '../../utils/productSmartFill';
-import { normalizeImageEntries, normalizeVideoEntries } from '../../services/normalize';
+import { normalizeImageEntries, normalizeImageUrl, normalizeVideoEntries } from '../../services/normalize';
 import {
   applyAssistantSuggestions,
   buildAssistantSuggestions,
@@ -52,6 +54,7 @@ const emptyProduct = {
   supplierSku: '',
   restockAt: '',
   publishAt: '',
+  salePrice: '',
   saleStartAt: '',
   saleEndAt: '',
   sizes: '',
@@ -97,6 +100,8 @@ export default function ProductForm({
   const [structure, setStructure] = useState(null);
   const [structureError, setStructureError] = useState('');
   const [categories, setCategories] = useState([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [categoryReload, setCategoryReload] = useState(0);
   const [subcategories, setSubcategories] = useState([]);
   const [form, setForm] = useState(() => (productId ? emptyProduct : (readDraftForm(productId, apiPrefix) || emptyProduct)));
   const [assistant, setAssistant] = useState({
@@ -114,6 +119,14 @@ export default function ProductForm({
     targetCustomer: '',
   });
   const [saving, setSaving] = useState(false);
+  const [mediaActivity, setMediaActivity] = useState({ images: false, videos: false });
+  const [viewMode, setViewMode] = useState('essential');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [duplicateReview, setDuplicateReview] = useState({ loading: false, conflicts: [] });
+  const [cloudDraft, setCloudDraft] = useState(null);
+  const [autosaveStatus, setAutosaveStatus] = useState('');
+  const [autosaveReady, setAutosaveReady] = useState(false);
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
@@ -148,7 +161,12 @@ export default function ProductForm({
   const [baseUpdatedAt, setBaseUpdatedAt] = useState('');
   const [recoveryDraft, setRecoveryDraft] = useState(null);
   const baselineRef = useRef(JSON.stringify(emptyProduct));
+  const formRef = useRef(null);
+  const autosaveIdRef = useRef('');
+  const autosavePauseRef = useRef(false);
+  const submitIntentRef = useRef('save');
   const draftKey = getDraftKey(productId, apiPrefix);
+  const autosaveKey = `active-add-product:${apiPrefix.replace(/[^a-z]/gi, '') || 'admin'}`;
   const reloadStructure = () => { setStructureError(''); return api.get('/catalog-configuration').then(setStructure).catch((error) => setStructureError(error.message)); };
   useEffect(() => {
     let alive = true;
@@ -161,11 +179,12 @@ export default function ProductForm({
 
   useEffect(() => {
     let alive = true;
+    setCategoriesLoaded(false);
     fetchCategories(api, apiPrefix).then((items) => {
-      if (alive) setCategories(items);
+      if (alive) { setCategories(items); setCategoriesLoaded(true); }
     });
     return () => { alive = false; };
-  }, [apiPrefix]);
+  }, [apiPrefix, categoryReload]);
 
   useEffect(() => {
     let alive = true;
@@ -262,14 +281,83 @@ export default function ProductForm({
     return () => window.clearTimeout(timer);
   }, [baseUpdatedAt, draftKey, draftReady, form, recoveryDraft]);
 
-  const update = (field, value) => setForm((current) => {
-    const next = { ...current, [field]: value };
-    if ((field === 'sizes' || field === 'colors') && current.trackVariants) {
-      next.variants = buildVariantMatrix(splitList(field === 'sizes' ? value : current.sizes), splitList(field === 'colors' ? value : current.colors), current.variants);
-      next.stock = next.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0);
-    }
-    return next;
-  });
+  useEffect(() => {
+    if (mode !== 'Add') { setAutosaveReady(true); return undefined; }
+    let alive = true;
+    api.get(`${apiPrefix}/product-drafts/autosave?key=${encodeURIComponent(autosaveKey)}`, { silent: true, forceRefetch: true })
+      .then((response) => {
+        if (!alive) return;
+        const draft = response?.data && response.data.status !== 'published' ? response.data : null;
+        if (draft && isMeaningfulDraft(draft)) {
+          autosaveIdRef.current = String(draft.id || draft._id || '');
+          setCloudDraft(draft);
+          setAutosaveStatus(`Cloud draft saved ${new Date(draft.updatedAt || Date.now()).toLocaleString('en-IN')}`);
+        }
+      })
+      .catch(() => { if (alive) setAutosaveStatus('Cloud draft sync is temporarily unavailable. Browser recovery is still active.'); })
+      .finally(() => { if (alive) setAutosaveReady(true); });
+    return () => { alive = false; };
+  }, [apiPrefix, autosaveKey, mode]);
+
+  useEffect(() => {
+    if (mode !== 'Add' || !autosaveReady || cloudDraft || !draftReady || recoveryDraft || autosavePauseRef.current) return undefined;
+    if (mediaActivity.images || mediaActivity.videos || !isMeaningfulDraft(form)) return undefined;
+    const timer = window.setTimeout(async () => {
+      try {
+        setAutosaveStatus('Syncing draft…');
+        const response = await api.put(`${apiPrefix}/product-drafts/autosave`, { ...buildDraftPayload(form), autosaveKey }, { silent: true });
+        autosaveIdRef.current = String(response?.data?.id || response?.data?._id || autosaveIdRef.current || '');
+        setAutosaveStatus('Draft synced across devices');
+      } catch {
+        setAutosaveStatus('Cloud sync paused. Browser recovery is still active.');
+      }
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [apiPrefix, autosaveKey, autosaveReady, cloudDraft, draftReady, form, mediaActivity.images, mediaActivity.videos, mode, recoveryDraft]);
+
+  useEffect(() => {
+    const name = String(form.name || '').trim();
+    const sku = String(form.sku || '').trim();
+    const barcode = String(form.barcode || '').trim();
+    if (name.length < 3 && !sku && !barcode) { setDuplicateReview({ loading: false, conflicts: [] }); return undefined; }
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      setDuplicateReview((current) => ({ ...current, loading: true }));
+      const query = new URLSearchParams({ ...(name.length >= 3 ? { name } : {}), ...(sku ? { sku } : {}), ...(barcode ? { barcode } : {}), ...(productId ? { excludeId: productId } : {}) });
+      api.get(`${apiPrefix}/products/duplicate-check?${query}`, { silent: true, forceRefetch: true })
+        .then((response) => { if (alive) setDuplicateReview({ loading: false, conflicts: Array.isArray(response?.conflicts) ? response.conflicts : [] }); })
+        .catch(() => { if (alive) setDuplicateReview({ loading: false, conflicts: [] }); });
+    }, 450);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [apiPrefix, form.barcode, form.name, form.sku, productId]);
+
+  const handleBarcode = useCallback((value) => {
+    setForm((current) => ({ ...current, barcode: value }));
+    clearErrors(setErrors, 'barcode');
+  }, []);
+
+  const copyExistingProduct = useCallback((product) => {
+    setForm(formFromExistingProduct(product));
+    setErrors({});
+    setMessage('Product details copied. Add a unique SKU, review the photos and enter stock before publishing.');
+    setCopyOpen(false);
+    setViewMode('essential');
+  }, []);
+
+  const update = (field, value) => {
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if ((field === 'sizes' || field === 'colors') && current.trackVariants) {
+        next.variants = seedExistingStock(
+          buildVariantMatrix(splitList(field === 'sizes' ? value : current.sizes), splitList(field === 'colors' ? value : current.colors), current.variants),
+          current,
+        );
+        next.stock = next.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0);
+      }
+      return next;
+    });
+    clearErrors(setErrors, field, ...(field === 'sizes' ? ['sizeChart', 'variants'] : []), ...(field === 'colors' ? ['variants'] : []), ...(field === 'originalPrice' ? ['price'] : []));
+  };
 
   const updateVariantStock = (index, stock) => {
     setForm((current) => {
@@ -278,6 +366,7 @@ export default function ProductForm({
       ));
       return { ...current, variants, stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) };
     });
+    clearErrors(setErrors, 'stock', 'variants');
   };
 
   const updateVariant = (index, field, value) => {
@@ -291,16 +380,24 @@ export default function ProductForm({
         stock: variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0),
       };
     });
+    clearErrors(setErrors, 'stock', 'variants');
   };
 
   const toggleTrackVariants = (enabled) => {
-    setForm((current) => ({
-      ...current,
-      trackVariants: enabled,
-      variants: enabled
-        ? buildVariantMatrix(splitList(current.sizes), splitList(current.colors), current.variants)
-        : [],
-    }));
+    setForm((current) => {
+      const variants = enabled
+        ? seedExistingStock(buildVariantMatrix(splitList(current.sizes), splitList(current.colors), current.variants), current)
+        : [];
+      return {
+        ...current,
+        trackVariants: enabled,
+        variants,
+        stock: enabled && variants.length
+          ? variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0)
+          : current.stock,
+      };
+    });
+    clearErrors(setErrors, 'variants');
   };
 
   const updateSizeMeasurement = (sizeLabel, field, value) => {
@@ -318,6 +415,7 @@ export default function ProductForm({
         },
       };
     });
+    clearErrors(setErrors, 'sizeChart');
   };
 
   const updateSizeChartUnit = (unit) => {
@@ -368,18 +466,29 @@ export default function ProductForm({
 
   const submit = async (event) => {
     event.preventDefault();
+    const intent = submitIntentRef.current || (mode === 'Add' ? 'publish' : 'save');
     if (saving || !draftReady || loadError || (mode === 'Update' && !productId)) return;
+    if (mediaActivity.images || mediaActivity.videos) {
+      setMessage('Please wait for the media upload to finish before saving the product.');
+      return;
+    }
     if (!structure) { setMessage('Load the store product configuration before saving.'); return; }
     const sizingProduct = productForSizing(form);
     const nextErrors = validate(form, sizingProduct, getActiveAttributeDefinitions(structure, categories, form));
+    const blockingDuplicate = duplicateReview.conflicts.find((item) => item.blocking);
+    if (blockingDuplicate) {
+      const reasons = blockingDuplicate.reasons || [blockingDuplicate.reason];
+      if (reasons.includes('SKU')) nextErrors.sku = `SKU is already used by ${blockingDuplicate.name}.`;
+      if (reasons.includes('Barcode')) nextErrors.barcode = `Barcode is already used by ${blockingDuplicate.name}.`;
+    }
+    if (intent === 'schedule' && (!form.publishAt || new Date(form.publishAt) <= new Date())) nextErrors.publishAt = 'Choose a future date and time to schedule this product.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
-      if (nextErrors.sizeChart) {
-        const missingInput = Array.from(event.currentTarget.querySelectorAll('[data-garment-measurement]'))
-          .find(input => !Number.isFinite(Number(input.value)) || Number(input.value) <= 0);
-        missingInput?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
-        missingInput?.focus({ preventScroll: true });
-      }
+      const needsAdvanced = Object.keys(nextErrors).some((field) => ['barcode', 'costPrice', 'gstRate', 'lowStockAlert', 'reorderQuantity', 'shippingWeightKg', 'packageDimensions', 'publishAt', 'salePrice', 'saleStartAt', 'saleEndAt'].includes(field));
+      if (needsAdvanced) {
+        setViewMode('advanced');
+        window.setTimeout(() => focusFormError(formRef.current, nextErrors), 0);
+      } else focusFormError(event.currentTarget, nextErrors);
       return;
     }
     setSaving(true);
@@ -397,6 +506,7 @@ export default function ProductForm({
         videos: prepareVideos(form.videos),
         price,
         originalPrice,
+        salePrice: form.salePrice ? Number(form.salePrice) : null,
         costPrice: Number(form.costPrice || 0),
         gstRate: Number(form.gstRate || 0),
         reorderQuantity: Number(form.reorderQuantity || 0),
@@ -408,7 +518,7 @@ export default function ProductForm({
           heightCm: Number(form.packageDimensions?.heightCm || 0),
         },
         restockAt: nullableDate(form.restockAt),
-        publishAt: nullableDate(form.publishAt),
+        publishAt: intent === 'publish' ? null : nullableDate(form.publishAt),
         saleStartAt: nullableDate(form.saleStartAt),
         saleEndAt: nullableDate(form.saleEndAt),
         sizes: sizingMode === 'sized' ? selectableSizes : [],
@@ -425,54 +535,51 @@ export default function ProductForm({
         industry: structure.industry,
         industryRevision: structure.revision,
         categoryDefinitionKey: activeCategoryDefinition?.key || form.categoryDefinitionKey || selectedCategory?.definitionKey || definitionKey(form.subCategory || selectedCategory?.name),
+        isActive: intent === 'publish' || intent === 'schedule' ? true : form.isActive,
       };
       if (productId && !tracksVariants && sizingMode !== 'sized' && !getEffectiveVariantConfig(structure, categories, form).enabled) delete payload.variants;
       if (!payload.category) delete payload.category;
       if (productId) await api.put(`${apiPrefix}/products/${productId}`, payload);
       else await api.post(`${apiPrefix}/products`, payload);
+      autosavePauseRef.current = true;
+      if (!cloudDraft && autosaveIdRef.current) await api.delete(`${apiPrefix}/product-drafts/${autosaveIdRef.current}`).catch(() => {});
       if (!productId) setForm(emptyProduct);
       clearDraft(productId, apiPrefix);
-      setMessage('Product saved successfully.');
+      setMessage(intent === 'schedule' ? 'Product scheduled successfully.' : intent === 'publish' ? 'Product published successfully.' : 'Product saved successfully.');
       onSaved?.();
     } catch (error) {
       setMessage(error.message);
     } finally {
       setSaving(false);
+      submitIntentRef.current = 'save';
     }
   };
 
   const saveServerDraft = async () => {
     if (saving || mode !== 'Add') return;
+    if (mediaActivity.images || mediaActivity.videos) {
+      setMessage('Please wait for the media upload to finish before saving the draft.');
+      return;
+    }
+    if (!isMeaningfulDraft(form)) {
+      setMessage('Add a product name, SKU, description or photo before saving a draft.');
+      return;
+    }
     setSaving(true);
     setMessage('');
     try {
       const sizingProduct = productForSizing(form);
       const sizingMode = resolveSizingMode(sizingProduct);
       const tracksVariants = form.trackVariants && (sizingMode === 'sized' || getEffectiveVariantConfig(structure, categories, form).enabled);
-      const payload = {
-        ...form,
-        images: prepareImages(form.images),
-        videos: prepareVideos(form.videos),
-        price: Number(form.price || 0),
-        sellingPrice: Number(form.price || 0),
-        originalPrice: Number(form.originalPrice || form.price || 0),
-        costPrice: Number(form.costPrice || 0),
-        gstRate: Number(form.gstRate || 0),
-        stock: tracksVariants ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) : Number(form.stock || 0),
-        lowStockAlert: Number(form.lowStockAlert || 5),
-        reorderQuantity: Number(form.reorderQuantity || 0),
-        shippingWeightKg: Number(form.shippingWeightKg || 0),
+      const payload = buildDraftPayload(form, {
         sizes: sizingMode === 'sized' ? getSelectableSizes(sizingProduct) : [],
-        colors: splitList(form.colors),
-        tags: splitList(form.tags),
         variants: tracksVariants ? form.variants : [],
-        restockAt: nullableDate(form.restockAt),
-        publishAt: nullableDate(form.publishAt),
-        saleStartAt: nullableDate(form.saleStartAt),
-        saleEndAt: nullableDate(form.saleEndAt),
-      };
+        stock: tracksVariants ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) : Number(form.stock || 0),
+      });
       if (!payload.category) delete payload.category;
       await api.post(`${apiPrefix}/product-drafts`, payload);
+      autosavePauseRef.current = true;
+      if (!cloudDraft && autosaveIdRef.current) await api.delete(`${apiPrefix}/product-drafts/${autosaveIdRef.current}`).catch(() => {});
       clearDraft(productId, apiPrefix);
       setMessage('Draft saved safely. Open Product Drafts whenever you are ready to complete it.');
       onSaved?.({ draft: true });
@@ -494,22 +601,44 @@ export default function ProductForm({
   const effectiveVariantConfiguration = getEffectiveVariantConfig(structure, categories, form);
   const activeCategoryDefinition = findCategoryDefinition(structure, categories, form);
   const availableSubcategories = getConfiguredSubcategories(structure, categories, form, subcategories);
+  const requiredAttributesComplete = activeAttributeDefinitions
+    .filter((attribute) => attribute.required)
+    .every((attribute) => String(form.attributeValues?.[attribute.key] ?? '').trim());
+  const sizeChartReady = effectiveSizingMode !== 'sized'
+    || (selectableSizes.length > 0 && getSizeChartValidation(sizingProduct).valid);
+  const pricingReady = Number(form.price) > 0
+    && Number(form.originalPrice) > 0
+    && Number(form.price) <= Number(form.originalPrice);
+  const inventoryReady = Number.isSafeInteger(Number(form.stock)) && Number(form.stock) >= 0
+    && (!form.trackVariants || (form.variants?.length > 0 && !validateVariants(form.variants)));
   const checklist = [
     { id: 'photo', label: 'Photo', done: Boolean(previewImage), target: 'product-media', icon: ImagePlus },
-    { id: 'name', label: 'Name', done: String(form.name || '').trim().length >= 3, target: 'product-basics', icon: Type },
-    { id: 'sku', label: 'SKU', done: Boolean(String(form.sku || '').trim()), target: 'product-basics', icon: Hash },
-    { id: 'category', label: 'Category', done: Boolean(form.category), target: 'product-pricing', icon: Tag },
-    { id: 'price', label: 'Price', done: Number(form.price) > 0, target: 'product-pricing', icon: IndianRupee },
+    { id: 'identity', label: 'Identity', done: String(form.name || '').trim().length >= 3 && Boolean(String(form.sku || '').trim()), target: 'product-basics', icon: Type },
+    { id: 'category', label: 'Category', done: Boolean(form.category) && requiredAttributesComplete, target: 'product-pricing', icon: Tag },
+    { id: 'price', label: 'Pricing', done: pricingReady, target: 'product-pricing', icon: IndianRupee },
+    { id: 'stock', label: 'Inventory', done: inventoryReady, target: 'product-pricing', icon: Hash },
+    { id: 'size', label: 'Sizing', done: sizeChartReady, target: 'product-media', icon: CircleCheck },
     { id: 'details', label: 'Details', done: String(form.description || '').trim().length >= 20, target: 'product-basics', icon: FileText },
   ];
   const readyCount = checklist.filter((item) => item.done).length;
+  const quality = productQuality(form, { pricingReady, inventoryReady, sizeChartReady, requiredAttributesComplete });
+  const chargeableWeight = calculateChargeableWeight(form);
+  const scheduledPublish = Boolean(form.publishAt && new Date(form.publishAt) > new Date());
 
   if (mode === 'Update' && !productId) return <p role="alert" className="admin-card p-5">Choose a product from the catalog before editing. <a href={cancelPath} className="underline">Back to catalog</a></p>;
   if (loadError) return <div role="alert" className="admin-card p-5">{loadError} <button type="button" onClick={() => setReload(value => value + 1)} className="admin-btn-ghost">Retry loading product</button></div>;
   if (!draftReady) return <p role="status" className="admin-card p-5">Loading product...</p>;
 
   return (
-    <form onSubmit={submit} className="admin-product-form">
+    <form ref={formRef} onSubmit={submit} aria-busy={saving || mediaActivity.images || mediaActivity.videos} className="admin-product-form">
+      <div className="product-form-commandbar">
+        <div><p>Editing experience</p><div className="product-form-mode" aria-label="Product form detail level"><button type="button" aria-pressed={viewMode === 'essential'} onClick={() => setViewMode('essential')}>Essentials</button><button type="button" aria-pressed={viewMode === 'advanced'} onClick={() => setViewMode('advanced')}><SlidersHorizontal size={15} /> Advanced</button></div></div>
+        <div className="product-form-quality"><span className={quality.score >= 80 ? 'is-ready' : ''}>{quality.score}</span><div><strong>Listing quality</strong><small>{quality.next || 'Ready for customers'}</small></div></div>
+        <div className="product-form-commandbar__actions">
+          {mode === 'Add' && <button type="button" className="admin-btn-ghost" onClick={() => setCopyOpen(true)}><Copy size={16} /> Copy existing</button>}
+          <button type="button" className="admin-btn-ghost" onClick={() => setPreviewOpen(true)}><Eye size={16} /> Preview</button>
+        </div>
+      </div>
       <div className="admin-form-guide" role="status">
         <div className="admin-form-guide__progress">
           <span className={`admin-form-guide__count${readyCount === checklist.length ? ' is-ready' : ''}`}>
@@ -544,33 +673,43 @@ export default function ProductForm({
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="admin-btn" onClick={() => { setForm((current) => ({ ...current, ...mergeDraftIntoProduct(recoveryDraft.form) })); setRecoveryDraft(null); }}>Restore browser edits</button><button type="button" className="admin-btn-ghost" onClick={() => { clearDraft(productId, apiPrefix); setRecoveryDraft(null); }}>Discard browser draft</button></div>
       </div>}
 
-      {Object.keys(errors).length > 0 && <div role="status" aria-live="polite" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Review {Object.keys(errors).length} highlighted section{Object.keys(errors).length === 1 ? '' : 's'} before saving.</strong><ul className="mt-2 list-disc space-y-1 pl-5">{Object.values(errors).slice(0, 5).map((error, index) => <li key={`${error}-${index}`}>{error}</li>)}</ul></div>}
+      {cloudDraft && <div role="alert" className="admin-form-hint border-blue-200 bg-blue-50"><div><h3>Draft available from your account</h3><p>Continue the version saved {new Date(cloudDraft.updatedAt || Date.now()).toLocaleString('en-IN')} on this or another device.</p></div><div className="mt-3 flex flex-wrap gap-2"><button type="button" className="admin-btn" onClick={() => { setForm(formFromServerDraft(cloudDraft)); setCloudDraft(null); setMessage('Cloud draft restored.'); }}>Restore cloud draft</button><button type="button" className="admin-btn-ghost" onClick={async () => { if (autosaveIdRef.current) await api.delete(`${apiPrefix}/product-drafts/${autosaveIdRef.current}`).catch(() => {}); autosaveIdRef.current = ''; setCloudDraft(null); setAutosaveStatus('Cloud draft discarded'); }}>Discard cloud draft</button></div></div>}
+
+      {autosaveStatus && mode === 'Add' && <p className="product-form-sync" role="status">{autosaveStatus}</p>}
+
+      {Object.keys(errors).length > 0 && <div role="status" aria-live="polite" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Review {Object.keys(errors).length} highlighted field{Object.keys(errors).length === 1 ? '' : 's'} before saving.</strong><ul className="mt-2 space-y-1">{Object.entries(errors).slice(0, 6).map(([field, error]) => <li key={field}><button type="button" className="text-left font-semibold underline decoration-rose-300 underline-offset-2" onClick={() => focusFormError(formRef.current, { [field]: error })}>{error}</button></li>)}</ul></div>}
 
       {structureError && <div role="alert" className="admin-form-hint"><p>{structureError}</p><button type="button" onClick={reloadStructure}>Retry product configuration</button></div>}
       <ProductSmartFill key={`${apiPrefix}-${productId || 'new'}-${smartFillReset}`} form={form} categories={categories} structure={structure} apiPrefix={apiPrefix}
-        disabled={saving || !draftReady || !!loadError || !structure}
+        disabled={saving || mediaActivity.images || mediaActivity.videos || !draftReady || !!loadError || !structure}
         onApply={(patch, undo) => { setForm(current => applySmartPatch(current, patch, undo)); setErrors({}); }} />
       {structure?.attributes?.length > 0 && <Section id="product-specifications" title={`${structure.name || 'Product'} specifications`} note="These fields, validation and customer-facing sections come from the active industry and category definition.">
-        {errors.attributes && <p role="alert" className="admin-form-hint lg:col-span-2">{errors.attributes}</p>}
-        {activeAttributeDefinitions.map((attribute) => <DynamicAttributeField key={attribute.key} attribute={attribute} value={form.attributeValues?.[attribute.key] ?? attribute.defaultValue ?? ''} onChange={(value) => setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } }))} />)}
+        {errors.attributes && <p role="alert" data-error-field="attributes" tabIndex="-1" className="admin-form-hint lg:col-span-2">{errors.attributes}</p>}
+        {activeAttributeDefinitions.filter((attribute) => viewMode === 'advanced' || attribute.required).map((attribute) => <DynamicAttributeField key={attribute.key} attribute={attribute} value={form.attributeValues?.[attribute.key] ?? attribute.defaultValue ?? ''} onChange={(value) => { setForm((current) => ({ ...current, attributeValues: { ...current.attributeValues, [attribute.key]: value } })); clearErrors(setErrors, 'attributes'); }} />)}
+        {viewMode === 'essential' && activeAttributeDefinitions.some((attribute) => !attribute.required) && <button type="button" className="admin-btn-ghost lg:col-span-2 w-fit" onClick={() => setViewMode('advanced')}>Show optional specifications</button>}
       </Section>}
       <Section id="product-basics" step="01" title="Basic Information" note="Name, SKU and the story customers will read.">
-        <Input label="Product name" value={form.name} onChange={(value) => update('name', value)} error={errors.name} placeholder="Royal Zari Silk Saree" required />
-        <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="leave blank for auto slug" />
-        <Input label="SKU" value={form.sku} onChange={(value) => update('sku', value)} error={errors.sku} placeholder="SC-0101" />
-        <Input label="Brand" value={form.brand} onChange={(value) => update('brand', value)} />
+        <Input field="name" label="Product name" value={form.name} onChange={(value) => update('name', value)} error={errors.name} placeholder="Royal Zari Silk Saree" required />
+        {viewMode === 'advanced' && <Input label="Slug" value={form.slug} onChange={(value) => update('slug', value)} placeholder="leave blank for auto slug" />}
+        <Input field="sku" label="SKU" value={form.sku} onChange={(value) => update('sku', value)} error={errors.sku} placeholder="SC-0101" />
+        {viewMode === 'advanced' && <Input label="Brand" value={form.brand} onChange={(value) => update('brand', value)} />}
         <Input label="Short Description" value={form.shortDescription} onChange={(value) => update('shortDescription', value)} placeholder="Premium festive wear" />
         <label className="admin-field lg:col-span-2">
           <span>Full Description</span>
           <textarea
             value={form.description}
             onChange={(event) => update('description', event.target.value)}
+            data-error-field="description"
+            aria-invalid={Boolean(errors.description)}
             className={`admin-field__control${errors.description ? ' is-error' : ''}`}
             placeholder="Write fabric, fit, finish and occasion details"
           />
           {errors.description && <span className="admin-field__error">{errors.description}</span>}
         </label>
       </Section>
+
+      {duplicateReview.loading && <p className="product-form-sync" role="status">Checking SKU, barcode and similar product names…</p>}
+      {!!duplicateReview.conflicts.length && <div className="product-duplicate-warning" role="status"><strong>{duplicateReview.conflicts.some((item) => item.blocking) ? 'Resolve duplicate catalog values' : 'Similar product found'}</strong>{duplicateReview.conflicts.map((item) => <p key={item.id}><span>{item.name}</span> matches {item.reasons.join(' and ')}. <a href={`${apiPrefix}/products/edit?id=${item.id}`}>Review product</a></p>)}</div>}
 
       <Section id="product-pricing" step="02" title="Category, Pricing and Inventory" note="Where it sits in the catalog and how it is sold.">
         <label className="admin-field">
@@ -580,15 +719,19 @@ export default function ProductForm({
             onChange={(event) => {
               const category = categories.find((item) => String(item._id) === String(event.target.value));
               setForm((current) => ({ ...current, category: event.target.value, subCategory: '', categoryDefinitionKey: category?.definitionKey || definitionKey(category?.name) }));
+              clearErrors(setErrors, 'category', 'attributes');
             }}
             className={`admin-field__control${errors.category ? ' is-error' : ''}`}
+            data-error-field="category"
+            aria-invalid={Boolean(errors.category)}
           >
-            <option value="">Select category</option>
+            <option value="">{categoriesLoaded ? 'Select category' : 'Loading categories...'}</option>
             {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
           </select>
           {errors.category && <span className="admin-field__error">{errors.category}</span>}
+          {categoriesLoaded && !categories.length ? <span className="admin-field__error">No category is available for this store. <button type="button" className="underline" onClick={() => setCategoryReload((value) => value + 1)}>Retry</button>{apiPrefix === '/admin' ? <> or <a className="underline" href="/admin/categories">create a category</a></> : null}.</span> : null}
         </label>
-        <label className="admin-field">
+        {viewMode === 'advanced' && <label className="admin-field">
           <span>Subcategory</span>
           <input
             list="product-subcategories"
@@ -604,26 +747,27 @@ export default function ProductForm({
           <datalist id="product-subcategories">
             {availableSubcategories.map((item) => <option key={item} value={item} />)}
           </datalist>
-        </label>
-        <Input label="Occasion" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding" />
-        <Input label="Fabric" value={form.fabric} onChange={(value) => update('fabric', value)} placeholder="Silk" />
-        <Input label="Original price" type="number" value={form.originalPrice} onChange={(value) => update('originalPrice', value)} error={errors.originalPrice} placeholder="2499" />
-        <Input label="Selling price" type="number" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
-        <Input label="Cost price" type="number" min="0" value={form.costPrice || 0} onChange={(value) => update('costPrice', value)} error={errors.costPrice} placeholder="700" />
-        <Input label="GST rate (%)" type="number" min="0" max="100" step="0.01" value={form.gstRate || 0} onChange={(value) => update('gstRate', value)} error={errors.gstRate} placeholder="5" />
-        <Input label="HSN code" value={form.hsnCode || ''} onChange={(value) => update('hsnCode', value)} placeholder="6204" />
-        <Input label="Barcode / GTIN" value={form.barcode || ''} onChange={(value) => update('barcode', value)} placeholder="Scan or enter barcode" />
-        <Input label="Stock quantity" type="number" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" />
-        <Input label="Low stock alert" type="number" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} placeholder="5" />
-        <Input label="Suggested reorder quantity" type="number" min="0" step="1" value={form.reorderQuantity || 0} onChange={(value) => update('reorderQuantity', value)} error={errors.reorderQuantity} placeholder="10" />
-        <Input label="Packed unit weight (kg, 0 uses store default)" type="number" value={form.shippingWeightKg || 0} onChange={value => update('shippingWeightKg', value)} placeholder="0.5" />
-        {Number(form.costPrice || 0) > 0 && Number(form.price || 0) > 0 && <div className="admin-form-hint lg:col-span-2"><h3>Estimated gross margin</h3><p>Rs. {Math.max(0, Number(form.price) - Number(form.costPrice)).toLocaleString('en-IN')} per unit · {Math.round(((Number(form.price) - Number(form.costPrice)) / Number(form.price)) * 100)}% before tax, shipping and payment charges.</p></div>}
+        </label>}
+        {viewMode === 'advanced' && <Input label="Occasion" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding" />}
+        {viewMode === 'advanced' && <Input label="Fabric" value={form.fabric} onChange={(value) => update('fabric', value)} placeholder="Silk" />}
+        <Input field="originalPrice" label="Original price" type="number" min="0.01" step="0.01" value={form.originalPrice} onChange={(value) => update('originalPrice', value)} error={errors.originalPrice} placeholder="2499" />
+        <Input field="price" label="Selling price" type="number" min="0.01" step="0.01" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
+        {viewMode === 'advanced' && <Input field="costPrice" label="Cost price" type="number" min="0" step="0.01" value={form.costPrice || 0} onChange={(value) => update('costPrice', value)} error={errors.costPrice} placeholder="700" />}
+        {viewMode === 'advanced' && <Input field="gstRate" label="GST rate (%)" type="number" min="0" max="100" step="0.01" value={form.gstRate || 0} onChange={(value) => update('gstRate', value)} error={errors.gstRate} placeholder="5" />}
+        {viewMode === 'advanced' && <Input label="HSN code" value={form.hsnCode || ''} onChange={(value) => update('hsnCode', value)} placeholder="6204" />}
+        {viewMode === 'advanced' && <div className="admin-field"><Input field="barcode" label="Barcode / GTIN" value={form.barcode || ''} onChange={(value) => update('barcode', value)} error={errors.barcode} placeholder="Scan or enter barcode" /><BarcodeScanner disabled={saving} onDetected={handleBarcode} /></div>}
+        <Input field="stock" label={form.trackVariants ? 'Total stock (calculated from variants)' : 'Stock quantity'} type="number" min="0" step="1" value={form.stock} onChange={(value) => update('stock', value)} error={errors.stock} placeholder="20" disabled={form.trackVariants} />
+        {viewMode === 'advanced' && <Input field="lowStockAlert" label="Low stock alert" type="number" min="0" step="1" value={form.lowStockAlert} onChange={(value) => update('lowStockAlert', value)} error={errors.lowStockAlert} placeholder="5" />}
+        {viewMode === 'advanced' && <Input field="reorderQuantity" label="Suggested reorder quantity" type="number" min="0" step="1" value={form.reorderQuantity || 0} onChange={(value) => update('reorderQuantity', value)} error={errors.reorderQuantity} placeholder="10" />}
+        {viewMode === 'advanced' && <Input field="shippingWeightKg" label="Packed unit weight (kg, 0 uses store default)" type="number" min="0" max="1000" step="0.01" value={form.shippingWeightKg || 0} onChange={value => update('shippingWeightKg', value)} error={errors.shippingWeightKg} placeholder="0.5" />}
+        {viewMode === 'advanced' && Number(form.costPrice || 0) > 0 && Number(form.price || 0) > 0 && <div className="admin-form-hint lg:col-span-2"><h3>Estimated gross margin</h3><p>Rs. {(Number(form.price) - Number(form.costPrice)).toLocaleString('en-IN')} per unit · {Math.round(((Number(form.price) - Number(form.costPrice)) / Number(form.price)) * 100)}% before tax, shipping and payment charges.</p></div>}
+        {errors.variants && <p role="alert" data-error-field="variants" tabIndex="-1" className="admin-field__error lg:col-span-2">{errors.variants}</p>}
         {effectiveSizingMode === 'sized' ? (
           <label className={`admin-flag lg:col-span-2 w-fit${form.trackVariants ? ' is-on' : ''}`}>
             <input type="checkbox" checked={!!form.trackVariants} onChange={(event) => toggleTrackVariants(event.target.checked)} className="accent-rose" />
-            Track stock by size and colour
+            Track stock by size and/or colour
           </label>
-        ) : effectiveVariantConfiguration.enabled ? (
+        ) : structure?.features?.sizing === false && effectiveVariantConfiguration.enabled ? (
           <DynamicVariantEditor
             variantConfiguration={effectiveVariantConfiguration}
             attributes={activeAttributeDefinitions}
@@ -638,33 +782,39 @@ export default function ProductForm({
           </div>
         )}
         {effectiveSizingMode === 'sized' && form.trackVariants ? (
-          <div className="lg:col-span-2 overflow-x-auto rounded-2xl border border-[#eadfd5]">
-            <table className="w-full min-w-[480px] text-left text-sm">
+          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-[#eadfd5]" data-error-field="variants" tabIndex="-1">
+            <VariantBulkTools form={form} setForm={setForm} />
+            <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-[#fffaf4] text-xs uppercase tracking-[0.12em] text-slate-500">
-                <tr><th className="p-3">Size</th><th className="p-3">Colour</th><th className="p-3">Stock</th></tr>
+                <tr><th className="p-3">Size</th><th className="p-3">Colour</th><th className="p-3">Variant SKU</th><th className="p-3">Stock</th><th className="p-3">Selling price</th><th className="p-3">MRP</th><th className="p-3">Photo</th><th className="p-3">Available</th></tr>
               </thead>
               <tbody>
                 {(form.variants || []).map((variant, index) => (
                   <tr key={`${variant.size}-${variant.color}-${index}`} className="border-t border-[#f3ebe3]">
                     <td className="p-3 font-bold">{variant.size}</td>
-                    <td className="p-3">{variant.color}</td>
+                    <td className="p-3">{variant.color || 'Default'}</td>
+                    <td className="p-3"><input aria-label={`${variant.size || 'Default'} ${variant.color || 'default'} variant SKU`} value={variant.sku || ''} onChange={(event) => updateVariant(index, 'sku', event.target.value)} className="admin-field__control h-10 min-h-10 min-w-36 px-3" placeholder="Optional" /></td>
                     <td className="p-3">
-                      <input type="number" min="0" value={variant.stock} onChange={(event) => updateVariantStock(index, event.target.value)} className="admin-field__control h-10 w-24 min-h-10 px-3" />
+                      <input aria-label={`${variant.size || 'Default'} ${variant.color || 'default'} stock`} type="number" min="0" step="1" value={variant.stock} onChange={(event) => updateVariantStock(index, event.target.value)} className="admin-field__control h-10 w-24 min-h-10 px-3" />
                     </td>
+                    <td className="p-3"><input aria-label={`${variant.size || 'Default'} ${variant.color || 'default'} selling price`} type="number" min="0.01" step="0.01" value={variant.price || ''} onChange={(event) => updateVariant(index, 'price', event.target.value)} className="admin-field__control h-10 w-28 min-h-10 px-3" placeholder="Main price" /></td>
+                    <td className="p-3"><input aria-label={`${variant.size || 'Default'} ${variant.color || 'default'} MRP`} type="number" min="0.01" step="0.01" value={variant.originalPrice || ''} onChange={(event) => updateVariant(index, 'originalPrice', event.target.value)} className="admin-field__control h-10 w-28 min-h-10 px-3" placeholder="Main MRP" /></td>
+                    <td className="p-3"><select aria-label={`${variant.size || 'Default'} ${variant.color || 'default'} photo`} value={variant.images?.[0]?.url || ''} onChange={(event) => updateVariant(index, 'images', event.target.value ? [{ url: event.target.value, primary: true }] : [])} className="admin-field__control h-10 min-h-10 min-w-36 px-2"><option value="">Main product photo</option>{form.images.map((image, imageIndex) => <option key={`${image.url}-${imageIndex}`} value={image.url}>Photo {imageIndex + 1}{image.primary ? ' · Main' : ''}</option>)}</select></td>
+                    <td className="p-3"><label className="inline-flex items-center gap-2 font-semibold"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => updateVariant(index, 'isActive', event.target.checked)} className="accent-wine" /> Sell</label></td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-            <p className="px-3 py-2 text-xs font-semibold text-slate-500">Total units: {form.stock || 0}. Leave a combination at 0 to hide it from checkout.</p>
+            </table></div>
+            <p className="px-3 py-2 text-xs font-semibold text-slate-500">Total units: {form.stock || 0}. Leave a combination at 0 to make it unavailable. Blank variant prices use the main product price and MRP.</p>
           </div>
         ) : null}
       </Section>
 
       <Section id="product-media" step="03" title="Product Images, Sizes and Colors" note="Photos first, then the options customers pick.">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2" data-error-field="images" tabIndex="-1">
           <div className="admin-form-hint mb-3">
             <h3>Product images</h3>
-            <p>Click the upload box or drag images here. Keep up to 20 clear product photos; add up to 8 at a time. JPG, JPEG, PNG or WEBP. Max 2MB each.</p>
+            <p>Click the upload box or drag images here. Keep up to 20 clear product photos; add up to 8 at a time. JPG, JPEG, PNG or WEBP files up to 20MB are compressed before upload.</p>
           </div>
           <ImageUploader
             label="Choose Product Images"
@@ -678,11 +828,13 @@ export default function ProductForm({
             targetSizeMb={0.7}
             value={form.images}
             onChange={(images) => update('images', images)}
+            disabled={saving}
+            onBusyChange={(busy) => setMediaActivity((current) => ({ ...current, images: busy }))}
           />
           <p className="mt-2 text-xs font-semibold text-slate-500">{form.images.length}/20 images saved. Mark one image as Main for product listing.</p>
           {errors.images && <p className="admin-field__error mt-2">{errors.images}</p>}
         </div>
-        <div className="lg:col-span-2">
+        {viewMode === 'advanced' && <div className="lg:col-span-2">
           <div className="admin-form-hint mb-3">
             <h3>Product videos</h3>
             <p>Optional. Upload up to 2 short videos. MP4, WEBM or MOV. Max 20MB each.</p>
@@ -696,9 +848,11 @@ export default function ProductForm({
             uploadPath={`${uploadPrefix}/videos`}
             value={form.videos}
             onChange={(videos) => update('videos', videos)}
+            disabled={saving}
+            onBusyChange={(busy) => setMediaActivity((current) => ({ ...current, videos: busy }))}
           />
           <p className="mt-2 text-xs font-semibold text-slate-500">{form.videos.length}/2 videos uploaded.</p>
-        </div>
+        </div>}
         {structure?.features?.sizing !== false && <><label className="admin-field">
           <span>Customer sizing</span>
           <select value={form.sizingMode || 'auto'} onChange={(event) => update('sizingMode', event.target.value)} className="admin-field__control">
@@ -725,7 +879,7 @@ export default function ProductForm({
         </label>
         </>}
         {effectiveSizingMode === 'sized' ? (
-          <Input label="Selectable sizes" value={form.sizes} onChange={(value) => update('sizes', value)} error={errors.sizes} placeholder="XS, S, M, L, XL, XXL" />
+          <Input field="sizes" label="Selectable sizes" value={form.sizes} onChange={(value) => update('sizes', value)} error={errors.sizes} placeholder="XS, S, M, L, XL, XXL" />
         ) : (
           <div className="admin-form-hint lg:col-span-2">
             <h3>No size chart required</h3>
@@ -733,8 +887,8 @@ export default function ProductForm({
           </div>
         )}
         <Input label="Colors" value={form.colors} onChange={(value) => update('colors', value)} placeholder="Pink, Maroon, Gold" />
-        <Input label="Tags" value={form.tags} onChange={(value) => update('tags', value)} placeholder="festive, silk, wedding" />
-        <Input label="Care Instructions" value={form.careInstructions} onChange={(value) => update('careInstructions', value)} placeholder="Dry clean preferred" />
+        {viewMode === 'advanced' && <Input label="Tags" value={form.tags} onChange={(value) => update('tags', value)} placeholder="festive, silk, wedding" />}
+        {viewMode === 'advanced' && <Input label="Care Instructions" value={form.careInstructions} onChange={(value) => update('careInstructions', value)} placeholder="Dry clean preferred" />}
 
         {effectiveSizingMode === 'sized' ? (
           <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-[#eadfd5] bg-white">
@@ -797,22 +951,24 @@ export default function ProductForm({
         ) : null}
       </Section>
 
-      <Section id="product-fulfilment" step="04" title="Shipping, Supplier and Schedule" note="Operational details used for courier planning, restocking and controlled publishing.">
-        <Input label="Package length (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.lengthCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'lengthCm', value)} error={errors.packageDimensions} />
-        <Input label="Package width (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.widthCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'widthCm', value)} />
-        <Input label="Package height (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.heightCm || 0} onChange={(value) => updateNested(setForm, 'packageDimensions', 'heightCm', value)} />
+      {viewMode === 'advanced' && <Section id="product-fulfilment" step="04" title="Shipping, Supplier and Schedule" note="Operational details used for courier planning, restocking and controlled publishing.">
+        <Input field="packageDimensions" label="Package length (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.lengthCm || 0} onChange={(value) => { updateNested(setForm, 'packageDimensions', 'lengthCm', value); clearErrors(setErrors, 'packageDimensions'); }} error={errors.packageDimensions} />
+        <Input label="Package width (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.widthCm || 0} onChange={(value) => { updateNested(setForm, 'packageDimensions', 'widthCm', value); clearErrors(setErrors, 'packageDimensions'); }} />
+        <Input label="Package height (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.heightCm || 0} onChange={(value) => { updateNested(setForm, 'packageDimensions', 'heightCm', value); clearErrors(setErrors, 'packageDimensions'); }} />
         <Input label="Country of origin" value={form.countryOfOrigin || ''} onChange={(value) => update('countryOfOrigin', value)} placeholder="India" />
         <Input label="Supplier name" value={form.supplierName || ''} onChange={(value) => update('supplierName', value)} placeholder="Optional internal reference" />
         <Input label="Supplier SKU" value={form.supplierSku || ''} onChange={(value) => update('supplierSku', value)} placeholder="Supplier item code" />
         <Input label="Expected restock" type="datetime-local" value={form.restockAt || ''} onChange={(value) => update('restockAt', value)} />
-        <Input label="Publish on" type="datetime-local" value={form.publishAt || ''} onChange={(value) => update('publishAt', value)} />
-        <Input label="Sale starts" type="datetime-local" value={form.saleStartAt || ''} onChange={(value) => update('saleStartAt', value)} />
-        <Input label="Sale ends" type="datetime-local" value={form.saleEndAt || ''} onChange={(value) => update('saleEndAt', value)} error={errors.saleEndAt} />
+        <Input field="publishAt" label="Publish on" type="datetime-local" value={form.publishAt || ''} onChange={(value) => update('publishAt', value)} error={errors.publishAt} />
+        <Input field="salePrice" label="Scheduled sale price" type="number" min="0.01" step="0.01" value={form.salePrice || ''} onChange={(value) => update('salePrice', value)} error={errors.salePrice} placeholder="Lower than regular selling price" />
+        <Input field="saleStartAt" label="Sale starts" type="datetime-local" value={form.saleStartAt || ''} onChange={(value) => update('saleStartAt', value)} error={errors.saleStartAt} />
+        <Input field="saleEndAt" label="Sale ends" type="datetime-local" value={form.saleEndAt || ''} onChange={(value) => update('saleEndAt', value)} error={errors.saleEndAt} />
+        <div className="admin-form-hint lg:col-span-2"><h3>Shipping weight preview</h3><p>Actual: {Number(form.shippingWeightKg || 0).toFixed(2)} kg · Volumetric: {chargeableWeight.volumetric.toFixed(2)} kg · Courier chargeable weight: <strong>{chargeableWeight.chargeable.toFixed(2)} kg</strong>. The final rate also depends on destination PIN code and your selected courier.</p></div>
         <label className="admin-field lg:col-span-2"><span>Manufacturer / importer details</span><textarea value={form.manufacturerDetails || ''} onChange={(event) => update('manufacturerDetails', event.target.value)} className="admin-field__control" placeholder="Name and address shown where legally required" /></label>
         <Input label="Warranty / guarantee" value={form.warranty || ''} onChange={(value) => update('warranty', value)} placeholder="Example: 6 months manufacturer warranty" />
-      </Section>
+      </Section>}
 
-      {structure?.industry !== 'fashion' ? null : <details className="admin-form-card"><summary className="cursor-pointer font-bold text-wine">Manual copy builder</summary><Section step="05" title="Build copy from your details" note="Optional templates. Review generated wording and product options before applying.">
+      {viewMode === 'advanced' && structure?.industry === 'fashion' ? <details className="admin-form-card"><summary className="cursor-pointer font-bold text-wine">Manual copy builder</summary><Section step="05" title="Build copy from your details" note="Optional templates. Review generated wording and product options before applying.">
         <div className="admin-form-hint lg:col-span-2">
           <h3>Generate title, description, tags and SEO</h3>
           <p>Use any details you know. Existing manual values stay unless you choose to replace them.</p>
@@ -930,9 +1086,9 @@ export default function ProductForm({
             Preview Suggestions
           </button>
         </div>
-      </Section></details>}
+      </Section></details> : null}
 
-      <Section step="06" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
+      {viewMode === 'advanced' && <Section step="06" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
         <Input label="Return Policy" value={form.returnPolicy} onChange={(value) => update('returnPolicy', value)} placeholder="7 days return/exchange" />
         <Input label="Meta Title" value={form.metaTitle} onChange={(value) => update('metaTitle', value)} />
@@ -956,7 +1112,8 @@ export default function ProductForm({
             </label>
           ))}
         </div>
-      </Section>
+        {form.publishAt && !form.isActive ? <div className="admin-form-hint lg:col-span-2"><h3>Scheduled publishing is paused</h3><p>Turn on Active if this product should appear automatically at the selected publish time.</p></div> : null}
+      </Section>}
 
       {assistantPreviewOpen && assistantSuggestions && (
         <AssistantPreviewModal
@@ -968,19 +1125,24 @@ export default function ProductForm({
           onApply={applyAssistant}
         />
       )}
+      {copyOpen && <ProductCopyModal apiPrefix={apiPrefix} onClose={() => setCopyOpen(false)} onChoose={copyExistingProduct} />}
+      {previewOpen && <ProductPreviewModal product={{ ...form, sizes: splitList(form.sizes), colors: splitList(form.colors) }} onClose={() => setPreviewOpen(false)} />}
 
-      {message && <p className="rounded-2xl border border-[#eadfd5] bg-white px-4 py-3 text-sm font-semibold text-wine">{message}</p>}
+      {(mediaActivity.images || mediaActivity.videos) && <p role="status" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">Media upload in progress. Saving will be available when it finishes.</p>}
+      {message && <p role="status" className="rounded-2xl border border-[#eadfd5] bg-white px-4 py-3 text-sm font-semibold text-wine">{message}</p>}
       <div className="admin-form-actions">
         {onCancel ? (
-          <button type="button" onClick={onCancel} className="admin-btn-ghost">
+          <button type="button" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={onCancel} className="admin-btn-ghost disabled:opacity-60">
             Cancel
           </button>
         ) : (
-          <a href={cancelPath} className="admin-btn-ghost">Cancel</a>
+          <a href={cancelPath} aria-disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={(event) => { if (saving || mediaActivity.images || mediaActivity.videos) event.preventDefault(); }} className={`admin-btn-ghost${saving || mediaActivity.images || mediaActivity.videos ? ' pointer-events-none opacity-60' : ''}`}>Cancel</a>
         )}
-        <button type="button" onClick={() => { setForm(JSON.parse(baselineRef.current)); clearDraft(productId, apiPrefix); setRecoveryDraft(null); setSmartFillReset(value => value + 1); }} className="admin-btn-ghost">Reset</button>
-        {mode === 'Add' && apiPrefix === '/admin' && <button type="button" disabled={saving || !structure} onClick={saveServerDraft} className="admin-btn-ghost disabled:opacity-60">Save Draft</button>}
-        <button disabled={saving} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : `${mode} Product`}</button>
+        <button type="button" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={() => { setForm(JSON.parse(baselineRef.current)); setErrors({}); setMessage(''); clearDraft(productId, apiPrefix); setRecoveryDraft(null); setSmartFillReset(value => value + 1); }} className="admin-btn-ghost disabled:opacity-60">Reset</button>
+        {mode === 'Add' && <button type="button" disabled={saving || mediaActivity.images || mediaActivity.videos || !structure} onClick={saveServerDraft} className="admin-btn-ghost disabled:opacity-60">Save Draft</button>}
+        <button type="button" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={() => setPreviewOpen(true)} className="admin-btn-ghost disabled:opacity-60"><Eye size={16} /> Preview</button>
+        {scheduledPublish && <button type="submit" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={() => { submitIntentRef.current = 'schedule'; }} className="admin-btn-secondary disabled:opacity-60">Schedule Product</button>}
+        <button type="submit" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={() => { submitIntentRef.current = mode === 'Add' ? 'publish' : 'save'; }} className="admin-btn disabled:opacity-60">{saving ? 'Saving...' : (mediaActivity.images || mediaActivity.videos) ? 'Uploading media...' : `${mode} Product`}</button>
       </div>
     </form>
   );
@@ -1063,6 +1225,66 @@ function AssistantPreviewModal({ suggestions, selection, setSelection, mode, onC
   );
 }
 
+function ProductCopyModal({ apiPrefix, onClose, onChoose }) {
+  const [products, setProducts] = useState([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError('');
+    const timer = window.setTimeout(() => {
+      const search = query.trim() ? `&search=${encodeURIComponent(query.trim())}` : '';
+      api.get(`${apiPrefix}/products?admin=true&page=1&limit=100&sort=updated${search}`, { silent: true, forceRefetch: true })
+        .then((response) => {
+          if (!alive) return;
+          const items = Array.isArray(response) ? response : Array.isArray(response?.items) ? response.items : [];
+          setProducts(items.filter((item) => item && item.isArchived !== true));
+        })
+        .catch((requestError) => { if (alive) setError(requestError.message || 'Products could not be loaded.'); })
+        .finally(() => { if (alive) setLoading(false); });
+    }, query.trim() ? 250 : 0);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [apiPrefix, query]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visible = products.filter((product) => !normalizedQuery || [product.name, product.sku, product.category?.name]
+    .some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
+
+  return (
+    <div className="product-copy-modal" role="dialog" aria-modal="true" aria-labelledby="copy-product-title">
+      <button type="button" className="product-copy-modal__backdrop" aria-label="Close product picker" onClick={onClose} />
+      <section className="product-copy-modal__panel">
+        <header>
+          <div><p>Reuse a listing</p><h2 id="copy-product-title">Copy an existing product</h2><span>Details and media are copied. SKU, barcode, stock and schedules are cleared.</span></div>
+          <button type="button" onClick={onClose} aria-label="Close product picker"><X size={20} /></button>
+        </header>
+        <label className="product-copy-modal__search">
+          <Search size={18} aria-hidden="true" />
+          <span className="sr-only">Search existing products</span>
+          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by product, SKU or category" />
+        </label>
+        <div className="product-copy-modal__list">
+          {loading ? <p className="product-copy-modal__state">Loading your catalogue…</p> : null}
+          {error ? <p role="alert" className="product-copy-modal__state is-error">{error}</p> : null}
+          {!loading && !error && visible.length === 0 ? <p className="product-copy-modal__state">No matching products found.</p> : null}
+          {visible.map((product) => (
+            <article key={product._id || product.id} className="product-copy-modal__item">
+              {product.images?.[0]?.url || product.image
+                ? <img src={normalizeImageUrl(product.images?.[0]?.url || product.image)} alt="" />
+                : <span className="product-copy-modal__no-photo">No photo</span>}
+              <div><strong>{product.name}</strong><span>{product.sku || 'No SKU'} · {product.category?.name || 'Uncategorised'}</span><small>₹{Number(product.price || 0).toLocaleString('en-IN')} · {Number(product.stock || 0)} in stock</small></div>
+              <button type="button" className="admin-btn-ghost" onClick={() => onChoose(product)}>Use product</button>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function formatFlagSummary(flags = {}) {
   return [
     flags.isNewArrival ? 'New Arrival: yes' : 'New Arrival: no',
@@ -1088,7 +1310,7 @@ function Section({ id, title, note, step, children }) {
   );
 }
 
-function Input({ label, value, onChange, placeholder, type = 'text', required = false, error, min, max, step }) {
+function Input({ field, label, value, onChange, placeholder, type = 'text', required = false, error, min, max, step, disabled = false }) {
   return (
     <label className="admin-field">
       <span>{label}{required ? <em>*</em> : null}</span>
@@ -1098,9 +1320,12 @@ function Input({ label, value, onChange, placeholder, type = 'text', required = 
         min={min}
         max={max}
         step={step}
+        disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`admin-field__control${error ? ' is-error' : ''}`}
+        data-error-field={field}
+        aria-invalid={Boolean(error)}
+        className={`admin-field__control disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500${error ? ' is-error' : ''}`}
         placeholder={placeholder}
       />
       {error && <span className="admin-field__error">{error}</span>}
@@ -1118,6 +1343,7 @@ function DynamicAttributeField({ attribute, value, onChange }) {
     value: value ?? '',
     required: Boolean(attribute.required),
     onChange: (event) => onChange(event.target.value),
+    'data-required-attribute': attribute.required && !String(value ?? '').trim() ? attribute.key : undefined,
     className: 'admin-field__control',
   };
 
@@ -1131,7 +1357,7 @@ function DynamicAttributeField({ attribute, value, onChange }) {
     const selected = new Set(splitList(value));
     if (attribute.options?.length) {
       return (
-        <fieldset className="admin-field">
+        <fieldset className="admin-field" data-required-attribute={attribute.required && !String(value ?? '').trim() ? attribute.key : undefined} tabIndex={attribute.required ? -1 : undefined}>
           <legend>{label}</legend>
           <div className="flex flex-wrap gap-2 rounded-xl border border-[#eadfd5] bg-white p-3">
             {attribute.options.map((option) => (
@@ -1176,7 +1402,7 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
   const optionValues = form.variantOptionValues || {};
   const maxCombinations = Number(variantConfiguration?.maxCombinations || 120);
   const generate = () => {
-    const variants = buildDynamicVariantMatrix(definitions, optionValues, form.variants, form.sku, maxCombinations);
+    const variants = seedExistingStock(buildDynamicVariantMatrix(definitions, optionValues, form.variants, form.sku, maxCombinations), form);
     setForm((current) => ({
       ...current,
       trackVariants: true,
@@ -1205,27 +1431,64 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
         ))}
       </div>
       {form.trackVariants && form.variants?.length ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <><div className="mt-4"><VariantBulkTools form={form} setForm={setForm} /></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {form.variants.map((variant, index) => (
             <article key={dynamicVariantKey(variant.optionValues)} className="rounded-xl border border-[#eadfd5] bg-white p-3">
               <strong className="block truncate text-sm text-charcoal" title={formatVariantOptions(variant.optionValues)}>{formatVariantOptions(variant.optionValues)}</strong>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <CompactVariantInput label="SKU" value={variant.sku} onChange={(value) => onUpdateVariant(index, 'sku', value)} />
-                <CompactVariantInput label="Stock" type="number" value={variant.stock} onChange={(value) => onUpdateVariant(index, 'stock', Math.max(0, Number(value || 0)))} />
-                <CompactVariantInput label="Selling price" type="number" value={variant.price} onChange={(value) => onUpdateVariant(index, 'price', value)} />
-                <CompactVariantInput label="MRP" type="number" value={variant.originalPrice} onChange={(value) => onUpdateVariant(index, 'originalPrice', value)} />
+                <CompactVariantInput label="Stock" type="number" min={0} step={1} value={variant.stock} onChange={(value) => onUpdateVariant(index, 'stock', Math.max(0, Number(value || 0)))} />
+                <CompactVariantInput label="Selling price" type="number" min={0.01} step={0.01} value={variant.price} onChange={(value) => onUpdateVariant(index, 'price', value)} />
+                <CompactVariantInput label="MRP" type="number" min={0.01} step={0.01} value={variant.originalPrice} onChange={(value) => onUpdateVariant(index, 'originalPrice', value)} />
               </div>
+              <label className="mt-3 grid gap-1 text-[11px] font-semibold text-slate-500"><span>Variant photo</span><select value={variant.images?.[0]?.url || ''} onChange={(event) => onUpdateVariant(index, 'images', event.target.value ? [{ url: event.target.value, primary: true }] : [])} className="h-9 rounded-lg border border-[#eadfd5] px-2"><option value="">Main product photo</option>{form.images.map((image, imageIndex) => <option key={`${image.url}-${imageIndex}`} value={image.url}>Photo {imageIndex + 1}</option>)}</select></label>
               <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => onUpdateVariant(index, 'isActive', event.target.checked)} /> Available for sale</label>
             </article>
           ))}
-        </div>
+        </div></>
       ) : <p className="mt-4 text-xs font-semibold text-slate-500">Add option values and generate combinations. Nothing is created automatically.</p>}
     </div>
   );
 }
 
-function CompactVariantInput({ label, value, onChange, type = 'text' }) {
-  return <label className="grid gap-1 text-[11px] font-semibold text-slate-500"><span>{label}</span><input type={type} min={type === 'number' ? 0 : undefined} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs text-charcoal" /></label>;
+function CompactVariantInput({ label, value, onChange, type = 'text', min, step }) {
+  return <label className="grid gap-1 text-[11px] font-semibold text-slate-500"><span>{label}</span><input type={type} min={min} step={step} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs text-charcoal" /></label>;
+}
+
+function VariantBulkTools({ form, setForm }) {
+  const [values, setValues] = useState({ stock: '', price: '', originalPrice: '' });
+  const updateAll = (transform) => setForm((current) => {
+    const variants = (current.variants || []).map(transform);
+    return { ...current, variants, stock: variants.filter((item) => item.isActive !== false).reduce((sum, item) => sum + Math.max(0, Number(item.stock || 0)), 0) };
+  });
+  const applyValues = () => {
+    const patch = {};
+    if (values.stock !== '') patch.stock = Math.max(0, Math.round(Number(values.stock || 0)));
+    if (Number(values.price) > 0) patch.price = Number(values.price);
+    if (Number(values.originalPrice) > 0) patch.originalPrice = Number(values.originalPrice);
+    if (!Object.keys(patch).length) return;
+    updateAll((variant) => ({ ...variant, ...patch }));
+  };
+  const generateSkus = () => updateAll((variant, index) => ({
+    ...variant,
+    sku: `${String(form.sku || 'PRODUCT').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toUpperCase()}-${variantCode(variant, index)}`,
+  }));
+  const first = form.variants?.[0];
+  return <div className="variant-bulk-tools">
+    <div><strong>Bulk variant editor</strong><small>Apply common inventory values, then adjust individual combinations.</small></div>
+    <label><span>Stock</span><input aria-label="Bulk variant stock" type="number" min="0" step="1" value={values.stock} onChange={(event) => setValues((current) => ({ ...current, stock: event.target.value }))} /></label>
+    <label><span>Price</span><input aria-label="Bulk variant price" type="number" min="0.01" step="0.01" value={values.price} onChange={(event) => setValues((current) => ({ ...current, price: event.target.value }))} /></label>
+    <label><span>MRP</span><input aria-label="Bulk variant MRP" type="number" min="0.01" step="0.01" value={values.originalPrice} onChange={(event) => setValues((current) => ({ ...current, originalPrice: event.target.value }))} /></label>
+    <div className="variant-bulk-tools__actions"><button type="button" onClick={applyValues}>Apply values</button><button type="button" onClick={generateSkus}>Generate SKUs</button><button type="button" disabled={!first} onClick={() => updateAll((variant) => ({ ...variant, stock: first.stock, price: first.price, originalPrice: first.originalPrice }))}>Copy first row</button><button type="button" onClick={() => updateAll((variant) => ({ ...variant, isActive: true }))}>Enable all</button></div>
+  </div>;
+}
+
+function variantCode(variant = {}, index = 0) {
+  const values = Object.values(variant.optionValues || {}).filter(Boolean);
+  if (variant.size) values.unshift(variant.size);
+  if (variant.color) values.push(variant.color);
+  const code = [...new Set(values)].join('-').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toUpperCase();
+  return code || String(index + 1).padStart(2, '0');
 }
 
 function getActiveAttributeDefinitions(structure, categories = [], form = {}) {
@@ -1313,6 +1576,11 @@ function buildDynamicVariantMatrix(definitions, values, existing = [], baseSku =
   });
 }
 
+function seedExistingStock(variants, form = {}) {
+  if (!variants.length || (Array.isArray(form.variants) && form.variants.length) || !(Number(form.stock) > 0)) return variants;
+  return variants.map((variant, index) => index === 0 ? { ...variant, stock: Number(form.stock) } : variant);
+}
+
 function readVariantOptionValues(variants = []) {
   const result = {};
   variants.forEach((variant) => Object.entries(variant.optionValues || {}).forEach(([key, value]) => {
@@ -1342,17 +1610,31 @@ function validate(form, sizingProduct = form, attributes = []) {
   if (form.name.trim().length < 3) errors.name = 'Product name must be at least 3 characters.';
   if (!form.sku.trim()) errors.sku = 'SKU is required.';
   if (!form.category) errors.category = 'Category is required.';
-  if (!Number(form.originalPrice)) errors.originalPrice = 'Original price is required.';
-  if (!Number(form.price)) errors.price = 'Selling price is required.';
+  if (!Number.isFinite(Number(form.originalPrice)) || Number(form.originalPrice) <= 0) errors.originalPrice = 'Original price is required.';
+  if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) errors.price = 'Selling price is required.';
   if (Number(form.price) > Number(form.originalPrice)) errors.price = 'Selling price cannot exceed original price.';
-  if (Number(form.stock) < 0) errors.stock = 'Stock cannot be negative.';
+  if (!Number.isSafeInteger(Number(form.stock)) || Number(form.stock) < 0) errors.stock = 'Stock must be a whole number of zero or more.';
+  if (!Number.isSafeInteger(Number(form.lowStockAlert)) || Number(form.lowStockAlert) < 0) errors.lowStockAlert = 'Use a whole number of zero or more.';
   if (!Number.isFinite(Number(form.costPrice || 0)) || Number(form.costPrice || 0) < 0) errors.costPrice = 'Cost price must be zero or more.';
   if (!Number.isFinite(Number(form.gstRate || 0)) || Number(form.gstRate || 0) < 0 || Number(form.gstRate || 0) > 100) errors.gstRate = 'GST rate must be between 0 and 100.';
   if (!Number.isSafeInteger(Number(form.reorderQuantity || 0)) || Number(form.reorderQuantity || 0) < 0) errors.reorderQuantity = 'Use a whole number of zero or more.';
+  if (!Number.isFinite(Number(form.shippingWeightKg || 0)) || Number(form.shippingWeightKg || 0) < 0 || Number(form.shippingWeightKg || 0) > 1000) errors.shippingWeightKg = 'Packed unit weight must be between 0 and 1000 kg.';
   if (Object.values(form.packageDimensions || {}).some((value) => !Number.isFinite(Number(value || 0)) || Number(value || 0) < 0 || Number(value || 0) > 1000)) errors.packageDimensions = 'Package dimensions must be between 0 and 1000 cm.';
+  for (const key of ['publishAt', 'saleStartAt', 'saleEndAt']) if (form[key] && Number.isNaN(new Date(form[key]).getTime())) errors[key] = 'Choose a valid date and time.';
   if (form.saleStartAt && form.saleEndAt && new Date(form.saleStartAt) >= new Date(form.saleEndAt)) errors.saleEndAt = 'Sale end must be after sale start.';
+  const hasScheduledSale = Boolean(form.salePrice || form.saleStartAt || form.saleEndAt);
+  if (hasScheduledSale) {
+    if (!Number.isFinite(Number(form.salePrice)) || Number(form.salePrice) <= 0) errors.salePrice = 'Enter the scheduled sale price.';
+    else if (Number(form.salePrice) >= Number(form.price)) errors.salePrice = 'Scheduled sale price must be below the regular selling price.';
+    if (!form.saleStartAt) errors.saleStartAt = 'Choose when the sale starts.';
+    if (!form.saleEndAt) errors.saleEndAt = 'Choose when the sale ends.';
+  }
   if (!form.images.length) errors.images = 'Upload at least one product image.';
   if (form.description.trim().length < 20) errors.description = 'Description must be at least 20 characters.';
+  if (form.trackVariants) {
+    const variantError = validateVariants(form.variants);
+    if (variantError) errors.variants = variantError;
+  }
   const missingAttribute = attributes.find((attribute) => attribute.required && !String(form.attributeValues?.[attribute.key] ?? '').trim());
   if (missingAttribute) errors.attributes = `Enter ${missingAttribute.label}.`;
   if (resolveSizingMode(sizingProduct) === 'sized') {
@@ -1364,6 +1646,183 @@ function validate(form, sizingProduct = form, attributes = []) {
     }
   }
   return errors;
+}
+
+function validateVariants(variants = []) {
+  if (!Array.isArray(variants) || !variants.length) return 'Add every variant option, then generate at least one inventory combination.';
+  const combinations = new Set();
+  const skus = new Set();
+  for (const variant of variants) {
+    const stock = Number(variant?.stock);
+    if (!Number.isSafeInteger(stock) || stock < 0) return 'Every variant stock value must be a whole number of zero or more.';
+    const price = variant?.price === '' || variant?.price === undefined || variant?.price === null ? null : Number(variant.price);
+    const originalPrice = variant?.originalPrice === '' || variant?.originalPrice === undefined || variant?.originalPrice === null ? null : Number(variant.originalPrice);
+    if (price !== null && (!Number.isFinite(price) || price <= 0)) return 'Variant selling prices must be greater than zero when entered.';
+    if (originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice <= 0)) return 'Variant MRP values must be greater than zero when entered.';
+    if (price !== null && originalPrice !== null && price > originalPrice) return 'A variant selling price cannot exceed its MRP.';
+    const combination = dynamicVariantKey(Object.keys(variant?.optionValues || {}).length
+      ? variant.optionValues
+      : { size: variant?.size || '', color: variant?.color || '' });
+    if (!combination) return 'Every variant needs its configured option values.';
+    if (combinations.has(combination)) return 'Variant option combinations must be unique.';
+    combinations.add(combination);
+    const sku = String(variant?.sku || '').trim().toLowerCase();
+    if (sku && skus.has(sku)) return 'Variant SKUs must be unique within the product.';
+    if (sku) skus.add(sku);
+  }
+  return '';
+}
+
+function focusFormError(formNode, errors = {}) {
+  if (!formNode) return;
+  let target = null;
+  const fields = Array.from(formNode.querySelectorAll('[data-error-field]'));
+  for (const field of Object.keys(errors)) {
+    if (field === 'sizeChart') {
+      target = Array.from(formNode.querySelectorAll('[data-garment-measurement]'))
+        .find((input) => !Number.isFinite(Number(input.value)) || Number(input.value) <= 0);
+    } else if (field === 'attributes') {
+      target = Array.from(formNode.querySelectorAll('[data-required-attribute]'))
+        .find((input) => !String(input.value || '').trim());
+    }
+    target ||= fields.find((item) => item.dataset.errorField === field);
+    if (target) break;
+  }
+  if (!target) return;
+  target.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  const focusTarget = target.matches?.('input, select, textarea, button, [tabindex]')
+    ? target
+    : target.querySelector?.('input, select, textarea, button, [tabindex]');
+  focusTarget?.focus?.({ preventScroll: true });
+}
+
+function clearErrors(setter, ...fields) {
+  setter((current) => {
+    if (!fields.some((field) => current[field])) return current;
+    const next = { ...current };
+    fields.forEach((field) => delete next[field]);
+    return next;
+  });
+}
+
+function buildDraftPayload(form, overrides = {}) {
+  const payload = {
+    ...form,
+    ...overrides,
+    images: prepareImages(form.images),
+    videos: prepareVideos(form.videos),
+    price: Number(form.price || 0),
+    sellingPrice: Number(form.price || 0),
+    originalPrice: Number(form.originalPrice || form.price || 0),
+    salePrice: form.salePrice ? Number(form.salePrice) : undefined,
+    costPrice: Number(form.costPrice || 0),
+    gstRate: Number(form.gstRate || 0),
+    stock: overrides.stock ?? Number(form.stock || 0),
+    lowStockAlert: Number(form.lowStockAlert || 5),
+    reorderQuantity: Number(form.reorderQuantity || 0),
+    shippingWeightKg: Number(form.shippingWeightKg || 0),
+    packageDimensions: {
+      lengthCm: Number(form.packageDimensions?.lengthCm || 0),
+      widthCm: Number(form.packageDimensions?.widthCm || 0),
+      heightCm: Number(form.packageDimensions?.heightCm || 0),
+    },
+    sizes: overrides.sizes ?? splitList(form.sizes),
+    colors: splitList(form.colors),
+    tags: splitList(form.tags),
+    variants: overrides.variants ?? (form.trackVariants ? form.variants : []),
+    restockAt: nullableDate(form.restockAt),
+    publishAt: nullableDate(form.publishAt),
+    saleStartAt: nullableDate(form.saleStartAt),
+    saleEndAt: nullableDate(form.saleEndAt),
+  };
+  if (!payload.category) delete payload.category;
+  return payload;
+}
+
+function formFromServerDraft(draft = {}) {
+  return {
+    ...emptyProduct,
+    ...draft,
+    category: draft.category?._id || draft.category || '',
+    sizes: listText(draft.sizes),
+    colors: listText(draft.colors),
+    tags: listText(draft.tags),
+    highlights: Array.isArray(draft.highlights) ? draft.highlights : splitList(draft.highlights),
+    images: normalizeImageEntries(draft.images || []),
+    videos: normalizeVideoEntries(draft.videos || []),
+    packageDimensions: { ...emptyProduct.packageDimensions, ...(draft.packageDimensions || {}) },
+    restockAt: toDateTimeInput(draft.restockAt),
+    publishAt: toDateTimeInput(draft.publishAt),
+    saleStartAt: toDateTimeInput(draft.saleStartAt),
+    saleEndAt: toDateTimeInput(draft.saleEndAt),
+    trackVariants: Array.isArray(draft.variants) && draft.variants.length > 0,
+  };
+}
+
+function formFromExistingProduct(product = {}) {
+  const allowed = Object.keys(emptyProduct).reduce((result, key) => {
+    if (product[key] !== undefined) result[key] = product[key];
+    return result;
+  }, {});
+  const variants = (Array.isArray(product.variants) ? product.variants : []).map((variant) => {
+    const { _id, id, ...safeVariant } = variant || {};
+    return { ...safeVariant, sku: '', stock: 0 };
+  });
+  return {
+    ...emptyProduct,
+    ...allowed,
+    name: product.name ? `${product.name} copy` : '',
+    slug: '',
+    sku: '',
+    barcode: '',
+    category: product.category?._id || product.category || '',
+    sizes: listText(product.sizes),
+    colors: listText(product.colors),
+    tags: listText(product.tags),
+    highlights: Array.isArray(product.highlights) ? [...product.highlights] : splitList(product.highlights),
+    images: normalizeImageEntries(product.images || []),
+    videos: normalizeVideoEntries(product.videos || []),
+    packageDimensions: { ...emptyProduct.packageDimensions, ...(product.packageDimensions || {}) },
+    attributeValues: { ...(product.attributeValues || {}) },
+    stock: 0,
+    variants,
+    variantOptionValues: readVariantOptionValues(variants),
+    trackVariants: variants.length > 0,
+    restockAt: '',
+    publishAt: '',
+    salePrice: '',
+    saleStartAt: '',
+    saleEndAt: '',
+    isFeatured: false,
+    isNewArrival: false,
+    isBestSeller: false,
+    showOnHomepage: false,
+    showInTrending: false,
+    showInFestive: false,
+    isActive: true,
+  };
+}
+
+function listText(value) {
+  return Array.isArray(value) ? value.join(', ') : String(value || '');
+}
+
+function calculateChargeableWeight(form = {}) {
+  const actual = Math.max(0, Number(form.shippingWeightKg || 0));
+  const dimensions = form.packageDimensions || {};
+  const volumetric = Math.max(0, Number(dimensions.lengthCm || 0) * Number(dimensions.widthCm || 0) * Number(dimensions.heightCm || 0) / 5000);
+  return { actual, volumetric, chargeable: Math.max(actual, volumetric) };
+}
+
+function productQuality(form = {}, readiness = {}) {
+  const checks = [
+    { label: 'Complete the required product details', done: String(form.name || '').trim().length >= 3 && form.category && readiness.pricingReady && readiness.inventoryReady && readiness.sizeChartReady && readiness.requiredAttributesComplete },
+    { label: 'Add a stronger customer description', done: String(form.description || '').trim().length >= 50 && String(form.shortDescription || '').trim().length >= 12 },
+    { label: 'Add two clear product photos', done: (form.images || []).length >= 2 && (form.images || []).some((image) => image.primary) },
+    { label: 'Complete tags and search preview', done: splitList(form.tags).length >= 2 && String(form.metaTitle || '').trim().length >= 10 && String(form.metaDescription || '').trim().length >= 40 },
+    { label: 'Add shipping and compliance details', done: Number(form.shippingWeightKg || 0) > 0 && Object.values(form.packageDimensions || {}).every((value) => Number(value) > 0) && Boolean(String(form.countryOfOrigin || '').trim()) },
+  ];
+  return { score: checks.filter((item) => item.done).length * 20, next: checks.find((item) => !item.done)?.label || '' };
 }
 
 function prepareImages(images) {
