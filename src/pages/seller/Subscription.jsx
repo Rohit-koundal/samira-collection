@@ -7,8 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 
 const CYCLES = [
-  { id: 'monthly', label: 'Monthly', note: 'Flexible' },
-  { id: 'yearly', label: 'Yearly', note: 'Save 2 months' },
+  { id: 'monthly', label: 'Monthly', note: '30-day access' },
+  { id: 'yearly', label: 'Yearly', note: '365-day access' },
   { id: 'lifetime', label: 'Lifetime', note: 'One payment' },
 ];
 const FEATURE_LABELS = {
@@ -72,10 +72,13 @@ export default function Subscription() {
       <article className="rounded-[24px] border border-[#eadfd5] bg-white p-5 shadow-sm sm:p-6"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#9a5269]">Usage this period</p><div className="mt-4 space-y-4">{Object.entries(current.limits || {}).map(([key, limit]) => <Usage key={key} label={LIMIT_LABELS[key] || key} value={data.usage?.[key] || 0} limit={limit} />)}</div></article>
     </div>
 
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#eadfd5] bg-white p-3 shadow-sm"><div className="flex items-center gap-2 px-2"><Sparkles className="text-[#8f2748]" size={18} /><div><p className="text-sm font-black">Choose your billing period</p><p className="text-xs text-slate-500">Payments are one-time; renew when you choose.</p></div></div><div className="grid w-full grid-cols-3 gap-2 sm:w-auto">{CYCLES.map((item) => <button key={item.id} type="button" onClick={() => setCycle(item.id)} className={`rounded-xl px-4 py-2 text-left text-xs font-black transition ${cycle === item.id ? 'bg-[#751d39] text-white shadow' : 'bg-[#faf6f3] text-slate-700 hover:bg-[#f2e6e9]'}`}><span className="block">{item.label}</span><span className={`mt-0.5 block text-[9px] ${cycle === item.id ? 'text-white/65' : 'text-slate-400'}`}>{item.note}</span></button>)}</div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#eadfd5] bg-white p-3 shadow-sm"><div className="flex items-center gap-2 px-2"><Sparkles className="text-[#8f2748]" size={18} /><div><p className="text-sm font-black">Choose your access period</p><p className="text-xs text-slate-500">Monthly and yearly purchases are prepaid access periods and renew only after a new payment. {data.pricing?.taxMode === 'EXCLUSIVE' ? `${data.pricing.gstPercent}% GST is added at checkout.` : data.pricing ? `Displayed prices include ${data.pricing.gstPercent}% GST.` : 'The final tax treatment is confirmed at checkout.'}</p></div></div><div className="grid w-full grid-cols-3 gap-2 sm:w-auto">{CYCLES.map((item) => <button key={item.id} type="button" onClick={() => setCycle(item.id)} className={`rounded-xl px-4 py-2 text-left text-xs font-black transition ${cycle === item.id ? 'bg-[#751d39] text-white shadow' : 'bg-[#faf6f3] text-slate-700 hover:bg-[#f2e6e9]'}`}><span className="block">{item.label}</span><span className={`mt-0.5 block text-[9px] ${cycle === item.id ? 'text-white/65' : 'text-slate-400'}`}>{item.note}</span></button>)}</div></div>
 
     <div className="grid gap-4 lg:grid-cols-3">{data.plans.map((plan, index) => {
-      const amount = plan.prices?.[cycle] || 0;
+      const baseAmount = Number(plan.prices?.[cycle] || 0);
+      const taxAmount = data.pricing?.taxMode === 'EXCLUSIVE' ? Math.round(baseAmount * Number(data.pricing.gstPercent || 0) / 100) : 0;
+      const amount = baseAmount + taxAmount;
+      const yearlySaving = cycle === 'yearly' ? Math.max(0, Number(plan.prices?.monthly || 0) * 12 - Number(plan.prices?.yearly || 0)) : 0;
       const isCurrent = plan.id === current.id && ['ACTIVE', 'TRIAL'].includes(current.status);
       const lowerPlanBlocked = current.status === 'ACTIVE' && index < currentPlanIndex;
       const lifetimeBlocked = current.status === 'ACTIVE' && current.billingCycle === 'LIFETIME' && (cycle !== 'lifetime' || plan.id === current.id);
@@ -84,6 +87,8 @@ export default function Subscription() {
         {plan.id === 'PROFESSIONAL' && <span className="absolute right-4 top-4 rounded-full bg-[#f6e7ec] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#751d39]">Most popular</span>}
         <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f7e9ed] text-[#751d39]">{index === 2 ? <Crown size={20} /> : index === 1 ? <Sparkles size={20} /> : <CreditCard size={20} />}</span><div><h2 className="text-xl font-black">{plan.name}</h2><p className="text-xs text-slate-500">{plan.description}</p></div></div>
         <div className="mt-5 flex items-end gap-1"><strong className="text-3xl font-black">₹{Number(amount).toLocaleString('en-IN')}</strong><span className="pb-1 text-xs font-semibold text-slate-500">{cycle === 'lifetime' ? ' once' : cycle === 'yearly' ? ' / year' : ' / month'}</span></div>
+        {taxAmount > 0 && <p className="mt-1 text-[10px] font-semibold text-slate-500">₹{baseAmount.toLocaleString('en-IN')} + ₹{taxAmount.toLocaleString('en-IN')} GST</p>}
+        {yearlySaving > 0 && <p className="mt-2 w-fit rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700">Save ₹{yearlySaving.toLocaleString('en-IN')} yearly</p>}
         <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl bg-[#fbf7f4] p-3 text-xs"><span><strong className="block text-sm">{Number(plan.limits.products).toLocaleString('en-IN')}</strong>products</span><span><strong className="block text-sm">{Number(plan.limits.ordersPerMonth).toLocaleString('en-IN')}</strong>orders / month</span></div>
         <ul className="mt-5 flex-1 space-y-2.5 text-sm text-slate-700">{plan.features.slice(0, 8).map((feature) => <li key={feature} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />{FEATURE_LABELS[feature] || feature}</li>)}</ul>
         <button type="button" disabled={Boolean(busy) || !data.checkout.configured || purchaseBlocked} onClick={() => purchase(plan)} className={`mt-6 flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${plan.id === 'PROFESSIONAL' ? 'bg-[#751d39] text-white' : 'border border-[#8f2748] text-[#751d39]'}`}>{cycle === 'lifetime' && <InfinityIcon size={17} />}{busy === plan.id ? 'Opening payment...' : lifetimeBlocked && plan.id === current.id ? 'Lifetime already active' : lowerPlanBlocked ? 'Available after current plan' : isCurrent && current.billingCycle === cycle.toUpperCase() ? 'Extend this plan' : currentPlanIndex < index && current.status === 'ACTIVE' ? 'Upgrade now' : 'Choose plan'}</button>

@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronRight, Star, ThumbsUp } from 'lucide-react';
-import { normalizeImageUrl } from '../../services/normalize';
+import { ChevronRight, Star } from 'lucide-react';
 import ProductGallery from './ProductGallery';
 import ProductInfoPanel from './ProductInfoPanel';
 import ProductTrustPanel from './ProductTrustPanel';
 import ProductTabs from './ProductTabs';
 import RelatedProductCarousel from './RelatedProductCarousel';
+import PublicReviewCard from './PublicReviewCard';
 import './ProductDetailPage.css';
 
 export default function ProductDetailPage({
@@ -52,6 +52,10 @@ export default function ProductDetailPage({
   helpfulReviewIds = [],
   helpfulBusyId = '',
   onHelpful,
+  onReport,
+  reviewHasMore = false,
+  reviewsLoadingMore = false,
+  onLoadMoreReviews,
   variantProducts = [],
   managedVariants = [],
   selectedVariant,
@@ -182,6 +186,10 @@ export default function ProductDetailPage({
             helpfulBusyId={helpfulBusyId}
             onWriteReview={onWriteReview}
             onHelpful={onHelpful}
+            onReport={onReport}
+            reviewHasMore={reviewHasMore}
+            reviewsLoadingMore={reviewsLoadingMore}
+            onLoadMoreReviews={onLoadMoreReviews}
           />
         </div>
 
@@ -203,6 +211,10 @@ function DesktopReviews({
   helpfulBusyId,
   onWriteReview,
   onHelpful,
+  onReport,
+  reviewHasMore,
+  reviewsLoadingMore,
+  onLoadMoreReviews,
 }) {
   const [ratingFilter, setRatingFilter] = useState(0);
   const [sort, setSort] = useState('newest');
@@ -272,42 +284,15 @@ function DesktopReviews({
             const reviewId = String(review._id || '');
             const helpful = helpfulReviewIds.includes(reviewId);
             const isOwnReview = String(myReview?._id || '') === reviewId;
-            return (
-              <article key={reviewId} className="sc-pdp__review py-5">
-                <div className="sc-pdp__review-meta">
-                  <strong>{review.user?.name || 'Customer'}</strong>
-                  <span>{review.rating}★</span>
-                </div>
-                {review.title ? <h3 className="mt-3 font-bold text-charcoal">{review.title}</h3> : null}
-                <p className="whitespace-pre-line">{review.comment || 'Star rating submitted without a written review.'}</p>
-                {Array.isArray(review.photos) && review.photos.length ? (
-                  <div className="sc-pdp__review-photos">
-                    {review.photos.map((photo, index) => (
-                      <a key={`${photo}-${index}`} href={normalizeImageUrl(photo)} target="_blank" rel="noreferrer" aria-label={`Open review photo ${index + 1}`}>
-                        <img src={normalizeImageUrl(photo)} alt={`Customer review ${index + 1}`} />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                  {review.verifiedPurchase ? <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Verified purchase</span> : null}
-                  {review.createdAt ? <span>{formatReviewDate(review.createdAt)}</span> : null}
-                  {!isOwnReview ? <button type="button" onClick={() => onHelpful?.(review)} disabled={helpfulBusyId === reviewId} aria-pressed={helpful} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-bold disabled:opacity-50 ${helpful ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200'}`}><ThumbsUp className={`h-3.5 w-3.5 ${helpful ? 'fill-current' : ''}`} /> Helpful{Number(review.helpfulCount || 0) ? ` (${review.helpfulCount})` : ''}</button> : null}
-                </div>
-              </article>
-            );
+            return <PublicReviewCard key={reviewId} review={review} helpful={helpful} helpfulBusy={helpfulBusyId === reviewId} isOwnReview={isOwnReview} onHelpful={onHelpful} onReport={onReport} />;
           })}
         </div>
       ) : (
         <p className="sc-pdp__review-empty">{ratingFilter ? `No ${ratingFilter}-star reviews yet.` : 'No customer reviews yet. Delivered customers can be the first to review this product.'}</p>
       )}
-      {filteredReviews.length > 6 ? <button type="button" onClick={() => setShowAll((current) => !current)} className="mt-4 h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-charcoal">{showAll ? 'Show fewer reviews' : `View all ${filteredReviews.length} reviews`}</button> : null}
+      {filteredReviews.length > 6 && !showAll ? <button type="button" onClick={() => setShowAll(true)} className="mt-4 h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-charcoal">View loaded reviews</button> : null}
+      {showAll && reviewHasMore ? <button type="button" disabled={reviewsLoadingMore} onClick={onLoadMoreReviews} className="mt-4 h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-charcoal disabled:opacity-50">{reviewsLoadingMore ? 'Loading reviews...' : 'Load more reviews'}</button> : null}
+      {showAll && filteredReviews.length > 6 ? <button type="button" onClick={() => setShowAll(false)} className="ml-2 mt-4 h-11 px-4 text-sm font-bold text-slate-500">Show fewer</button> : null}
     </section>
   );
-}
-
-function formatReviewDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }

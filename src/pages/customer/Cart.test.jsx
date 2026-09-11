@@ -95,3 +95,8 @@ test('a failed bag load offers retry without an empty-bag message or a zero item
   await waitFor(() => expect(screen.getByRole('button', { name: 'Continue to address' })).toBeEnabled());
   expect(screen.getByRole('button', { name: 'Rose cotton kurti' })).toBeInTheDocument();
 });
+test('a campaign coupon in the cart URL is applied automatically once items are ready', async () => {
+  render(<Cart route="/cart?coupon=SAVE100" navigate={jest.fn()} />);
+  await waitFor(() => expect(mockCart.setCoupon).toHaveBeenCalledWith(expect.objectContaining({ code: 'SAVE100', discount: 100 })));
+  expect(api.post.mock.calls.filter(([path]) => path === '/coupons/apply')).toHaveLength(1);
+});

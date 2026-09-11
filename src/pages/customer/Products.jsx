@@ -15,12 +15,13 @@ import {
   splitFilterValues,
   toggleFilterValue,
 } from '../../store/catalogSlice';
-import { useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
+import { useGetBannersQuery, useGetCategoriesQuery, useGetProductsQuery } from '../../store/apiSlice';
 import { trackEvent } from '../../utils/analytics';
 import { useStorefront } from '../../context/StorefrontContext';
 import { storefrontPath } from '../../utils/routing';
 import SeoHead from '../../components/seo/SeoHead';
 import api from '../../services/api';
+import StorefrontBannerSlot from '../../components/banners/StorefrontBannerSlot';
 
 export default function Products({ navigate, route = '/products' }) {
   const dispatch = useDispatch();
@@ -33,6 +34,7 @@ export default function Products({ navigate, route = '/products' }) {
   const filters = useSelector(selectCatalogFilters);
   const params = useMemo(() => createCatalogSearchParams(filters), [filters]);
   const { data: categories = [] } = useGetCategoriesQuery({ store: storeSlug });
+  const { data: banners = [] } = useGetBannersQuery({ store: storeSlug });
   const { data: productData = [], isLoading, isFetching, error, refetch } = useGetProductsQuery({ store: storeSlug });
   const loading = isLoading || isFetching;
   const catalog = useMemo(() => {
@@ -106,6 +108,7 @@ export default function Products({ navigate, route = '/products' }) {
   return (
     <section className="bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 md:p-0">
       <SeoHead route={route} page={categorySeo || undefined} />
+      <StorefrontBannerSlot banners={banners} position="Category - Featured" navigate={navigate} compact className="max-w-[1500px] px-0 md:px-6" />
       {(
         <DesktopNewArrivalsLayout
           navigate={navigate}

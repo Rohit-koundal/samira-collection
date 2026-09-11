@@ -18,9 +18,12 @@ export function uniqueSubcategories(products = []) {
     .sort((a, b) => a.localeCompare(b));
 }
 
-export async function fetchCategories(api, apiPrefix = '/admin') {
+export async function fetchCategories(api, apiPrefix = '/admin', storeId = '') {
+  const storeQuery = apiPrefix === '/admin' && storeId
+    ? `&storeId=${encodeURIComponent(storeId)}`
+    : '';
   const paths = apiPrefix === '/admin'
-    ? ['/admin/categories?admin=true', '/categories?admin=true']
+    ? [`/admin/categories?admin=true${storeQuery}`]
     : [`${apiPrefix}/categories`];
 
   for (const path of paths) {

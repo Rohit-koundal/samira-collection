@@ -55,7 +55,7 @@ test('return history recovers malformed data and opens the original order', asyn
   api.get.mockResolvedValueOnce({ wrong: [] }).mockResolvedValueOnce([{ _id: 'request-one', type: 'return', order: 'order-one', status: 'Requested', product: { name: 'Silk saree' } }]);
   const navigate = jest.fn(); render(<MyReturns navigate={navigate} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-  fireEvent.click(await screen.findByRole('button', { name: /View order & request details/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /View order details/ }));
   expect(navigate).toHaveBeenCalledWith('/order-detail?id=order-one');
   await waitFor(() => expect(screen.queryByText('Unable to load requests')).not.toBeInTheDocument());
 });

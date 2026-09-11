@@ -46,6 +46,8 @@ backend/models/*
 !backend/models/ReelImport.js
 !backend/models/WebsiteTheme.js
 !backend/models/WebsiteThemeVersion.js
+!backend/models/StoreContentVersion.js
+!backend/models/ClientInstallationOperation.js
 !backend/controllers/
 backend/controllers/*
 !backend/controllers/websiteCustomizationController.js
@@ -62,6 +64,8 @@ backend/tests/*
 !backend/controllers/notificationController.js
 !backend/controllers/contactController.js
 !backend/models/Notification.js
+!backend/models/ReviewVote.js
+!backend/models/ReviewReport.js
 !backend/routes/notificationRoutes.js
 !backend/modules/
 !backend/modules/**
@@ -84,9 +88,15 @@ backend/services/*
 !backend/services/productSizingService.js
 !backend/services/paymentSettingsService.js
 !backend/services/returnEligibilityService.js
+!backend/services/returnWorkflowService.js
+!backend/services/refundReconciliationService.js
+!backend/services/exchangeAdjustmentService.js
 !backend/services/orderSnapshotService.js
 !backend/services/orderWorkflowService.js
 !backend/services/notificationService.js
+!backend/services/reviewIntelligenceService.js
+!backend/controllers/reviewUploadController.js
+!backend/controllers/returnUploadController.js
 !backend/services/shippingService.js
 !backend/services/quickAddVision.service.js
 !backend/services/reelCandidateVision.service.js
@@ -117,6 +127,7 @@ backend/middleware/*
 !backend/utils/
 backend/utils/*
 !backend/utils/auditData.js
+!backend/utils/secretBox.js
 !backend/tests/audit.unit.test.js
 !backend/tests/audit.integration.test.js
 !backend/tests/socialImport.unit.test.js
@@ -130,12 +141,15 @@ backend/utils/*
 !backend/controllers/productDraftController.js
 !backend/controllers/storeController.js
 !backend/models/MasterConfiguration.js
+!backend/models/MasterConfigurationVersion.js
 !backend/models/IndustryPreset.js
 !backend/routes/masterRoutes.js
 !backend/routes/storeContentRoutes.js
 !backend/routes/storeRoutes.js
 !backend/services/masterConfigurationService.js
+!backend/services/masterGovernanceService.js
 !backend/services/clientHandoverService.js
+!backend/services/storeContentService.js
 !backend/tests/masterOwner.unit.test.js
 !backend/tests/websiteCustomization.unit.test.js
 !backend/tests/websiteDesignerPerformance.unit.test.js
@@ -258,9 +272,13 @@ vite.config.ts.timestamp-*
 !backend/tests/socialWorkspace.test.js
 # Commerce corrections and isolated regression fixtures; environment files stay ignored.
 !backend/services/orderPricingService.js
+!backend/services/checkoutSafetyService.js
+!backend/services/paymentRefundService.js
+!backend/services/storeService.js
 !backend/utils/validators.js
 !backend/tests/auth.test.js
 !backend/tests/orders.test.js
+!backend/tests/payments.test.js
 !backend/tests/leftovers.test.js
 !backend/tests/phoneUtils.test.js
 !backend/tests/authRecovery.unit.test.js
@@ -271,9 +289,11 @@ vite.config.ts.timestamp-*
 !backend/tests/factories.js
 !backend/controllers/variantGroupController.js
 !backend/tests/applicationWorkflows.integration.test.js
+!backend/tests/campaigns.integration.test.js
 !backend/tests/returns.test.js
 !backend/tests/testHarness.unit.test.js
 !backend/tests/uploads.integration.test.js
+!backend/tests/reviews.test.js
 !backend/tests/reelWorkflows.integration.test.js
 
 !backend/services/storeSettingsValidation.js
@@ -288,6 +308,7 @@ vite.config.ts.timestamp-*
 !backend/services/xpressbeesProvider.js
 !backend/services/deliveryService.js
 !backend/models/Shipment.js
+!backend/models/CheckoutAttempt.js
 !backend/controllers/deliveryController.js
 !backend/SHIPPING.md
 !backend/tests/shippingProviders.unit.test.js
@@ -298,8 +319,11 @@ vite.config.ts.timestamp-*
 !backend/config/storePlans.js
 !backend/models/Store.js
 !backend/models/SubscriptionPayment.js
+!backend/models/SubscriptionPricing.js
+!backend/models/Campaign.js
 !backend/controllers/subscriptionController.js
 !backend/services/subscriptionService.js
+!backend/services/subscriptionPricingService.js
 !backend/tests/subscription.unit.test.js
 !backend/tests/subscription.integration.test.js
 !backend/models/ClientInstallation.js
@@ -315,7 +339,9 @@ vite.config.ts.timestamp-*
 !backend/services/licenseSignatureService.js
 !backend/middleware/externalLicenseMiddleware.js
 !backend/controllers/businessController.js
+!backend/controllers/campaignController.js
 !backend/routes/businessRoutes.js
+!backend/routes/campaignRoutes.js
 !backend/services/businessOperationsService.js
 !backend/scripts/
 backend/scripts/*
@@ -325,14 +351,22 @@ backend/scripts/*
 # Store-scoped customer workspace source. Runtime environment files remain ignored below.
 !backend/models/CustomerCrm.js
 !backend/models/StoreMember.js
+!backend/models/AnalyticsEvent.js
+!backend/models/ReportView.js
 !backend/models/Conversation.js
 !backend/models/Message.js
 !backend/controllers/crmController.js
 !backend/routes/customerCrmRoutes.js
 !backend/services/crmService.js
 !backend/services/customerAccessService.js
+!backend/services/emailService.js
+!backend/services/reportingService.js
+!backend/services/reportExportService.js
+!backend/services/reportScheduleService.js
+!backend/controllers/reportController.js
 !backend/middleware/storeMiddleware.js
 !backend/tests/customerCrm.integration.test.js
+!backend/tests/reporting.integration.test.js
 !backend/utils/apiError.js
 # Local environment files in every directory, including examples and backups.
 # Keep these after source allowlists so environment files stay ignored.
@@ -340,3 +374,22 @@ backend/scripts/*
 .env.*
 *.env
 *.env.*
+
+# Track backend source added by new modules. Runtime environment files above
+# remain ignored; this prevents working local features from disappearing when
+# the repository is cloned or deployed.
+!backend/config/*.js
+!backend/controllers/*.js
+!backend/middleware/*.js
+!backend/models/*.js
+!backend/models/plugins/
+!backend/models/plugins/*.js
+!backend/routes/*.js
+!backend/services/*.js
+!backend/services/providers/
+!backend/services/providers/*.js
+!backend/utils/*.js
+!backend/queues/*.js
+!backend/workers/*.js
+!backend/scripts/*.js
+!backend/tests/*.js

@@ -13,6 +13,7 @@ const status = {
   status: 'TRIAL', plan: 'PROFESSIONAL', billingCycle: 'TRIAL', endsAt: '2099-01-01T00:00:00.000Z',
   limits: { products: 1000, ordersPerMonth: 2000 }, appVersion: '1.0.0', targetVersion: '1.1.0', latestVersion: '1.1.0',
   updateAvailable: true, updateChannel: 'stable', issuedAt: '2026-09-09T00:00:00.000Z', checkout: { configured: true },
+  pricing: { revision: 2, currency: 'INR', taxMode: 'EXCLUSIVE', gstPercent: 18 },
   plans: [{ id: 'PROFESSIONAL', name: 'Professional', description: 'Growing store', features: ['catalog', 'orders'], limits: { products: 1000, ordersPerMonth: 2000 }, prices: { monthly: 1999, yearly: 19990, lifetime: 49999 } }],
 };
 
@@ -32,6 +33,7 @@ test('shows signed client status and renews through the local backend proxy', as
   render(<SystemStatus />);
   expect(await screen.findByText('Client Store')).toBeTruthy();
   expect(screen.getByText('Update assigned')).toBeTruthy();
+  expect(screen.getByText('₹23,588')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Choose this plan' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/system/subscription/checkout', { plan: 'PROFESSIONAL', billingCycle: 'YEARLY' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/system/subscription/verify', expect.objectContaining({ razorpay_payment_id: 'pay_1' })));

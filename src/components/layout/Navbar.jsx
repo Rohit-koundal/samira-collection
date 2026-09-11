@@ -43,6 +43,13 @@ export default function Navbar({
   const { user, switchMode } = useAuth();
   const { config: websiteConfig } = useWebsiteCustomization();
   const headerConfig = websiteConfig.header;
+  const [announcementClock, setAnnouncementClock] = useState(() => Date.now());
+  const navLinks = useMemo(() => (headerConfig.menuItems?.length ? headerConfig.menuItems : desktopLinks).map((link) => ({
+    ...(desktopLinks.find((fallback) => fallback.path === link.path) || {}), ...link,
+  })), [headerConfig.menuItems]);
+  const announcementVisible = headerConfig.announcementEnabled
+    && (!headerConfig.announcementStartsAt || new Date(headerConfig.announcementStartsAt).getTime() <= announcementClock)
+    && (!headerConfig.announcementEndsAt || new Date(headerConfig.announcementEndsAt).getTime() >= announcementClock);
   const configuredLogo = normalizeImageUrl(websiteConfig.branding.logo) || logoSrc;
   const routePath = route.split('?')[0];
   const routeParams = useMemo(() => new URLSearchParams(route.split('?')[1] || ''), [route]);
@@ -58,6 +65,15 @@ export default function Navbar({
   useEffect(() => {
     setSearchTerm(searchValue);
   }, [searchValue]);
+
+  useEffect(() => {
+    const boundaries = [headerConfig.announcementStartsAt, headerConfig.announcementEndsAt]
+      .map((value) => new Date(value).getTime()).filter((value) => Number.isFinite(value) && value > Date.now());
+    if (!boundaries.length) return undefined;
+    const wait = Math.max(50, Math.min(2147480000, Math.min(...boundaries) - Date.now() + 50));
+    const timer = window.setTimeout(() => setAnnouncementClock(Date.now()), wait);
+    return () => window.clearTimeout(timer);
+  }, [headerConfig.announcementEndsAt, headerConfig.announcementStartsAt, announcementClock]);
 
   const submitSearch = () => {
     const value = searchTerm.trim();
@@ -78,10 +94,11 @@ export default function Navbar({
       style={{ '--navbar-bg': headerConfig.background, '--navbar-text': headerConfig.textColor, '--navbar-logo-size': `${headerConfig.logoSize}px`, '--navbar-announcement-bg': headerConfig.announcementBackground, '--navbar-announcement-text': headerConfig.announcementTextColor }}
     >
       <div className="sc-navbar__shell">
-        {headerConfig.announcementEnabled && <div className="sc-navbar__top">
+        {announcementVisible && <div className="sc-navbar__top">
           <div className="sc-navbar__announcement">
             <Truck className="h-4.5 w-4.5 text-[#b88945]" strokeWidth={1.9} aria-hidden="true" />
-            <span className="text-[13px] font-medium tracking-[0.01em]">{headerConfig.announcementText}</span>
+            {headerConfig.announcementLink ? <button type="button" className="text-[13px] font-medium tracking-[0.01em] underline-offset-2 hover:underline" onClick={() => go(headerConfig.announcementLink)}>{headerConfig.announcementText}</button>
+              : <span className="text-[13px] font-medium tracking-[0.01em]">{headerConfig.announcementText}</span>}
           </div>
 
           <div className="sc-navbar__center-mark" aria-hidden="true">
@@ -110,8 +127,9 @@ export default function Navbar({
           </div>
 
           <nav className="sc-navbar__links" aria-label="Primary" style={{ justifyContent: headerConfig.menuAlignment === 'right' ? 'flex-end' : headerConfig.menuAlignment }}>
-            {desktopLinks.map((link) => {
-              const isActive = activeLinkLabel === link.label;
+            {navLinks.map((link) => {
+              const targetPath = String(link.path || '').split('?')[0];
+              const isActive = activeLinkLabel === link.label || (targetPath !== '/' && routePath === targetPath) || (targetPath === '/' && routePath === '/');
               return (
                 <button
                   key={link.label}

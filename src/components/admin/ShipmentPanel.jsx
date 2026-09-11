@@ -5,8 +5,11 @@ import api from '../../services/api';
 const human = value => String(value || 'WAITING').replaceAll('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
 const providerName = value => ({ bluedart: 'Blue Dart', shiprocket: 'Shiprocket', delhivery: 'Delhivery', xpressbees: 'Xpressbees', manual: 'Manual courier' }[value] || 'Courier');
 const inputClass = 'admin-field__control w-full min-w-0';
-export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = '/admin' }) {
-  const base = returnId ? `${apiBase}/returns/${returnId}/delivery` : `${apiBase}/orders/${orderId}/delivery`;
+export default function ShipmentPanel({ orderId, returnId, replacement = false, onChanged, apiBase = '/admin' }) {
+  const reverse = Boolean(returnId && !replacement);
+  const base = returnId
+    ? `${apiBase}/returns/${returnId}/${replacement ? 'replacement-delivery' : 'delivery'}`
+    : `${apiBase}/orders/${orderId}/delivery`;
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -71,8 +74,10 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
   const integrated = activeProvider !== 'manual';
   const canBook = integrated && !shipment?.awb && !uncertain && shipment?.bookingState !== 'CANCELLED';
   const canPickup = shipment?.bookingState === 'BOOKED' && !uncertain && !shipment?.pickup?.token && shipment?.status === 'READY_TO_SHIP';
-  return <section className="admin-card min-w-0 p-5" aria-label={returnId ? 'Reverse delivery' : 'Courier delivery'}>
-    <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2"><Truck size={19} />{returnId ? 'Reverse pickup' : 'Courier delivery'}</h2><button type="button" className="admin-table-action-link inline-flex items-center gap-1" disabled={busy} onClick={() => load(true)}><RefreshCw size={14} />Refresh tracking</button></header>
+  const deliveryLabel = replacement ? 'Replacement delivery' : reverse ? 'Reverse pickup' : 'Courier delivery';
+  const shipmentLabel = replacement ? 'replacement shipment' : reverse ? 'return shipment' : 'shipment';
+  return <section className="admin-card min-w-0 p-5" aria-label={deliveryLabel}>
+    <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2"><Truck size={19} />{deliveryLabel}</h2><button type="button" className="admin-table-action-link inline-flex items-center gap-1" disabled={busy} onClick={() => load(true)}><RefreshCw size={14} />Refresh tracking</button></header>
     {error && <p role="alert" className="my-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
     {message && <p role="status" className="my-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{message}</p>}
     {!data ? <p className="admin-note mt-3">{error ? 'Delivery details could not load.' : 'Loading delivery details...'}</p> : <>
@@ -96,7 +101,7 @@ export default function ShipmentPanel({ orderId, returnId, onChanged, apiBase = 
       <fieldset disabled={busy}>
         {canBook && <div className="mt-4"><h3 className="flex items-center gap-2 text-sm"><Package size={17} />Packed parcel · one package</h3><div className="mt-3 grid grid-cols-2 gap-3">{[['weightKg', 'Weight (kg)'], ['lengthCm', 'Length (cm)'], ['widthCm', 'Width (cm)'], ['heightCm', 'Height (cm)']].map(([key, label]) => <label className="text-sm" key={key}>{label}<input type="number" min="0.001" step="0.001" className={inputClass} value={parcel[key] ?? ''} onChange={e => { setParcel(p => ({ ...p, [key]: e.target.value })); setChecked(false); }} /></label>)}</div><p className="admin-note mt-2">Measure the finished parcel including packaging. Changing these measurements does not change the customer's order total.</p></div>}
         {(canBook || canPickup) && <div className="mt-4 grid gap-3 sm:grid-cols-3">{[['date', 'Pickup date', 'date'], ['time', 'Ready from (IST)', 'time'], ['closeTime', 'Closes at (IST)', 'time']].map(([key, label, type]) => <label className="min-w-0 text-sm" key={key}>{label}<input className={inputClass} type={type} value={slot[key]} onChange={e => setSlot(s => ({ ...s, [key]: e.target.value }))} /></label>)}</div>}
-        {canBook && <><label className="my-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} className="mt-1" /><span>I checked the packed parcel details. Create this shipment with {carrier} using my connected account.</span></label><button type="button" disabled={!checked || !connection?.liveBooking} className="admin-btn" onClick={() => act('book')}>Create {returnId ? 'return shipment' : 'shipment'}</button></>}
+        {canBook && <><label className="my-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} className="mt-1" /><span>I checked the packed parcel details. Create this {shipmentLabel} with {carrier} using my connected account.</span></label><button type="button" disabled={!checked || !connection?.liveBooking} className="admin-btn" onClick={() => act('book')}>Create {shipmentLabel}</button></>}
         {integrated && shipment?.awb && shipment.status !== 'CANCELLED' && <div className="mt-4 flex flex-wrap gap-3"><button type="button" className="admin-btn-ghost inline-flex items-center gap-2" disabled={!shipment.labelAvailable} onClick={download}><Download size={16} />Download label / print PDF</button>{canPickup && <button type="button" className="admin-btn" onClick={() => act('pickup')}>Request {carrier} pickup</button>}</div>}
         {integrated && shipment?.awb && !shipment.labelAvailable && <p className="admin-note mt-2">The PDF was not returned by {carrier}. Download the original label from the carrier account using this AWB.</p>}
         {uncertain && <div className="mt-4 rounded-xl border border-amber-200 p-4"><h3>Check the existing request</h3><p className="admin-note">A request may already exist at {carrier}. Check by reference before creating another parcel.</p>{shipment?.operation?.startsWith('pickup') && <label className="mt-3 block text-sm">Confirmed pickup token<input className={inputClass} value={pickupToken} onChange={e => setPickupToken(e.target.value)} /></label>}{shipment?.operation && !['book'].includes(shipment.operation) && <label className="my-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={carrierConfirmed} onChange={e => setCarrierConfirmed(e.target.checked)} />I confirmed this request with {carrier}.</label>}<details className="mt-3"><summary>{carrier} confirmed no request exists</summary><label className="my-3 flex items-start gap-2"><input type="checkbox" checked={confirmedNoRequest} onChange={e => { setConfirmedNoRequest(e.target.checked); setCarrierConfirmed(e.target.checked); }} /><span>{carrier} confirmed there is no AWB or pickup for this reference. Unlock a retry only after that confirmation.</span></label></details><button type="button" className="admin-btn-ghost mt-3" onClick={() => act('reconcile')}>Check booking outcome</button></div>}

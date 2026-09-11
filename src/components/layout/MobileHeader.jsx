@@ -27,6 +27,7 @@ import { useBrandIdentity } from '../../context/BrandIdentityContext';
 import { normalizeImageUrl } from '../../services/normalize';
 import logoFallback from '../../assets/samira-collection-logo.png';
 import StoreLogo from '../ui/StoreLogo';
+import { useWebsiteCustomization } from '../../context/WebsiteCustomizationContext';
 
 const categoryLinks = [
   ['Sarees', '/products?search=Saree'],
@@ -40,19 +41,38 @@ const categoryLinks = [
 
 export default function MobileHeader({ navigate, route = '/' }) {
   const brand = useBrandIdentity();
+  const { config: websiteConfig } = useWebsiteCustomization();
   const cart = useCart();
   const wishlist = useWishlist();
   const { user, switchMode } = useAuth();
   const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [announcementClock, setAnnouncementClock] = useState(() => Date.now());
   const compactUtilityRoute = ['/wishlist', '/profile', '/orders', '/notifications', '/cart', '/checkout']
     .includes(route.split('?')[0]);
   const searchValue = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+  const headerConfig = websiteConfig.header;
+  const menuItems = headerConfig.menuItems?.length ? headerConfig.menuItems : [
+    { label: 'Home', path: '/' }, { label: 'Shop All', path: '/products' },
+    { label: 'New Arrivals', path: '/products?newArrival=true' }, { label: 'Offers', path: '/products?discount=20' },
+  ];
+  const announcementVisible = headerConfig.announcementEnabled
+    && (!headerConfig.announcementStartsAt || new Date(headerConfig.announcementStartsAt).getTime() <= announcementClock)
+    && (!headerConfig.announcementEndsAt || new Date(headerConfig.announcementEndsAt).getTime() >= announcementClock);
 
   useEffect(() => {
     setSearchOpen(false);
   }, [route]);
+
+  useEffect(() => {
+    const boundaries = [headerConfig.announcementStartsAt, headerConfig.announcementEndsAt]
+      .map((value) => new Date(value).getTime()).filter((value) => Number.isFinite(value) && value > Date.now());
+    if (!boundaries.length) return undefined;
+    const wait = Math.max(50, Math.min(2147480000, Math.min(...boundaries) - Date.now() + 50));
+    const timer = window.setTimeout(() => setAnnouncementClock(Date.now()), wait);
+    return () => window.clearTimeout(timer);
+  }, [headerConfig.announcementEndsAt, headerConfig.announcementStartsAt, announcementClock]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -154,10 +174,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
 
             <nav className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(env(safe-area-inset-bottom)+16px)]">
               <div className="border-b-[6px] border-[#f7f7f7] py-2">
-                <DrawerLink icon={Home} label="Home" onClick={() => go('/')} />
-                <DrawerLink icon={Grid2x2} label="Shop All" onClick={() => go('/products')} />
-                <DrawerLink icon={Sparkles} label="New Arrivals" badge="NEW" onClick={() => go('/products?newArrival=true')} />
-                <DrawerLink icon={Tag} label="Offers" badge="SALE" accent onClick={() => go('/products?discount=20')} />
+                {menuItems.map((item, index) => <DrawerLink key={`${item.path}-${index}`} icon={item.path === '/' ? Home : item.path === '/products' ? Grid2x2 : /newArrival/i.test(item.path) ? Sparkles : /discount|offer/i.test(item.path) ? Tag : undefined} label={item.label} badge={/newArrival/i.test(item.path) ? 'NEW' : /discount|offer/i.test(item.path) ? 'SALE' : ''} accent={/discount|offer/i.test(item.path)} onClick={() => go(item.path)} />)}
               </div>
 
               <DrawerSection title="Shop by category">
@@ -194,7 +211,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
               <div className="px-5 pb-2 pt-5">
                 <p className="text-[9px] font-bold uppercase tracking-[.16em] text-slate-500">{brand.websiteName}</p>
                 <p className="mt-1 text-[10px] font-medium text-slate-400">{brand.tagline}</p>
-                {brand.announcementEnabled && brand.announcementText && <p className="mt-3 rounded-lg bg-[#faf2ee] p-3 text-[11px] text-wine">{brand.announcementText}</p>}
+                {announcementVisible && headerConfig.announcementText && (headerConfig.announcementLink ? <button type="button" onClick={() => go(headerConfig.announcementLink)} className="mt-3 w-full rounded-lg bg-[#faf2ee] p-3 text-left text-[11px] font-bold text-wine">{headerConfig.announcementText}</button> : <p className="mt-3 rounded-lg bg-[#faf2ee] p-3 text-[11px] text-wine">{headerConfig.announcementText}</p>)}
               </div>
             </nav>
           </aside>

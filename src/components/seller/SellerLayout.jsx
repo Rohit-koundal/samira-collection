@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, CreditCard, GitBranch, LayoutDashboard, Store, Package, ShoppingBag, Users, MessageCircle, Camera, ClipboardList, BarChart3, HeartPulse, Settings } from 'lucide-react';
+import { ChevronRight, CreditCard, FileText, GitBranch, Image, LayoutDashboard, Store, Package, ShoppingBag, Users, MessageCircle, Camera, ClipboardList, BarChart3, HeartPulse, Settings, Star, RotateCcw } from 'lucide-react';
 import useAppPath from '../../hooks/useAppPath';
 import { useAuth } from '../../context/AuthContext';
 import '../admin/AdminShell.css';
@@ -12,14 +12,20 @@ const links = [
   ['Variant Families', '/seller/variant-groups'],
   ['Inventory', '/seller/inventory'],
   ['Orders', '/seller/orders'],
+  ['Returns / Exchange', '/seller/returns'],
   ['Customers', '/seller/crm'],
   ['Offers', '/seller/offers'],
+  ['Banners', '/seller/banners'],
+  ['Campaigns', '/seller/campaigns'],
+  ['Reviews', '/seller/reviews'],
   ['Inbox', '/seller/inbox'],
   ['Analytics', '/seller/analytics'],
+  ['Reports', '/seller/reports'],
   ['Business Center', '/seller/business'],
   ['Plan & billing', '/seller/subscription'],
   ['Store settings', '/seller/settings'],
   ['Store Designer', '/seller/design'],
+  ['Store content', '/seller/content'],
   ['Social studio', '/seller/social'],
   ['Audit log', '/seller/audit'],
 ];
@@ -32,23 +38,32 @@ const icons = {
   'Variant Families': GitBranch,
   Inventory: Package,
   Orders: ShoppingBag,
+  'Returns / Exchange': RotateCcw,
   Customers: Users,
   Offers: HeartPulse,
+  Banners: Image,
+  Campaigns: BarChart3,
+  Reviews: Star,
   Inbox: MessageCircle,
   Analytics: BarChart3,
+  Reports: BarChart3,
   'Business Center': HeartPulse,
   'Plan & billing': CreditCard,
   'Store settings': Settings,
   'Store Designer': LayoutDashboard,
+  'Store content': FileText,
   'Social studio': Camera,
   'Audit log': ClipboardList,
 };
 const LINK_FEATURES = {
   '/seller/crm': 'crm',
   '/seller/analytics': 'analytics',
+  '/seller/reports': 'analytics',
+  '/seller/campaigns': 'festival',
   '/seller/design': 'advancedCustomization',
   '/seller/social': 'socialStudio',
 };
+const LINK_PERMISSIONS = { '/seller/content': 'content.read' };
 
 export default function SellerLayout({ children }) {
   const path = useAppPath();
@@ -75,12 +90,13 @@ export default function SellerLayout({ children }) {
   const enabledFeatures = useMemo(() => new Set(activeFeatures || []), [activeFeatures]);
   const licenceRestricted = ['EXPIRED', 'SUSPENDED'].includes(activeStore?.platform?.status);
 
-  const items = useMemo(() => links.filter(([, itemPath]) => !LINK_FEATURES[itemPath] || (!licenceRestricted && enabledFeatures.has(LINK_FEATURES[itemPath]))).map(([label, itemPath]) => ({
+  const granted = useMemo(() => new Set(activeStore?.permissions || (['OWNER', 'MANAGER'].includes(activeStore?.role) ? ['*'] : [])), [activeStore]);
+  const items = useMemo(() => links.filter(([, itemPath]) => (!LINK_FEATURES[itemPath] || (!licenceRestricted && enabledFeatures.has(LINK_FEATURES[itemPath]))) && (!LINK_PERMISSIONS[itemPath] || granted.has('*') || granted.has(LINK_PERMISSIONS[itemPath]))).map(([label, itemPath]) => ({
     label,
     path: itemPath,
     active: itemPath === '/seller' ? path === '/seller' || path === '/seller/' : path === itemPath || path.startsWith(`${itemPath}/`),
     Icon: icons[label] || Store,
-  })), [enabledFeatures, licenceRestricted, path]);
+  })), [enabledFeatures, granted, licenceRestricted, path]);
 
   return (
     <div className="admin-shell min-h-screen bg-[#f7f2eb] lg:pl-[260px]">

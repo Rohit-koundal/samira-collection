@@ -37,11 +37,14 @@ export function OrderItem({ item, children, onOpen }) {
   const [failed, setFailed] = useState(false);
   const src = normalizeImageUrl(typeof item.image === 'string' ? item.image : item.image?.url || '');
   const name = item.name || item.productName || 'Ordered product';
+  const cancelled = Math.max(0, Number(item.cancelledQuantity || 0));
+  const active = Math.max(0, Number(item.quantity ?? 1) - cancelled);
   return <div className="sc-order-item">
     <div className="sc-order-item__image">{src && !failed ? <img src={src} alt={name} loading="lazy" onError={() => setFailed(true)} /> : <Package size={25} aria-label="Product image unavailable" />}</div>
     <div className="sc-order-item__body">{onOpen ? <button className="sc-order-item__name" onClick={onOpen}>{name}</button> : <h3>{name}</h3>}
       <p className="sc-order-item__variant">{[item.size && `Size: ${item.size}`, item.color && `Colour: ${item.color}`, `Qty: ${item.quantity ?? 1}`].filter(Boolean).join(' · ')}</p>
-      {item.price !== undefined && <p className="sc-order-item__price">{money(Number(item.price) * Number(item.quantity ?? 1))}{Number(item.originalPrice) > Number(item.price) && <del>{money(Number(item.originalPrice) * Number(item.quantity ?? 1))}</del>}</p>}
+      {cancelled > 0 && <p className="sc-orders__muted">{cancelled} cancelled{active > 0 ? ` · ${active} active` : ' · item fully cancelled'}</p>}
+      {item.price !== undefined && <p className="sc-order-item__price">{money(Number(item.price) * active)}{Number(item.originalPrice) > Number(item.price) && active > 0 && <del>{money(Number(item.originalPrice) * active)}</del>}</p>}
       {children}
     </div>
   </div>;

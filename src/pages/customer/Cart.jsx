@@ -17,18 +17,25 @@ import CouponSelector from '../../components/coupon/CouponSelector';
 import './Cart.css';
 import '../../styles/MobileShoppingTheme.css';
 import { SETTINGS_CHANGED_EVENT, SETTINGS_STORAGE_KEY } from '../../config/storeSettings';
+import StorefrontBannerSlot from '../../components/banners/StorefrontBannerSlot';
 
 const money = value => '₹' + Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-export default function Cart({ navigate }) {
+export default function Cart({ navigate, route = '' }) {
   const cart = useCart(), wishlist = useWishlist(); const { user } = useAuth(); const { storeSlug } = useStorefront();
+  const [storefrontBanners, setStorefrontBanners] = useState([]);
   const [settings, setSettings] = useState(null), [settingsError, setSettingsError] = useState(''), [reload, setReload] = useState(0);
   const [addresses, setAddresses] = useState([]), [addressId, setAddressId] = useState(''), [addressOpen, setAddressOpen] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
   const [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null), [notice, setNotice] = useState(null);
   const [actionBusy, setActionBusy] = useState(false), [checking, setChecking] = useState(false);
   const [coupons, setCoupons] = useState([]), [bestCode, setBestCode] = useState(''), [couponBusy, setCouponBusy] = useState(''), [couponFeedback, setCouponFeedback] = useState(''), [couponChecking, setCouponChecking] = useState(false);
-  const actionLock = useRef(false), signatureRef = useRef(''), couponRequest = useRef(0);
+  const actionLock = useRef(false), signatureRef = useRef(''), couponRequest = useRef(0), linkedCouponTried = useRef('');
   const selected = useMemo(() => selectedBagItems(cart.items), [cart.items]);
+  const address = addresses.find(row => row._id === addressId);
+  const linkedCouponCode = useMemo(() => {
+    const query = String(route || '').split('?')[1] || '';
+    return String(new URLSearchParams(query).get('coupon') || '').trim().toUpperCase();
+  }, [route]);
   const totals = bagTotals(selected, cart.coupon, settings || {});
   const signature = selected.map(item => [bagKey(item), item.quantity, item.price ?? item.product.price].join(':')).join('|');
   signatureRef.current = signature;
@@ -60,6 +67,12 @@ export default function Cart({ navigate }) {
     return () => { alive = false; };
   }, []);
   useEffect(() => {
+    let alive = true;
+    const query = storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : '';
+    api.get(`/banners${query}`, { silent: true }).then(data => { if (alive) setStorefrontBanners(Array.isArray(data) ? data : []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [storeSlug]);
+  useEffect(() => {
     let alive = true; setAddresses([]); setAddressId('');
     if (user) api.get('/user/addresses', { silent: true }).then(data => {
       if (!alive) return; const rows = Array.isArray(data) ? data : []; setAddresses(rows); setAddressId((rows.find(row => row.isDefault) || rows[0])?._id || '');
@@ -70,31 +83,36 @@ export default function Cart({ navigate }) {
     let alive = true;
     const request = ++couponRequest.current;
     if (!selected.length) { setCoupons([]); setBestCode(''); setCouponChecking(false); return undefined; }
-    const body = couponApplyBody({ cart: { items: selected, sellingTotal: totals.sellingTotal } });
+    const body = couponApplyBody({ cart: { items: selected, sellingTotal: totals.sellingTotal }, shippingAddress: address, deliveryCharge: Number(settings?.deliveryCharge || 0) });
     api.post('/coupons/available', body).then(data => {
       if (alive) { setCoupons(data.items || []); setBestCode(data.bestCouponCode || ''); }
     }).catch(() => { if (alive) { setCoupons([]); setBestCode(''); } });
     if (cart.coupon?.code) {
       setCouponChecking(true);
       api.post('/coupons/apply', { ...body, code: cart.coupon.code }).then(data => {
-        if (alive && request === couponRequest.current) cart.setCoupon({ code: data.couponCode || cart.coupon.code, discount: Number(data.discountAmount || 0) });
+        if (alive && request === couponRequest.current) cart.setCoupon(couponFromResponse(data, cart.coupon.code));
       }).catch(failure => {
         if (alive && request === couponRequest.current) { cart.setCoupon(null); setCouponFeedback('Coupon removed: ' + failure.message); }
       }).finally(() => { if (alive && request === couponRequest.current) setCouponChecking(false); });
     } else setCouponChecking(false);
     return () => { alive = false; };
-  }, [signature, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signature, cart.coupon?.code, address?.pincode, settings?.deliveryCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyCoupon = async code => {
     if (couponBusy || busy || !selected.length) return false;
     const current = signature; const request = ++couponRequest.current; setCouponBusy(code); setCouponFeedback('');
     try {
-      const data = await api.post('/coupons/apply', couponApplyBody({ code, cart: { items: selected, sellingTotal: totals.sellingTotal } }));
+      const data = await api.post('/coupons/apply', couponApplyBody({ code, cart: { items: selected, sellingTotal: totals.sellingTotal }, shippingAddress: address, deliveryCharge: Number(settings?.deliveryCharge || 0) }));
       if (signatureRef.current !== current || couponRequest.current !== request) { setCouponFeedback('Your bag changed. Please apply the coupon again.'); return false; }
-      cart.setCoupon({ code: data.couponCode || code, discount: Number(data.discountAmount ?? 0) }); return true;
+      cart.setCoupon(couponFromResponse(data, code)); setCouponFeedback(data.message || `${data.couponCode || code} applied.`); return true;
     } catch (failure) { setCouponFeedback(failure.message); return false; }
     finally { setCouponBusy(''); setCouponChecking(false); }
   };
+  useEffect(() => {
+    if (!linkedCouponCode || !selected.length || cart.coupon?.code || linkedCouponTried.current === linkedCouponCode) return;
+    linkedCouponTried.current = linkedCouponCode;
+    applyCoupon(linkedCouponCode);
+  }, [linkedCouponCode, selected.length, cart.coupon?.code]); // eslint-disable-line react-hooks/exhaustive-deps
   const removeCoupon = () => { couponRequest.current += 1; cart.setCoupon(null); setCouponFeedback('Coupon removed.'); setCouponChecking(false); };
   const performRemoval = async move => {
     if (actionLock.current || !removing?.length) return;
@@ -131,7 +149,6 @@ export default function Cart({ navigate }) {
     if (fresh.map(item => [bagKey(item), item.quantity, item.price ?? item.product.price].join(':')).join('|') !== signature) { setNotice({ text: 'Your bag has been updated. Review the latest prices and selections, then continue.' }); return; }
     goCheckout();
   };
-  const address = addresses.find(row => row._id === addressId);
   const rules = readPricingSettings(settings || {});
   const shippingRemaining = Math.max(0, rules.freeShippingMinAmount - totals.sellingTotal);
   const allSelected = cart.items.length > 0 && selected.length === cart.items.length;
@@ -179,6 +196,7 @@ export default function Cart({ navigate }) {
         {recommended.length > 0 && <section className="sc-bag__recommendations"><div><h2>You may also like</h2></div><div>{recommended.map(product => <button key={product._id || product.id} onClick={() => navigate(productHref(product, storeSlug))}><div><BagImage product={product} /></div><span>{product.name}</span><strong>{money(product.price)}</strong><small>View style <ArrowRight size={12} /></small></button>)}</div></section>}
         <div className="sc-bag__mobile-continue"><div><strong>{settings ? money(totals.finalAmount) : '—'}</strong><button onClick={() => document.getElementById('bag-price-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View price details</button></div><button className="sc-bag__primary" onClick={continueCheckout} disabled={!canContinue}>{checking ? <LoaderCircle size={18} className="sc-bag__spin" /> : 'Continue'}<ArrowRight size={17} /></button></div>
       </>}
+      <StorefrontBannerSlot banners={storefrontBanners} position="Cart - Bottom" navigate={navigate} compact className="max-w-[1320px]" />
       <footer className="sc-bag__footer"><span><LockKeyhole size={16} /> Secure checkout</span><button onClick={() => navigate('/shipping-policy')}>Shipping policy</button><button onClick={() => navigate('/return-policy')}>Return policy</button><button onClick={() => navigate('/privacy-policy')}>Privacy policy</button></footer>
     </div>
     {editing && <EditBagItem item={editing} cart={cart} onClose={() => setEditing(null)} />}
@@ -187,6 +205,7 @@ export default function Cart({ navigate }) {
   </section>;
 }
 function PriceRow({ label, value, good }) { return <div className="sc-bag__price-row"><span>{label}</span><span className={good ? 'is-good' : ''}>{value}</span></div>; }
+function couponFromResponse(data, fallbackCode) { return { code: data?.couponCode || fallbackCode, discount: Number(data?.discountAmount || 0), benefitType: data?.coupon?.benefitType || 'DISCOUNT', savingAmount: Number(data?.coupon?.effectiveSaving ?? (Number(data?.discountAmount || 0) + Number(data?.coupon?.estimatedDeliverySaving || 0))) }; }
 function BagImage({ product }) {
   const [failed, setFailed] = useState(false); const image = getPrimaryImageUrl(product.images);
   return image && !failed ? <img src={image} alt={product.name} onError={() => setFailed(true)} loading="lazy" /> : <span className="sc-bag__image-empty"><ImageOff size={27} /><small>Image unavailable</small></span>;

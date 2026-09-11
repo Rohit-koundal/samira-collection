@@ -35,6 +35,7 @@ import useDesktopFeedback from '../../hooks/useDesktopFeedback';
 import { couponApplyBody } from '../../utils/couponApply';
 import { shouldExitEmptyCheckout } from '../../utils/checkoutGuard';
 import { bagKey, checkoutCart } from '../../utils/bag';
+import { checkoutPayloadSignature, clearCheckoutAttempt, getCheckoutAttempt } from '../../utils/checkoutAttempt';
 import CouponSelector from '../../components/coupon/CouponSelector';
 import './Checkout.css';
 import './CheckoutMobile.css';
@@ -99,7 +100,14 @@ export default function Checkout({ navigate }) {
   const fullCart = useCart();
   const currentCart = useRef(fullCart);
   currentCart.current = fullCart;
-  const cart = checkoutCart(fullCart);
+  const checkoutParams = new URLSearchParams(window.location.search);
+  const buyNowItemId = checkoutParams.get('buyNow');
+  const requestedBuyNowQuantity = Number(checkoutParams.get('quantity') || 1);
+  const buyNowQuantity = Number.isInteger(requestedBuyNowQuantity) ? Math.max(1, Math.min(20, requestedBuyNowQuantity)) : 1;
+  const checkoutSource = buyNowItemId
+    ? { ...fullCart, items: fullCart.items.filter(item => String(item._id || item.id || item.cartItemId || '') === buyNowItemId).map(item => ({ ...item, selected: true, quantity: Math.min(Number(item.quantity || 1), buyNowQuantity) })) }
+    : fullCart;
+  const cart = checkoutCart(checkoutSource);
   const { setToast, user } = useAuth();
   const receiptStorageKey = pendingPaymentKey(user);
   const { isDesktop, notify } = useDesktopFeedback();
@@ -226,7 +234,7 @@ export default function Checkout({ navigate }) {
       return undefined;
     }
     let alive = true;
-    api.post('/coupons/available', couponApplyBody({ cart, paymentMethod }))
+    api.post('/coupons/available', couponApplyBody({ cart, paymentMethod, shippingAddress: selectedAddress, deliveryCharge: quote?.shipping?.deliveryCharge }))
       .then((data) => {
         if (!alive) return;
         setCoupons(Array.isArray(data?.items) ? data.items : []);
@@ -239,7 +247,7 @@ export default function Checkout({ navigate }) {
         }
       });
     return () => { alive = false; };
-  }, [cartSignature, paymentMethod, user?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cartSignature, paymentMethod, user?._id, selectedAddress?.pincode, quote?.shipping?.deliveryCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Totals always come from the backend so delivery, COD fee and coupon
   // discount match exactly what the order will be created with.
@@ -263,6 +271,13 @@ export default function Checkout({ navigate }) {
         if (!alive) return;
         const valid = typeof data?.totals?.finalAmount === 'number' && Number.isFinite(data.totals.finalAmount) && data.totals.finalAmount >= 0;
         setQuote(valid ? { ...data.totals, shipping: data.shipping } : null);
+        if (Array.isArray(data?.paymentOptions)) {
+          setPaymentOptions(data.paymentOptions);
+          setPaymentMethod(current => data.paymentOptions.some(option => option.key === current && option.enabled)
+            ? current
+            : data.paymentOptions.find(option => option.enabled)?.key || '');
+          setPaymentError(data.paymentOptions.some(option => option.enabled) ? '' : 'No payment methods are available for this order and delivery address.');
+        }
         setQuoteError(valid ? '' : 'Unable to calculate order totals. Please retry.');
       })
       .catch((err) => {
@@ -371,8 +386,8 @@ export default function Checkout({ navigate }) {
     }
     setCouponBusyCode(nextCode);
     try {
-      const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart, paymentMethod }));
-      cart.setCoupon({ code: data.couponCode, discount: data.discountAmount });
+      const data = await api.post('/coupons/apply', couponApplyBody({ code: nextCode, cart, paymentMethod, shippingAddress: selectedAddress, deliveryCharge: quote?.shipping?.deliveryCharge }));
+      cart.setCoupon({ code: data.couponCode, discount: data.discountAmount, benefitType: data.coupon?.benefitType || 'DISCOUNT', savingAmount: Number(data.coupon?.effectiveSaving ?? (Number(data.discountAmount || 0) + Number(data.coupon?.estimatedDeliverySaving || 0))) });
       setCouponCode(data.couponCode || nextCode);
       setCouponFeedback(data.message || `${data.couponCode || nextCode} applied successfully.`);
       trackEvent('COUPON_APPLIED');
@@ -394,16 +409,25 @@ export default function Checkout({ navigate }) {
     setCouponFeedback(removedCode ? `${removedCode} removed.` : 'Coupon removed.');
   };
 
-  const orderPayload = () => ({
-    expectedTotal: quote?.finalAmount,
-    orderItems: buildOrderItems(cart.items),
-    shippingAddress: selectedAddress,
-    paymentMethod,
-    coupon: cart.coupon ? { code: cart.coupon.code } : undefined,
-    attribution: readAttribution(),
-  });
+  const orderPayload = () => {
+    const payload = {
+      expectedTotal: quote?.finalAmount,
+      orderItems: buildOrderItems(cart.items),
+      cartItems: cart.items.map(item => ({
+        cartItemId: item._id || item.id || item.cartItemId,
+        product: item.product._id || item.product.id,
+        size: item.size || '', color: item.color || '', variantId: item.variantId || '', quantity: item.quantity,
+      })),
+      shippingAddress: selectedAddress,
+      paymentMethod,
+      coupon: cart.coupon ? { code: cart.coupon.code } : undefined,
+      attribution: readAttribution(),
+    };
+    payload.checkoutAttemptId = getCheckoutAttempt(user, checkoutPayloadSignature(payload));
+    return payload;
+  };
 
-  const verifyReceipt = async ({ response, purchased }) => {
+  const verifyReceipt = async ({ response, purchased, checkoutAttemptId }) => {
     const result = await api.post('/payments/verify', {
       razorpay_order_id: response.razorpay_order_id,
       razorpay_payment_id: response.razorpay_payment_id,
@@ -415,8 +439,11 @@ export default function Checkout({ navigate }) {
       const current = currentCart.current.items.find(line => bagKey(line) === bagKey(item));
       return !current || current.quantity === item.quantity;
     });
-    const cleanup = await currentCart.current.completeCheckout(unchanged).catch(() => ({ ok: false }));
+    const cleanup = await (buyNowItemId
+      ? currentCart.current.refresh()
+      : currentCart.current.completeCheckout(unchanged)).catch(() => ({ ok: false }));
     clearPendingPayment(receiptStorageKey, response);
+    clearCheckoutAttempt(user, checkoutAttemptId);
     setToast(unchanged.length !== purchased.length ? 'Payment successful. Your bag changed during payment; please review the remaining quantities.' : cleanup.ok ? 'Payment successful' : 'Payment successful. Refresh your bag to check remaining items.');
     navigate(`/order-success?id=${result.order._id}`);
   };
@@ -445,19 +472,29 @@ export default function Checkout({ navigate }) {
     orderLock.current = true;
 
     let pendingPayment = null;
+    let checkoutAttemptId = '';
 
     try {
       const payload = orderPayload();
+      checkoutAttemptId = payload.checkoutAttemptId;
       if (paymentMethod === 'COD') {
         const order = await api.post('/orders/cod', payload);
         checkoutCompletedRef.current = true;
-        const cleanup = await fullCart.completeCheckout(cart.items).catch(() => ({ ok: false }));
+        clearCheckoutAttempt(user, payload.checkoutAttemptId);
+        const cleanup = await (buyNowItemId ? fullCart.refresh() : fullCart.completeCheckout(cart.items)).catch(() => ({ ok: false }));
         setToast(cleanup.ok ? 'COD order placed successfully' : 'Order placed successfully. Refresh your bag to check remaining items.');
         navigate(`/order-success?id=${order._id}`);
         return;
       }
 
       pendingPayment = await api.post('/payments/create-order', payload);
+      if (pendingPayment?.alreadyCompleted && pendingPayment?.orderId) {
+        checkoutCompletedRef.current = true;
+        clearCheckoutAttempt(user, payload.checkoutAttemptId);
+        await fullCart.refresh().catch(() => null);
+        navigate(`/order-success?id=${pendingPayment.orderId}`);
+        return;
+      }
       const razorpayOrderId = pendingPayment.razorpayOrderId || pendingPayment.order_id;
       const razorpayKey = pendingPayment.keyId || process.env.REACT_APP_RAZORPAY_KEY_ID;
 
@@ -477,7 +514,7 @@ export default function Checkout({ navigate }) {
         contact: selectedAddress?.mobile || user?.phone,
         preferredMethod: paymentMethod,
         onSuccess: async (response) => {
-          const receipt = { response, purchased: cart.items };
+          const receipt = { response, purchased: cart.items, checkoutAttemptId: payload.checkoutAttemptId };
           savePendingPayment(receiptStorageKey, receipt);
           setPendingReceipt(receipt);
           try { await verifyReceipt(receipt); }
@@ -502,13 +539,25 @@ export default function Checkout({ navigate }) {
           ? 'Payment cancelled by customer'
           : err.message;
 
-        try {
-          await api.post('/payments/failure', {
-            reason,
-            razorpayOrderId: pendingPayment?.razorpayOrderId,
-          });
-        } catch {
-          // ignore logging failure
+        const providerOrderId = pendingPayment?.razorpayOrderId || pendingPayment?.order_id;
+        const setupOutcomeUnknown = !providerOrderId && (
+          ['FETCH_ERROR', 'TIMEOUT_ERROR'].includes(String(err.status || ''))
+          || (err.code === 'DUPLICATE_REQUEST' && /being prepared/i.test(String(err.details || err.message || '')))
+        );
+        if (providerOrderId) {
+          try {
+            await api.post('/payments/failure', { reason, razorpayOrderId: providerOrderId });
+            clearCheckoutAttempt(user, checkoutAttemptId);
+          } catch {
+            // Keep the attempt so retry can recover a possibly-created order.
+          }
+        } else if (!setupOutcomeUnknown) {
+          clearCheckoutAttempt(user, checkoutAttemptId);
+        }
+
+        if (setupOutcomeUnknown) {
+          showFeedback('Payment setup response was interrupted. Retry here with the same checkout; you will not be charged twice.', 'error');
+          return;
         }
 
         if (err.message !== 'Payment cancelled') {

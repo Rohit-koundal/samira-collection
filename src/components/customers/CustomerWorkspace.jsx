@@ -44,7 +44,9 @@ export default function CustomerWorkspace({ apiPrefix = '/admin' }) {
   const [showColumns, setShowColumns] = useState(false);
   const [columns, setColumns] = useState(() => readColumns(seller));
   const [masterStores, setMasterStores] = useState([]);
-  const [storeSlug, setStoreSlug] = useState('');
+  const [storeSlug, setStoreSlug] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('store') || '');
+  const directCustomerId = useRef(typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('customer') || '');
+  const directCustomerOpened = useRef(false);
   const requestSequence = useRef(0);
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function CustomerWorkspace({ apiPrefix = '/admin' }) {
   const toggle = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const toggleVisible = () => setSelected((current) => allSelected ? current.filter((id) => !items.some((item) => item.userId === id)) : [...new Set([...current, ...items.map((item) => item.userId)])]);
 
-  const openCustomer = async (row) => {
+  const openCustomer = useCallback(async (row) => {
     setDetail({ customer: { id: row.userId, name: row.name }, metrics: row }); setDetailLoading(true); setPrepared([]);
     try {
       const response = await api.get(scopedPath(`${crmPath}/${row.userId}`, storeSlug));
@@ -98,7 +100,13 @@ export default function CustomerWorkspace({ apiPrefix = '/admin' }) {
       setRestrictionEdit(restrictionForm(response.profile?.restrictions));
     } catch (detailError) { setNotice({ type: 'error', message: detailError.message }); setDetail(null); }
     finally { setDetailLoading(false); }
-  };
+  }, [crmPath, storeSlug]);
+
+  useEffect(() => {
+    if (!directCustomerId.current || directCustomerOpened.current) return;
+    directCustomerOpened.current = true;
+    openCustomer({ userId: directCustomerId.current, name: 'Customer' });
+  }, [openCustomer]);
 
   const refreshDetail = async (id) => {
     const response = await api.get(scopedPath(`${crmPath}/${id}`, storeSlug));

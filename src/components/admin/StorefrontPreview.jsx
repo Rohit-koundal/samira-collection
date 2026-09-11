@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { PREVIEW_PATH } from '../../config/websiteDesigner';
+import { PREVIEW_PAGES, PREVIEW_PATH } from '../../config/websiteDesigner';
 
 const widths = { desktop: 1440, tablet: 820, mobile: 390 };
 export const PREVIEW_UPDATE_DELAY = 500;
@@ -81,7 +81,7 @@ function StorefrontPreview({ config, device, valid = true }) {
   return <div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3 text-xs text-slate-600">
       <label>Preview page <select aria-label="Preview page" value={path} onChange={(event) => setPath(event.target.value)} className="ml-2 rounded-lg border bg-white p-2">
-        <option value="/">Home</option><option value="/products">Product listing</option><option value="/contact">Contact</option>
+        {PREVIEW_PAGES.map((page) => <option key={page.path} value={page.path}>{page.label}</option>)}
       </select></label>
       <span>{widths[device]} px · Read-only · Real catalog</span>
       <div className="flex flex-wrap gap-2">

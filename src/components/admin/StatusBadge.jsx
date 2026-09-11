@@ -13,6 +13,9 @@ const styles = {
   Refunded: 'bg-[#f4edff] text-[#6b4aa8]',
   Visible: 'bg-[#eef8f1] text-[#2f6b4a]',
   Hidden: 'bg-[#f6efe8] text-slate-600',
+  Published: 'bg-[#eef8f1] text-[#2f6b4a]',
+  Rejected: 'bg-[#fff0f4] text-wine',
+  Archived: 'bg-slate-100 text-slate-600',
   Blocked: 'bg-[#fff0f4] text-wine',
   Requested: 'bg-[#fff4e8] text-[#9a5b20]',
   'Return Requested': 'bg-[#fff4e8] text-[#9a5b20]',
@@ -20,7 +23,6 @@ const styles = {
   Returned: 'bg-[#f4edff] text-[#6b4aa8]',
   'Out of Stock': 'bg-[#fff0f4] text-wine',
   Approved: 'bg-[#eef8f1] text-[#2f6b4a]',
-  Rejected: 'bg-[#fff0f4] text-wine',
 };
 
 export default function StatusBadge({ value }) {

@@ -52,4 +52,34 @@ describe('ReviewModal', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  test('uploads photos and submits optional product-detail ratings', async () => {
+    const onUpload = jest.fn().mockResolvedValue({ files: [{ url: 'https://media.example.test/review.webp' }] });
+    const onSubmit = jest.fn().mockResolvedValue({ message: 'Saved' });
+    const { container } = render(<ReviewModal open product={product} onClose={jest.fn()} onUpload={onUpload} onSubmit={onSubmit} />);
+    const file = new File(['photo'], 'review.webp', { type: 'image/webp' });
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+    await waitFor(() => expect(onUpload).toHaveBeenCalledWith([file]));
+    expect(await screen.findByAltText('Review upload')).toHaveAttribute('src', 'https://media.example.test/review.webp');
+    fireEvent.click(screen.getByRole('button', { name: /4 stars.*Very good/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Quality rating' }), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({
+      rating: 4,
+      title: '',
+      comment: '',
+      aspects: { quality: 5 },
+      recommend: true,
+      photos: ['https://media.example.test/review.webp'],
+    }));
+  });
+
+  test('lets the customer withdraw an existing review', async () => {
+    const onWithdraw = jest.fn().mockResolvedValue({ success: true });
+    render(<ReviewModal open product={product} existingReview={{ _id: 'review-1', rating: 4 }} onClose={jest.fn()} onSubmit={jest.fn()} onWithdraw={onWithdraw} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw this review' }));
+    await waitFor(() => expect(onWithdraw).toHaveBeenCalledWith(expect.objectContaining({ _id: 'review-1' })));
+    expect(await screen.findByText('Review saved')).toBeInTheDocument();
+  });
 });

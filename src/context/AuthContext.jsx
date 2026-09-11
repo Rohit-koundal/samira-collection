@@ -160,6 +160,7 @@ export function AuthProvider({ children, navigate }) {
   }, [dispatch, navigate, setToast]);
 
   const logout = useCallback(() => {
+    try { Promise.resolve(api.post('/auth/logout', {}, { silent: true })).catch(() => null); } catch { /* local logout must always complete */ }
     sessionRevision.current += 1;
     dispatch(logoutAction());
     dispatch(samiraApi.util.resetApiState());

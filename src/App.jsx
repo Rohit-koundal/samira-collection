@@ -58,7 +58,6 @@ const SellerProducts = lazy(() => import('./pages/seller/Products'));
 const SellerOrders = lazy(() => import('./pages/seller/Orders'));
 const SellerCrm = lazy(() => import('./pages/seller/Crm'));
 const SellerInbox = lazy(() => import('./pages/seller/Inbox'));
-const SellerInstagram = lazy(() => import('./pages/seller/Instagram'));
 const SocialWorkspace = lazy(() => import('./pages/admin/SocialWorkspace'));
 const SellerAudit = lazy(() => import('./pages/seller/Audit'));
 const SellerAnalytics = lazy(() => import('./pages/seller/Analytics'));
@@ -82,6 +81,7 @@ const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'));
 const Customers = lazy(() => import('./pages/admin/Customers'));
 const Coupons = lazy(() => import('./pages/admin/Coupons'));
 const Banners = lazy(() => import('./pages/admin/Banners'));
+const CampaignBuilder = lazy(() => import('./pages/admin/CampaignBuilder'));
 const Reviews = lazy(() => import('./pages/admin/Reviews'));
 const Returns = lazy(() => import('./pages/admin/Returns'));
 const Inventory = lazy(() => import('./pages/admin/Inventory'));
@@ -93,6 +93,7 @@ const Subscribers = lazy(() => import('./pages/admin/Subscribers'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const ReelProductImport = lazy(() => import('./pages/admin/ReelProductImport'));
 const SocialProductImport = lazy(() => import('./pages/admin/SocialProductImport'));
+const ContextualHelp = lazy(() => import('./components/help/ContextualHelp'));
 
 const customerRoutes = {
   '/': Home,
@@ -137,18 +138,24 @@ const sellerRoutes = {
   '/seller/products/edit': SellerProductForm,
   '/seller/inventory': Inventory,
   '/seller/orders': SellerOrders,
+  '/seller/returns': Returns,
   '/seller/orders/detail': AdminOrderDetail,
   '/seller/crm': SellerCrm,
   '/seller/offers': Coupons,
+  '/seller/banners': Banners,
+  '/seller/campaigns': CampaignBuilder,
+  '/seller/reviews': Reviews,
   '/seller/inbox': SellerInbox,
-  '/seller/instagram': SellerInstagram,
+  '/seller/instagram': SocialWorkspace,
   '/seller/social': SocialWorkspace,
   '/seller/audit': SellerAudit,
   '/seller/analytics': SellerAnalytics,
+  '/seller/reports': Reports,
   '/seller/business': BusinessCenter,
   '/seller/subscription': SellerSubscription,
   '/seller/settings': Settings,
   '/seller/design': StoreDesigner,
+  '/seller/content': StoreContent,
 };
 
 const adminRoutes = {
@@ -167,6 +174,7 @@ const adminRoutes = {
   '/admin/customers': Customers,
   '/admin/coupons': Coupons,
   '/admin/banners': Banners,
+  '/admin/campaigns': CampaignBuilder,
   '/admin/reviews': Reviews,
   '/admin/returns': Returns,
   '/admin/inventory': Inventory,
@@ -410,6 +418,7 @@ function AppShell({ route, navigate }) {
       <CartProvider key={cartStoragePlan.storageName} storageName={cartStoragePlan.storageName} legacyStorageNames={cartStoragePlan.legacyStorageNames}>
         <WishlistProvider key={wishlistStoragePlan.storageName} storageName={wishlistStoragePlan.storageName} legacyStorageNames={wishlistStoragePlan.legacyStorageNames}>
           <MobileAppCompanion enabled={!isAdmin && !isSeller} />
+          <Suspense fallback={null}><ContextualHelp route={route} navigate={navigate} /></Suspense>
           {isAdmin ? (
             routePath === '/admin/login' ? (
               page
@@ -463,21 +472,35 @@ function AppShell({ route, navigate }) {
 }
 
 function RouteFallback() {
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 767px)').matches
+  ));
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    const onChange = (event) => setIsMobileViewport(event.matches);
+    media.addEventListener('change', onChange);
+    setIsMobileViewport(media.matches);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  if (isMobileViewport) return <MobileOverlayLoader />;
+
   return (
-    <>
-      <MobileOverlayLoader />
-      <div className="hidden min-h-[50vh] place-items-center px-4 md:grid">
-        <div className="flex flex-col items-center gap-3 rounded-3xl border border-[#eadfd5] bg-white px-8 py-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-          <span className="relative block h-12 w-12" aria-hidden="true">
-            <span className="absolute inset-0 rounded-full border-[3px] border-[#f3d3da]" />
-            <span
-              className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
-              style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
-            />
-          </span>
-          <p className="text-sm font-black text-slate-500">Loading...</p>
-        </div>
+    <div className="grid min-h-[50vh] place-items-center px-4">
+      <div className="flex flex-col items-center gap-3 rounded-3xl border border-[#eadfd5] bg-white px-8 py-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+        <span className="relative block h-12 w-12" aria-hidden="true">
+          <span className="absolute inset-0 rounded-full border-[3px] border-[#f3d3da]" />
+          <span
+            className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
+            style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
+          />
+        </span>
+        <p className="text-sm font-black text-slate-500">Loading...</p>
       </div>
-    </>
+    </div>
   );
 }

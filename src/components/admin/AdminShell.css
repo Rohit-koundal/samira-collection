@@ -18,6 +18,50 @@
   letter-spacing: 0;
 }
 
+.card-action,
+.preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  border: 1px solid #e2d5ce;
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 0.45rem 0.75rem;
+  color: #6f1c38;
+  font-size: 0.7rem;
+  font-weight: 800;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.card-action:hover,
+.preview-toggle:hover {
+  border-color: #b76f87;
+  background: #fff7f9;
+}
+
+.card-action:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.card-action--primary,
+.preview-toggle--active {
+  border-color: #751d39;
+  background: #751d39;
+  color: #fff;
+}
+
+.admin-shell .campaign-hero h1 {
+  color: #fff;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+}
+
+.admin-shell .campaign-workspace h2 {
+  font-size: clamp(1.15rem, 2vw, 1.65rem);
+}
+
 .admin-shell h1,
 .admin-shell h2,
 .admin-shell h3 {

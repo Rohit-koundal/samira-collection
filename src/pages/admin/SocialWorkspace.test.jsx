@@ -11,7 +11,7 @@ const thread = { _id: 'thread-1', connectionId: account._id, provider: 'instagra
 const status = { configured: true, missing: [], mediaStorage: 'r2', store: { id: 'store-1', name: 'Samira Collection' }, stores: [], accounts: [account], permissions: { connect: true, inbox: true, reply: true, publish: true, catalog: true } };
 let fixtureStatus, fixtureThread, drafts, messageList;
 beforeEach(() => {
-  jest.clearAllMocks(); window.history.replaceState({}, '', '/admin/social'); window.scrollTo = jest.fn();
+  jest.clearAllMocks(); window.history.replaceState({}, '', '/admin/social'); window.scrollTo = jest.fn(); sessionStorage.removeItem('samira_seller_store_id');
   fixtureStatus = { ...status }; fixtureThread = { ...thread }; drafts = [];
   messageList = [{ _id: 'message-1', text: 'Is medium available?', direction: 'inbound', sentAt: '2026-09-06T09:00:00Z' }];
   api.get.mockImplementation(async path => {
@@ -35,6 +35,14 @@ beforeEach(() => {
     return { success: true };
   });
 });
+
+test('seller workspace opens the store selected in the seller shell', async () => {
+  sessionStorage.setItem('samira_seller_store_id', 'store-2');
+  window.history.replaceState({}, '', '/seller/social');
+  render(<SocialWorkspace />);
+  await screen.findByRole('button', { name: /Ananya/ });
+  expect(api.get).toHaveBeenCalledWith('/social/status?storeId=store-2', { silent: true });
+});
 async function openComposer() {
   render(<SocialWorkspace />);
   fireEvent.click(await screen.findByRole('button', { name: /Create & publish/i }));
@@ -45,7 +53,7 @@ async function openComposer() {
 
 test('product selection fills a draft without publishing; publishing requires a destination and final confirmation', async () => {
   await openComposer();
-  const caption = screen.getByLabelText('Your caption', { exact: false });
+  const caption = screen.getByLabelText('Main caption', { exact: false });
   expect(caption.value).toContain(product.name); expect(caption.value).toContain('1,299'); expect(caption.value).toContain(product.url);
   expect(api.post).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Review & publish' })).toBeDisabled();
@@ -95,7 +103,7 @@ test('unknown delivery remains visible and is not blindly resubmitted', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Check Meta before sending again.');
   expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
-  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.post.mock.calls.filter(([path]) => path.split('?')[0].endsWith('/reply'))).toHaveLength(1);
 });
 
 test('unconfigured accounts explain setup instead of showing a working login button', async () => {
@@ -114,7 +122,7 @@ test('a late reply result cannot replace another customer conversation or its un
       ? Promise.resolve({ thread: second, messages: [{ _id: 'message-2', text: 'Any blue sarees?', direction: 'inbound' }], hasMore: false })
       : originalGet(path));
   let finishReply;
-  api.post.mockImplementation(() => new Promise(resolve => { finishReply = resolve; }));
+  api.post.mockImplementation((path) => path.includes('/reply-presence') || path.includes('/read') ? Promise.resolve({ success: true }) : new Promise(resolve => { finishReply = resolve; }));
   render(<SocialWorkspace />);
   fireEvent.click(await screen.findByRole('button', { name: /Ananya/ }));
   fireEvent.change(await screen.findByRole('textbox', { name: 'Write your reply' }), { target: { value: 'Reply for Ananya' } });
@@ -126,7 +134,7 @@ test('a late reply result cannot replace another customer conversation or its un
   expect(screen.getByRole('heading', { name: 'Meera' })).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'Write your reply' })).toHaveValue('Draft for Meera');
   expect(screen.getByRole('button', { name: 'Send reply' })).toBeEnabled();
-  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.post.mock.calls.filter(([path]) => path.split('?')[0].endsWith('/reply'))).toHaveLength(1);
 });
 
 test('a confirmed sent reply clears before a subsequent refresh failure', async () => {
@@ -138,5 +146,5 @@ test('a confirmed sent reply clears before a subsequent refresh failure', async 
   fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to refresh messages');
   expect(textarea).toHaveValue('');
-  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.post.mock.calls.filter(([path]) => path.split('?')[0].endsWith('/reply'))).toHaveLength(1);
 });

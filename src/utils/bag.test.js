@@ -13,3 +13,7 @@ test('checkout contains only selected items and unavailable lines are clearly bl
   expect(bagIssue({ ...line, availableStock: 0 })).toMatch(/out of stock/);
   expect(bagIssue({ ...line, quantity: 3, availableStock: 2 })).toMatch(/Only 2/);
 });
+test('a free-delivery coupon removes delivery without inventing a price discount', () => {
+  const totals = bagTotals([line], { discount: 0, benefitType: 'FREE_SHIPPING' }, { platformFee: 0, freeShippingMinAmount: 2000, deliveryCharge: 99 });
+  expect(totals).toMatchObject({ couponDiscount: 0, deliveryCharge: 0, finalAmount: 999 });
+});

@@ -20,6 +20,8 @@ import { getHomepageSection } from '../../config/websiteCustomization';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import styles from './DesktopLuxuryHome.module.css';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import { bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
+import StorefrontCustomBlocks from '../../components/storefront/StorefrontCustomBlocks';
 
 const QuickViewModal = lazy(() => import('../../components/product/QuickViewModal'));
 
@@ -45,6 +47,7 @@ export default function DesktopLuxuryHome({
   websiteConfig,
   customerReviews = [],
   industry = 'fashion',
+  storeSlug = '',
 }) {
   const brand = useBrandIdentity();
   const fashion = industry === 'fashion';
@@ -57,13 +60,14 @@ export default function DesktopLuxuryHome({
   );
 
   const heroSlides = useMemo(() => {
-    const heroes = banners.filter((banner) => banner.type === 'Hero' && banner.image);
+    const heroes = bannersForPosition(banners, 'Home - Top', ['Hero']);
     if (heroes.length) return heroes;
     const closestBanner = banners.find((banner) => banner.image);
     return closestBanner ? [closestBanner] : [{}];
   }, [banners]);
 
   const activeHero = heroSlides[heroIndex % heroSlides.length] || {};
+  const heroEngagementRef = useBannerEngagement(activeHero);
   const heroSection = getHomepageSection(websiteConfig, 'hero');
   const heroImage = heroSection.image
     ? normalizeImageUrl(heroSection.image)
@@ -84,7 +88,7 @@ export default function DesktopLuxuryHome({
     hasSelection('trending') ? trendingProducts : catalog.filter((product) => product.showInTrending),
   ).filter((product) => getProductImage(product)).slice(0, 12);
   const latestArrivals = arrivals.slice(0, 12);
-  const saleBanner = banners.find((banner) => ['Sale', 'Offer'].includes(banner.type) && banner.image);
+  const saleBanner = bannersForPosition(banners, 'Home - Middle', ['Sale', 'Offer'])[0];
 
   const moveHero = (direction) => {
     setHeroIndex((current) => (current + direction + heroSlides.length) % heroSlides.length);
@@ -92,7 +96,7 @@ export default function DesktopLuxuryHome({
 
   return (
     <div className={`${styles.desktopLuxuryHome} themed-home-flow themed-home-flow--desktop`}>
-      <ThemedDesktopSection config={websiteConfig} id="hero"><section className={styles.hero}>
+      <ThemedDesktopSection config={websiteConfig} id="hero"><section ref={heroEngagementRef} className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>{fashion ? 'New Festive Collection' : `New ${industryLabel(industry)} Collection`}</p>
@@ -101,7 +105,7 @@ export default function DesktopLuxuryHome({
               {heroSection.description || activeHero.subtitle || (fashion ? 'Premium ethnic wear crafted for weddings, festive moments, and everyday elegance.' : `Explore quality ${industryLabel(industry).toLowerCase()} products selected for your needs.`)}
             </p>
             <div className={styles.heroButtons}>
-              <button type="button" className={`${styles.primaryButton} site-theme-button`} onClick={() => navigate(heroSection.buttonLink || activeHero.link || '/products?newArrival=true')}>{heroSection.buttonText || 'Shop New Arrivals'}</button>
+              <button type="button" className={`${styles.primaryButton} site-theme-button`} onClick={() => activeHero?._id ? openBanner({ ...activeHero, link: heroSection.buttonLink || activeHero.link }, navigate) : navigate(heroSection.buttonLink || '/products?newArrival=true')}>{heroSection.buttonText || activeHero.buttonText || 'Shop New Arrivals'}</button>
               <button type="button" className={styles.secondaryButton} onClick={() => navigate('/products')}>Explore Collections</button>
             </div>
             <div className={styles.trustPoints}>
@@ -111,7 +115,7 @@ export default function DesktopLuxuryHome({
             </div>
           </div>
           <div className={styles.heroVisual}>
-            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={activeHero.title || 'Festive collection'} /> : <div className={styles.imageFallback}>{websiteConfig?.branding?.websiteName || brand.websiteName}</div>}
+            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={heroSection.imageAlt || activeHero.altText || activeHero.title || 'Featured collection'} style={{ objectPosition: heroSection.imagePosition || activeHero.focalPoint || 'center' }} /> : <div className={styles.imageFallback}>{websiteConfig?.branding?.websiteName || brand.websiteName}</div>}
           </div>
         </div>
         <button type="button" className={`${styles.heroArrow} ${styles.heroArrowLeft}`} onClick={() => moveHero(-1)} aria-label="Previous hero slide"><IconChevronLeft /></button>
@@ -226,6 +230,7 @@ export default function DesktopLuxuryHome({
 
       <ThemedDesktopSection config={websiteConfig} id="reviews"><TestimonialSection section={getHomepageSection(websiteConfig, 'reviews')} reviews={customerReviews} /></ThemedDesktopSection>
       <ThemedDesktopSection config={websiteConfig} id="newsletter"><NewsletterSection section={getHomepageSection(websiteConfig, 'newsletter')} /></ThemedDesktopSection>
+      <StorefrontCustomBlocks blocks={websiteConfig?.homepage?.blocks || []} catalog={catalog} categories={categories} navigate={navigate} storeSlug={storeSlug} />
     </div>
   );
 }
@@ -425,11 +430,12 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
 
 function SaleBanner({ banner, fallbackProduct, navigate, section }) {
   const brand = useBrandIdentity();
+  const engagementRef = useBannerEngagement(banner);
   const image = section?.image ? normalizeImageUrl(section.image) : banner?.image ? normalizeImageUrl(banner.image) : getProductImage(fallbackProduct);
   return (
-    <section className={`${styles.luxuryContainer} ${styles.saleBanner}`}>
+    <section ref={engagementRef} className={`${styles.luxuryContainer} ${styles.saleBanner}`}>
       <div className={styles.saleCopy}><span>{brand.websiteName}</span><h2>{section?.heading || banner?.title || 'Season Sale'}</h2><p>{section?.description || 'Discover current offers'}</p></div>
-      <button type="button" className="site-theme-button" onClick={() => navigate(section?.buttonLink || banner?.link || '/products?discount=20')}>{section?.buttonText || 'Shop Sale'}</button>
+      <button type="button" className="site-theme-button" onClick={() => banner?._id ? openBanner({ ...banner, link: section?.buttonLink || banner.link }, navigate) : navigate(section?.buttonLink || '/products?discount=20')}>{section?.buttonText || banner?.buttonText || 'Shop Sale'}</button>
       <div className={styles.saleVisual}>{image && <img loading="lazy" decoding="async" src={image} alt={banner?.title || 'Festive sale'} />}</div>
     </section>
   );
@@ -525,7 +531,7 @@ function ThemedDesktopSection({ config, id, children }) {
   const section = getHomepageSection(config, id);
   if (!section?.visible) return null;
   const background = normalizeImageUrl(section.backgroundImage);
-  return <div className="themed-home-section" data-section-background={Boolean(background)} style={{ '--home-section-order': section.order, ...(background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>{children}</div>;
+  return <div className="themed-home-section" data-section-background={Boolean(background)} style={{ '--home-section-order': section.order, ...(background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: section.imagePosition || 'center' } : {}) }}>{children}</div>;
 }
 
 function uniqueProducts(products) {

@@ -48,6 +48,23 @@ test('payment settings failure can recover without reloading the page', async ()
   await waitFor(() => expect(screen.getByRole('button', { name: 'Place COD Order' })).toBeEnabled());
 });
 
+test('the server quote replaces stale payment settings for the selected address', async () => {
+  const originalPost = api.post.getMockImplementation();
+  api.post.mockImplementation((path, body) => path === '/orders/quote'
+    ? Promise.resolve({ ...quote, paymentOptions: [
+      { key: 'COD', label: 'Cash on Delivery', enabled: false, disabledReason: 'COD is unavailable for this PIN code.' },
+      { key: 'UPI', label: 'UPI', enabled: true },
+    ] })
+    : originalPost(path, body));
+  render(<Checkout navigate={jest.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
+
+  expect(await screen.findByRole('button', { name: 'Pay Now' })).toBeEnabled();
+  expect(screen.getByText('COD is unavailable for this PIN code.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Place COD Order' })).not.toBeInTheDocument();
+});
+
 test('an order total failure offers retry and blocks submission until the server responds', async () => {
   let failQuote = true;
   const originalPost = api.post.getMockImplementation();
@@ -119,6 +136,37 @@ test('a delayed payment verification retries the receipt without starting or fai
   await waitFor(() => expect(navigate).toHaveBeenCalledWith('/order-success?id=verified-order'));
   expect(api.post.mock.calls.filter(([path]) => path === '/payments/create-order')).toHaveLength(1);
   expect(api.post).toHaveBeenCalledWith('/payments/verify', response);
+});
+
+test('a lost payment setup response retries the same checkout attempt without cancelling it', async () => {
+  const originalGet = api.get.getMockImplementation();
+  api.get.mockImplementation(path => path === '/settings/payment-methods' ? Promise.resolve({ methods: [{ key: 'UPI', label: 'UPI', enabled: true }] }) : originalGet(path));
+  const originalPost = api.post.getMockImplementation();
+  let setupCalls = 0;
+  api.post.mockImplementation((path, body) => {
+    if (path !== '/payments/create-order') return originalPost(path, body);
+    setupCalls += 1;
+    if (setupCalls === 1) return Promise.reject(Object.assign(new Error('Connection interrupted'), { status: 'FETCH_ERROR' }));
+    return Promise.resolve({ razorpayOrderId: 'recovered-gateway-order', keyId: 'test-key', amount: 102200 });
+  });
+  openRazorpayCheckout.mockImplementation(() => new Promise(() => {}));
+  render(<Checkout navigate={jest.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
+  const pay = await screen.findByRole('button', { name: 'Pay Now' });
+  await waitFor(() => expect(pay).toBeEnabled());
+
+  fireEvent.click(pay);
+  expect(await screen.findByRole('alert')).toHaveTextContent('you will not be charged twice');
+  expect(api.post.mock.calls.some(([path]) => path === '/payments/failure')).toBe(false);
+  const firstAttempt = api.post.mock.calls.find(([path]) => path === '/payments/create-order')[1].checkoutAttemptId;
+
+  await waitFor(() => expect(pay).toBeEnabled());
+  fireEvent.click(pay);
+  await waitFor(() => expect(openRazorpayCheckout).toHaveBeenCalled());
+  const setupPayloads = api.post.mock.calls.filter(([path]) => path === '/payments/create-order').map(([, body]) => body);
+  expect(setupPayloads).toHaveLength(2);
+  expect(setupPayloads[1].checkoutAttemptId).toBe(firstAttempt);
+  expect(api.post.mock.calls.some(([path]) => path === '/payments/failure')).toBe(false);
 });
 
 test('changing the delivery pincode rechecks COD availability before an order can be submitted', async () => {

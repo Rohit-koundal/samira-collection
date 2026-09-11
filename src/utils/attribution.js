@@ -3,6 +3,7 @@ import { boutiquePath } from './routing';
 const ATTRIBUTION_KEY = 'samira_attribution';
 const STORE_SLUG_KEY = 'samira_store_slug';
 const SESSION_KEY = 'samira_session_id';
+const ATTRIBUTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function parseHashQuery(route = '') {
   const query = route.includes('?') ? route.slice(route.indexOf('?') + 1) : '';
@@ -34,7 +35,8 @@ export function captureAttribution(route = '') {
   const campaign = params.get('campaign') || params.get('utm_campaign') || '';
   const reelId = params.get('reel') || params.get('reelId') || '';
   if (!source && !campaign && !reelId) return readAttribution();
-  const attribution = { source, campaign, reelId };
+  const capturedAt = Date.now();
+  const attribution = { source, campaign, reelId, capturedAt, expiresAt: capturedAt + ATTRIBUTION_WINDOW_MS };
   try {
     sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(attribution));
   } catch {
@@ -45,11 +47,18 @@ export function captureAttribution(route = '') {
 
 export function readAttribution() {
   try {
-    return JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) || '{}');
+    const attribution = JSON.parse(sessionStorage.getItem(ATTRIBUTION_KEY) || '{}');
+    if (attribution.expiresAt && Number(attribution.expiresAt) <= Date.now()) {
+      sessionStorage.removeItem(ATTRIBUTION_KEY);
+      return {};
+    }
+    return attribution;
   } catch {
     return {};
   }
 }
+
+export { ATTRIBUTION_WINDOW_MS };
 
 export function setStoreSlug(slug) {
   try {

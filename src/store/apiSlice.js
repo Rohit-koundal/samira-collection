@@ -8,6 +8,7 @@ import { isWebsitePreview } from '../config/websiteDesigner';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
+  credentials: 'include',
   prepareHeaders: (headers, { getState, arg }) => {
     if (isWebsitePreview()) return headers;
     const token = getState().auth.token || localStorage.getItem('samira_token');
@@ -55,12 +56,11 @@ function sessionCredentials(api) {
   return {
     userId: String(api.getState().auth.user?._id || api.getState().auth.user?.id || ''),
     token: api.getState().auth.token || localStorage.getItem('samira_token') || '',
-    refreshToken: api.getState().auth.refreshToken || localStorage.getItem('samira_refresh_token') || '',
   };
 }
 
 function sameSession(left, right) {
-  return left.userId === right.userId && left.token === right.token && left.refreshToken === right.refreshToken;
+  return left.userId === right.userId && left.token === right.token;
 }
 
 async function baseQueryWithRefresh(args, api, extraOptions) {
@@ -85,7 +85,7 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
           ? rawBaseQuery(args, api, extraOptions)
           : { error: { status: 409, data: { message: 'Your session changed. Please try again.' } } };
       }
-      if (currentSession.refreshToken) {
+      if (currentSession.token && currentSession.userId) {
         let pending = sessionRefreshes.get(api.dispatch);
         if (!pending || !sameSession(pending.session, currentSession)) {
           pending = { session: currentSession };
@@ -93,7 +93,7 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
             const refreshed = await rawBaseQuery({
               url: '/auth/refresh',
               method: 'POST',
-              body: { refreshToken: currentSession.refreshToken },
+              body: {},
             }, api, extraOptions);
             if (!sameSession(currentSession, sessionCredentials(api))) return { stale: true };
             if (refreshed.data?.token && refreshed.data?.user) {
@@ -175,7 +175,12 @@ export const samiraApi = createApi({
     getAddresses: builder.query({ query: () => '/user/addresses', providesTags: ['Addresses'] }),
     getCoupons: builder.query({ query: () => '/coupons', providesTags: ['Coupons'] }),
     getOrders: builder.query({ query: () => '/orders/my-orders', providesTags: ['Orders'] }),
-    getReviews: builder.query({ query: (productId) => `/reviews/${productId}`, providesTags: ['Reviews'] }),
+    getReviews: builder.query({
+      query: (value) => typeof value === 'object'
+        ? ({ url: `/reviews/${encodeURIComponent(value.productId)}`, params: { page: value.page || 1, limit: value.limit || 20, ...(value.store ? { store: value.store } : {}) } })
+        : `/reviews/${encodeURIComponent(value)}`,
+      providesTags: ['Reviews'],
+    }),
     getFeaturedReviews: builder.query({ query: (query) => ({ url: '/reviews/featured', ...params(query) }), providesTags: ['Reviews'] }),
     getAdminStats: builder.query({ query: () => '/admin/dashboard/stats', providesTags: ['AdminDashboard'] }),
     getAdminProducts: builder.query({ query: () => '/admin/products', providesTags: ['AdminProducts'] }),

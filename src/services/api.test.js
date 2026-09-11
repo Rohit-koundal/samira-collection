@@ -67,7 +67,7 @@ test('bag requests use separate query identities for guests and customer account
   expect(mockInitiateQuery).toHaveBeenNthCalledWith(2, { path: '/cart', silent: true, cacheScope: 'customer-1' }, { forceRefetch: true, subscribe: false });
 });
 
-test('project downloads use bearer authentication without credentialed CORS mode', async () => {
+test('project downloads use bearer authentication and the secure refresh cookie', async () => {
   const archive = new Blob(['PK'], { type: 'application/zip' });
   global.fetch = jest.fn().mockResolvedValue({ ok: true, blob: jest.fn().mockResolvedValue(archive) });
   await expect(api.download('/master/projects/generate', { industry: 'mobile' })).resolves.toBe(archive);
@@ -75,7 +75,7 @@ test('project downloads use bearer authentication without credentialed CORS mode
     method: 'POST',
     headers: expect.objectContaining({ Authorization: 'Bearer master-token' }),
   }));
-  expect(global.fetch.mock.calls[0][1]).not.toHaveProperty('credentials');
+  expect(global.fetch.mock.calls[0][1]).toHaveProperty('credentials', 'include');
 });
 
 test.each([

@@ -54,7 +54,7 @@ test.each(['FETCH_ERROR', 'TIMEOUT_ERROR', 503])('a %s during token refresh pres
     : unauthorized);
   const result = await request('/auth/me');
   expect(result.error.status).toBe(status);
-  expect(testStore.getState().auth).toEqual(original);
+  expect(testStore.getState().auth).toEqual({ user, token: original.token, refreshToken: null });
   expect(localStorage.getItem('samira_token')).toBe(original.token);
 });
 
@@ -69,7 +69,7 @@ test('simultaneous expired requests share one refresh and both resume with the n
   expect((await first).data).toEqual({ path: '/auth/me' });
   expect((await second).data).toEqual({ path: '/notifications/summary' });
   expect(mockRawQuery.mock.calls.filter(([arg]) => arg.url === '/auth/refresh')).toHaveLength(1);
-  expect(testStore.getState().auth).toEqual(renewed);
+  expect(testStore.getState().auth).toEqual({ user, token: renewed.token, refreshToken: null });
 });
 
 test('an invalid refresh token clears the rejected session', async () => {

@@ -6,6 +6,7 @@ import VariantGroups from './VariantGroups';
 import Returns from './Returns';
 import Reports from './Reports';
 import Settings from './Settings';
+import ContextualHelp from '../../components/help/ContextualHelp';
 import api from '../../services/api';
 const mockVariantRefetch = jest.fn();
 const mockVariantArchive = jest.fn();
@@ -36,6 +37,21 @@ beforeEach(() => {
   [mockVariantArchive, mockVariantCreate, mockVariantUpdate, mockVariantDelete, mockVariantRestore, mockVariantReconcile].forEach((mock) => mock.mockReturnValue({ unwrap: () => Promise.resolve({ message: 'Saved' }) }));
 });
 afterEach(() => jest.restoreAllMocks());
+
+test('contextual manual opens the correct page guide and keeps full help searchable', async () => {
+  const navigate = jest.fn();
+  render(<ContextualHelp route="/admin/returns?status=Requested" navigate={navigate} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open help for this page' }));
+  expect(await screen.findByRole('heading', { name: 'Returns & Exchange Center' })).toBeInTheDocument();
+  expect(screen.getByText(/create the reverse pickup from the customer pickup address/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Complete manual' }));
+  const search = screen.getByPlaceholderText('Search the manual…');
+  fireEvent.change(search, { target: { value: 'refund' } });
+  expect(screen.getByText(/guide(s)? for this workspace/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Contact support' }));
+  expect(navigate).toHaveBeenCalledWith('/admin/support');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
 
 test('missing product or category edit IDs never turn into create forms', () => {
   const view = render(<ProductForm mode="Update" />);
@@ -108,28 +124,45 @@ test('variant family archive failures are actionable and preserve the family for
   expect(mockVariantArchive).toHaveBeenCalledTimes(2);
 });
 
-test('a failed return update cannot undo a successful update on a different request', async () => {
-  api.get.mockResolvedValue([{ _id: 'return-a', status: 'Requested' }, { _id: 'return-b', status: 'Requested' }]);
-  let failFirst;
-  api.put.mockImplementation(path => path.includes('return-a') ? new Promise((_resolve, reject) => { failFirst = reject; }) : Promise.resolve({ status: 'Approved' }));
+test('a partial bulk return failure preserves the successful update and reports the failed case', async () => {
+  let cases = [
+    { _id: 'return-a', status: 'Requested', type: 'return', quantity: 1, revision: 0, allowedStatuses: ['Approved', 'Rejected'] },
+    { _id: 'return-b', status: 'Requested', type: 'return', quantity: 1, revision: 0, allowedStatuses: ['Approved', 'Rejected'] },
+  ];
+  api.get.mockImplementation(path => Promise.resolve(path.includes('/returns/stats')
+    ? { total: cases.length, pending: cases.filter(item => item.status === 'Requested').length }
+    : { items: cases, total: cases.length, page: 1, totalPages: 1 }));
+  api.put.mockImplementation(path => {
+    if (path.includes('return-a')) return Promise.reject(new Error('First request failed'));
+    cases = cases.map(item => item._id === 'return-b' ? { ...item, status: 'Approved', revision: 1, allowedStatuses: ['Pickup Scheduled'] } : item);
+    return Promise.resolve(cases[1]);
+  });
   render(<Returns />);
-  fireEvent.change(await screen.findByRole('combobox', { name: 'Status for return-a' }), { target: { value: 'Approved' } });
-  fireEvent.change(screen.getByRole('combobox', { name: 'Status for return-b' }), { target: { value: 'Approved' } });
-  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Status for return-b' })).toHaveValue('Approved'));
-  await act(async () => { failFirst(new Error('First request failed')); });
-  expect(screen.getByRole('combobox', { name: 'Status for return-a' })).toHaveValue('Requested');
-  expect(screen.getByRole('combobox', { name: 'Status for return-b' })).toHaveValue('Approved');
+  await screen.findByRole('button', { name: '#RETURN-A' });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select page' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve eligible' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('1 request(s) approved; 1 need individual review');
+  expect(api.put).toHaveBeenCalledWith('/admin/returns/return-a/status', expect.objectContaining({ status: 'Approved', revision: 0 }));
+  expect(api.put).toHaveBeenCalledWith('/admin/returns/return-b/status', expect.objectContaining({ status: 'Approved', revision: 0 }));
+  expect(await screen.findByRole('button', { name: 'Mark pickup scheduled' })).toBeInTheDocument();
 });
 
 test('report range changes ignore late results and show the selected range', async () => {
   const late = [];
-  api.get.mockImplementation(path => path.includes('range=30d') ? new Promise(resolve => late.push(resolve)) : Promise.resolve(path.includes('/sales') ? { totals: { revenue: 700 } } : {}));
+  const summary = value => ({ currency: 'INR', timezone: 'Asia/Kolkata', generatedAt: new Date().toISOString(), range: { fromDate: '2026-09-04', toDate: '2026-09-10' }, capabilities: { sections: { summary: true, products: true, customers: true, marketing: true, fulfillment: true } }, data: { metrics: { bookedValue: { value }, recognizedRevenue: { value }, orders: { value: 1 }, averageOrderValue: { value }, customers: { value: 1 }, units: { value: 1 } }, current: { allOrders: 1, orders: 1 }, series: [], statusBreakdown: [], paymentBreakdown: [] } });
+  api.get.mockImplementation(path => {
+    if (path.includes('/reports/options')) return Promise.resolve({ capabilities: { canExport: true, canManage: true, sections: { summary: true, products: true, customers: true, marketing: true, fulfillment: true } } });
+    if (path.includes('/reports/views')) return Promise.resolve({ items: [] });
+    if (path.includes('/center/summary') && path.includes('range=30d')) return new Promise(resolve => late.push(resolve));
+    if (path.includes('/center/summary')) return Promise.resolve(summary(700));
+    return Promise.resolve({ data: {} });
+  });
   render(<Reports />);
   fireEvent.click(screen.getByRole('button', { name: '7 days' }));
-  await screen.findByText('Rs. 700');
-  await act(async () => { late.forEach(resolve => resolve({ totals: { revenue: 3000 } })); });
-  expect(screen.getByText('Rs. 700')).toBeInTheDocument();
-  expect(screen.queryByText('Rs. 3000')).not.toBeInTheDocument();
+  expect((await screen.findAllByText('₹700.00')).length).toBeGreaterThan(0);
+  await act(async () => { late.forEach(resolve => resolve(summary(3000))); });
+  expect(screen.getAllByText('₹700.00').length).toBeGreaterThan(0);
+  expect(screen.queryByText('₹3,000.00')).not.toBeInTheDocument();
 });
 
 test('optional payment readiness failure leaves settings editable and reports successful saves accurately', async () => {

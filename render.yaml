@@ -64,6 +64,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: STRICT_PRODUCTION_CONFIG
+        value: "true"
       - key: ENABLE_REEL_PRODUCT_IMPORT
         value: "true"
       - key: REDIS_URL
@@ -72,6 +74,10 @@ services:
           name: samira-reel-queue
           property: connectionString
       - key: REQUIRE_DATABASE
+        value: "true"
+      - key: REQUIRE_MEDIA_STORAGE
+        value: "true"
+      - key: REQUIRE_REDIS
         value: "false"
       - key: MONGO_URI
         sync: false
@@ -95,9 +101,19 @@ services:
       # mode the fixed DEMO_OTP is accepted and returned to the client.
       - key: OTP_MODE
         value: demo
-      # The owner always uses real SMS; customer accounts use the demo OTP.
       - key: DEMO_OTP
         value: "123456"
+      - key: ALLOW_REFRESH_TOKEN_BODY
+        value: "false"
+      - key: RETURN_REFRESH_TOKEN_IN_BODY
+        value: "false"
+      - key: AUTH_COOKIE_SAME_SITE
+        value: none
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      # Temporary team-demo access for the platform owner. Set false before live use.
+      - key: ALLOW_HOSTED_OWNER_DEMO
+        value: "true"
       - key: OTP_EXPIRY_MINUTES
         value: "5"
       - key: OTP_MAX_ATTEMPTS
@@ -165,11 +181,11 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
-        value: samira-products
+        sync: false
       - key: R2_PUBLIC_URL
         sync: false
       - key: R2_FOLDER
-        value: products
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

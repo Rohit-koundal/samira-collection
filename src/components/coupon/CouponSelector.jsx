@@ -17,7 +17,7 @@ export default function CouponSelector({
   const closeRef = useRef(() => setOpen(false));
   const bestCoupon = useMemo(
     () => coupons.find((coupon) => coupon.code === bestCouponCode)
-      || coupons.find((coupon) => coupon.eligible !== false && Number(coupon.estimatedDiscount || 0) > 0),
+      || coupons.find((coupon) => coupon.eligible !== false && couponSaving(coupon) > 0),
     [bestCouponCode, coupons],
   );
   const eligibleCount = coupons.filter((coupon) => coupon.eligible !== false).length;
@@ -55,9 +55,9 @@ export default function CouponSelector({
             <span className="block text-[13px] font-black text-charcoal">Apply Coupons</span>
             <span className="mt-1 block truncate text-[11px] text-slate-500">
               {appliedCoupon
-                ? `${appliedCoupon.code} applied · You save Rs. ${Number(appliedCoupon.discount || 0).toLocaleString('en-IN')}`
+                ? `${appliedCoupon.code} applied · You save Rs. ${Number(appliedCoupon.savingAmount ?? appliedCoupon.discount ?? 0).toLocaleString('en-IN')}`
                 : bestCoupon
-                  ? `Save up to Rs. ${Number(bestCoupon.estimatedDiscount || 0).toLocaleString('en-IN')} with ${bestCoupon.code}`
+                  ? `Save up to Rs. ${couponSaving(bestCoupon).toLocaleString('en-IN')} with ${bestCoupon.code}`
                   : eligibleCount
                     ? `${eligibleCount} coupon${eligibleCount === 1 ? '' : 's'} available`
                     : 'Enter a coupon code to check your offer'}
@@ -111,7 +111,7 @@ export default function CouponSelector({
                               </div>
                               <h4 className="mt-3 text-[13px] font-black leading-5 text-charcoal">{coupon.title || formatCouponOffer(coupon)}</h4>
                               {coupon.description ? <p className="mt-1 text-[10px] leading-4 text-slate-500">{coupon.description}</p> : null}
-                              {eligible && Number(coupon.estimatedDiscount || 0) > 0 ? <p className="mt-2 text-[11px] font-bold text-emerald-700">You save Rs. {Number(coupon.estimatedDiscount).toLocaleString('en-IN')}</p> : null}
+                              {eligible && couponSaving(coupon) > 0 ? <p className="mt-2 text-[11px] font-bold text-emerald-700">You save Rs. {couponSaving(coupon).toLocaleString('en-IN')}</p> : null}
                               {!eligible ? <p className="mt-2 text-[10px] font-semibold leading-4 text-rose">{coupon.reason}</p> : null}
                               {coupon.expiryDate ? <p className="mt-2 text-[9px] text-slate-400">Expires {formatCouponExpiry(coupon.expiryDate)}</p> : null}
                             </div>
@@ -136,4 +136,8 @@ export default function CouponSelector({
       ) : null}
     </>
   );
+}
+
+function couponSaving(coupon) {
+  return Number(coupon?.effectiveSaving ?? (Number(coupon?.estimatedDiscount || 0) + Number(coupon?.estimatedDeliverySaving || 0)));
 }

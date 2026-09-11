@@ -13,15 +13,16 @@ function readUser() {
 const initialState = {
   user: readUser(),
   token: localStorage.getItem('samira_token') || null,
-  refreshToken: localStorage.getItem('samira_refresh_token') || null,
+  refreshToken: null,
 };
+localStorage.removeItem('samira_refresh_token');
 
 const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
     setCredentials(state, action) {
-      const { user, token, refreshToken } = action.payload || {};
+      const { user, token } = action.payload || {};
       if (user) {
         state.user = user;
         localStorage.setItem('samira_user', JSON.stringify(user));
@@ -30,10 +31,8 @@ const authSlice = createSlice({
         state.token = token;
         localStorage.setItem('samira_token', token);
       }
-      if (refreshToken) {
-        state.refreshToken = refreshToken;
-        localStorage.setItem('samira_refresh_token', refreshToken);
-      }
+      state.refreshToken = null;
+      localStorage.removeItem('samira_refresh_token');
     },
     setUser(state, action) {
       state.user = action.payload;

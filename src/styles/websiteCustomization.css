@@ -108,7 +108,15 @@
 }
 
 @media (max-width: 767px) {
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-title="false"] [data-card-field="title"],
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-price="false"] [data-card-field="price"],
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-discount="false"] [data-card-field="discount"],
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-rating="false"] [data-card-field="rating"],
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-wishlist="false"] [data-card-field="wishlist"],
+  .site-storefront[data-mobile-custom="true"][data-mobile-card-cart="false"] [data-card-field="cart"] { display: none !important; }
   .site-storefront[data-mobile-custom="true"] .mobile-home { background: var(--site-mobile-bg); }
+  .site-storefront[data-mobile-custom="true"],
+  .site-storefront[data-mobile-custom="true"] > main { background: var(--site-mobile-bg); }
   .site-storefront[data-mobile-custom="true"] .mobile-home--custom { display: flex; flex-direction: column; }
   .site-storefront[data-mobile-custom="true"] [data-mobile-header] { background: var(--site-mobile-header-bg); color: var(--site-mobile-header-text); }
   .site-storefront[data-mobile-custom="true"] [data-mobile-header] button { color: inherit; }

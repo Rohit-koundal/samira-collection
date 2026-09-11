@@ -15,6 +15,7 @@ let theme;
 const configInPreview = () => JSON.parse(screen.getByTestId('draft-preview').textContent);
 beforeEach(() => {
   jest.clearAllMocks();
+  window.localStorage.clear();
   window.matchMedia = jest.fn(() => ({ matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn() }));
   jest.spyOn(window, 'confirm').mockReturnValue(true);
   theme = { _id: 'theme-1', name: 'Current theme', updatedAt: '2026-09-01T00:00:00.000Z', isActive: true,
@@ -81,10 +82,13 @@ test('mobile overrides do not change desktop configuration', async () => {
 
 test('publishing requires review and a second explicit confirmation', async () => {
   await openDesigner();
-  api.post.mockImplementation(async () => ({ theme, version: { version: 2 } }));
+  api.post.mockImplementation(async (path) => path.endsWith('/preflight')
+    ? { ready: true, blocking: [], warnings: [], summary: { productsChecked: 0, categoriesChecked: 0, blocksChecked: 0 } }
+    : { theme, version: { version: 2 } });
   fireEvent.click(screen.getByRole('button', { name: 'Review & publish' }));
-  expect(api.post).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm publish' }));
+  await screen.findByText('Storefront preflight passed');
+  expect(api.post).toHaveBeenCalledWith('/admin/customization/themes/theme-1/preflight', expect.objectContaining({ expectedUpdatedAt: '2026-09-01T00:00:00.000Z' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Publish now' }));
   await screen.findByText('Published successfully as version 2.');
   expect(api.post).toHaveBeenCalledWith('/admin/customization/themes/theme-1/publish', expect.objectContaining({ expectedUpdatedAt: '2026-09-02T00:00:00.000Z' }));
 });
@@ -119,7 +123,7 @@ test('editor opens without waiting for catalog or history, and avoids fetching t
   expect(api.get.mock.calls.some(([path]) => path.startsWith('/admin/products'))).toBe(false);
   fireEvent.click(screen.getByRole('tab', { name: 'Desktop home' }));
   await screen.findByText(/Loading catalog choices/);
-  expect(api.get).toHaveBeenCalledWith('/admin/products?customizationOptions=true');
+  expect(api.get).toHaveBeenCalledWith('/admin/products?customizationOptions=true&optionLimit=250');
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
 });
 
@@ -220,4 +224,33 @@ test('selected product ordering and footer link ordering are controllable withou
   expect(configInPreview().footer.menus.shopping.slice(0, 2)).toEqual([menus[1], menus[0]]);
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
   expect(configInPreview().footer.menus.shopping).toEqual(menus);
+});
+
+test('seller studio saves through tenant routes and keeps master theme controls hidden', async () => {
+  const sellerConfig = mergeWebsiteConfig({ branding: { websiteName: 'Client store' } });
+  api.get.mockImplementation(async (path) => {
+    if (path === '/seller/design') return {
+      store: { id: 'store-7', name: 'Client store', slug: 'client-store' },
+      platform: { name: 'Growth', status: 'ACTIVE' },
+      draftConfig: sellerConfig,
+      publishedConfig: sellerConfig,
+      preset: 'default',
+      revision: 4,
+      presets: [{ id: 'sage', name: 'Botanical Sage', swatches: { primary: '#31594c' }, config: mergeWebsiteConfig({ colors: { primary: '#31594c' }, theme: { preset: 'sage' } }) }],
+      managedFields: [],
+    };
+    if (path === '/seller/design/history') return [];
+    return [];
+  });
+  api.put.mockResolvedValue({ draftConfig: sellerConfig, revision: 5, updatedAt: '2026-09-10T00:00:00.000Z' });
+
+  render(<WebsiteCustomizer mode="seller" />);
+  await screen.findByRole('heading', { name: 'Storefront Studio' });
+  expect(screen.queryByRole('button', { name: 'Duplicate' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Delete theme' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await screen.findByText('Draft saved. Your live storefront has not changed.');
+  expect(api.put).toHaveBeenCalledWith('/seller/design', expect.objectContaining({ expectedRevision: 4 }));
+  expect(api.get).not.toHaveBeenCalledWith('/admin/customization');
 });

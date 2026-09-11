@@ -73,6 +73,9 @@ const emptyProduct = {
   highlights: [],
   careInstructions: '',
   returnPolicy: '',
+  returnable: true,
+  exchangeable: true,
+  returnWindowDays: '',
   metaTitle: '',
   metaDescription: '',
   metaKeywords: '',
@@ -531,10 +534,12 @@ export default function ProductForm({
         stock: tracksVariants
           ? form.variants.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0)
           : Number(form.stock),
+        ...(productId ? { inventoryRevision: Number(form.inventoryRevision || 0) } : {}),
         discountPercentage: originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0,
         industry: structure.industry,
         industryRevision: structure.revision,
         categoryDefinitionKey: activeCategoryDefinition?.key || form.categoryDefinitionKey || selectedCategory?.definitionKey || definitionKey(form.subCategory || selectedCategory?.name),
+        returnWindowDays: form.returnWindowDays === '' ? null : Number(form.returnWindowDays),
         isActive: intent === 'publish' || intent === 'schedule' ? true : form.isActive,
       };
       if (productId && !tracksVariants && sizingMode !== 'sized' && !getEffectiveVariantConfig(structure, categories, form).enabled) delete payload.variants;
@@ -1091,6 +1096,14 @@ export default function ProductForm({
       {viewMode === 'advanced' && <Section step="06" title="Highlights, Policy and SEO" note="Storefront extras and catalog flags.">
         <Input label="Highlights" value={form.highlights.join(', ')} onChange={(value) => update('highlights', splitList(value))} placeholder="Premium fabric, Easy wash care" />
         <Input label="Return Policy" value={form.returnPolicy} onChange={(value) => update('returnPolicy', value)} placeholder="7 days return/exchange" />
+        <div className="admin-form-hint lg:col-span-2">
+          <div><h3>Returns and exchanges</h3><p>These rules are copied into each order when it is placed, so later policy edits do not change an existing customer purchase.</p></div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className={`admin-flag${form.returnable ? ' is-on' : ''}`}><input type="checkbox" checked={form.returnable} onChange={(event) => update('returnable', event.target.checked)} className="accent-rose" /> Return allowed</label>
+            <label className={`admin-flag${form.exchangeable ? ' is-on' : ''}`}><input type="checkbox" checked={form.exchangeable} onChange={(event) => update('exchangeable', event.target.checked)} className="accent-rose" /> Exchange allowed</label>
+          </div>
+          <label className="admin-field mt-3 max-w-xs"><span>Product window (days)</span><input className="admin-field__control" type="number" min="0" max="365" step="1" value={form.returnWindowDays} onChange={(event) => update('returnWindowDays', event.target.value)} placeholder="Use store default" /><small>Leave blank to use the store setting. Set 0 to close the window for this product.</small></label>
+        </div>
         <Input label="Meta Title" value={form.metaTitle} onChange={(value) => update('metaTitle', value)} />
         <Input label="Meta Keywords" value={form.metaKeywords} onChange={(value) => update('metaKeywords', value)} />
         <label className="admin-field lg:col-span-2">
@@ -1734,6 +1747,7 @@ function buildDraftPayload(form, overrides = {}) {
     publishAt: nullableDate(form.publishAt),
     saleStartAt: nullableDate(form.saleStartAt),
     saleEndAt: nullableDate(form.saleEndAt),
+    returnWindowDays: form.returnWindowDays === '' ? undefined : Number(form.returnWindowDays),
   };
   if (!payload.category) delete payload.category;
   return payload;

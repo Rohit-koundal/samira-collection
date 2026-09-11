@@ -24,7 +24,9 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
   const prefix = apiPrefix || (route.startsWith('/seller') ? '/seller' : '/admin');
   const productsPath = `${prefix}/products`;
   const isAdmin = prefix === '/admin';
-  const routeSearch = new URLSearchParams(route.split('?')[1] || '').get('search') || '';
+  const routeParams = new URLSearchParams(route.split('?')[1] || '');
+  const routeSearch = routeParams.get('search') || '';
+  const routeStoreId = isAdmin ? (routeParams.get('storeId') || '') : '';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [query, setQuery] = useState(routeSearch);
@@ -63,6 +65,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
     setLoading(true);
     setLoadError('');
     const params = new URLSearchParams({ admin: 'true', page: String(page), limit: String(pageSize), includeSummary: 'true', sort });
+    if (routeStoreId) params.set('storeId', routeStoreId);
     Object.entries(activeFilters).forEach(([key, value]) => { if (value && key !== 'sort') params.set(key, value); });
     try {
       const response = await api.get(`${productsPath}?${params.toString()}`);
@@ -80,13 +83,13 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
     } finally {
       if (revision === requestRevision.current) setLoading(false);
     }
-  }, [activeFilters, page, pageSize, productsPath, sort]);
+  }, [activeFilters, page, pageSize, productsPath, routeStoreId, sort]);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
   useEffect(() => {
     let alive = true;
     Promise.allSettled([
-      fetchCategories(api, prefix),
+      fetchCategories(api, prefix, routeStoreId),
       api.get(isAdmin ? '/settings' : '/seller/settings'),
     ]).then(([categoryResult, settingsResult]) => {
       if (!alive) return;
@@ -94,7 +97,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
       if (settingsResult.status === 'fulfilled') setSettings(settingsResult.value);
     });
     return () => { alive = false; };
-  }, [isAdmin, prefix]);
+  }, [isAdmin, prefix, routeStoreId]);
   useEffect(() => { setQuery(routeSearch); setPage(1); }, [routeSearch]);
   useEffect(() => { setPage((current) => Math.min(current, pageCount)); }, [pageCount]);
 
@@ -140,7 +143,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
     title: 'Mark product out of stock?',
     message: `All available stock for ${product.name}${product.variants?.length ? ', including every variant,' : ''} will be set to zero.`,
     label: 'Set stock to zero',
-    run: () => runAction(`out:${product._id}`, () => api.patch(`${productsPath}/${product._id}/mark-out-of-stock`, {}), 'Product marked out of stock.'),
+    run: () => runAction(`out:${product._id}`, () => api.patch(`${productsPath}/${product._id}/mark-out-of-stock`, { confirm: true, expectedRevision: product.inventoryRevision ?? 0, reasonCode: 'CORRECTION' }), 'Product marked out of stock.'),
   });
 
   const executeBulk = () => {

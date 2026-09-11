@@ -23,10 +23,14 @@ export default function OrderDetail({ route = '' }) {
   const [shipmentForm, setShipmentForm] = useState({ courierName: '', trackingNumber: '', trackingUrl: '', awb: '' });
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelComment, setCancelComment] = useState('');
   const [codOpen, setCodOpen] = useState(false);
   const [codForm, setCodForm] = useState({ reference: '', note: 'COD payment collected from customer' });
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundForm, setRefundForm] = useState({ amount: '', reference: '', note: '' });
+  const [manualRefundTarget, setManualRefundTarget] = useState(null);
+  const [manualRefundForm, setManualRefundForm] = useState({ reference: '', note: '' });
+  const [rtoForm, setRtoForm] = useState({ disposition: 'RESTOCK', receivedQuantity: '', notes: '', waiveRefundDeduction: false });
   const [staffNote, setStaffNote] = useState('');
   const [addressForm, setAddressForm] = useState(blankAddress);
   const [addressReason, setAddressReason] = useState('');
@@ -52,10 +56,12 @@ export default function OrderDetail({ route = '' }) {
       setOrder(data); setMessage('');
       setShipmentForm({ courierName: data.shipment?.courierName || '', trackingNumber: data.shipment?.trackingNumber || '', trackingUrl: data.shipment?.trackingUrl || '', awb: data.shipment?.awb || '' });
       setAddressForm({ ...blankAddress, ...(data.shippingAddress || {}) });
+      const activeUnits = (data.orderItems || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantity || 0) - Number(item.cancelledQuantity || 0)), 0);
+      setRtoForm(current => ({ ...current, receivedQuantity: String(activeUnits) }));
     } catch (error) { if (version === loadVersion.current) setMessage(error.message); }
   }, [apiBase, orderId, loadReceipt]);
   useEffect(() => {
-    setOrder(null); setReceipt(null); setMessage(''); setReceiptError(''); setSaving(false); setCancelOpen(false); setCodOpen(false); setRefundOpen(false); setInvoiceOpen(false); mutationPending.current = false;
+    setOrder(null); setReceipt(null); setMessage(''); setReceiptError(''); setSaving(false); setCancelOpen(false); setCodOpen(false); setRefundOpen(false); setManualRefundTarget(null); setInvoiceOpen(false); mutationPending.current = false;
     load();
     return () => { loadVersion.current += 1; mutationVersion.current += 1; mutationPending.current = false; };
   }, [load]);
@@ -79,7 +85,8 @@ export default function OrderDetail({ route = '' }) {
   const saveShipment = event => { event.preventDefault(); mutate('shipment', { ...shipmentForm, note: 'Manual shipment updated by staff' }); };
   const cancelOrder = async () => {
     if (!cancelReason.trim()) { setMessage('Enter the cancellation reason.'); return; }
-    if (await mutate('status', { orderStatus: 'Cancelled', revision: Number(order.revision || 0), note: cancelReason.trim() })) { setCancelOpen(false); setCancelReason(''); }
+    const note = cancelComment.trim() || `Order cancelled: ${cancelReason.replaceAll('_', ' ').toLowerCase()}`;
+    if (await mutate('status', { orderStatus: 'Cancelled', revision: Number(order.revision || 0), reasonCode: cancelReason, note })) { setCancelOpen(false); setCancelReason(''); setCancelComment(''); }
   };
   const collectCod = async () => {
     if (!codForm.note.trim()) { setMessage('Enter a COD collection note.'); return; }
@@ -92,6 +99,22 @@ export default function OrderDetail({ route = '' }) {
     if (await mutate('payment-status', { paymentStatus: 'Refunded', amount, revision: Number(order.revision || 0), reference: refundForm.reference.trim(), note: refundForm.note.trim() })) {
       setRefundOpen(false); setRefundForm({ amount: '', reference: '', note: '' });
     }
+  };
+  const recordManualResolutionRefund = async () => {
+    if (!manualRefundTarget || !manualRefundForm.reference.trim() || !manualRefundForm.note.trim()) { setMessage('Enter the payment reference and refund note.'); return; }
+    const path = manualRefundTarget.type === 'cancellation' ? 'cancellation-refund' : manualRefundTarget.type === 'rto' ? 'rto/refund' : 'item-cancellation-refund';
+    const body = { manualReference: manualRefundForm.reference.trim(), manualNote: manualRefundForm.note.trim(), ...(manualRefundTarget.operationId ? { operationId: manualRefundTarget.operationId } : {}) };
+    if (await mutate(path, body, 'post')) { setManualRefundTarget(null); setManualRefundForm({ reference: '', note: '' }); }
+  };
+  const openManualRefund = (target, note) => {
+    setManualRefundTarget(target);
+    setManualRefundForm({ reference: '', note });
+  };
+  const inspectRto = async event => {
+    event.preventDefault();
+    if (!rtoForm.notes.trim()) { setMessage('Enter the RTO inspection notes.'); return; }
+    const payload = { ...rtoForm, receivedQuantity: Number(rtoForm.receivedQuantity), revision: Number(order.revision || 0), notes: rtoForm.notes.trim() };
+    if (await mutate('rto/inspect', payload, 'post')) setRtoForm(current => ({ ...current, notes: '' }));
   };
   const addNote = async event => {
     event.preventDefault();
@@ -121,6 +144,13 @@ export default function OrderDetail({ route = '' }) {
   const canEditAddress = ['Pending', 'Confirmed', 'Packed'].includes(order.orderStatus) && !order.shipment?.awb && !['BOOKING', 'BOOKED', 'UNKNOWN'].includes(order.shipment?.bookingState);
   const showManualShipment = (!order.shipment || order.shipment.provider === 'manual') && ['Confirmed', 'Packed', 'Shipped', 'Out for Delivery'].includes(order.orderStatus);
   const returnHref = seller ? `${apiBase}/orders` : `/admin/returns?orderId=${order._id}`;
+  const cancellationRefund = order.cancellationRefund;
+  const cancellationRefundNeedsAction = ['FAILED', 'MANUAL_REQUIRED'].includes(cancellationRefund?.status);
+  const rto = order.rto || {};
+  const rtoExpectedQuantity = (order.orderItems || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantity || 0) - Number(item.cancelledQuantity || 0)), 0);
+  const rtoNeedsInspection = ['RECEIVED', 'QC_PENDING'].includes(rto.status);
+  const rtoRefundNeedsAction = ['FAILED', 'MANUAL_REQUIRED'].includes(rto.refundStatus);
+  const failedItemRefunds = (order.itemCancellationRefunds || []).filter(entry => ['FAILED', 'MANUAL_REQUIRED'].includes(entry.status));
 
   return <section className="order-detail-workspace space-y-5">
     <PageHeader title={displayId} kicker={seller ? 'Seller / Order' : 'Admin / Order'} note={`Placed ${new Date(order.createdAt).toLocaleString('en-IN')} · Revision ${Number(order.revision || 0)}`}>
@@ -128,20 +158,24 @@ export default function OrderDetail({ route = '' }) {
       <a href={`${apiBase}/orders`} className="admin-btn-ghost">Back to orders</a>
     </PageHeader>
     {message && <p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{message}</p>}
+    {cancellationRefundNeedsAction && <section role="alert" className="admin-card flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>Cancellation refund needs attention</strong><p className="admin-note">{cancellationRefund.lastError || 'The automatic refund did not finish. Retry it without creating a second refund.'}</p></div><button type="button" className="admin-btn" disabled={saving} onClick={() => cancellationRefund.status === 'MANUAL_REQUIRED' ? openManualRefund({ type: 'cancellation', amount: cancellationRefund.amount }, 'Cancellation refund completed outside the connected gateway.') : mutate('cancellation-refund', {}, 'post')}>{cancellationRefund.status === 'MANUAL_REQUIRED' ? 'Record manual refund' : saving ? 'Retrying…' : 'Retry refund safely'}</button></section>}
+    {rtoRefundNeedsAction && <section role="alert" className="admin-card flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>RTO refund needs attention</strong><p className="admin-note">{rto.lastRefundError || 'The prepaid refund did not finish. Retry uses the same idempotent refund operation.'}</p></div><button type="button" className="admin-btn" disabled={saving} onClick={() => rto.refundStatus === 'MANUAL_REQUIRED' ? openManualRefund({ type: 'rto', amount: rto.refundAmount }, 'RTO refund completed outside the connected gateway.') : mutate('rto/refund', {}, 'post')}>{rto.refundStatus === 'MANUAL_REQUIRED' ? 'Record manual refund' : saving ? 'Retrying…' : 'Retry RTO refund'}</button></section>}
+    {failedItemRefunds.map(entry => <section role="alert" key={entry.operationId} className="admin-card flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>Cancelled item refund needs attention</strong><p className="admin-note">₹{Number(entry.amount || 0).toLocaleString('en-IN')} · {entry.lastError || 'The automatic refund did not finish.'}</p></div><button type="button" className="admin-btn" disabled={saving} onClick={() => entry.status === 'MANUAL_REQUIRED' ? openManualRefund({ type: 'item', operationId: entry.operationId, amount: entry.amount }, 'Cancelled item refund completed outside the connected gateway.') : mutate('item-cancellation-refund', { operationId: entry.operationId }, 'post')}>{entry.status === 'MANUAL_REQUIRED' ? 'Record manual refund' : 'Retry item refund'}</button></section>)}
     {receiptError && <p role="alert" className="rounded-xl bg-rose/10 p-3 text-sm font-bold text-rose">{receiptError} <button type="button" className="admin-btn-ghost" onClick={() => loadReceipt()}>Retry invoice</button></p>}
 
     <section className="admin-card order-detail-summary">
       <div><span>Order</span><strong><StatusBadge value={order.orderStatus} /></strong></div>
       <div><span>Payment</span><strong><StatusBadge value={order.paymentStatus} /></strong><small>{order.paymentMethod}</small></div>
       <div><span>Delivery</span><strong>{order.shipment?.status ? order.shipment.status.replaceAll('_', ' ') : 'Waiting for shipment'}</strong><small>{order.shipment?.awb ? `AWB ${order.shipment.awb}` : 'AWB not assigned'}</small></div>
-      <div><span>Order total</span><strong>₹{Number(order.finalAmount || 0).toLocaleString('en-IN')}</strong><small>{order.orderItems?.reduce((sum, item) => sum + Number(item.quantity || 0), 0)} units</small></div>
+      <div><span>Order total</span><strong>₹{Number(order.adjustedFinalAmount ?? order.finalAmount ?? 0).toLocaleString('en-IN')}</strong><small>{rtoExpectedQuantity} active units{Number(order.cancellationAdjustment || 0) > 0 ? ` · ₹${Number(order.cancellationAdjustment).toLocaleString('en-IN')} cancelled` : ''}</small></div>
     </section>
 
-    <div className="admin-card order-detail-next-action"><div><p className="admin-kicker">Next safe action</p><h2>Continue fulfilment</h2><p className="admin-note">Only actions allowed by the current payment, order and courier state are available.</p></div><OrderWorkflowActions order={order} busy={saving} onStatus={updateStatus} onCancel={() => { setCancelReason(''); setCancelOpen(true); }} onCollectCod={() => setCodOpen(true)} onRefund={() => { setRefundForm({ amount: Math.max(0, Number(order.finalAmount || 0) - Number(order.refundedAmount || 0)).toFixed(2), reference: '', note: '' }); setRefundOpen(true); }} onResolveException={() => document.querySelector('[aria-label="Courier delivery"]')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })} returnHref={returnHref} /></div>
+    <div className="admin-card order-detail-next-action"><div><p className="admin-kicker">Next safe action</p><h2>Continue fulfilment</h2><p className="admin-note">Only actions allowed by the current payment, order and courier state are available.</p></div><OrderWorkflowActions order={order} busy={saving} onStatus={updateStatus} onCancel={() => { setCancelReason(''); setCancelComment(''); setCancelOpen(true); }} onCollectCod={() => setCodOpen(true)} onRefund={() => { setRefundForm({ amount: Math.max(0, Number(order.adjustedFinalAmount ?? order.finalAmount ?? 0) - Number(order.refundedAmount || 0)).toFixed(2), reference: '', note: '' }); setRefundOpen(true); }} onResolveException={() => document.querySelector('[aria-label="Courier delivery"]')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })} returnHref={returnHref} /></div>
 
     <div className="order-detail-grid">
       <main className="space-y-5">
         <ShipmentPanel orderId={orderId} onChanged={load} apiBase={apiBase} />
+        {rto.status && rto.status !== 'NONE' && <section className="admin-card p-5"><header className="order-section-heading"><div><h2>Return to origin</h2><p>Courier return, warehouse inspection, inventory and refund stay separate.</p></div><PackageCheck size={20} /></header><div className="order-facts"><Row label="RTO state" value={String(rto.status).replaceAll('_', ' ')} /><Row label="Inventory" value={rto.disposition || 'Waiting for inspection'} /><Row label="Received" value={rto.receivedQuantity === undefined ? '-' : `${rto.receivedQuantity}/${rtoExpectedQuantity}`} /><Row label="Refund" value={String(rto.refundStatus || 'NOT REQUIRED').replaceAll('_', ' ')} />{rto.refundAmount !== undefined && <Row label="Refund amount" value={`₹${Number(rto.refundAmount || 0).toLocaleString('en-IN')}`} />}{Number(rto.refundDeduction || 0) > 0 && <Row label="Policy deduction" value={`₹${Number(rto.refundDeduction).toLocaleString('en-IN')}`} />}{rto.refundReference && <Row label="Refund reference" value={rto.refundReference} />}</div>{rto.notes && <p className="admin-note mt-3">{rto.notes}</p>}{rto.lastRefundError && <p role="alert" className="admin-note mt-3">Refund error: {rto.lastRefundError}</p>}{rtoNeedsInspection && <form onSubmit={inspectRto} className="mt-4 grid gap-3 sm:grid-cols-2"><label className="admin-field">Disposition<select className="admin-field__control" value={rtoForm.disposition} onChange={event => setRtoForm(value => ({ ...value, disposition: event.target.value, receivedQuantity: event.target.value === 'MISSING' ? '0' : String(rtoExpectedQuantity) }))}><option value="RESTOCK">Restock as sellable</option><option value="QUARANTINE">Quarantine</option><option value="DAMAGED">Damaged</option><option value="MISSING">Parcel missing</option></select></label><label className="admin-field">Units received<input className="admin-field__control" type="number" min="0" max={rtoExpectedQuantity} required value={rtoForm.receivedQuantity} onChange={event => setRtoForm(value => ({ ...value, receivedQuantity: event.target.value }))} placeholder={String(rtoExpectedQuantity)} /></label><label className="admin-field sm:col-span-2">Inspection notes<textarea className="admin-field__control min-h-24" maxLength={1000} required value={rtoForm.notes} onChange={event => setRtoForm(value => ({ ...value, notes: event.target.value }))} placeholder="Parcel condition, received units and QC decision" /></label><label className="admin-field sm:col-span-2"><span><input type="checkbox" checked={rtoForm.waiveRefundDeduction} onChange={event => setRtoForm(value => ({ ...value, waiveRefundDeduction: event.target.checked }))} /> Waive any configured RTO refund deduction</span><small>Use this for courier faults, store faults or any case where the customer should receive the full remaining amount.</small></label><button className="admin-btn sm:col-span-2" type="submit" disabled={saving || !rtoForm.notes.trim() || rtoForm.receivedQuantity === ''}>Complete RTO inspection</button></form>}</section>}
         <section className="admin-card p-5"><header className="order-section-heading"><div><h2>Ordered items</h2><p>{order.orderItems?.length || 0} catalogue line{order.orderItems?.length === 1 ? '' : 's'}</p></div><PackageCheck size={20} /></header><div className="order-item-list">{order.orderItems?.map(item => {
           const request = order.returnRequests?.find(entry => String(entry.orderItemId) === String(item._id));
           return <article key={`${item._id || item.product}-${item.size}-${item.color}`} className="order-item-row">{item.image ? <img src={item.image} alt="" /> : <span className="order-item-placeholder"><PackageCheck size={20} /></span>}<div><h3>{item.name || item.productName}</h3><p>{[item.sku && `SKU ${item.sku}`, item.size, item.color].filter(Boolean).join(' · ') || 'Standard item'}</p><p>{item.quantity} × ₹{Number(item.price || 0).toLocaleString('en-IN')}{item.originalPrice > item.price ? ` · MRP ₹${Number(item.originalPrice).toLocaleString('en-IN')}` : ''}</p>{request && <span className="order-return-chip">{request.type === 'exchange' ? 'Exchange' : 'Return'} · {request.status}</span>}</div><strong>₹{Number(item.price * item.quantity || 0).toLocaleString('en-IN')}</strong></article>;
@@ -158,9 +192,10 @@ export default function OrderDetail({ route = '' }) {
         {showManualShipment && <form onSubmit={saveShipment} className="admin-card p-5"><fieldset disabled={saving}><h2>Manual courier</h2><p className="admin-note">Save the real AWB before marking the order shipped.</p><input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="Courier name" value={shipmentForm.courierName} onChange={event => setShipmentForm(value => ({ ...value, courierName: event.target.value }))} /><input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="AWB / tracking number" value={shipmentForm.trackingNumber} onChange={event => setShipmentForm(value => ({ ...value, trackingNumber: event.target.value, awb: event.target.value }))} /><input className="mt-3 h-11 w-full rounded-xl border border-slate-200 px-3 font-semibold" placeholder="Secure tracking URL (optional)" value={shipmentForm.trackingUrl} onChange={event => setShipmentForm(value => ({ ...value, trackingUrl: event.target.value }))} /><button type="submit" className="admin-btn mt-3 w-full">{saving ? 'Saving…' : 'Save manual shipment'}</button></fieldset></form>}
       </aside>
     </div>
-    <ConfirmModal open={cancelOpen} title="Cancel this order?" message="The cancellation reason will be visible in the order history and inventory will be restored once." confirmLabel="Cancel order" onClose={() => setCancelOpen(false)} onConfirm={cancelOrder}><label className="admin-field">Cancellation reason<textarea className="admin-field__control min-h-24" maxLength={300} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label></ConfirmModal>
+    <ConfirmModal open={cancelOpen} title="Cancel this order?" message="The cancellation reason will be visible in the order history and inventory will be restored once." confirmLabel="Cancel order" onClose={() => setCancelOpen(false)} onConfirm={cancelOrder}><div className="grid gap-3"><label className="admin-field">Cancellation reason<select className="admin-field__control" required value={cancelReason} onChange={event => setCancelReason(event.target.value)}><option value="">Select a reason</option><option value="CUSTOMER_REQUEST">Customer requested cancellation</option><option value="OUT_OF_STOCK">Item unavailable</option><option value="ADDRESS_UNSERVICEABLE">Address not serviceable</option><option value="PAYMENT_PROBLEM">Payment problem</option><option value="DUPLICATE_ORDER">Duplicate order</option><option value="OTHER">Other</option></select></label><label className="admin-field">Staff note<textarea className="admin-field__control min-h-24" maxLength={300} value={cancelComment} onChange={event => setCancelComment(event.target.value)} placeholder="Optional context for the timeline and audit log" /></label></div></ConfirmModal>
     <ConfirmModal open={codOpen} title="Record COD collection" message="Confirm that cash was collected after delivery. This creates a permanent payment event." confirmLabel="Record payment" onClose={() => setCodOpen(false)} onConfirm={collectCod}><div className="grid gap-3"><label className="admin-field">Receipt/reference (optional)<input className="admin-field__control" value={codForm.reference} onChange={event => setCodForm(value => ({ ...value, reference: event.target.value }))} /></label><label className="admin-field">Collection note<textarea className="admin-field__control min-h-20" value={codForm.note} onChange={event => setCodForm(value => ({ ...value, note: event.target.value }))} /></label></div></ConfirmModal>
     <ConfirmModal open={refundOpen} title="Record COD refund" message="Use this after the return refund is completed. It records money already returned; it does not transfer funds." confirmLabel="Record refund" onClose={() => setRefundOpen(false)} onConfirm={recordRefund}><div className="grid gap-3"><label className="admin-field">Refund amount<input type="number" min="0.01" step="0.01" className="admin-field__control" value={refundForm.amount} onChange={event => setRefundForm(value => ({ ...value, amount: event.target.value }))} /></label><label className="admin-field">Receipt/reference (optional)<input className="admin-field__control" maxLength={120} value={refundForm.reference} onChange={event => setRefundForm(value => ({ ...value, reference: event.target.value }))} /></label><label className="admin-field">Refund note<textarea className="admin-field__control min-h-20" maxLength={500} value={refundForm.note} onChange={event => setRefundForm(value => ({ ...value, note: event.target.value }))} /></label></div></ConfirmModal>
+    <ConfirmModal open={Boolean(manualRefundTarget)} title="Record completed manual refund" message={`Confirm that ₹${Number(manualRefundTarget?.amount || 0).toLocaleString('en-IN')} was actually returned to the customer. This records financial history; it does not transfer money.`} confirmLabel="Record refund" onClose={() => setManualRefundTarget(null)} onConfirm={recordManualResolutionRefund}><div className="grid gap-3"><label className="admin-field">Bank / UPI / receipt reference<input required className="admin-field__control" maxLength={120} value={manualRefundForm.reference} onChange={event => setManualRefundForm(value => ({ ...value, reference: event.target.value }))} /></label><label className="admin-field">Refund note<textarea required className="admin-field__control min-h-20" maxLength={500} value={manualRefundForm.note} onChange={event => setManualRefundForm(value => ({ ...value, note: event.target.value }))} /></label></div></ConfirmModal>
   </section>;
 }
 

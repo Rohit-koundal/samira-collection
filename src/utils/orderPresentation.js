@@ -34,5 +34,6 @@ export function priceLines(order) {
   }
   rows.push(['Delivery charge', order.deliveryCharge ?? 0]);
   for (const [label, key] of [['COD charge', 'codCharge'], ['Platform fee', 'platformFee']]) if (Number(order[key]) > 0) rows.push([label, order[key]]);
+  if (Number(order.cancellationAdjustment) > 0) rows.push(['Cancelled items adjustment', -Number(order.cancellationAdjustment)]);
   return rows;
 }

@@ -56,7 +56,7 @@ mode. Without the local demo opt-in, owner
 login requires real SMS. This local setting means the API cannot be reached
 from another device over Wi-Fi; use real SMS for that setup.
 
-## Hosted hybrid OTP (Render or another server)
+## Hosted demo OTP (Render or another server)
 
 For team testing on the deployed website, configure the **backend service** and
 deploy the updated backend:
@@ -64,15 +64,17 @@ deploy the updated backend:
 ```dotenv
 OTP_MODE=demo
 DEMO_OTP=123456
+ALLOW_HOSTED_OWNER_DEMO=true
 SMS_PROVIDER=twilio
 ```
 
-With this hybrid configuration, the owner number receives a random OTP through
-the configured real SMS provider. Every non-owner number uses the displayed
-`123456` demo OTP without making an SMS provider request. Database access,
-session secrets and working SMS credentials remain required for owner login.
-There is no hosted owner-demo switch, so customer demo mode cannot accidentally
-downgrade owner authentication.
+With this temporary configuration, the owner and customer numbers use the
+displayed `123456` demo OTP without making an SMS-provider request. Owner login
+still requires database access and configured session secrets. OTP expiry,
+attempt limits, resend cooldown and single-use redemption remain active.
+
+Generated client packages keep `ALLOW_HOSTED_OWNER_DEMO=false`, so creating a
+new client ZIP does not copy this platform-owner shortcut.
 
 Both repository Render Blueprints include these demo settings. For a Render
 service managed directly in the dashboard, add them under **Environment** and
@@ -86,8 +88,9 @@ The API binds to `0.0.0.0` and uses the hosting platform's `PORT`. Local demo
 sessions cannot be reused remotely. Resend cooldown, expiry, attempt limits,
 single-use verification and saved admin sessions remain enforced.
 
-For real operation, set `OTP_MODE=production`, configure real SMS, and redeploy.
-The same provider then handles owner and customer OTP delivery.
+For real operation, set `OTP_MODE=production`, set
+`ALLOW_HOSTED_OWNER_DEMO=false`, configure real SMS, and redeploy. The same
+provider then handles owner and customer OTP delivery.
 
 ## Available controls
 

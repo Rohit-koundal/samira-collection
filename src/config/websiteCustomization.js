@@ -13,18 +13,30 @@ export const HOME_SECTION_DEFAULTS = [
   { id: 'reviews', label: 'Customer Reviews', visible: true, order: 90, heading: 'Loved by Our Customers', description: 'Real stories from the Samira community.', buttonText: '', buttonLink: '', image: '', backgroundImage: '' },
   { id: 'newsletter', label: 'Newsletter', visible: true, order: 100, heading: 'Join Samira Circle', description: 'Get early access to new drops, offers, and styling updates.', buttonText: 'Subscribe', buttonLink: '', image: '', backgroundImage: '' },
   { id: 'instagram', label: 'Instagram / Social', visible: true, order: 110, heading: 'Style Inspiration', description: 'Discover more from our latest collection.', buttonText: 'Explore', buttonLink: '/products', image: '', backgroundImage: '' },
-];
+].map((section) => ({ ...section, mobileImage: '', imageAlt: '', imagePosition: 'center' }));
 
 export const DEFAULT_WEBSITE_CONFIG = {
   schemaVersion: 2,
   branding: { websiteName: 'Samira Collection', tagline: 'Elegance for every celebration', logo: '', favicon: '' },
   colors: { primary: '#6d1f34', secondary: '#fff0f4', accent: '#b8914a', background: '#fffaf2', surface: '#ffffff', text: '#17161a', mutedText: '#6f6470' },
-  header: { background: '#fffaf2', textColor: '#17161a', logoSize: 72, menuAlignment: 'left', sticky: true, announcementEnabled: true, announcementText: 'Free Shipping Above ₹999', announcementBackground: '#830b31', announcementTextColor: '#ffffff' },
+  header: {
+    background: '#fffaf2', textColor: '#17161a', logoSize: 72, menuAlignment: 'left', sticky: true,
+    announcementEnabled: true, announcementText: 'Free Shipping Above ₹999', announcementBackground: '#830b31', announcementTextColor: '#ffffff',
+    announcementLink: '', announcementStartsAt: '', announcementEndsAt: '',
+    menuItems: [
+      { label: 'Home', path: '/' }, { label: 'Shop All', path: '/products' },
+      { label: 'New Arrivals', path: '/products?newArrival=true&collection=new-arrivals' },
+      { label: 'Best Sellers', path: '/products?bestSeller=true&collection=best-sellers' },
+      { label: 'Featured', path: '/products?featured=true&collection=featured' },
+      { label: 'Offers', path: '/products?discount=20' }, { label: 'Contact Us', path: '/contact' },
+    ],
+  },
   homepage: {
     sections: HOME_SECTION_DEFAULTS,
     featuredCategoryIds: [],
     categoryImages: [],
     sectionProductIds: { featured: [], newArrivals: [], bestSellers: [], trending: [], ethnicSets: [], accessories: [] },
+    blocks: [],
   },
   typography: { headingFont: 'Playfair Display', bodyFont: 'Inter', headingScale: 1, bodyScale: 1, headingWeight: 700, bodyWeight: 400, buttonFont: 'Inter', buttonWeight: 700 },
   buttons: { background: '#6d1f34', textColor: '#ffffff', borderRadius: 8, style: 'solid', size: 'medium', hoverEffect: 'lift' },
@@ -45,6 +57,7 @@ export const DEFAULT_WEBSITE_CONFIG = {
     headerBackground: '#ffffff', headerText: '#334155',
     pageBackground: '#fcfaf7', gridGap: 12, cardRadius: 14, imageRatio: 'original',
     columns: 2, useDesktopCatalog: false,
+    showTitle: true, showPrice: true, showDiscount: true, showRating: true, showWishlist: true, showAddToCart: true,
     sections: ['hero', 'services', 'categories', 'sale', 'promotional', 'trending', 'newArrivals', 'ethnicSets', 'accessories']
       .map((id, index) => ({ id, visible: true, order: index * 10, heading: '' })),
   },
@@ -67,6 +80,40 @@ function mergeKnown(base, incoming) {
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, mergeKnown(value, source[key])]));
 }
 
+export const WEBSITE_BLOCK_TYPES = ['hero', 'image-text', 'offer', 'trust', 'faq', 'video', 'product-grid', 'category-grid', 'category-carousel', 'reviews', 'newsletter', 'social', 'countdown', 'coupon'];
+const cleanText = (value, max = 500) => String(value || '').trim().slice(0, max);
+const safeInternalPath = (value) => { const path = cleanText(value, 500); return !path || (/^\/(?!\/)/.test(path) && !/[\\\s]/.test(path)) ? path : ''; };
+const safeImageUrl = (value) => { const url = cleanText(value, 2000); return /^(https?:\/\/|\/(?!\/))[^\\\s]*$/i.test(url) ? url : ''; };
+const safeMediaUrl = (value) => { const url = safeImageUrl(value); return /\.(mp4|webm)(?:[?#].*)?$/i.test(url) ? url : ''; };
+const validOptionalColor = (value) => { const color = cleanText(value, 20); return !color || /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : ''; };
+const bounded = (value, min, max, fallback) => { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback; };
+const uniqueIds = (value, max) => [...new Set((Array.isArray(value) ? value : []).map((item) => cleanText(item, 100)).filter(Boolean))].slice(0, max);
+
+export function normalizeWebsiteBlocks(blocks) {
+  const used = new Set();
+  return (Array.isArray(blocks) ? blocks : []).slice(0, 24).map((input, index) => {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    let id = cleanText(source.id, 80).replace(/[^a-zA-Z0-9_-]/g, '') || `block-${index + 1}`;
+    while (used.has(id)) id = `${id}-${index + 1}`;
+    used.add(id);
+    return {
+      id, type: WEBSITE_BLOCK_TYPES.includes(source.type) ? source.type : 'image-text', visible: source.visible !== false,
+      showOnDesktop: source.showOnDesktop !== false, showOnMobile: source.showOnMobile !== false,
+      order: bounded(source.order, 0, 2000, 120 + index * 10), eyebrow: cleanText(source.eyebrow, 80),
+      title: cleanText(source.title, 140), body: cleanText(source.body, 1200), buttonText: cleanText(source.buttonText, 80),
+      buttonLink: safeInternalPath(source.buttonLink), image: safeImageUrl(source.image), mobileImage: safeImageUrl(source.mobileImage),
+      altText: cleanText(source.altText, 180), videoUrl: safeMediaUrl(source.videoUrl),
+      couponCode: cleanText(source.couponCode, 40).toUpperCase().replace(/[^A-Z0-9_-]/g, ''),
+      endsAt: (() => { const value = cleanText(source.endsAt, 40); return value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : ''; })(),
+      alignment: ['left', 'center', 'right'].includes(source.alignment) ? source.alignment : 'left',
+      imagePosition: ['top', 'center', 'bottom'].includes(source.imagePosition) ? source.imagePosition : 'center',
+      backgroundColor: validOptionalColor(source.backgroundColor), textColor: validOptionalColor(source.textColor),
+      productIds: uniqueIds(source.productIds, 12), categoryIds: uniqueIds(source.categoryIds, 8),
+      items: (Array.isArray(source.items) ? source.items : []).slice(0, 8).map((item) => cleanText(item, 160)).filter(Boolean),
+    };
+  }).sort((left, right) => left.order - right.order);
+}
+
 export function mergeWebsiteConfig(config = {}) {
   const sourceVersion = Number(config?.schemaVersion || 0);
   const merged = mergeKnown(DEFAULT_WEBSITE_CONFIG, config);
@@ -76,8 +123,24 @@ export function mergeWebsiteConfig(config = {}) {
   if (sourceVersion < 2) merged.header.sticky = true;
   merged.schemaVersion = 2;
   const incoming = new Map((Array.isArray(config?.homepage?.sections) ? config.homepage.sections : []).filter(Boolean).map((section) => [section.id, section]));
-  merged.homepage.sections = HOME_SECTION_DEFAULTS.map((section) => mergeKnown(section, incoming.get(section.id)))
-    .sort((a, b) => Number(a.order) - Number(b.order));
+  merged.homepage.sections = HOME_SECTION_DEFAULTS.map((section) => {
+    const next = mergeKnown(section, incoming.get(section.id));
+    next.buttonLink = safeInternalPath(next.buttonLink);
+    next.image = safeImageUrl(next.image);
+    next.mobileImage = safeImageUrl(next.mobileImage);
+    next.backgroundImage = safeImageUrl(next.backgroundImage);
+    next.imageAlt = cleanText(next.imageAlt, 180);
+    next.imagePosition = ['top', 'center', 'bottom'].includes(next.imagePosition) ? next.imagePosition : 'center';
+    return next;
+  }).sort((a, b) => Number(a.order) - Number(b.order));
+  merged.homepage.blocks = normalizeWebsiteBlocks(config?.homepage?.blocks || merged.homepage.blocks);
+  merged.header.menuItems = (Array.isArray(config?.header?.menuItems) ? config.header.menuItems : merged.header.menuItems)
+    .slice(0, 8).map((item) => ({ label: cleanText(item?.label, 80), path: safeInternalPath(item?.path) })).filter((item) => item.label && item.path);
+  merged.header.announcementLink = safeInternalPath(merged.header.announcementLink);
+  for (const key of ['announcementStartsAt', 'announcementEndsAt']) {
+    const value = cleanText(merged.header[key], 40);
+    merged.header[key] = value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : '';
+  }
   const mobileSections = new Map((Array.isArray(config?.mobile?.sections) ? config.mobile.sections : []).filter(Boolean).map((section) => [section.id, section]));
   merged.mobile.sections = DEFAULT_WEBSITE_CONFIG.mobile.sections.map((section) => mergeKnown(section, mobileSections.get(section.id))).sort((a, b) => a.order - b.order);
   return merged;

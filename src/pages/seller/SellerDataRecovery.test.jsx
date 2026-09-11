@@ -59,7 +59,7 @@ test('analytics updates the chosen period and can retry that exact failed period
   expect(api.get).toHaveBeenLastCalledWith('/seller/analytics/funnel?range=7d');
 });
 
-test('business center changes live periods and keeps assistant and campaign actions connected', async () => {
+test('business center changes live periods and links to the unified campaign workspace', async () => {
   const overview = {
     store: { id: 'store-1', name: 'Silk boutique', slug: 'silk' },
     platform: { name: 'Premium', status: 'ACTIVE', features: ['businessAssistant', 'abandonedCart', 'festival'] },
@@ -75,7 +75,6 @@ test('business center changes live periods and keeps assistant and campaign acti
   };
   api.get.mockImplementation(async path => path.includes('/overview') ? { ...overview, health: { ...overview.health, period: { key: path.includes('7d') ? '7d' : '30d', label: path.includes('7d') ? 'Last 7 days' : 'Last 30 days' } } } : { items: [] });
   api.post.mockResolvedValue({ question: 'What should I restock?', answer: 'Two products need stock.', actions: ['Review inventory.'], generatedAt: '2026-09-09T10:01:00Z' });
-  api.put.mockResolvedValue({ ...overview.festivalCampaign, enabled: true });
   render(<BusinessCenter />);
   expect(await screen.findByRole('heading', { name: "Today's priorities" })).toBeInTheDocument();
   expect(screen.getByText('Rs. 2,400')).toBeInTheDocument();
@@ -84,6 +83,6 @@ test('business center changes live periods and keeps assistant and campaign acti
   fireEvent.change(screen.getByRole('textbox', { name: 'Business question' }), { target: { value: 'What should I restock?' } });
   fireEvent.click(screen.getByRole('button', { name: 'Analyse live data' }));
   expect(await screen.findByText('Two products need stock.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Schedule campaign' }));
-  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/seller/business/festival', expect.objectContaining({ enabled: true, preset: 'diwali' })));
+  expect(screen.getByRole('link', { name: /Open campaigns/ })).toHaveAttribute('href', '/seller/campaigns');
+  expect(screen.queryByRole('button', { name: 'Schedule campaign' })).not.toBeInTheDocument();
 });

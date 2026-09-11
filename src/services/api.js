@@ -105,6 +105,7 @@ async function download(path, body) {
     const token = store.getState().auth.token || localStorage.getItem('samira_token');
     const response = await fetch(`${getApiBaseUrl()}${path}`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(body),
     });
@@ -125,7 +126,7 @@ const api = {
   post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body: JSON.stringify(body) }),
   put: (path, body, options = {}) => request(path, { ...options, method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: (path) => request(path, { method: 'DELETE' }),
+  delete: (path, body) => request(path, { method: 'DELETE', ...(body ? { body: JSON.stringify(body) } : {}) }),
   download,
   upload: async (path, files, { fieldName = 'images', onRequest } = {}) => {
     startMobileLoader();

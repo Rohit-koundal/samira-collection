@@ -13,8 +13,8 @@ jest.mock('../../components/order/Receipt', () => () => <div>Printable invoice</
 jest.mock('../../utils/printReceipt', () => ({ downloadReceiptPdf: jest.fn(), printReceipt: jest.fn() }));
 const first = { _id: 'line1', product: 'product1', name: 'Silk Saree', size: 'Free size', color: 'Wine', quantity: 1, price: 1000 };
 const second = { ...first, _id: 'line2', product: 'product2', name: 'Cotton Kurti', size: 'M', quantity: 2, price: 500 };
-const base = { _id: '0123456789abcdef01234567', orderStatus: 'Delivered', createdAt: '2026-09-01T10:00:00Z', deliveredAt: '2026-09-04T10:00:00Z', orderItems: [first, second], totalMRP: 2500, productDiscount: 500, finalAmount: 2000, paymentMethod: 'COD', paymentStatus: 'Pending', shippingAddress: { fullName: 'Test Shopper', houseNo: '12A', area: 'Fort', city: 'Mumbai', pincode: '400001', mobile: '9876543210' }, statusTimeline: [{ status: 'Confirmed', date: '2026-09-01T10:00:00Z' }, { status: 'Delivered', date: '2026-09-04T10:00:00Z' }] };
-const eligibility = { requests: [], windowDays: 7, deadline: '2026-09-11T10:00:00Z', items: [{ orderItemId: 'line1', canRequest: true, remainingQuantity: 1 }, { orderItemId: 'line2', canRequest: true, remainingQuantity: 2 }] };
+const base = { _id: '0123456789abcdef01234567', orderStatus: 'Delivered', createdAt: '2026-09-01T10:00:00Z', deliveredAt: '2026-09-04T10:00:00Z', orderItems: [first, second], totalMRP: 2500, productDiscount: 500, finalAmount: 2000, paymentMethod: 'COD', paymentStatus: 'Pending', shippingAddress: { fullName: 'Test Shopper', houseNo: '12A', area: 'Fort', city: 'Mumbai', state: 'Maharashtra', pincode: '400001', mobile: '9876543210' }, statusTimeline: [{ status: 'Confirmed', date: '2026-09-01T10:00:00Z' }, { status: 'Delivered', date: '2026-09-04T10:00:00Z' }] };
+const eligibility = { requests: [], windowDays: 7, deadline: '2026-09-11T10:00:00Z', items: [{ orderItemId: 'line1', canRequest: true, canReturn: true, canExchange: true, remainingQuantity: 1 }, { orderItemId: 'line2', canRequest: true, canReturn: true, canExchange: true, remainingQuantity: 2 }] };
 const invoice = { orderId: base._id, items: base.orderItems };
 function mockDetail(order = base) {
   api.get.mockImplementation(async (path) => path.endsWith('/receipt') ? invoice : path.startsWith('/returns/order/') ? eligibility : path.includes('/eligibility') ? { canReview: true } : order);
@@ -73,7 +73,9 @@ test('sends selected item identity and quantity for returns, then refreshes stat
   const dialog = screen.getByRole('dialog', { name: 'Return or exchange' });
   fireEvent.change(within(dialog).getByLabelText('Quantity'), { target: { value: '2' } });
   fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Size or fit issue' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Submit request' }));
+  fireEvent.change(within(dialog).getByLabelText('Refund destination'), { target: { value: 'MANUAL' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Review request' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm request' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/returns', expect.objectContaining({ order: base._id, product: 'product2', orderItemId: 'line2', quantity: 2, type: 'return' })));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('status')).toHaveTextContent('Return request submitted');
@@ -84,12 +86,13 @@ test('shows actual exchange choices and submits the selected replacement variant
   api.post.mockResolvedValue({ status: 'Requested' });
   render(<OrderDetail route={`/order-detail?id=${base._id}`} navigate={jest.fn()} />);
   fireEvent.click((await screen.findAllByRole('button', { name: 'Return / exchange' }))[0]);
-  fireEvent.click(screen.getByRole('radio', { name: 'Exchange' }));
+  fireEvent.click(await screen.findByRole('radio', { name: 'Exchange item' }));
   const select = await screen.findByLabelText('Replacement size / colour');
   expect(screen.getByRole('option', { name: /S \/ Blue/ })).toBeDisabled();
   fireEvent.change(select, { target: { value: 'variant1' } });
   fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Size or fit issue' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Submit request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm request' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/returns', expect.objectContaining({ type: 'exchange', exchangeVariantId: 'variant1', exchangeSize: 'L', exchangeColor: 'Gold' })));
 });
 test('cancellation waits for confirmation, sends reason, and renders server result', async () => {
@@ -98,9 +101,9 @@ test('cancellation waits for confirmation, sends reason, and renders server resu
   render(<OrderDetail route={`/order-detail?id=${base._id}`} navigate={jest.fn()} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel order' }));
   expect(api.post).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText('Reason for cancellation'), { target: { value: 'Ordered by mistake' } });
+  fireEvent.change(screen.getByLabelText('Reason for cancellation'), { target: { value: 'ORDERED_BY_MISTAKE' } });
   fireEvent.click(screen.getByRole('button', { name: 'Confirm cancellation' }));
-  await waitFor(() => expect(api.post).toHaveBeenCalledWith(`/orders/${base._id}/cancel`, { reason: 'Ordered by mistake' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith(`/orders/${base._id}/cancel`, { reason: 'ORDERED_BY_MISTAKE', comment: '' }));
   expect(await screen.findByText('Cancelled')).toBeInTheDocument();
 });
 test('failed cancellation keeps the order and allows retry', async () => {

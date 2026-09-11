@@ -11,6 +11,8 @@ import { useWebsiteCustomization } from '../../context/WebsiteCustomizationConte
 import { getHomepageSection } from '../../config/websiteCustomization';
 import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
+import StorefrontBannerSlot, { bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
+import StorefrontCustomBlocks from '../../components/storefront/StorefrontCustomBlocks';
 
 const DesktopLuxuryHome = lazy(() => import('./DesktopLuxuryHome'));
 const emptyList = [];
@@ -73,8 +75,9 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
   const reviewsSection = getHomepageSection(websiteConfig, 'reviews');
   const { data: customerReviews = emptyList } = useGetFeaturedReviewsQuery({ store: storeSlug }, { skip: !isDesktop || !reviewsSection.visible });
   const catalog = useMemo(() => normalizeProducts(productData || emptyList), [productData]);
-  const heroBanners = banners.filter((banner) => banner.type === 'Hero');
+  const heroBanners = bannersForPosition(banners, 'Home - Top', ['Hero']);
   const promoBanner = banners.find((banner) => ['Offer', 'Category', 'Sale', 'Hero'].includes(banner.type));
+  const middleBanners = bannersForPosition(banners, 'Home - Middle', ['Offer', 'Category', 'Sale']);
 
   const collections = useMemo(() => ({
     featured: catalog.filter((product) => product.isFeatured || product.showOnHomepage).slice(0, 12),
@@ -119,11 +122,11 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
     <>
       {!isDesktop && <div className={`mobile-home bg-[#fcfaf7] ${mobileCustom ? 'mobile-home--custom' : ''}`}>
         {[
-          ['hero', <MobileHero banner={heroBanners[0] || promoBanner} heading={mobileSection('hero')?.heading} navigate={navigate} industry={industry} />],
+          ['hero', <MobileHero banner={heroBanners[0] || promoBanner} heading={mobileSection('hero')?.heading} section={mobileCustom ? getHomepageSection(websiteConfig, 'hero') : null} navigate={navigate} industry={industry} />],
           ['services', <MobileServices />],
           ['categories', <MobileCategoryScroller categories={mobileCustom && websiteConfig.mobile.useDesktopCatalog ? themedCategories : categories} navigate={navigate} />],
-          ['sale', <MobileOfferStrip navigate={navigate} />],
-          ['promotional', <MobileEditorialBanners banners={banners.filter((banner) => ['Offer', 'Category', 'Sale'].includes(banner.type))} navigate={navigate} />],
+          ['sale', bannersForPosition(banners, 'Offer Strip').length ? <StorefrontBannerSlot banners={banners} position="Offer Strip" navigate={navigate} compact /> : <MobileOfferStrip navigate={navigate} />],
+          ['promotional', <MobileEditorialBanners banners={middleBanners} navigate={navigate} />],
           ...[
             ['trending', 'Trending Now', 'Fast-moving styles', trendingProducts.length ? trendingProducts : featuredProducts, '/products?trending=true&collection=trending-now'],
             ['newArrivals', 'New Arrivals', 'Fresh drops this week', newArrivalProducts.length ? newArrivalProducts : featuredProducts, '/products?newArrival=true&collection=new-arrivals'],
@@ -141,10 +144,12 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
           />]),
         ].filter(([id]) => mobileSection(id)?.visible !== false && isIndustryHomepageSectionAllowed(industry, industrySections, id))
           .map(([id, content]) => <MobileSection key={id} section={mobileSection(id)}>{content}</MobileSection>)}
+        <StorefrontCustomBlocks blocks={websiteConfig.homepage.blocks} catalog={catalog} categories={themedCategories} navigate={navigate} mobile storeSlug={storeSlug} />
       </div>}
 
       {isDesktop && (
         <Suspense fallback={<section className="container-page min-h-[560px] py-10"><PageState loading loadingLabel="Loading the collection..." /></section>}>
+        <StorefrontBannerSlot banners={banners} position="Offer Strip" navigate={navigate} compact className="max-w-[1500px]" />
         <DesktopLuxuryHome
           navigate={navigate}
           categories={themedCategories}
@@ -160,9 +165,11 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
           websiteConfig={websiteConfig}
           industry={industry}
           customerReviews={customerReviews}
+          storeSlug={storeSlug}
         />
         </Suspense>
       )}
+      <StorefrontBannerSlot banners={banners} position="Home - Bottom" navigate={navigate} className="max-w-[1500px]" />
     </>
   );
 }
@@ -171,46 +178,44 @@ function MobileSection({ section, children }) {
   return section ? <div style={{ order: section.order }}>{children}</div> : children;
 }
 
-function MobileHero({ banner, heading, navigate, industry = 'fashion' }) {
+function MobileHero({ banner, heading, section, navigate, industry = 'fashion' }) {
   const brand = useBrandIdentity();
+  const engagementRef = useBannerEngagement(banner);
   const fashion = industry === 'fashion';
+  const configuredImage = section?.mobileImage || section?.image;
+  const heroImage = normalizeImageUrl(configuredImage || banner?.mobileImage || banner?.image);
+  const heroAlt = section?.imageAlt || banner?.altText || banner?.title || 'Featured collection';
   return (
-    <section className="px-3 pb-4 pt-3">
+    <section ref={engagementRef} className="px-3 pb-4 pt-3">
       <button
         type="button"
-        onClick={() => navigate(banner?.link || '/products')}
+        onClick={() => section?.buttonLink ? navigate(section.buttonLink) : banner ? openBanner(banner, navigate) : navigate('/products')}
         className="relative block w-full overflow-hidden rounded-[16px] bg-gradient-to-r from-[#fbf1ef] via-[#fff8f5] to-[#f6ddcf] text-left shadow-[0_8px_20px_rgba(122,31,54,0.08)]"
       >
-        {banner?.image && (
-          <img
-            src={normalizeImageUrl(banner.image)}
-            alt={banner.title || 'Hero banner'}
-            className="absolute inset-0 h-full w-full object-cover opacity-25"
-          />
-        )}
+        {heroImage && <img src={heroImage} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-25" style={{ objectPosition: section?.imagePosition || banner?.focalPoint || 'center' }} />}
         <div className="relative grid min-h-[178px] grid-cols-[1.2fr_124px] items-center gap-3 px-4 py-4">
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#9d3154]">{fashion ? 'New festive collection' : `New ${industryLabel(industry)} collection`}</p>
             <h1 className="mt-2 text-[20px] font-semibold leading-[1.12] text-[#6d1f34]">
-              {heading || banner?.title || 'Celebrate in Style'}
+              {heading || section?.heading || banner?.title || 'Celebrate in Style'}
             </h1>
             <p className="mt-1.5 max-w-[190px] text-[12px] leading-[1.35] text-[#6a5761]">
-              {banner?.subtitle || (fashion ? 'Elegant sarees, suits & kurtis for every occasion.' : `Discover quality ${industryLabel(industry).toLowerCase()} products selected for you.`)}
+              {section?.description || banner?.subtitle || (fashion ? 'Elegant sarees, suits & kurtis for every occasion.' : `Discover quality ${industryLabel(industry).toLowerCase()} products selected for you.`)}
             </p>
             <div className="mt-3 inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6d1f34]">
               Up to 50% off
             </div>
             <div className="mt-3">
               <span className="inline-flex h-9 items-center rounded-[8px] bg-[#7a1f36] px-4 text-[10px] font-bold uppercase tracking-[0.08em] text-white">
-                Shop Now
+                {section?.buttonText || 'Shop Now'}
               </span>
             </div>
           </div>
           <div className="relative flex h-[148px] items-end justify-center">
             <div className="absolute inset-0 rounded-[18px] bg-white/60 blur-[2px]" />
             <div className="relative h-full w-full overflow-hidden rounded-[24px] bg-white/80">
-              {banner?.image ? (
-                <img src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} loading="eager" fetchPriority="high" decoding="async" className="h-full w-full object-cover object-top" />
+              {heroImage ? (
+                <img src={heroImage} alt={heroAlt} loading="eager" fetchPriority="high" decoding="async" className="h-full w-full object-cover" style={{ objectPosition: section?.imagePosition || banner?.focalPoint || 'top' }} />
               ) : (
                 <div className="flex h-full items-center justify-center bg-gradient-to-b from-[#f8e2d7] to-[#f6cfd2] text-[11px] font-semibold text-[#7a1f36]">
                   {brand.websiteName}
@@ -322,30 +327,18 @@ function MobileEditorialBanners({ banners, navigate }) {
         </button>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {cards.map((banner, index) => (
-          <button
-            key={banner._id || banner.title || index}
-            type="button"
-            onClick={() => navigate(banner.link || '/products')}
-            className="relative overflow-hidden rounded-[12px] bg-[#f4e9e0] text-left shadow-[0_6px_16px_rgba(15,23,42,0.05)]"
-          >
-            <div className="aspect-[0.92]">
-              {banner.image ? (
-                <img loading="lazy" decoding="async" src={normalizeImageUrl(banner.image)} alt={banner.title || 'Collection'} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-end bg-gradient-to-br from-[#f7e8de] to-[#ecd2c4] p-3">
-                  <span className="text-[11px] font-semibold text-[#6d1f34]">{banner.title || 'Samira edit'}</span>
-                </div>
-              )}
-            </div>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#3f2731]/85 via-[#3f2731]/25 to-transparent px-2.5 py-2">
-              <p className="line-clamp-2 text-[10px] font-semibold leading-3 text-white">{banner.title || 'Featured collection'}</p>
-            </div>
-          </button>
-        ))}
+        {cards.map((banner, index) => <MobileBannerCard key={banner._id || banner.title || index} banner={banner} navigate={navigate} />)}
       </div>
     </section>
   );
+}
+
+function MobileBannerCard({ banner, navigate }) {
+  const ref = useBannerEngagement(banner);
+  return <button ref={ref} type="button" onClick={() => openBanner(banner, navigate)} className="relative overflow-hidden rounded-[12px] bg-[#f4e9e0] text-left shadow-[0_6px_16px_rgba(15,23,42,0.05)]">
+    <div className="aspect-[0.92]">{banner.image ? <picture><source media="(max-width: 639px)" srcSet={normalizeImageUrl(banner.mobileImage || banner.image)} /><img loading="lazy" decoding="async" src={normalizeImageUrl(banner.image)} alt={banner.altText || banner.title || 'Collection'} className="h-full w-full object-cover" style={{ objectPosition: banner.focalPoint || 'center' }} /></picture> : <div className="flex h-full items-end bg-gradient-to-br from-[#f7e8de] to-[#ecd2c4] p-3"><span className="text-[11px] font-semibold text-[#6d1f34]">{banner.title || 'Samira edit'}</span></div>}</div>
+    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#3f2731]/85 via-[#3f2731]/25 to-transparent px-2.5 py-2"><p className="line-clamp-2 text-[10px] font-semibold leading-3 text-white">{banner.title || 'Featured collection'}</p></div>
+  </button>;
 }
 
 function MobileProductSection({ eyebrow, title, products = [], navigate, viewAllPath, emptyMessage = '' }) {

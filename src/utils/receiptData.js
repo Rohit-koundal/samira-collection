@@ -51,6 +51,7 @@ export function receiptView(receipt = {}) {
   totals.push(['Delivery', amount(receipt.deliveryCharge)]);
   if (amount(receipt.codCharge) > 0) totals.push(['Cash on delivery fee', amount(receipt.codCharge)]);
   if (amount(receipt.platformFee) > 0) totals.push(['Platform fee', amount(receipt.platformFee)]);
+  if (amount(receipt.cancellationAdjustment) > 0) totals.push(['Cancelled items adjustment', -amount(receipt.cancellationAdjustment)]);
   const cod = receipt.paymentMethod === 'COD';
   const methods = { COD: 'Cash on delivery', UPI: 'UPI', CARD: 'Card', Card: 'Card', NETBANKING: 'Net banking', WALLET: 'Wallet', Razorpay: 'Online payment' };
   const paymentMethod = methods[receipt.paymentMethod] || clean(receipt.paymentMethod) || 'Not recorded';
@@ -73,8 +74,8 @@ export function receiptView(receipt = {}) {
     customerName: clean(receipt.billingAddress?.fullName || receipt.shippingAddress?.fullName || receipt.customer?.name) || 'Customer',
     customerEmail: clean(receipt.customer?.email),
     shipping: shipping.length ? shipping : ['Address not available'], billing: billing.length ? billing : shipping.length ? shipping : ['Address not available'],
-    items, quantity: items.reduce((sum, item) => sum + item.quantity, 0), totals, total: amount(receipt.finalAmount),
-    totalWords: amountInWords(receipt.finalAmount), paymentMethod, paymentProvider, paymentStatus, paymentNote,
+    items, quantity: items.reduce((sum, item) => sum + item.quantity, 0), totals, total: amount(receipt.adjustedFinalAmount ?? receipt.finalAmount),
+    totalWords: amountInWords(receipt.adjustedFinalAmount ?? receipt.finalAmount), paymentMethod, paymentProvider, paymentStatus, paymentNote,
     transactionId: clean(receipt.razorpayPaymentId), orderStatus: clean(receipt.orderStatus) || 'Not recorded',
     tracking: [receipt.shipment?.courierName, receipt.shipment?.trackingNumber || receipt.shipment?.awb].map(clean).filter(Boolean).join(' | '),
     taxNote: tax > 0 ? `Includes ${invoiceMoney(tax)} GST${Number(receipt.taxRate) > 0 ? ` (${amount(receipt.taxRate)}%)` : ''}. Tax is already included in the invoice total.` : '',

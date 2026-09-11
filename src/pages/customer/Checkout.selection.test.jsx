@@ -13,9 +13,9 @@ jest.mock('../../utils/razorpayCheckout', () => ({ openRazorpayCheckout: jest.fn
 const selected = { _id: 'line-a', product: { _id: 'a', name: 'Selected saree', price: 999, images: [] }, quantity: 1, size: 'Free Size', color: '', selected: true };
 const later = { ...selected, _id: 'line-b', product: { ...selected.product, _id: 'b', name: 'Saved for later saree' }, selected: false };
 beforeEach(() => {
-  jest.clearAllMocks(); sessionStorage.clear();
+  jest.clearAllMocks(); sessionStorage.clear(); localStorage.clear(); window.history.replaceState({}, '', '/checkout');
   window.matchMedia = jest.fn(() => ({ matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn() }));
-  Object.assign(mockCart, { items: [selected, later], hydrated: true, coupon: null, setCoupon: jest.fn(), completeCheckout: jest.fn(async () => ({ ok: true })), clearCart: jest.fn() });
+  Object.assign(mockCart, { items: [selected, later], hydrated: true, coupon: null, setCoupon: jest.fn(), completeCheckout: jest.fn(async () => ({ ok: true })), refresh: jest.fn(async () => ({ ok: true })), clearCart: jest.fn() });
   api.get.mockImplementation(async path => path === '/user/addresses' ? [{ _id: 'addr', fullName: 'Test Customer', mobile: '9000000081', houseNo: '1', area: 'Test Road', city: 'Delhi', state: 'Delhi', pincode: '110001', isDefault: true }] : { methods: [{ key: 'COD', label: 'Cash on Delivery', enabled: true }] });
   api.post.mockImplementation(async path => path === '/orders/quote' ? { totals: { totalMRP: 999, finalAmount: 1022, platformFee: 23 } } : path === '/orders/cod' ? { _id: 'order-1' } : { items: [] });
 });
@@ -85,6 +85,23 @@ test('order quotes, COD orders and completion use only checked bag items', async
   await waitFor(() => expect(navigate).toHaveBeenCalledWith('/order-success?id=order-1'));
   expect(api.post).toHaveBeenCalledWith('/orders/cod', expect.objectContaining({ orderItems: [expect.objectContaining({ product: 'a' })] }));
   expect(mockCart.completeCheckout).toHaveBeenCalledWith([selected]); expect(mockCart.clearCart).not.toHaveBeenCalled();
+});
+
+test('Buy Now checks out only its exact cart line and refreshes the remaining bag', async () => {
+  window.history.replaceState({}, '', '/checkout?buyNow=line-b&quantity=1');
+  const navigate = jest.fn(); render(<Checkout navigate={navigate} />);
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/orders/quote', expect.objectContaining({ orderItems: [expect.objectContaining({ product: 'b', quantity: 1 })] })));
+  expect(screen.getByText('Saved for later saree')).toBeInTheDocument();
+  expect(screen.queryByText('Selected saree')).not.toBeInTheDocument();
+  const button = await screen.findByRole('button', { name: /Place COD Order/i });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/order-success?id=order-1'));
+  expect(api.post).toHaveBeenCalledWith('/orders/cod', expect.objectContaining({ orderItems: [expect.objectContaining({ product: 'b', quantity: 1 })] }));
+  expect(mockCart.refresh).toHaveBeenCalledTimes(1);
+  expect(mockCart.completeCheckout).not.toHaveBeenCalled();
 });
 
 test('desktop review shows variant prices and itemizes the server prepaid discount', async () => {

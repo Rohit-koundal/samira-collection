@@ -9,6 +9,7 @@ export const DESIGNER_CONTROLS = [
   { id: 'colors', label: 'Colors', keywords: 'primary secondary accent background surface text palette' },
   { id: 'header', label: 'Desktop header', keywords: 'announcement banner sticky navigation logo size' },
   { id: 'homepage', label: 'Desktop home', keywords: 'hero image products categories collections section order hide show newsletter' },
+  { id: 'blocks', label: 'Content blocks', keywords: 'custom image text offer faq video products categories trust reviews newsletter social reusable section' },
   { id: 'typography', label: 'Typography', keywords: 'font heading body size weight text' },
   { id: 'buttons', label: 'Buttons', keywords: 'hover corners rounded radius style size' },
   { id: 'cards', label: 'Desktop cards', keywords: 'product image ratio title price rating discount wishlist cart shadow' },
@@ -120,6 +121,7 @@ export function applyLayoutStyle(config, id) {
 }
 
 export function restoreDesignerPanel(config, saved, tab) {
+  if (tab === 'blocks') return setDesignerValue(config, ['homepage', 'blocks'], saved.homepage?.blocks || []);
   const group = tab === 'cards' ? 'productCards' : tab;
   if (!['branding', 'colors', 'header', 'homepage', 'typography', 'buttons', 'productCards', 'footer', 'layout', 'mobile', 'tablet'].includes(group)) return config;
   return setDesignerValue(config, [group], saved[group]);

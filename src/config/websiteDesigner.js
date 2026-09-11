@@ -1,6 +1,16 @@
 import { mergeWebsiteConfig } from './websiteCustomization';
 
 export const PREVIEW_PATH = '/website-preview';
+export const PREVIEW_PAGES = [
+  { path: '/', label: 'Home' }, { path: '/products', label: 'Product listing' },
+  { path: '/product-preview', label: 'Product detail' }, { path: '/wishlist', label: 'Wishlist' },
+  { path: '/cart', label: 'Shopping bag' }, { path: '/checkout', label: 'Checkout' },
+  { path: '/payment-preview', label: 'Payment' },
+  { path: '/addresses', label: 'Addresses' }, { path: '/orders', label: 'Orders' },
+  { path: '/order-preview', label: 'Order detail' }, { path: '/returns', label: 'Returns' },
+  { path: '/notifications', label: 'Notifications' }, { path: '/contact', label: 'Contact' },
+  { path: '/empty-preview', label: 'Empty state' }, { path: '/error-preview', label: 'Error state' },
+];
 export const isWebsitePreview = () => typeof window !== 'undefined' && window.location.pathname === PREVIEW_PATH;
 
 // Presets only replace appearance. Store identity, content, selected products,
@@ -51,6 +61,25 @@ export function validateDesignerConfig(input) {
   const safePath = (path) => !path || (/^\/(?!\/)/.test(path) && !/[\\\s]/.test(path));
   config.homepage.sections.forEach((section) => {
     if (!safePath(section.buttonLink)) issues.push(`${section.label}: use an internal link such as /products.`);
+    if ((section.image || section.mobileImage) && !section.imageAlt.trim()) issues.push(`${section.label}: add image alt text.`);
+  });
+  if (config.header.menuItems.length > 8) issues.push('Header: use at most 8 navigation links.');
+  config.header.menuItems.forEach((item) => {
+    if (!item.label || !safePath(item.path)) issues.push('Header: each navigation item needs a label and valid internal path.');
+  });
+  if (!safePath(config.header.announcementLink)) issues.push('Header: announcement link must be an internal store path.');
+  if (config.header.announcementStartsAt && config.header.announcementEndsAt && new Date(config.header.announcementStartsAt) >= new Date(config.header.announcementEndsAt)) {
+    issues.push('Header: announcement end time must be after its start time.');
+  }
+  if (config.homepage.blocks.length > 24) issues.push('Custom blocks: use at most 24 blocks.');
+  config.homepage.blocks.forEach((block, index) => {
+    const name = block.title || `Block ${index + 1}`;
+    if (!safePath(block.buttonLink)) issues.push(`${name}: use a valid internal button link.`);
+    if (block.visible && (block.image || block.mobileImage) && !block.altText.trim()) issues.push(`${name}: add image alt text.`);
+    if (block.visible && block.type === 'video' && !block.videoUrl) issues.push(`${name}: add a hosted MP4 or WEBM video URL.`);
+    if (block.visible && block.type === 'countdown' && (!block.endsAt || new Date(block.endsAt).getTime() <= Date.now())) issues.push(`${name}: choose a future countdown end time.`);
+    if (block.visible && block.type === 'coupon' && !block.couponCode) issues.push(`${name}: add a coupon code.`);
+    if (block.visible && !block.title && !block.body && !block.image && !block.videoUrl && !block.productIds.length && !block.categoryIds.length && !block.items.length) issues.push(`${name}: add content or hide the empty block.`);
   });
   Object.entries(config.footer.menus).forEach(([group, items]) => {
     if (items.length > 20) issues.push(`${group}: use at most 20 menu links.`);
@@ -62,7 +91,7 @@ export function validateDesignerConfig(input) {
     if (url && !/^https:\/\/[^\s]+$/i.test(url)) issues.push('Social links must start with https://.');
   });
   const images = [config.branding.logo, config.branding.favicon, config.footer.logo,
-    ...config.homepage.sections.flatMap((section) => [section.image, section.backgroundImage]),
+    ...config.homepage.sections.flatMap((section) => [section.image, section.mobileImage, section.backgroundImage]),
     ...config.homepage.categoryImages.map((item) => item?.image)];
   images.forEach((url) => {
     if (url && !/^(https?:\/\/|\/(?!\/))[^\\\s]*$/i.test(url)) issues.push('Images must use an uploaded image path or an HTTP(S) URL.');
@@ -123,5 +152,8 @@ export function websiteDataAttributes(config) {
       ['rating', 'showRating'], ['wishlist', 'showWishlist'], ['cart', 'showAddToCart'], ['quick', 'quickView']]
       .map(([attribute, key]) => [`data-card-${attribute}`, config.productCards[key]])),
     'data-mobile-custom': config.mobile.enabled, 'data-tablet-custom': config.tablet.enabled,
+    ...Object.fromEntries([['title', 'showTitle'], ['price', 'showPrice'], ['discount', 'showDiscount'],
+      ['rating', 'showRating'], ['wishlist', 'showWishlist'], ['cart', 'showAddToCart']]
+      .map(([attribute, key]) => [`data-mobile-card-${attribute}`, config.mobile[key]])),
   };
 }

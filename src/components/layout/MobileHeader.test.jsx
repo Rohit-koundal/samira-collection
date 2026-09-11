@@ -14,6 +14,10 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: null, switchMode: jest.fn() }),
 }));
 
+jest.mock('../../context/WebsiteCustomizationContext', () => ({
+  useWebsiteCustomization: () => ({ config: { header: {} } }),
+}));
+
 jest.mock('../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn() },

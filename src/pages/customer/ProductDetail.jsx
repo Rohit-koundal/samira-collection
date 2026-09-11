@@ -1,9 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Share2, ShieldCheck, Star, ThumbsUp, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Share2, ShieldCheck, Star, Truck, X } from 'lucide-react';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import { ProductVisual } from '../../components/product/ProductCard';
 import ProductDetailPage from '../../components/product/ProductDetailPage';
+import PublicReviewCard from '../../components/product/PublicReviewCard';
 import Icon from '../../components/layout/Icon';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -57,6 +58,10 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const [reviewSummary, setReviewSummary] = useState(null);
   const [helpfulReviewIds, setHelpfulReviewIds] = useState([]);
   const [helpfulBusyId, setHelpfulBusyId] = useState('');
+  const [reviewItems, setReviewItems] = useState([]);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
   const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey ? { id: productKey, store: storeSlug } : skipToken);
   const { data: settingsData } = useGetSettingsQuery();
   const product = productData ? normalizeProduct(productData) : null;
@@ -64,7 +69,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const relatedQuery = product?.categoryId ? { category: product.categoryId, store: storeSlug } : { sort: 'rating', store: storeSlug };
   const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
   const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating', store: storeSlug } : skipToken);
-  const { data: reviewsData = [], refetch: refetchReviews } = useGetReviewsQuery(productId || skipToken);
+  const { data: reviewsData, refetch: refetchReviews } = useGetReviewsQuery(productId ? { productId, store: storeSlug, page: 1, limit: 20 } : skipToken);
   const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId ? { id: product.variantGroupId, store: storeSlug } : skipToken);
   const variantMembers = useMemo(() => {
     const group = variantGroupData?.data;
@@ -88,11 +93,18 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     [...normalizeProducts(relatedData), ...normalizeProducts(fallbackRelatedData), ...normalizeProducts(variantProducts)].forEach(pushProduct);
     return Array.from(byId.values()).slice(0, 12);
   }, [fallbackRelatedData, productId, relatedData, variantProducts]);
-  const reviews = useMemo(() => Array.isArray(reviewsData) ? reviewsData : [], [reviewsData]);
+  const firstReviewItems = useMemo(() => Array.isArray(reviewsData) ? reviewsData : Array.isArray(reviewsData?.items) ? reviewsData.items : [], [reviewsData]);
+  const reviewPagination = Array.isArray(reviewsData) ? null : reviewsData;
+  const reviews = reviewItems;
   const effectiveReviewSummary = useMemo(() => reviewSummary || buildReviewSummary(reviews), [reviewSummary, reviews]);
   const storeWhatsappNumber = formatWhatsappNumber(settingsData?.whatsappNumber || '');
   const selectableSizes = product ? getSelectableSizes(product) : [];
   const managedOptionVariants = product ? activeVariants(product).filter((variant) => Object.keys(variant.optionValues || {}).length) : [];
+
+  useEffect(() => {
+    setReviewItems((current) => JSON.stringify(current) === JSON.stringify(firstReviewItems) ? current : firstReviewItems);
+    setReviewPage((current) => current === 1 ? current : 1);
+  }, [firstReviewItems, productId]);
 
   useEffect(() => {
     if (!productData) return;
@@ -403,6 +415,9 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
       existingReview: saved,
     };
     setReviewEligibility(nextEligibility);
+    setReviewItems((current) => saved?.isVisible === false
+      ? current.filter((item) => String(item._id) !== String(saved._id))
+      : [saved, ...current.filter((item) => String(item._id) !== String(saved._id))]);
     const successMessage = existing ? 'Your review was updated successfully.' : 'Thank you. Your verified review was submitted successfully.';
     setReviewFeedback(successMessage);
     setActionMessage(successMessage);
@@ -424,6 +439,8 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     };
   };
 
+  const uploadReviewPhotos = async (files) => api.upload('/reviews/uploads', files);
+
   const toggleReviewHelpful = async (review) => {
     const reviewId = String(review?._id || '');
     if (!reviewId || helpfulBusyId) return;
@@ -434,11 +451,11 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     setHelpfulBusyId(reviewId);
     setReviewFeedback('');
     try {
-      const result = await api.post(`/reviews/${reviewId}/helpful`, {});
+      const result = await api.post(`/reviews/${reviewId}/helpful`, { helpful: !helpfulReviewIds.includes(reviewId) });
       setHelpfulReviewIds((current) => result.helpful
         ? Array.from(new Set([...current, reviewId]))
         : current.filter((id) => id !== reviewId));
-      await refetchReviews();
+      setReviewItems((current) => current.map((item) => String(item._id) === reviewId ? { ...item, helpfulCount: result.helpfulCount } : item));
     } catch (reviewError) {
       setReviewFeedback(reviewError?.message || 'Unable to update this review right now.');
     } finally {
@@ -446,9 +463,56 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     }
   };
 
+  const loadMoreReviews = async () => {
+    const totalPages = Number(reviewPagination?.totalPages || 1);
+    if (!productId || reviewsLoadingMore || reviewPage >= totalPages) return;
+    setReviewsLoadingMore(true);
+    try {
+      const nextPage = reviewPage + 1;
+      const params = new URLSearchParams({ page: String(nextPage), limit: '20' });
+      if (storeSlug) params.set('store', storeSlug);
+      const data = await api.get(`/reviews/${productId}?${params}`);
+      const incoming = Array.isArray(data?.items) ? data.items : [];
+      setReviewItems((current) => {
+        const map = new Map(current.map((item) => [String(item._id), item]));
+        incoming.forEach((item) => map.set(String(item._id), item));
+        return [...map.values()];
+      });
+      setReviewPage(nextPage);
+    } catch (reviewError) {
+      setReviewFeedback(reviewError.message || 'Unable to load more reviews.');
+    } finally { setReviewsLoadingMore(false); }
+  };
+
+  const withdrawReview = async (review) => {
+    if (!review?._id) return;
+    const result = await api.patch(`/reviews/${review._id}/withdraw`, {});
+    setReviewItems((current) => current.filter((item) => String(item._id) !== String(review._id)));
+    setReviewEligibility((current) => ({ ...(current || {}), existingReview: result.review, canEdit: true }));
+    await Promise.allSettled([refetchProduct(), api.get(`/reviews/${productId}/summary`).then(setReviewSummary)]);
+  };
+
+  const reportReview = async ({ reason, details }) => {
+    if (!reportTarget?._id) return;
+    const response = await api.post(`/reviews/${reportTarget._id}/report`, { reason, details });
+    setReportTarget(null);
+    setReviewFeedback(response.message || 'Thank you. The review was sent for moderation.');
+  };
+
+  const openReportReview = (review) => {
+    if (!user) { navigate(`/login?redirect=${encodeURIComponent(route)}`); return; }
+    setReportTarget(review);
+  };
+
   const buyNow = async () => {
     const result = await add();
-    if (result?.ok) navigate('/checkout');
+    if (result?.ok) {
+      const match = (result.items || []).find(item => String(item.productId || item.product?._id || item.product?.id) === String(product._id || product.id)
+        && String(item.size || '') === String(size || '') && String(item.color || '') === String(color || '')
+        && String(item.variantId || '') === String(selectedVariant?._id || product.variantId || product.selectedVariantId || ''));
+      const cartItemId = match?._id || match?.id || match?.cartItemId;
+      navigate(cartItemId ? `/checkout?buyNow=${encodeURIComponent(cartItemId)}&quantity=${encodeURIComponent(quantity)}` : '/checkout');
+    }
   };
 
   const orderOnWhatsApp = () => {
@@ -578,6 +642,10 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
           helpfulReviewIds={helpfulReviewIds}
           helpfulBusyId={helpfulBusyId}
           onHelpful={toggleReviewHelpful}
+          onReport={openReportReview}
+          reviewHasMore={reviewPage < Number(reviewPagination?.totalPages || 1)}
+          reviewsLoadingMore={reviewsLoadingMore}
+          onLoadMoreReviews={loadMoreReviews}
           variantProducts={variantProducts}
           managedVariants={managedOptionVariants}
           selectedVariant={selectedVariant}
@@ -880,6 +948,10 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         helpfulReviewIds={helpfulReviewIds}
         helpfulBusyId={helpfulBusyId}
         onHelpful={toggleReviewHelpful}
+        onReport={openReportReview}
+        reviewHasMore={reviewPage < Number(reviewPagination?.totalPages || 1)}
+        reviewsLoadingMore={reviewsLoadingMore}
+        onLoadMoreReviews={loadMoreReviews}
       />
 
       <div className="mx-auto mt-9 max-w-6xl px-4 md:px-6">
@@ -923,7 +995,10 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         initialRating={reviewInitialRating}
         onClose={() => setReviewModalOpen(false)}
         onSubmit={saveReview}
+        onUpload={uploadReviewPhotos}
+        onWithdraw={withdrawReview}
       /></Suspense></LazyBoundary>}
+      {reportTarget ? <ReviewReportModal review={reportTarget} onClose={() => setReportTarget(null)} onSubmit={reportReview} /> : null}
       {openSizeChart && <LazyBoundary><Suspense fallback={<p role="status" className="p-4 text-sm">Loading size guide…</p>}><SizeChartModal
         open={openSizeChart}
         onClose={() => setOpenSizeChart(false)}
@@ -1136,6 +1211,10 @@ function ReviewsSection({
   helpfulReviewIds = [],
   helpfulBusyId = '',
   onHelpful,
+  onReport,
+  reviewHasMore = false,
+  reviewsLoadingMore = false,
+  onLoadMoreReviews,
 }) {
   const [showAll, setShowAll] = useState(false);
   const [ratingFilter, setRatingFilter] = useState(0);
@@ -1196,33 +1275,33 @@ function ReviewsSection({
               const reviewId = String(review._id || '');
               const helpful = helpfulReviewIds.includes(reviewId);
               const isOwnReview = String(myReview?._id || '') === reviewId;
-              return (
-                <article key={reviewId} className="py-5 first:pt-3">
-                  <div className="flex items-start gap-2">
-                    <span className={`inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-[10px] font-black text-white ${Number(review.rating) >= 4 ? 'bg-emerald-600' : Number(review.rating) === 3 ? 'bg-amber-500' : 'bg-[#ff4d67]'}`}>{review.rating} <Star className="h-2.5 w-2.5 fill-white" /></span>
-                    <div className="min-w-0 flex-1">
-                      {review.title && <h4 className="text-[12px] font-bold leading-4 text-charcoal">{review.title}</h4>}
-                      {review.comment ? <p className={`${review.title ? 'mt-2' : ''} whitespace-pre-line text-[11px] leading-5 text-slate-600`}>{review.comment}</p> : <p className="text-[10px] italic text-slate-400">Star rating submitted without a written review.</p>}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-slate-400">
-                    <span className="font-semibold text-slate-500">{review.user?.name || 'Customer'}</span>
-                    {review.verifiedPurchase && <span className="inline-flex items-center gap-1 font-semibold text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Verified purchase</span>}
-                    {review.createdAt && <span>{formatReviewDate(review.createdAt)}</span>}
-                  </div>
-                  {!isOwnReview ? <button type="button" onClick={() => onHelpful?.(review)} disabled={helpfulBusyId === reviewId} className={`mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[9px] font-bold disabled:opacity-50 ${helpful ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 text-slate-500'}`} aria-pressed={helpful}><ThumbsUp className={`h-3.5 w-3.5 ${helpful ? 'fill-current' : ''}`} /> Helpful{Number(review.helpfulCount || 0) ? ` (${review.helpfulCount})` : ''}</button> : null}
-                </article>
-              );
+              return <PublicReviewCard key={reviewId} review={review} compact helpful={helpful} helpfulBusy={helpfulBusyId === reviewId} isOwnReview={isOwnReview} onHelpful={onHelpful} onReport={onReport} />;
             })}
           </div>
         ) : (
           <div className="py-10 text-center"><Star className="mx-auto h-8 w-8 text-slate-200" /><p className="mt-3 text-[12px] font-bold text-charcoal">{ratingFilter ? `No ${ratingFilter}-star reviews yet` : 'No customer reviews yet'}</p><p className="mt-1 text-[10px] text-slate-500">{ratingFilter ? 'Choose another rating to continue browsing.' : 'Delivered customers can be the first to review this product.'}</p></div>
         )}
 
-        {filteredReviews.length > 6 && <button type="button" onClick={() => setShowAll((current) => !current)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 text-[11px] font-bold text-charcoal">{showAll ? 'Show fewer reviews' : `View all ${filteredReviews.length} reviews`}</button>}
+        {filteredReviews.length > 6 && !showAll ? <button type="button" onClick={() => setShowAll(true)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 text-[11px] font-bold text-charcoal">View loaded reviews</button> : null}
+        {showAll && reviewHasMore ? <button type="button" disabled={reviewsLoadingMore} onClick={onLoadMoreReviews} className="mt-2 h-11 w-full rounded-xl border border-slate-200 text-[11px] font-bold text-charcoal disabled:opacity-50">{reviewsLoadingMore ? 'Loading reviews...' : 'Load more reviews'}</button> : null}
+        {showAll && filteredReviews.length > 6 ? <button type="button" onClick={() => setShowAll(false)} className="mt-2 h-10 w-full text-[10px] font-bold text-slate-500">Show fewer</button> : null}
       </div>
     </section>
   );
+}
+
+function ReviewReportModal({ review, onClose, onSubmit }) {
+  const [reason, setReason] = useState('SPAM');
+  const [details, setDetails] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try { await onSubmit({ reason, details: details.trim() }); }
+    catch (failure) { setError(failure.message || 'Unable to report this review.'); }
+    finally { setBusy(false); }
+  };
+  return <div className="fixed inset-0 z-[100] grid place-items-end bg-black/50 sm:place-items-center sm:p-4"><form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Report review" className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-black text-charcoal">Report this review</h2><p className="mt-1 text-xs text-slate-500">Our store team will check it. Reports do not remove reviews automatically.</p></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close report form" className="grid h-9 w-9 place-items-center rounded-full bg-slate-50"><X className="h-4 w-4" /></button></div><p className="mt-4 line-clamp-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">{review.comment || review.title || `${review.rating} star review`}</p><label className="mt-4 block text-xs font-bold">Reason<select value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3"><option value="SPAM">Spam or promotion</option><option value="ABUSE">Abusive content</option><option value="PRIVACY">Personal information</option><option value="IRRELEVANT">Not about this product</option><option value="OTHER">Something else</option></select></label><label className="mt-4 block text-xs font-bold">Additional details <span className="font-normal text-slate-400">(optional)</span><textarea value={details} maxLength={500} onChange={(event) => setDetails(event.target.value)} className="mt-2 min-h-24 w-full resize-none rounded-xl border border-slate-200 p-3 text-xs" /></label>{error ? <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600">{error}</p> : null}<button type="submit" disabled={busy} className="mt-4 h-12 w-full rounded-xl bg-wine text-sm font-black text-white disabled:opacity-50">{busy ? 'Sending report...' : 'Submit report'}</button></form></div>;
 }
 
 const colorSwatches = {
@@ -1265,12 +1344,6 @@ function buildReviewSummary(reviews = []) {
     distribution,
     recommendationPercentage: total ? Math.round(((distribution[4] + distribution[5]) / total) * 100) : 0,
   };
-}
-
-function formatReviewDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function formatWhatsappNumber(value = '') {

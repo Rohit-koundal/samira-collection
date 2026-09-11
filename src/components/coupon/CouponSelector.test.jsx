@@ -65,4 +65,10 @@ describe('CouponSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
+
+  test('shows delivery savings for a free-shipping offer', () => {
+    const freeDelivery = { code: 'SHIPFREE', title: 'Free delivery', benefitType: 'FREE_SHIPPING', effectiveSaving: 99, estimatedDiscount: 0, eligible: true };
+    render(<CouponSelector coupons={[freeDelivery]} bestCouponCode="SHIPFREE" onApply={jest.fn()} onRemove={jest.fn()} />);
+    expect(screen.getByText(/Save up to Rs. 99 with SHIPFREE/i)).toBeInTheDocument();
+  });
 });

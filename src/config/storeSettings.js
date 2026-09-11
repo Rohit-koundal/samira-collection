@@ -10,17 +10,21 @@ export const SETTINGS_SECTIONS = [
   { id: 'social', title: 'Social & app links', note: 'Connect the storefront to your public profiles and shopping apps.', icon: 'social', keywords: 'Instagram Facebook YouTube Pinterest Android Apple' },
   { id: 'website', title: 'Website & announcement', note: 'Announcement, browser title and store description.', icon: 'website', keywords: 'SEO metadata banner' },
 ];
-export const NUMBER_DEFAULTS = { freeShippingMinAmount: 999, deliveryCharge: 99, platformFee: 23, gstRate: 5, codCharge: 0, codMaxAmount: 0, codMinAmount: 0, prepaidDiscountValue: 0, rtoBlockMinOrders: 0, rtoBlockThreshold: 0, returnWindowDays: 7, minimumOrderAmount: 0 };
-export const BOOLEAN_DEFAULTS = { acceptingOrders: true, brandIdentityEnabled: false, contactDetailsEnabled: false, razorpayEnabled: false, upiEnabled: true, cardPaymentEnabled: true, netBankingEnabled: true, walletEnabled: true, codEnabled: true, codConfirmationRequired: false, rtoBlockEnabled: false, searchIndexingEnabled: true };
+export const NUMBER_DEFAULTS = { freeShippingMinAmount: 999, deliveryCharge: 99, platformFee: 23, gstRate: 5, codCharge: 0, codMaxAmount: 0, codMinAmount: 0, prepaidDiscountValue: 0, rtoBlockMinOrders: 0, rtoBlockThreshold: 0, rtoRefundDeduction: 0, returnWindowDays: 7, customerReturnShippingCharge: 0, customerRestockingFeePercent: 0, exchangeReservationHours: 168, returnSlaHours: 24, minimumOrderAmount: 0 };
+export const BOOLEAN_DEFAULTS = { acceptingOrders: true, brandIdentityEnabled: false, contactDetailsEnabled: false, razorpayEnabled: false, upiEnabled: true, cardPaymentEnabled: true, netBankingEnabled: true, walletEnabled: true, codEnabled: true, codConfirmationRequired: false, rtoBlockEnabled: false, returnsEnabled: true, refundDeliveryChargeOnFullReturn: false, refundPlatformFeeOnFullReturn: false, refundCodChargeOnFullReturn: false, searchIndexingEnabled: true };
 export function settingsForm(data = {}) {
-  return { ...NUMBER_DEFAULTS, ...BOOLEAN_DEFAULTS, invoicePrefix: 'SC', ...data, socialLinks: { ...data.socialLinks }, appLinks: { ...data.appLinks } };
+  return { ...NUMBER_DEFAULTS, ...BOOLEAN_DEFAULTS, invoicePrefix: 'SC', ...data, returnWindowUnlimited: data.returnWindowDays === null, returnWindowDays: data.returnWindowDays === null ? NUMBER_DEFAULTS.returnWindowDays : (data.returnWindowDays ?? NUMBER_DEFAULTS.returnWindowDays), socialLinks: { ...data.socialLinks }, appLinks: { ...data.appLinks } };
 }
 export function settingsPayload(form) {
   const { _id, __v, createdAt, updatedAt, storeId, ...body } = form;
+  const unlimitedReturnWindow = body.returnWindowUnlimited === true;
+  delete body.returnWindowUnlimited;
   for (const key of Object.keys(NUMBER_DEFAULTS)) {
+    if (key === 'returnWindowDays' && unlimitedReturnWindow) continue;
     if (String(body[key]).trim() === '' || !Number.isFinite(Number(body[key])) || Number(body[key]) < 0) throw new Error('Please enter a valid, non-negative value in every number field.');
     body[key] = Number(body[key]);
   }
+  if (unlimitedReturnWindow) body.returnWindowDays = null;
   body.storeName = String(body.storeName || '').trim();
   if (!body.storeName) throw new Error('Store name is required.');
   body.prepaidDiscountType = body.prepaidDiscountType || '';

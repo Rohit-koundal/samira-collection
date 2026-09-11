@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import Banners from './Banners';
 import Categories from './Categories';
 import Coupons from './Coupons';
 import Customers from './Customers';
 import Reviews from './Reviews';
+import Returns from './Returns';
 import Support from './Support';
 import Subscribers from './Subscribers';
 import Dashboard from './Dashboard';
@@ -183,43 +184,132 @@ test('category editor creates a normalized child category from the list-first dr
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/categories', expect.objectContaining({ name: 'Festive Sarees', slug: 'festive-sarees', parent: 'parent', definitionKey: 'sarees' })));
   expect(await screen.findByRole('status')).toHaveTextContent('Category added successfully');
 });
-test('coupon pause preserves redeemed history and delete archives a used coupon', async () => {
+test('coupon pause preserves redeemed history and archive keeps it restorable', async () => {
   const coupon = { _id: 'coupon', code: 'FESTIVE', discountType: 'percentage', discountValue: 10, isActive: true, usedCount: 2 };
   api.get.mockImplementation(async path => path.includes('/coupons') ? [coupon] : path.includes('/categories') ? [category] : []);
-  api.put.mockResolvedValue({ ...coupon, isActive: false });
-  api.delete.mockResolvedValue({ archived: true, coupon: { ...coupon, isActive: false, isArchived: true } });
+  api.patch.mockResolvedValueOnce({ ...coupon, isActive: false }).mockResolvedValueOnce({ archived: true, coupon: { ...coupon, isActive: false, isArchived: true } });
   render(<Coupons />);
   fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
   expect(await screen.findByRole('button', { name: 'Activate' })).toBeInTheDocument();
-  expect(api.put).toHaveBeenCalledWith('/admin/coupons/coupon', { isActive: false });
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  expect(api.patch).toHaveBeenCalledWith('/admin/coupons/coupon/status', { isActive: false });
   fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
-  await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/admin/coupons/coupon'));
-  expect(await screen.findByText('FESTIVE')).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Archive' }).at(-1));
+  await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/coupons/coupon/archive', {}));
+  await waitFor(() => expect(screen.queryByText('FESTIVE')).not.toBeInTheDocument());
 });
-test('review moderation keeps failed visibility changes and removes only after deletion is acknowledged', async () => {
-  const review = { _id: 'review', product: { name: 'Rose saree' }, user: { name: 'Asha' }, rating: 5, comment: 'Beautiful fabric', isVisible: true, createdAt: '2026-09-01' };
-  api.get.mockResolvedValue([review]);
-  api.patch.mockRejectedValueOnce(new Error('Moderation failed')).mockResolvedValueOnce({ ...review, isVisible: false }).mockResolvedValueOnce(review);
-  api.delete.mockResolvedValue({});
+test('campaign-managed coupons direct changes back to the campaign workspace', async () => {
+  const coupon = { _id: 'coupon-managed', campaignId: 'campaign-1', code: 'SYNC20', type: 'Percentage', discountValue: 20, isActive: true, usedCount: 0 };
+  api.get.mockImplementation(async path => path.includes('/coupons/stats') ? { total: 1, live: 1, scheduled: 0, redemptions: 0 } : path.includes('/coupons?') ? { items: [coupon], page: 1, totalPages: 1, total: 1 } : []);
+  render(<Coupons />);
+  const selectors = await screen.findAllByRole('checkbox', { name: 'Select SYNC20' });
+  selectors.forEach((control) => expect(control).toBeDisabled());
+  const links = screen.getAllByRole('link', { name: /Open campaign/i });
+  links.forEach((link) => expect(link).toHaveAttribute('href', '/admin/campaigns'));
+  expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+});
+test('campaign-managed banners cannot drift through direct edit or reorder controls', async () => {
+  const banner = { _id: 'banner-managed', campaignId: 'campaign-1', title: 'Festival edit', position: 'Home - Top', image: 'https://media.example/festival.jpg', status: 'Live', isActive: true };
+  api.get.mockImplementation(async path => path.includes('/banners?') ? { items: [banner] } : []);
+  render(<Banners />);
+  expect((await screen.findAllByText('Campaign managed')).length).toBeGreaterThan(0);
+  screen.getAllByTitle('Change placement order from Campaigns').forEach((control) => expect(control).toBeDisabled());
+  expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+  expect(screen.getAllByRole('link', { name: /Open campaign/i }).some((link) => link.getAttribute('href') === '/admin/campaigns')).toBe(true);
+});
+test('coupon performance drawer loads real metrics and runs the checkout simulator', async () => {
+  const coupon = { _id: 'coupon', code: 'SMART10', type: 'Percentage', discountValue: 10, isActive: true, usedCount: 3 };
+  api.get.mockImplementation(async path => {
+    if (path.includes('/insights')) return { coupon, days: 30, summary: { orders: 3, paidRevenue: 2700, uniqueCustomers: 2, averageOrderValue: 900, saving: 300, cancelled: 0, returned: 0, remainingBudget: null }, daily: [], recentOrders: [] };
+    if (path.endsWith('/coupons/stats')) return { total: 1, live: 1, scheduled: 0, redemptions: 3, timezone: 'Asia/Kolkata' };
+    if (path.includes('/coupons?')) return { items: [coupon], page: 1, totalPages: 1, total: 1 };
+    return [];
+  });
+  api.post.mockResolvedValue({ code: 'SMART10', eligible: true, effectiveSaving: 100 });
+  render(<Coupons />);
+  fireEvent.click(await screen.findByRole('button', { name: 'View' }));
+  expect(await screen.findByRole('dialog', { name: /SMART10 performance/i })).toBeInTheDocument();
+  expect(screen.getByText('Rs. 2,700')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Run eligibility test/i }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/coupons/coupon/simulate', expect.objectContaining({ cartTotal: 1000 })));
+  expect(await screen.findByRole('status')).toHaveTextContent('Estimated saving Rs. 100');
+});
+test('review moderation preserves failed changes and archives only after confirmation', async () => {
+  let review = { _id: 'review', product: { name: 'Rose saree' }, user: { name: 'Asha' }, rating: 5, comment: 'Beautiful fabric', isVisible: true, moderationStatus: 'PUBLISHED', createdAt: '2026-09-01' };
+  let deleted = false;
+  api.get.mockImplementation(async path => {
+    if (path.includes('/management/stats')) return { total: deleted ? 0 : 1, published: review.isVisible ? 1 : 0, hidden: review.moderationStatus === 'HIDDEN' ? 1 : 0, archived: review.moderationStatus === 'ARCHIVED' ? 1 : 0 };
+    if (path.includes('/management/review')) return review;
+    if (path.startsWith('/admin/reviews?')) return { items: deleted ? [] : [review], page: 1, totalPages: 1, total: deleted ? 0 : 1 };
+    return [];
+  });
+  api.patch.mockRejectedValueOnce(new Error('Moderation failed')).mockImplementation(async (path, body) => {
+    if (path.includes('/moderation')) review = { ...review, isVisible: body.status === 'PUBLISHED', moderationStatus: body.status };
+    if (path.includes('/archive')) review = { ...review, isVisible: false, moderationStatus: 'ARCHIVED' };
+    return review;
+  });
+  api.delete.mockImplementation(async () => { deleted = true; return {}; });
   render(<Reviews />);
   fireEvent.click(await screen.findByRole('button', { name: 'Hide' }));
   expect(await screen.findByRole('status')).toHaveTextContent('Moderation failed');
   fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Publish' }));
   await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(3));
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' }).at(-1));
+  fireEvent.click(screen.getByRole('button', { name: 'View' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Archive' }));
+  fireEvent.click(within(await screen.findByRole('dialog', { name: 'Archive review?' })).getByRole('button', { name: 'Archive' }));
+  await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/reviews/management/review/archive', { reason: 'Archived by store team' }));
+});
+test('an archived review exposes controlled permanent deletion and removes it only after acknowledgement', async () => {
+  const review = { _id: 'review', product: { name: 'Rose saree' }, user: { name: 'Asha' }, rating: 5, comment: 'Beautiful fabric', isVisible: false, moderationStatus: 'ARCHIVED', createdAt: '2026-09-01' };
+  let deleted = false;
+  api.get.mockImplementation(async path => path.includes('/management/stats') ? { total: deleted ? 0 : 1, archived: deleted ? 0 : 1 } : path.includes('/management/review') ? review : { items: deleted ? [] : [review], page: 1, totalPages: 1, total: deleted ? 0 : 1 });
+  api.delete.mockImplementation(async () => { deleted = true; return {}; });
+  render(<Reviews />);
+  fireEvent.click(await screen.findByRole('button', { name: 'View' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete permanently' }));
+  fireEvent.click(within(await screen.findByRole('dialog', { name: 'Permanently delete archived review?' })).getByRole('button', { name: 'Delete permanently' }));
+  await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/admin/reviews/management/review?confirm=PERMANENTLY_DELETE'));
   await waitFor(() => expect(screen.queryByText('Beautiful fabric')).not.toBeInTheDocument());
 });
 test('review read failures show a retry instead of an empty inbox and retry clears the error', async () => {
-  api.get.mockRejectedValueOnce(new Error('Reviews unavailable')).mockResolvedValueOnce([{ _id: 'review', product: { name: 'Silk saree' }, rating: 5, isVisible: true, createdAt: '2026-09-01' }]);
+  let attempts = 0;
+  api.get.mockImplementation(async path => {
+    if (path.includes('/management/stats')) return {};
+    if (path.includes('/management/options')) return [];
+    attempts += 1;
+    if (attempts === 1) throw new Error('Reviews unavailable');
+    return { items: [{ _id: 'review', product: { name: 'Silk saree' }, rating: 5, isVisible: true, createdAt: '2026-09-01' }], page: 1, totalPages: 1, total: 1 };
+  });
   render(<Reviews />);
   await screen.findByText('Reviews unavailable');
   expect(screen.queryByText('No reviews found')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(await screen.findByText('Silk saree')).toBeInTheDocument();
   expect(screen.queryByText('Reviews unavailable')).not.toBeInTheDocument();
+});
+test('master review view requests all stores only after the explicit scope control is enabled', async () => {
+  api.get.mockImplementation(async path => path.includes('/management/stats') ? {} : { items: [], page: 1, totalPages: 1, total: 0 });
+  render(<Reviews />);
+  const scope = await screen.findByRole('checkbox', { name: 'All stores' });
+  expect(api.get.mock.calls.some(([path]) => String(path).includes('scope=all'))).toBe(false);
+  fireEvent.click(scope);
+  await waitFor(() => expect(api.get.mock.calls.some(([path]) => String(path).includes('scope=all'))).toBe(true));
+});
+
+test('review trust filters reported, verified and exact product results through server queries', async () => {
+  api.get.mockImplementation(async path => {
+    if (path.includes('/management/stats')) return { total: 4, reported: 2 };
+    if (path.includes('/management/options')) return [{ id: 'product-1', name: 'Rose saree', sku: 'RS-1', reviewCount: 4 }];
+    return { items: [], page: 1, totalPages: 1, total: 0 };
+  });
+  render(<Reviews />);
+  fireEvent.click(await screen.findByRole('button', { name: /Reported 2/ }));
+  await waitFor(() => expect(api.get.mock.calls.some(([path]) => String(path).includes('reported=true') && !String(path).includes('status=REPORTED'))).toBe(true));
+  fireEvent.change(screen.getByLabelText('Verified purchase filter'), { target: { value: 'true' } });
+  fireEvent.change(await screen.findByLabelText('Product filter'), { target: { value: 'product-1' } });
+  await waitFor(() => expect(api.get.mock.calls.some(([path]) => String(path).includes('verified=true') && String(path).includes('productId=product-1'))).toBe(true));
 });
 test('support status is serialized and changes only after the API acknowledges it', async () => {
   api.get.mockResolvedValue([{ _id: 'message', name: 'Asha', email: 'asha@example.test', message: 'Where is my order?', status: 'NEW' }]);
@@ -327,4 +417,47 @@ test('required catalog failures show retry rather than an empty successful catal
   await screen.findByText('Catalog unavailable');
   expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   expect(screen.queryByText('No products found')).not.toBeInTheDocument();
+});
+
+test('return workspace exposes only valid next actions and sends revision-safe updates', async () => {
+  const item = {
+    _id: '64b000000000000000000001', type: 'return', quantity: 1, reason: 'Size issue', status: 'Requested', revision: 2,
+    createdAt: '2026-09-10T08:00:00.000Z', slaDueAt: '2026-09-11T08:00:00.000Z', allowedStatuses: ['Approved', 'Rejected', 'Cancelled'],
+    user: { name: 'Asha', phone: '******8086' }, order: { _id: '64b000000000000000000010', invoiceNumber: 'SC-TEST-1', paymentProvider: 'COD', orderItems: [] },
+    product: { name: 'Rose saree', images: [] }, productSnapshot: { name: 'Rose saree', unitPrice: 1000 }, financial: { estimatedRefundAmount: 1000, refundStatus: 'PENDING' }, statusTimeline: [{ status: 'Requested', date: '2026-09-10T08:00:00.000Z', source: 'CUSTOMER' }],
+  };
+  api.get.mockImplementation(async path => path.includes('/returns/stats') ? { awaitingReview: 1, pickupDue: 0, inTransit: 0, qcPending: 0, refundPending: 0, exceptions: 0, overdue: 0 }
+    : path === `/admin/returns/${item._id}` ? item
+      : path.startsWith('/admin/returns?') ? { items: [item], total: 1, page: 1, totalPages: 1 }
+        : []);
+  api.put.mockResolvedValue({ ...item, status: 'Approved', revision: 3, allowedStatuses: ['Pickup Scheduled', 'Received', 'Cancelled'] });
+  render(<Returns route="/admin/returns" />);
+  fireEvent.click(await screen.findByRole('button', { name: '#00000001' }));
+  expect(await screen.findByText('Choose the next action')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Record refund' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Approve request' }).at(-1));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Approve request' }).at(-1));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith(`/admin/returns/${item._id}/status`, expect.objectContaining({ status: 'Approved', revision: 2 })));
+});
+
+test('exchange allocation requires a recorded price-difference settlement', async () => {
+  const item = {
+    _id: '64b000000000000000000099', type: 'exchange', quantity: 1, reason: 'Size or fit issue', status: 'QC Passed', revision: 5,
+    createdAt: '2026-09-10T08:00:00.000Z', allowedStatuses: ['Exchange Allocated'], exchangeSize: 'L', exchangeColor: 'Red',
+    user: { name: 'Asha', phone: '******8086' }, order: { _id: '64b000000000000000000010', invoiceNumber: 'SC-TEST-2', orderItems: [] },
+    productSnapshot: { name: 'Rose saree', unitPrice: 1000 }, financial: { merchandiseAmount: 1000, exchangeUnitPrice: 1200, exchangePriceDifference: 200, exchangeAdjustmentStatus: 'AMOUNT_DUE', refundStatus: 'NOT_REQUIRED' }, statusTimeline: [],
+  };
+  api.get.mockImplementation(async path => path.includes('/returns/stats') ? {} : path === `/admin/returns/${item._id}` ? item : path.startsWith('/admin/returns?') ? { items: [item], total: 1, page: 1, totalPages: 1 } : []);
+  api.put.mockResolvedValue({ ...item, status: 'Exchange Allocated', revision: 6, allowedStatuses: ['Replacement Shipped'], financial: { ...item.financial, exchangeAdjustmentStatus: 'SETTLED', exchangeAdjustmentReference: 'exchange-payment-001' } });
+  render(<Returns route="/admin/returns" />);
+  fireEvent.click(await screen.findByRole('button', { name: '#00000099' }));
+  const drawer = await screen.findByRole('complementary', { name: 'Return case details' });
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Allocate replacement' }));
+  const submit = within(drawer).getAllByRole('button', { name: 'Allocate replacement' }).at(-1);
+  expect(submit).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Price difference is settled' }));
+  fireEvent.change(screen.getByLabelText('Payment / refund reference'), { target: { value: 'exchange-payment-001' } });
+  expect(submit).toBeEnabled();
+  fireEvent.click(submit);
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith(`/admin/returns/${item._id}/status`, expect.objectContaining({ status: 'Exchange Allocated', revision: 5, exchangeAdjustmentSettled: true, exchangeAdjustmentReference: 'exchange-payment-001' })));
 });

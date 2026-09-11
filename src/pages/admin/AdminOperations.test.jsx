@@ -12,59 +12,53 @@ const product = { _id: 'product-1', name: 'Rose kurta', stock: 8, variants: [], 
 const order = { _id: 'order12345678', orderStatus: 'Pending', paymentStatus: 'Pending', paymentMethod: 'COD', finalAmount: 1299, createdAt: '2026-09-06T00:00:00Z', orderItems: [{ product: 'p', name: 'Rose kurta', size: 'M', color: 'Pink', quantity: 1, price: 1299 }] };
 beforeEach(() => jest.clearAllMocks());
 
-test('inventory typing saves one completed quantity and rejects blank or fractional stock', async () => {
-  api.get.mockResolvedValue([product]);
-  api.patch.mockImplementation(async (_path, body) => ({ ...product, stock: body.stock }));
+const inventorySummary = { sellable: 8, capabilities: { canAdjust: true, canBulkAdjust: true, canApprove: true, canReceive: true, canExport: true, canViewCost: true } };
+const inventoryPage = (items = [product]) => ({ items, page: 1, limit: 25, total: items.length, totalPages: 1, capabilities: inventorySummary.capabilities });
+const mockInventory = (items = [product]) => api.get.mockImplementation(async (path) => path.includes('/inventory/summary') ? inventorySummary : inventoryPage(items));
+
+test('inventory adjustment saves one reviewed exact quantity with concurrency context', async () => {
+  mockInventory();
+  api.post.mockResolvedValue({ product: { ...product, stock: 120 }, movement: { stockBefore: 8, stockAfter: 120 } });
   render(<Inventory />);
-  const input = await screen.findByRole('spinbutton', { name: 'Rose kurta stock' });
-  fireEvent.change(input, { target: { value: '' } });
-  fireEvent.change(input, { target: { value: '1' } });
-  fireEvent.change(input, { target: { value: '120' } });
-  expect(api.patch).not.toHaveBeenCalled();
-  fireEvent.blur(input);
-  await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/products/product-1/stock', { stock: 120 }));
-  await waitFor(() => expect(input).toBeEnabled());
-  expect(api.get.mock.calls.filter(([path]) => path === '/admin/products?admin=true')).toHaveLength(1);
-  expect(api.get.mock.calls.filter(([path]) => path === '/admin/inventory/history?limit=30')).toHaveLength(2);
-  for (const invalid of ['', '1.5', '-2']) {
-    fireEvent.change(input, { target: { value: invalid } });
-    fireEvent.blur(input);
-    expect(screen.getByRole('alert')).toHaveTextContent('whole stock quantity');
-  }
-  expect(api.patch).toHaveBeenCalledTimes(1);
+  fireEvent.click(await screen.findByRole('button', { name: 'Adjust' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Action'), { target: { value: 'SET' } });
+  fireEvent.change(within(dialog).getByLabelText('Quantity'), { target: { value: '120' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save adjustment' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/inventory/adjustments', expect.objectContaining({ productId: 'product-1', mode: 'SET', quantity: 120, expectedStock: 8, expectedRevision: 0 })));
+  expect(await screen.findByRole('status')).toHaveTextContent('changed from 8 to 120');
 });
 
-test('failed stock saves leave actual inventory intact and allow a single retry', async () => {
-  api.get.mockResolvedValue([product]);
+test('failed stock adjustments preserve the reviewed values and allow retry', async () => {
+  mockInventory();
   let rejectSave;
-  api.patch.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
+  api.post.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
   render(<Inventory />);
-  const input = await screen.findByRole('spinbutton', { name: 'Rose kurta stock' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Adjust' }));
+  const dialog = screen.getByRole('dialog');
+  const input = within(dialog).getByLabelText('Quantity');
   fireEvent.change(input, { target: { value: '12' } });
-  fireEvent.keyDown(input, { key: 'Enter' });
-  fireEvent.blur(input);
-  expect(api.patch).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save adjustment' }));
+  expect(api.post).toHaveBeenCalledTimes(1);
   await act(async () => { rejectSave(new Error('Stock update failed')); });
-  expect(screen.getByRole('alert')).toHaveTextContent('Stock update failed');
-  expect(screen.getByText('8', { selector: 'td' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Stock update failed');
   expect(input).toHaveValue(12);
-  api.patch.mockResolvedValueOnce({ ...product, stock: 12 });
-  fireEvent.keyDown(input, { key: 'Enter' });
-  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-  expect(api.patch).toHaveBeenCalledTimes(2);
+  api.post.mockResolvedValueOnce({ product: { ...product, stock: 20 } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save adjustment' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(api.post).toHaveBeenCalledTimes(2);
 });
 
 test('variant stock writes target the chosen size and update the returned total', async () => {
   const variants = [{ _id: 'variant-1', size: 'M', color: 'Pink', stock: 3 }, { _id: 'variant-2', size: 'L', color: 'Pink', stock: 5 }];
-  api.get.mockResolvedValue([{ ...product, variants }]);
-  api.patch.mockResolvedValue({ ...product, stock: 15, variants: [{ ...variants[0], stock: 10 }, variants[1]] });
+  mockInventory([{ ...product, variants, available: 8, reserved: 0, incoming: 0, damaged: 0, quarantine: 0, inventoryStatus: 'HEALTHY' }]);
+  api.post.mockResolvedValue({ product: { ...product, stock: 15, variants: [{ ...variants[0], stock: 10 }, variants[1]] } });
   render(<Inventory />);
-  const input = await screen.findByRole('spinbutton', { name: 'Rose kurta M Pink stock' });
-  fireEvent.change(input, { target: { value: '10' } });
-  fireEvent.blur(input);
-  await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/admin/products/product-1/stock', { stock: 10, variantId: 'variant-1' }));
-  expect(await screen.findByText('15', { selector: 'td' })).toBeInTheDocument();
-  expect(screen.getByRole('spinbutton', { name: 'Rose kurta L Pink stock' })).toHaveValue(5);
+  fireEvent.click(await screen.findByRole('button', { name: /M \/ Pink/ }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Quantity'), { target: { value: '7' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save adjustment' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/inventory/adjustments', expect.objectContaining({ productId: 'product-1', variantId: 'variant-1', mode: 'ADD', quantity: 7, expectedStock: 3 })));
 });
 
 test('cancelling an order keeps the server-confirmed record in order history', async () => {
@@ -74,10 +68,10 @@ test('cancelling an order keeps the server-confirmed record in order history', a
   render(<Orders />);
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel order', exact: true }));
   const dialog = screen.getByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Cancellation reason'), { target: { value: 'Customer requested cancellation' } });
+  fireEvent.change(within(dialog).getByLabelText('Cancellation reason'), { target: { value: 'CUSTOMER_REQUEST' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel order', exact: true }));
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'Cancel this order?' })).not.toBeInTheDocument());
-  expect(api.put).toHaveBeenCalledWith('/admin/orders/order12345678/status', expect.objectContaining({ orderStatus: 'Cancelled', revision: 0, note: 'Customer requested cancellation' }));
+  expect(api.put).toHaveBeenCalledWith('/admin/orders/order12345678/status', expect.objectContaining({ orderStatus: 'Cancelled', revision: 0, reasonCode: 'CUSTOMER_REQUEST', note: 'Order cancelled: customer request' }));
   const row = screen.getByRole('row', { name: /12345678/ });
   expect(within(row).getByText('Cancelled', { selector: 'span' })).toBeInTheDocument();
   expect(within(row).queryByRole('button', { name: 'Cancel order', exact: true })).not.toBeInTheDocument();
@@ -169,6 +163,26 @@ test('a completed COD return records an audited refund amount from order detail'
     reference: 'cash-refund-final',
     note: 'Remaining cash refund paid to customer',
   }));
+});
+
+test('failed automatic cancellation refunds expose one safe retry action', async () => {
+  const failedRefund = {
+    ...order,
+    orderStatus: 'Cancelled',
+    paymentStatus: 'Paid',
+    paymentMethod: 'UPI',
+    cancellationRefund: { status: 'FAILED', lastError: 'Provider temporarily unavailable' },
+  };
+  api.get.mockImplementation(async path => path.endsWith('/receipt') ? null : failedRefund);
+  api.post.mockResolvedValue({ ...failedRefund, cancellationRefund: { status: 'PROCESSED' } });
+  render(<OrderDetail route={'/admin/orders/detail?id=' + order._id} />);
+
+  expect(await screen.findByText('Cancellation refund needs attention')).toBeInTheDocument();
+  expect(screen.getByText('Provider temporarily unavailable')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry refund safely' }));
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/orders/order12345678/cancellation-refund', {}));
+  expect(api.post).toHaveBeenCalledTimes(1);
 });
 
 test('delivery exceptions expose a focused staff follow-up without changing carrier status', async () => {

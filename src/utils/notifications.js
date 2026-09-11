@@ -1,13 +1,22 @@
 export function notificationDestination(item, user) {
   const metadata = item.metadata || {};
   const admin = item.audience === 'ADMIN';
+  const socialQuery = () => {
+    const query = new URLSearchParams();
+    const storeId = metadata.storeId || item.storeId;
+    if (storeId) query.set('storeId', storeId);
+    if (metadata.socialThreadId) query.set('thread', metadata.socialThreadId);
+    return query.toString() ? `?${query}` : '';
+  };
   if (admin && user?.activeMode === 'seller') {
+    if (metadata.socialThreadId || metadata.socialAccountId || metadata.socialPostId) return `/seller/social${socialQuery()}`;
     if (metadata.contactId) return '/seller/inbox';
     if (metadata.orderId || metadata.returnId) return '/seller/orders';
     return '/seller/notifications';
   }
   if (admin && user?.role !== 'admin') return '';
   if (admin) {
+    if (metadata.socialThreadId || metadata.socialAccountId || metadata.socialPostId) return `/admin/social${socialQuery()}`;
     if (metadata.returnId) return `/admin/returns?search=${encodeURIComponent(metadata.returnId)}`;
     if (metadata.contactId) return `/admin/support?search=${encodeURIComponent(metadata.contactId)}`;
     if (metadata.orderId) return `/admin/orders/detail?id=${encodeURIComponent(metadata.orderId)}`;
@@ -23,6 +32,7 @@ export function notificationCategory(item) {
   if (/^(PAYMENT_|REFUND_)/.test(event)) return 'payments';
   if (/^ORDER_/.test(event) || item.metadata?.orderId) return 'orders';
   if (/^CONTACT_/.test(event)) return 'support';
+  if (/^SOCIAL_/.test(event)) return 'social';
   return 'updates';
 }
 export function notificationDate(value) {
