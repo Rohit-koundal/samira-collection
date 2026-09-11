@@ -178,7 +178,7 @@
   .sc-bag__prices { border: 0; border-radius: 0; padding: 22px 20px; }
   .sc-bag__help { padding: 0 20px 20px; }
   .sc-bag__desktop-continue, .sc-bag__next { display: none; }
-  .sc-bag__mobile-continue { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: white; border-top: 1px solid var(--bag-border); box-shadow: 0 -4px 20px #44221908; padding: 12px 20px max(12px, env(safe-area-inset-bottom)); }
+  .sc-bag__mobile-continue { position: fixed; bottom: calc(4rem + env(safe-area-inset-bottom)); left: 0; right: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: white; border-top: 1px solid var(--bag-border); box-shadow: 0 -4px 20px #44221908; padding: 12px 20px; }
   .sc-bag__mobile-continue > div { display: flex; flex-direction: column; gap: 3px; }
   .sc-bag__mobile-continue strong { font-size: 16px; }
   .sc-bag__mobile-continue > div button { font-size: 10px; color: var(--bag-primary); text-align: left; min-height: 24px; }
@@ -226,6 +226,9 @@
   .sc-bag-dialog__body { padding: 20px; }
   .sc-bag-dialog > footer { padding: 16px 20px max(20px, env(safe-area-inset-bottom)); }
 }
+@media (max-width: 767px) {
+  .sc-bag__loading { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { .sc-bag *, .sc-bag-dialog * { animation: none !important; scroll-behavior: auto !important; } }
 
 
@@ -258,7 +261,7 @@
   .sc-bag__prices > h2 { font-size: 13px; letter-spacing: 0; margin-bottom: 16px; }
   .sc-bag__price-row { color: var(--bag-muted); }
   .sc-bag__help { padding: 4px 4px 16px; }
-  .sc-bag__mobile-continue { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); gap: 12px; }
+  .sc-bag__mobile-continue { padding: 12px 16px; gap: 12px; }
   .sc-bag__mobile-continue > button { min-height: 48px; font-size: 13px; }
   .sc-bag__recommendations { background: white; border-color: #f7f8fa; padding: 20px 12px; }
   .sc-bag__footer { margin-top: 0; background: white; border-color: var(--bag-border); }

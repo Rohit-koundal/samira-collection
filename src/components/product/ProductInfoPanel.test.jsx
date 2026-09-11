@@ -48,6 +48,30 @@ describe('desktop product purchase information', () => {
     expect(screen.getByText('Selling price')).toBeInTheDocument();
   });
 
+  test('keeps selectable sizes unselected and shows verified measurements after selection', () => {
+    const product = {
+      ...baseProps.product,
+      name: 'Rose fit and flare dress',
+      category: 'Dresses',
+      sizingMode: 'sized',
+      sizeChartProfile: 'dress',
+      sizes: ['S', 'M'],
+      sizeFitNotes: 'The model is wearing size M.',
+      sizeChart: { unit: 'in', rows: [{ size: 'S', acrossShoulder: 14, sleeveLength: 18, bust: 36, waist: 30, frontLength: 51, hips: 38 }] },
+    };
+    const { rerender } = render(<ProductInfoPanel {...baseProps} product={product} />);
+
+    expect(screen.getByRole('button', { name: 'Size S' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('Choose a size before adding this product to your bag.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Selected size S')).not.toBeInTheDocument();
+
+    rerender(<ProductInfoPanel {...baseProps} product={product} size="S" />);
+    expect(screen.getByRole('button', { name: 'Size S' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Selected size S')).toBeInTheDocument();
+    expect(screen.getByText(/Bust 36 in · Waist 30 in/)).toBeInTheDocument();
+    expect(screen.getByText('The model is wearing size M.')).toBeInTheDocument();
+  });
+
   test('shows delivery results returned by the delivery workflow', () => {
     render(
       <ProductInfoPanel

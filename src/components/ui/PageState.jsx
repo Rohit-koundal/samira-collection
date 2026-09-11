@@ -1,3 +1,5 @@
+import MobileOverlayLoader from './MobileOverlayLoader';
+
 export default function PageState({
   loading = false,
   error = '',
@@ -10,10 +12,13 @@ export default function PageState({
 }) {
   if (loading) {
     return (
-      <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" />
-        <p className="mt-3 text-sm font-semibold text-slate-500">{loadingLabel}</p>
-      </div>
+      <>
+        <MobileOverlayLoader label={loadingLabel} overlay={false} />
+        <div className="hidden rounded-2xl bg-white p-8 text-center shadow-sm md:block" role="status" aria-busy="true">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-[3px] border-wine border-t-transparent" aria-hidden="true" />
+          <p className="mt-3 text-sm font-semibold text-slate-500">{loadingLabel}</p>
+        </div>
+      </>
     );
   }
 

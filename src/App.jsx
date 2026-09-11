@@ -294,7 +294,7 @@ function AppShell({ route, navigate }) {
     '/notifications',
   ];
   const focusedMobileRoutes = ['/product', '/cart', '/checkout', '/wishlist', '/orders', '/order-detail', '/order-success', '/profile/addresses'];
-  const hideMobileBottomNavRoutes = ['/cart', '/checkout', '/profile/details'];
+  const hideMobileBottomNavRoutes = ['/checkout', '/profile/details'];
   const standaloneAuthRoutes = ['/login', '/register'];
   const immersiveRoutes = ['/profile/addresses/new', '/profile/addresses/edit'];
   const cartStoragePlan = useMemo(() => createStoragePlan('samira_cart', user), [user]);

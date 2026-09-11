@@ -6,6 +6,7 @@ import { createStoragePlan, readScopedJson } from '../utils/userStorage';
 import { findProductVariant, hasManagedVariants, variantStock } from '../utils/variants';
 import { trackEvent } from '../utils/analytics';
 import { bagTotals, selectedBagItems } from '../utils/bag';
+import { getSelectableSizes } from '../utils/productSizing';
 
 export const CartContext = createContext(null);
 const GUEST_STORAGE = createStoragePlan('samira_cart', null);
@@ -138,15 +139,21 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     });
   // Preserve the storefront's synchronous result contract; actual state comes
   // from the acknowledged server response for guests and accounts alike.
-  const addToCart = (product, size = product.sizes?.[0] || 'Free Size', color = product.colors?.[0] || '', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
-    const resolved = variantId || findProductVariant(product, { size, color })?._id || '';
-    const stock = getAvailableStock(product, { size, color, variantId: resolved });
+  const addToCart = (product, size = '', color = product.colors?.[0] || '', variantId = product.variantId || product.selectedVariantId || '', quantity = 1) => {
+    const selectableSizes = getSelectableSizes(product);
+    if (selectableSizes.length && !String(size || '').trim()) {
+      setNotice('Please select a size on the product page before adding it to your bag.');
+      return { ok: false, reason: 'missing-size' };
+    }
+    const resolvedSize = String(size || '').trim() || 'Free Size';
+    const resolved = variantId || findProductVariant(product, { size: resolvedSize, color })?._id || '';
+    const stock = getAvailableStock(product, { size: resolvedSize, color, variantId: resolved });
     if (stock === 0) { setNotice('This selection is out of stock.'); return { ok: false, reason: 'out-of-stock' }; }
     if (!getProductId(product)) return { ok: false, reason: 'invalid-product' };
-    const existing = findCartItem(itemsRef.current, product, { size, color, variantId: resolved });
+    const existing = findCartItem(itemsRef.current, product, { size: resolvedSize, color, variantId: resolved });
     const total = Number(existing?.quantity || 0) + quantity;
     if (total > 20 || (stock !== null && total > stock)) { setNotice('The available quantity has been reached.'); return { ok: false, reason: 'stock-limit' }; }
-    addToCartConfirmed(product, size, color, resolved, quantity);
+    addToCartConfirmed(product, resolvedSize, color, resolved, quantity);
     return { ok: true, quantity: total };
   };
   const getCartItem = (productOrKey, options = {}) => findCartItem(itemsRef.current, productOrKey, options);

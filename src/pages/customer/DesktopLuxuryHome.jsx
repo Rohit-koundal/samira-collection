@@ -22,6 +22,7 @@ import styles from './DesktopLuxuryHome.module.css';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
 import { bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
 import StorefrontCustomBlocks from '../../components/storefront/StorefrontCustomBlocks';
+import { getSelectableSizes } from '../../utils/productSizing';
 
 const QuickViewModal = lazy(() => import('../../components/product/QuickViewModal'));
 
@@ -367,6 +368,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
   const discount = Number(product.discountPercentage) || (originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0);
   const wishlisted = wishlist.items.some((item) => getProductId(item) === productId);
   const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
+  const needsSize = getSelectableSizes(product).length > 0;
 
   const toggleWishlist = async (event) => {
     event.stopPropagation();
@@ -375,7 +377,8 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
 
   const addToCart = (event) => {
     event.stopPropagation();
-    cart.addToCart(product);
+    if (needsSize) navigate(`/product?id=${encodeURIComponent(productId)}`);
+    else cart.addToCart(product);
   };
 
   const slideImage = (event, direction) => {
@@ -389,7 +392,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
         <img loading="lazy" decoding="async" src={image} alt={product.name} />
         {(product.isNewArrival || product.isBestSeller) && <span className={styles.productBadge}>{product.isBestSeller ? 'Bestseller' : 'New'}</span>}
         <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} disabled={wishlist.loading} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
-        <button type="button" className={styles.cartButton} onClick={addToCart} disabled={unavailable || cart.loading} aria-label={unavailable ? 'Out of stock' : 'Add to cart'} data-card-field="cart"><IconShoppingBag /></button>
+        <button type="button" className={styles.cartButton} onClick={addToCart} disabled={unavailable || cart.loading} aria-label={unavailable ? 'Out of stock' : needsSize ? 'Select a size' : 'Add to cart'} data-card-field="cart"><IconShoppingBag /></button>
         <button type="button" data-card-field="quick-view" className="absolute bottom-3 right-3 z-20 rounded-lg bg-white/95 px-3 py-2 text-[10px] font-black uppercase text-wine shadow" onClick={(event) => { event.stopPropagation(); setQuickOpen(true); }}>Quick view</button>
         {productImages.length > 1 && (
           <>

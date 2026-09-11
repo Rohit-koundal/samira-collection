@@ -58,6 +58,19 @@ test('confirmed bag adds wait for the backend, deduplicate clicks and use the se
   expect(JSON.parse(localStorage.getItem('samira_cart_guest')).items[0].product.price).toBe(1099);
 });
 
+test('quick adds cannot choose the first clothing size automatically', async () => {
+  const sizedProduct = { ...product, name: 'Rose dress', category: 'Dresses', sizingMode: 'sized', sizes: ['S', 'M'] };
+  const { result } = renderHook(useCart, { wrapper });
+  await waitFor(() => expect(result.current.hydrated).toBe(true));
+
+  let outcome;
+  act(() => { outcome = result.current.addToCart(sizedProduct); });
+
+  expect(outcome).toEqual({ ok: false, reason: 'missing-size' });
+  expect(api.post).not.toHaveBeenCalled();
+  expect(result.current.items).toHaveLength(0);
+});
+
 test('failed confirmed adds leave the bag unchanged and return failure to the wishlist', async () => {
   const { result } = renderHook(useCart, { wrapper });
   await waitFor(() => expect(result.current.hydrated).toBe(true));

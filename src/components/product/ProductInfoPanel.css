@@ -266,12 +266,36 @@
     gap: 9px;
   }
 
+  .sc-info__sizes {
+    row-gap: 16px;
+  }
+
+  .sc-info__size-wrap {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .sc-info__size-wrap > small {
+    position: absolute;
+    right: -3px;
+    bottom: -8px;
+    z-index: 1;
+    border-radius: 3px;
+    background: #ff7f50;
+    padding: 2px 5px;
+    color: #fff;
+    font-size: 8px;
+    font-weight: 850;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
   .sc-info__size {
     position: relative;
-    min-width: 48px;
-    height: 40px;
-    padding: 0 13px;
-    overflow: hidden;
+    width: 52px;
+    height: 52px;
+    padding: 0 8px;
     border: 1px solid #dfd2c9;
     border-radius: 50%;
     background: #fff;
@@ -403,7 +427,8 @@
   }
 
   .sc-info__low-stock,
-  .sc-info__stock-message {
+  .sc-info__stock-message,
+  .sc-info__selection-message {
     margin: 13px 0 0;
     font-size: 11px;
     font-weight: 750;
@@ -419,6 +444,13 @@
     background: #fff5f7;
     padding: 9px 11px;
     color: #b80f35;
+  }
+
+  .sc-info__selection-message {
+    border-radius: 7px;
+    background: #fff8ec;
+    padding: 9px 11px;
+    color: #8c5510;
   }
 
   .sc-info__actions {

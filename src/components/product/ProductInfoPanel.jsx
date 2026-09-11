@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle2, MapPin, Minus, Plus, Ruler, Share2, ShoppingBag, Store, Truck } from 'lucide-react';
 import { getColorSwatch } from '../../utils/catalogFacets';
 import { getSelectableSizes } from '../../utils/productSizing';
+import SelectedSizeSummary from './SelectedSizeSummary';
 import './ProductInfoPanel.css';
 
 export default function ProductInfoPanel({
@@ -41,6 +42,7 @@ export default function ProductInfoPanel({
   reviewCount,
   isSizeAvailable = () => true,
   isColorAvailable = () => true,
+  getSizeStock = () => null,
 }) {
   const [showPriceDetails, setShowPriceDetails] = useState(false);
   const sizes = getSelectableSizes(product);
@@ -121,20 +123,25 @@ export default function ProductInfoPanel({
             <div className="sc-info__sizes">
               {sizes.map((item) => {
                 const available = isSizeAvailable(item);
+                const remaining = getSizeStock(item);
                 return (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={!available}
-                    onClick={() => setSize?.(item)}
-                    className={`sc-info__size${size === item ? ' sc-info__size--active' : ''}`}
-                    aria-label={`${item}${available ? '' : ' unavailable'}`}
-                  >
-                    {item}
-                  </button>
+                  <span className="sc-info__size-wrap" key={item}>
+                    <button
+                      type="button"
+                      disabled={!available}
+                      onClick={() => setSize?.(item)}
+                      className={`sc-info__size${size === item ? ' sc-info__size--active' : ''}`}
+                      aria-label={`Size ${item}${available ? '' : ', unavailable'}`}
+                      aria-pressed={size === item}
+                    >
+                      {item}
+                    </button>
+                    {available && Number.isFinite(remaining) && remaining > 0 && remaining <= 3 ? <small>{remaining} left</small> : null}
+                  </span>
                 );
               })}
             </div>
+            <SelectedSizeSummary product={product} size={size} onOpenSizeGuide={onOpenSizeGuide} />
           </section>
         ) : null}
 
@@ -210,7 +217,7 @@ export default function ProductInfoPanel({
           </section>
         ) : null}
 
-        {isOutOfStock ? <p className="sc-info__stock-message">This selection is currently out of stock. Choose another available size or colour.</p> : stockLimit !== null && stockLimit <= 5 ? <p className="sc-info__low-stock">Only {stockLimit} left in this selection</p> : null}
+        {sizes.length && !size ? <p className="sc-info__selection-message">Choose a size before adding this product to your bag.</p> : isOutOfStock ? <p className="sc-info__stock-message">This selection is currently out of stock. Choose another available size or colour.</p> : stockLimit !== null && stockLimit <= 5 ? <p className="sc-info__low-stock">Only {stockLimit} left in this selection</p> : null}
 
         <div className={`sc-info__actions${storeWhatsappNumber ? '' : ' sc-info__actions--two'}`}>
           <button type="button" disabled={isOutOfStock || cartBusy} onClick={onAddToCart} className={`sc-info__action sc-info__action--primary${cartItem ? ' sc-info__action--active' : ''}`}>

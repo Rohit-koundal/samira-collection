@@ -7,6 +7,7 @@ import QuickViewModal from '../product/QuickViewModal';
 import { useStorefront } from '../../context/StorefrontContext';
 import { productHref } from '../../utils/routing';
 import { isUnavailable, wishlistId, wishlistOptions, wishlistStock } from '../../utils/wishlist';
+import { getSelectableSizes } from '../../utils/productSizing';
 import './ProductCard.css';
 
 export default function ProductCard({ product, navigate, onAddToCart, onWishlistToggle, isWishlisted: isWishlistedProp, badgeLabel }) {
@@ -23,6 +24,7 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   const unavailable = isUnavailable(product);
   const stock = wishlistStock(product);
   const options = wishlistOptions(product);
+  const needsSize = getSelectableSizes(product).length > 0;
   const price = Number(product.sellingPrice ?? product.price ?? 0);
   const originalPrice = Math.max(price, Number(product.originalPrice ?? price));
   const discount = originalPrice > price ? Math.round((originalPrice - price) / originalPrice * 100) : 0;
@@ -47,6 +49,7 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   };
   const addToCart = event => {
     event.stopPropagation();
+    if (needsSize) { openProduct(); return; }
     if (onAddToCart) onAddToCart(product);
     else cart.addToCart(product);
   };
@@ -89,11 +92,11 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
             className={'sc-product-card__cart' + (cartItem ? ' is-active' : '')}
             onClick={addToCart}
             disabled={unavailable || stock === 0 || cart.loading}
-            aria-label={unavailable ? product.name + ' is unavailable' : stock === 0 ? product.name + ' is out of stock' : (cartItem ? 'Add more ' : 'Add ') + product.name + ' to bag'}
+            aria-label={unavailable ? product.name + ' is unavailable' : stock === 0 ? product.name + ' is out of stock' : needsSize ? `Select a size for ${product.name}` : (cartItem ? 'Add more ' : 'Add ') + product.name + ' to bag'}
             data-card-field="cart"
           >
             <ShoppingBag size={17} strokeWidth={1.6} />
-            <span>{unavailable ? 'Unavailable' : stock === 0 ? 'Out of stock' : cartItem ? 'Add more' : 'Add to bag'}</span>
+            <span>{unavailable ? 'Unavailable' : stock === 0 ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add more' : 'Add to bag'}</span>
           </button>
         </div>
       </div>

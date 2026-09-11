@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Share2, ShieldCheck, Star, Truck, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw, Ruler, Share2, ShieldCheck, Star, Truck, X } from 'lucide-react';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import { ProductVisual } from '../../components/product/ProductCard';
 import ProductDetailPage from '../../components/product/ProductDetailPage';
@@ -20,6 +20,7 @@ import { parseProductKey, storefrontPath } from '../../utils/routing';
 import { getSelectableSizes } from '../../utils/productSizing';
 import { useStorefront } from '../../context/StorefrontContext';
 import { isUnavailable, wishlistStock } from '../../utils/wishlist';
+import SelectedSizeSummary from '../../components/product/SelectedSizeSummary';
 
 const SizeChartModal = lazy(() => import('../../components/product/SizeChartModal'));
 const ReviewModal = lazy(() => import('../../components/product/ReviewModal'));
@@ -43,6 +44,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const [actionMessage, setActionMessage] = useState('');
   const [cartBusy, setCartBusy] = useState(false);
   const purchasePending = useRef(false);
+  const initializedSelectionFor = useRef('');
   const activeProductKey = useRef(productKey);
   const mounted = useRef(true);
   activeProductKey.current = productKey;
@@ -109,18 +111,20 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   useEffect(() => {
     if (!productData) return;
     const item = normalizeProduct(productData);
+    const selectionKey = String(item._id || item.id || item.slug || productKey);
+    if (initializedSelectionFor.current === selectionKey) return;
+    initializedSelectionFor.current = selectionKey;
     const inStock = firstInStockVariant(item);
     const availableSizes = getSelectableSizes(item);
-    const requestedSize = new URLSearchParams(String(route).split('?')[1] || '').get('size') || '';
-    setSize(availableSizes.includes(requestedSize) ? requestedSize : availableSizes.includes(inStock?.size) ? inStock.size : (availableSizes[0] || ''));
+    setSize('');
     setColor(inStock?.color || item.colors?.[0] || '');
-    setSelectedVariantId(inStock?._id || '');
+    setSelectedVariantId(availableSizes.length ? '' : inStock?._id || '');
     setActiveImage(Math.max(0, getPrimaryImageIndex(item.images)));
     setOpenGallery(false);
     setActionMessage('');
     setDeliveryResult(null);
     setQuantity(1);
-  }, [productData, route]);
+  }, [productData, productKey]);
 
   useEffect(() => {
     if (!product?._id) return;
@@ -165,11 +169,13 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const selectedVariant = hasManagedVariants(product || {})
     ? (selectedVariantId
       ? findProductVariant(product || {}, { variantId: selectedVariantId })
-      : selectableSizes.length
-      ? findProductVariant(product || {}, { size, color })
-      : activeVariants(product || {}).find((variant) => (!color || String(variant.color) === String(color)) && Number(variant.stock || 0) > 0)
-        || activeVariants(product || {})[0]
-        || null)
+      : selectableSizes.length || product?.colors?.length
+        ? findProductVariant(product || {}, { size, color })
+        : managedOptionVariants.length
+          ? null
+          : activeVariants(product || {}).find((variant) => (!color || String(variant.color) === String(color)) && Number(variant.stock || 0) > 0)
+            || activeVariants(product || {})[0]
+            || null)
     : null;
   const mediaItems = useMemo(() => {
     const variantImageItems = selectedVariant?.images?.length
@@ -198,8 +204,23 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const qualifiesForFreeShipping = freeShippingMinimum > 0 && dealPrice >= freeShippingMinimum;
   const returnWindowDays = Number(settingsData?.returnWindowDays || 0);
   const returnPolicyText = product?.returnPolicy || settingsData?.returnPolicy || (returnWindowDays > 0 ? `${returnWindowDays}-day return window` : '');
-  const selectedStock = variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
+  const selectionIncomplete = Boolean(
+    (selectableSizes.length && !size)
+    || (product?.colors?.length && !color)
+    || (hasManagedVariants(product || {}) && !selectedVariant),
+  );
+  const selectedStock = hasManagedVariants(product || {}) && selectionIncomplete
+    ? null
+    : variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
   const isOutOfStock = selectedStock !== null && Number(selectedStock) <= 0;
+  const sizeStock = (item) => {
+    if (!hasManagedVariants(product || {})) return null;
+    const matching = activeVariants(product || {}).filter((variant) => (
+      String(variant.size || '') === String(item)
+      && (!color || String(variant.color || '') === String(color))
+    ));
+    return matching.length ? matching.reduce((sum, variant) => sum + Math.max(0, Number(variant.stock || 0)), 0) : 0;
+  };
 
   useEffect(() => {
     if (selectedVariant?.images?.length) setActiveImage(0);
@@ -338,9 +359,8 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const selectDesktopColor = (nextColor) => {
     setSelectedVariantId('');
     setColor(nextColor);
-    if (selectableSizes.length && hasManagedVariants(product) && (!size || !activeVariants(product).some((variant) => String(variant.size) === String(size) && String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0))) {
-      const compatible = activeVariants(product).find((variant) => String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0);
-      setSize(compatible?.size || '');
+    if (size && selectableSizes.length && hasManagedVariants(product) && !activeVariants(product).some((variant) => String(variant.size) === String(size) && String(variant.color) === String(nextColor) && Number(variant.stock || 0) > 0)) {
+      setSize('');
     }
     setQuantity(1);
     setActionMessage('');
@@ -628,6 +648,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
           cartBusy={cartBusy || cart.loading}
           isSizeAvailable={(item) => isSizeAvailable(product, item)}
           isColorAvailable={(item) => isColorAvailable(product, item, size)}
+          getSizeStock={sizeStock}
           onAddToCart={add}
           onBuyNow={buyNow}
           onOrderWhatsApp={orderOnWhatsApp}
@@ -777,11 +798,17 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                   <h2 className="text-[14px] font-bold uppercase tracking-[.04em] text-charcoal md:text-xl">Select size</h2>
                   <button type="button" onClick={() => setOpenSizeChart(true)} className="inline-flex items-center gap-1 text-[11px] font-bold text-[#ff3e6c]">Size chart <ChevronRight className="h-3.5 w-3.5" /></button>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2.5">
-                  {selectableSizes.map((item) => (
-                    <button key={item} type="button" disabled={!isSizeAvailable(product, item)} onClick={() => selectDesktopSize(item)} className={`grid h-11 min-w-11 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:min-w-24 md:rounded-2xl md:px-5 md:py-4 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`}>{item}</button>
-                  ))}
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-5">
+                  {selectableSizes.map((item) => {
+                    const remaining = sizeStock(item);
+                    const available = isSizeAvailable(product, item);
+                    return <span key={item} className="relative inline-grid place-items-center">
+                      <button type="button" disabled={!available} onClick={() => selectDesktopSize(item)} className={`grid h-12 min-w-12 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:h-14 md:min-w-14 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`} aria-label={`Size ${item}${available ? '' : ', unavailable'}`} aria-pressed={size === item}>{item}</button>
+                      {available && Number.isFinite(remaining) && remaining > 0 && remaining <= 3 ? <small className="absolute -bottom-2 right-[-4px] rounded-[3px] bg-[#ff7f50] px-1.5 py-0.5 text-[8px] font-black leading-none text-white">{remaining} left</small> : null}
+                    </span>;
+                  })}
                 </div>
+                <SelectedSizeSummary product={product} size={size} onOpenSizeGuide={() => setOpenSizeChart(true)} />
               </>
             ) : null}
             {product.colors?.length > 0 && (
@@ -829,9 +856,9 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                 <button type="button" onClick={() => setQuantity((value) => selectedStock === null ? value + 1 : Math.min(value + 1, Number(selectedStock)))} disabled={selectedStock !== null && quantity >= Number(selectedStock)} className="h-10 w-10 text-lg font-black text-[#ff3e6c] disabled:text-slate-300" aria-label="Increase quantity">+</button>
               </div>
             </div>
-            <div className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5 text-[11px] font-semibold ${isOutOfStock ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
-              {isOutOfStock ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-              {isOutOfStock ? 'This selection is currently unavailable.' : selectedStock === null ? 'Available to order' : `${selectedStock} item${Number(selectedStock) === 1 ? '' : 's'} available for this selection`}
+            <div className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5 text-[11px] font-semibold ${selectableSizes.length && !size ? 'bg-amber-50 text-amber-800' : isOutOfStock ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+              {selectableSizes.length && !size ? <Ruler className="h-4 w-4 shrink-0" /> : isOutOfStock ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+              {selectableSizes.length && !size ? 'Choose a size before adding this product to your bag.' : isOutOfStock ? 'This selection is currently unavailable.' : selectedStock === null ? 'Available to order' : `${selectedStock} item${Number(selectedStock) === 1 ? '' : 's'} available for this selection`}
             </div>
           </section>
 
@@ -1186,6 +1213,7 @@ function RailProduct({ product, navigate }) {
   const image = getPrimaryImageUrl(product.images);
   const cartItem = cart.getCartItem(product);
   const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
+  const needsSize = getSelectableSizes(product).length > 0;
   return (
     <article className="w-40 shrink-0 md:w-52">
       <button type="button" onClick={() => navigate(`/product?id=${product._id || product.id || product.slug}`)} className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f6efe8]">
@@ -1193,8 +1221,8 @@ function RailProduct({ product, navigate }) {
       </button>
       <h3 className="product-name mt-2 truncate" title={product.name}>{product.name}</h3>
       <p className="mt-1"><span className="old-price text-slate-400 line-through">Rs. {product.originalPrice}</span> <span className="price">Rs. {product.price}</span></p>
-      <button type="button" disabled={unavailable || cart.loading} onClick={() => cart.addToCart(product)} className={`mt-3 h-10 w-full rounded-xl border disabled:opacity-50 ${cartItem ? 'border-emerald-600 text-emerald-700' : 'border-rose text-rose'}`}>
-        {unavailable ? 'Out of stock' : cartItem ? 'Add More' : 'Add to Cart'}
+      <button type="button" disabled={unavailable || cart.loading} onClick={() => needsSize ? navigate(`/product?id=${product._id || product.id || product.slug}`) : cart.addToCart(product)} className={`mt-3 h-10 w-full rounded-xl border disabled:opacity-50 ${cartItem ? 'border-emerald-600 text-emerald-700' : 'border-rose text-rose'}`}>
+        {unavailable ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add More' : 'Add to Cart'}
       </button>
     </article>
   );

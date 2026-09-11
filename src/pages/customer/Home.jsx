@@ -13,6 +13,7 @@ import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
 import StorefrontBannerSlot, { bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
 import StorefrontCustomBlocks from '../../components/storefront/StorefrontCustomBlocks';
+import { getSelectableSizes } from '../../utils/productSizing';
 
 const DesktopLuxuryHome = lazy(() => import('./DesktopLuxuryHome'));
 const emptyList = [];
@@ -391,6 +392,7 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
   const image = getPrimaryImageUrl(product.images);
   const cartItem = cart.getCartItem(product);
   const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
+  const needsSize = getSelectableSizes(product).length > 0;
 
   const badge = product.isBestSeller
     ? { label: 'BESTSELLER', className: 'bg-[#f59e0b] text-white' }
@@ -460,10 +462,14 @@ function MobileCompactProductCard({ product, navigate, sectionTitle }) {
           </div>
           <button
             type="button"
-            onClick={() => cart.addToCart(product)}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (needsSize) navigate(`/product?id=${productId}`);
+              else cart.addToCart(product);
+            }}
             disabled={unavailable || cart.loading}
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#e7e5e4] disabled:opacity-40 ${cartItem ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-600'}`}
-            aria-label={unavailable ? 'Out of stock' : cartItem ? 'Add more to cart' : 'Add to cart'}
+            aria-label={unavailable ? 'Out of stock' : needsSize ? 'Select a size' : cartItem ? 'Add more to cart' : 'Add to cart'}
           >
             <Icon name="bag" className="h-3.5 w-3.5" />
           </button>

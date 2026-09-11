@@ -58,7 +58,7 @@ jest.mock('../../services/api', () => ({
 }));
 
 jest.mock('../../components/product/ProductCard', () => ({ ProductVisual: () => null }));
-jest.mock('../../components/product/ProductDetailPage', () => ({ onBuyNow, onAddToCart, cartBusy }) => <div data-testid="desktop-purchase-actions"><button disabled={cartBusy} onClick={onBuyNow}>Desktop buy now</button><button disabled={cartBusy} onClick={onAddToCart}>Desktop add to bag</button></div>);
+jest.mock('../../components/product/ProductDetailPage', () => ({ onBuyNow, onAddToCart, cartBusy, size, setSize, actionMessage }) => <div data-testid="desktop-purchase-actions"><span data-testid="desktop-selected-size">{size || 'No size selected'}</span><button type="button" aria-pressed={size === 'S'} onClick={() => setSize('S')}>Desktop size S</button><button disabled={cartBusy} onClick={onBuyNow}>Desktop buy now</button><button disabled={cartBusy} onClick={onAddToCart}>Desktop add to bag</button>{actionMessage ? <p>{actionMessage}</p> : null}</div>);
 jest.mock('../../components/seo/SeoHead', () => () => null);
 jest.mock('../../utils/analytics', () => ({ trackEvent: jest.fn() }));
 
@@ -66,6 +66,10 @@ beforeEach(() => {
   mockAddConfirmed.mockReset();
   mockVariantGroupData = null;
   delete mockProduct.variantGroupId;
+  delete mockProduct.sizingMode;
+  delete mockProduct.sizeChartProfile;
+  delete mockProduct.sizeChart;
+  delete mockProduct.sizeFitNotes;
 });
 
 describe('mobile product details', () => {
@@ -135,6 +139,45 @@ describe.each(['mobile', 'desktop'])('%s purchase confirmation', (view) => {
     expect((await screen.findAllByText('Only 1 item is available. Please update the quantity.')).length).toBeGreaterThan(0);
     expect(navigate).not.toHaveBeenCalled();
     expect(buyButton()).toBeEnabled();
+  });
+});
+
+describe.each(['mobile', 'desktop'])('%s explicit size selection', (view) => {
+  test('does not preselect a size and blocks bag or checkout until the customer chooses one', async () => {
+    mockProduct.sizingMode = 'sized';
+    mockProduct.sizeChartProfile = 'dress';
+    mockProduct.sizeChart = {
+      unit: 'in',
+      rows: [
+        { size: 'S', bust: 36, waist: 30, hips: 38, acrossShoulder: 14, sleeveLength: 18, frontLength: 51 },
+        { size: 'M', bust: 38, waist: 32, hips: 40, acrossShoulder: 15, sleeveLength: 18, frontLength: 52 },
+      ],
+    };
+    mockProduct.sizeFitNotes = "The model is wearing size M.";
+    mockAddConfirmed.mockResolvedValue({ items: [{ _id: 'line-s', product: mockProduct, productId: 'product-1', size: 'S', color: 'Navy', quantity: 1 }] });
+    const navigate = jest.fn();
+    render(<ProductDetail navigate={navigate} route="/product?id=product-1" />);
+
+    const buy = view === 'desktop'
+      ? within(screen.getByTestId('desktop-purchase-actions')).getByRole('button', { name: 'Desktop buy now' })
+      : screen.getAllByRole('button', { name: 'Buy Now', exact: true }).at(-1);
+    const sizeButton = view === 'desktop'
+      ? within(screen.getByTestId('desktop-purchase-actions')).getByRole('button', { name: 'Desktop size S' })
+      : screen.getByRole('button', { name: 'Size S' });
+
+    expect(sizeButton).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('desktop-selected-size')).toHaveTextContent('No size selected');
+    fireEvent.click(buy);
+    expect(mockAddConfirmed).not.toHaveBeenCalled();
+    expect((await screen.findAllByText('Please select a size first.')).length).toBeGreaterThan(0);
+    expect(navigate).not.toHaveBeenCalled();
+
+    fireEvent.click(sizeButton);
+    expect(sizeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByLabelText('Selected size S').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Bust 36 in · Waist 30 in/).length).toBeGreaterThan(0);
+    fireEvent.click(buy);
+    await waitFor(() => expect(mockAddConfirmed).toHaveBeenCalledWith(expect.objectContaining({ _id: 'product-1' }), 'S', 'Navy', '', 1));
   });
 });
 
