@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../../services/api';
 import DeliveryTracking from '../../components/order/DeliveryTracking';
 import { OrderItem, OrderShell, OrderState, StatusBadge } from '../../components/order/OrderUi';
@@ -14,11 +14,14 @@ export default function MyReturns({ navigate }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reload, setReload] = useState(0);
+  const refreshVersion = useRef(reload);
   useEffect(() => {
     let active = true; setLoading(true); setError('');
     const params = new URLSearchParams({ page: String(page), limit: '12' });
     if (filters.status) params.set('status', filters.status); if (filters.type) params.set('type', filters.type);
-    api.get(`/returns/my-requests?${params}`, { silent: true, cache: 'no-store' }).then(data => {
+    const forceRefetch = refreshVersion.current !== reload;
+    refreshVersion.current = reload;
+    api.get(`/returns/my-requests?${params}`, { silent: true, cacheFirst: true, forceRefetch }).then(data => {
       const items = Array.isArray(data) ? data : data?.items;
       if (!Array.isArray(items) || items.some(item => !item?._id)) throw new Error('Your return requests could not be loaded.');
       if (active) { setRequests(items); setMeta(Array.isArray(data) ? null : data); }

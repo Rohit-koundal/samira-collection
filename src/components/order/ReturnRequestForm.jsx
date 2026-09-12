@@ -26,7 +26,7 @@ export default function ReturnRequestForm({ item, eligibility, paymentMethod = '
   useEffect(() => {
     if (form.type !== 'exchange') return undefined;
     let active = true; setLoading(true); setProductError(''); setProduct(null);
-    api.get(`/products/${productIdOf(item)}`, { silent: true }).then(data => {
+    api.get(`/products/${productIdOf(item)}`, { silent: true, cacheFirst: true }).then(data => {
       if (active) { setProduct(data); setForm(current => ({ ...current, exchangeVariantId: '', exchangeSize: !data.sizes?.length || data.sizes.includes(item.size) ? item.size || '' : '', exchangeColor: !data.colors?.length || data.colors.includes(item.color) ? item.color || '' : '' })); }
     }).catch(err => { if (active) setProductError(err.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

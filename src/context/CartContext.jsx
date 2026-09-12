@@ -49,13 +49,13 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const next = queue.current.catch(() => {}).then(() => valid() ? operation() : { ok: false, message: 'Your account changed. Please retry.' });
     queue.current = next; return next;
   }, [valid]);
-  const refresh = useCallback(() => {
+  const refresh = useCallback((forceRefetch = false) => {
     if (refreshRequests.current.has(account)) return refreshRequests.current.get(account);
     const request = enqueue(async () => {
       setLoading(true); setError('');
       try {
         const cached = loadGuestCart(guestName, guestLegacy);
-        let remote = normalizeCartResponse(await api.get('/cart', { silent: true, cacheScope: account }));
+        let remote = normalizeCartResponse(await api.get('/cart', { silent: true, cacheFirst: true, cacheScope: account, forceRefetch }));
         if (!valid()) return { ok: false };
         const failed = [];
         // New server carts absorb the guest session automatically. Only unsynced
@@ -96,7 +96,7 @@ export function CartProvider({ children, storageName: storageNameProp, legacySto
     const onFocus = () => { if (Date.now() - lastFocus > 30000) { lastFocus = Date.now(); refresh(); } };
     const onStorage = event => {
       if (event.key !== SYNC_KEY) return;
-      try { if (JSON.parse(event.newValue)?.account === account) refresh(); } catch { /* unrelated storage */ }
+      try { if (JSON.parse(event.newValue)?.account === account) refresh(true); } catch { /* unrelated storage */ }
     };
     const onSessionRefreshed = event => {
       const refreshedUser = event.detail;

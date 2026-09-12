@@ -1,4 +1,4 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { getApiBaseUrl } from './apiBaseUrl';
 import { compressImageFile, isSupportedImageFile } from '../services/imageCompression';
 import { logout, setCredentials } from './authSlice';
@@ -146,15 +146,27 @@ function params(query) {
   return query && Object.keys(query).length ? { params: query } : undefined;
 }
 
+function cacheIdentity(queryArgs) {
+  if (!queryArgs || typeof queryArgs !== 'object' || Array.isArray(queryArgs)) return queryArgs;
+  const { silent: _silent, silentWhenCached: _silentWhenCached, cache: _cache, ...identity } = queryArgs;
+  return identity;
+}
+
 export const samiraApi = createApi({
   reducerPath: 'samiraApi',
   baseQuery: baseQueryWithRefresh,
+  serializeQueryArgs: ({ endpointName, queryArgs, endpointDefinition }) => defaultSerializeQueryArgs({
+    endpointName,
+    endpointDefinition,
+    queryArgs: cacheIdentity(queryArgs),
+  }),
   tagTypes: ['Auth', 'Products', 'Categories', 'Banners', 'Settings', 'Cart', 'Wishlist', 'Addresses', 'Coupons', 'Orders', 'Payments', 'Returns', 'Reviews', 'AdminDashboard', 'AdminProducts', 'AdminCategories', 'AdminOrders', 'AdminCustomers', 'AdminSettings', 'ProductDrafts', 'VariantGroups', 'Inventory', 'Contact', 'Newsletter', 'Notifications', 'WebsiteCustomization', 'ReelImports'],
   keepUnusedDataFor: 120,
   endpoints: (builder) => ({
     request: builder.query({
-      query: ({ path, query, silent, cache }) => ({ url: path, ...params(query), silent, ...(cache ? { cache } : {}) }),
+      query: ({ path, query, silent, silentWhenCached, cache }) => ({ url: path, ...params(query), silent, silentWhenCached, ...(cache ? { cache } : {}) }),
       providesTags: (_result, _error, arg) => tagsForPath(arg.path),
+      keepUnusedDataFor: 900,
     }),
     mutate: builder.mutation({
       query: ({ path, method = 'POST', body, silent }) => ({ url: path, method, body, ...(silent ? { silent } : {}) }),
@@ -176,9 +188,10 @@ export const samiraApi = createApi({
     getProducts: builder.query({
       query: (query = {}) => {
         const { silent = false, ...requestParams } = query || {};
-        return { url: '/products', ...params(requestParams), silent };
+        return { url: '/products', ...params(requestParams), silent, silentWhenCached: true };
       },
       providesTags: ['Products'],
+      keepUnusedDataFor: 900,
     }),
     getMobileHome: builder.query({
       query: (query) => ({ url: '/storefront/home', ...params(query), silentWhenCached: true }),
@@ -187,37 +200,45 @@ export const samiraApi = createApi({
     }),
     getProduct: builder.query({
       query: (value) => typeof value === 'object'
-        ? { url: `/products/${encodeURIComponent(value.id)}`, params: { store: value.store || '' }, silent: Boolean(value.silent) }
-        : `/products/${encodeURIComponent(value)}`,
+        ? { url: `/products/${encodeURIComponent(value.id)}`, params: { store: value.store || '' }, silent: Boolean(value.silent), silentWhenCached: true }
+        : { url: `/products/${encodeURIComponent(value)}`, silentWhenCached: true },
       providesTags: ['Products'],
+      keepUnusedDataFor: 900,
     }),
     getCategories: builder.query({
       query: (query = {}) => {
         const { silent = false, ...requestParams } = query || {};
-        return { url: '/categories', ...params(requestParams), silent };
+        return { url: '/categories', ...params(requestParams), silent, silentWhenCached: true };
       },
       providesTags: ['Categories'],
+      keepUnusedDataFor: 900,
     }),
     getBanners: builder.query({
       query: (query = {}) => {
         const { silent = false, ...requestParams } = query || {};
-        return { url: '/banners', ...params(requestParams), silent };
+        return { url: '/banners', ...params(requestParams), silent, silentWhenCached: true };
       },
       providesTags: ['Banners'],
+      keepUnusedDataFor: 900,
     }),
-    getSettings: builder.query({ query: (options = {}) => ({ url: '/settings', silent: Boolean(options?.silent) }), providesTags: ['Settings'] }),
-    getCart: builder.query({ query: () => '/cart', providesTags: ['Cart'] }),
-    getWishlist: builder.query({ query: () => '/wishlist', providesTags: ['Wishlist'] }),
-    getAddresses: builder.query({ query: () => '/user/addresses', providesTags: ['Addresses'] }),
-    getCoupons: builder.query({ query: () => '/coupons', providesTags: ['Coupons'] }),
-    getOrders: builder.query({ query: () => '/orders/my-orders', providesTags: ['Orders'] }),
+    getSettings: builder.query({
+      query: (options = {}) => ({ url: '/settings', params: options?.store !== undefined ? { store: options.store } : undefined, silent: Boolean(options?.silent), silentWhenCached: true }),
+      providesTags: ['Settings'],
+      keepUnusedDataFor: 900,
+    }),
+    getCart: builder.query({ query: () => ({ url: '/cart', silentWhenCached: true }), providesTags: ['Cart'], keepUnusedDataFor: 300 }),
+    getWishlist: builder.query({ query: () => ({ url: '/wishlist', silentWhenCached: true }), providesTags: ['Wishlist'], keepUnusedDataFor: 300 }),
+    getAddresses: builder.query({ query: () => ({ url: '/user/addresses', silentWhenCached: true }), providesTags: ['Addresses'], keepUnusedDataFor: 300 }),
+    getCoupons: builder.query({ query: () => ({ url: '/coupons', silentWhenCached: true }), providesTags: ['Coupons'], keepUnusedDataFor: 300 }),
+    getOrders: builder.query({ query: () => ({ url: '/orders/my-orders', silentWhenCached: true }), providesTags: ['Orders'], keepUnusedDataFor: 300 }),
     getReviews: builder.query({
       query: (value) => typeof value === 'object'
-        ? ({ url: `/reviews/${encodeURIComponent(value.productId)}`, params: { page: value.page || 1, limit: value.limit || 20, ...(value.store ? { store: value.store } : {}) }, silent: Boolean(value.silent) })
-        : `/reviews/${encodeURIComponent(value)}`,
+        ? ({ url: `/reviews/${encodeURIComponent(value.productId)}`, params: { page: value.page || 1, limit: value.limit || 20, ...(value.store ? { store: value.store } : {}) }, silent: Boolean(value.silent), silentWhenCached: true })
+        : ({ url: `/reviews/${encodeURIComponent(value)}`, silentWhenCached: true }),
       providesTags: ['Reviews'],
+      keepUnusedDataFor: 600,
     }),
-    getFeaturedReviews: builder.query({ query: (query) => ({ url: '/reviews/featured', ...params(query) }), providesTags: ['Reviews'] }),
+    getFeaturedReviews: builder.query({ query: (query) => ({ url: '/reviews/featured', ...params(query), silentWhenCached: true }), providesTags: ['Reviews'], keepUnusedDataFor: 600 }),
     getAdminStats: builder.query({ query: () => '/admin/dashboard/stats', providesTags: ['AdminDashboard'] }),
     getAdminProducts: builder.query({ query: () => '/admin/products', providesTags: ['AdminProducts'] }),
     getAdminCategories: builder.query({ query: () => '/admin/categories', providesTags: ['AdminCategories'] }),

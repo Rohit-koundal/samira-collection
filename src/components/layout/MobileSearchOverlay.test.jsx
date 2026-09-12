@@ -14,7 +14,7 @@ test('failed search retries the same store query and opening a result saves rece
   expect(screen.getByRole('alert')).toHaveTextContent('Search is unavailable');
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   await runSearch();
-  expect(api.get).toHaveBeenLastCalledWith('/products?search=silk&page=1&limit=8&store=boutique');
+  expect(api.get).toHaveBeenLastCalledWith('/products?search=silk&page=1&limit=8&store=boutique', { cacheFirst: true });
   fireEvent.click(screen.getByRole('button', { name: /Silk saree/ }));
   expect(navigate).toHaveBeenCalledWith('/product?id=one');
   expect(onClose).toHaveBeenCalledTimes(1);

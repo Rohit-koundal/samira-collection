@@ -44,7 +44,11 @@ test('waits for a real order, shows COD and saved item/address details, and load
   expect(screen.getByText('Mumbai, Maharashtra - 400001')).toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(api.get).toHaveBeenCalledTimes(1);
-  expect(api.get).toHaveBeenCalledWith(`/orders/${base._id}`);
+  expect(api.get).toHaveBeenCalledWith(`/orders/${base._id}`, {
+    cacheFirst: true,
+    cacheScope: base._id,
+    forceRefetch: false,
+  });
   const progress = screen.getByRole('region', { name: 'Delivery progress' });
   expect(within(progress).getAllByRole('listitem')[0]).toHaveAttribute('aria-current', 'step');
 });

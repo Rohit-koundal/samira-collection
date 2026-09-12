@@ -134,7 +134,7 @@ const legalLinks = [
 
 export default function Footer({ navigate }) {
   const { storeSlug } = useStorefront();
-  const { data: settings = {} } = useGetSettingsQuery();
+  const { data: settings = {} } = useGetSettingsQuery({ store: storeSlug });
   const { config: websiteConfig } = useWebsiteCustomization();
   const footerConfig = websiteConfig.footer;
   const [email, setEmail] = useState('');

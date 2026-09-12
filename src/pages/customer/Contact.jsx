@@ -4,6 +4,7 @@ import { Card, CardContent } from '../../components/ui';
 import PageState from '../../components/ui/PageState';
 import api from '../../services/api';
 import { normalizeIndianPhone } from '../../utils/phoneFormatter';
+import { useStorefront } from '../../context/StorefrontContext';
 
 const pageCopy = {
   '/return-policy': {
@@ -49,6 +50,7 @@ const pageCopy = {
 };
 
 export default function Contact({ route = '/contact' }) {
+  const { storeSlug } = useStorefront();
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -69,12 +71,12 @@ export default function Contact({ route = '/contact' }) {
   useEffect(() => {
     let active = true;
     setLoading(true); setSettingsError('');
-    api.get('/settings')
+    api.get(`/settings${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`, { cacheFirst: true, forceRefetch: attempt > 0 })
       .then(data => { if (active) setSettings(data || {}); })
       .catch((err) => { if (active) setSettingsError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [attempt]);
+  }, [attempt, storeSlug]);
 
   const routePath = route.split('?')[0];
   const policy = pageCopy[routePath];

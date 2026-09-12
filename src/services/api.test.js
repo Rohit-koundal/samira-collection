@@ -54,6 +54,17 @@ test('imperative GET requests force a network refresh instead of returning stale
   expect(mockUnsubscribe).toHaveBeenCalled();
 });
 
+test('storefront cache-first GET reuses Redux data and refreshes silently when required', async () => {
+  await api.get('/products?limit=8', { cacheFirst: true, cacheScope: 'boutique-a' });
+
+  expect(mockInitiateQuery).toHaveBeenCalledWith(
+    { path: '/products?limit=8', silent: undefined, silentWhenCached: true, cacheScope: 'boutique-a' },
+    { forceRefetch: false, subscribe: false },
+  );
+  expect(startMobileLoader).not.toHaveBeenCalled();
+  expect(stopMobileLoader).not.toHaveBeenCalled();
+});
+
 test('background notification polling does not trigger the mobile loading overlay', async () => {
   await api.get('/notifications/summary', { silent: true });
   expect(mockInitiateQuery).toHaveBeenCalledWith({ path: '/notifications/summary', silent: true }, { forceRefetch: true, subscribe: false });

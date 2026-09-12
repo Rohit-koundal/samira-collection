@@ -37,18 +37,18 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
   const [notice, setNotice] = useState('');
   const selected = addresses.find((address) => address._id === editorId);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefetch = false) => {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await api.get('/user/addresses');
+      const data = await api.get('/user/addresses', { cacheFirst: true, cacheScope: String(user?._id || user?.id || user?.phone || ''), forceRefetch });
       setAddresses(savedAddresses(data));
     } catch (error) {
       setLoadError(error.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?._id, user?.id, user?.phone]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -130,7 +130,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
             {notice && <p role="status" className="sc-addresses__notice"><Check size={16} />{notice}</p>}
             {message && !isEditor && !removing && <p role="alert" className="sc-addresses__error">{message}</p>}
             {loading ? <div role="status" className="sc-addresses__empty">Loading your addresses…</div>
-              : loadError ? <div role="alert" className="sc-addresses__empty"><p>{loadError}</p><button type="button" className="sc-addresses__secondary" onClick={load}>Try again</button></div>
+              : loadError ? <div role="alert" className="sc-addresses__empty"><p>{loadError}</p><button type="button" className="sc-addresses__secondary" onClick={() => load(true)}>Try again</button></div>
                 : !addresses.length ? <div className="sc-addresses__empty">
                   <span className="sc-addresses__empty-icon"><MapPin size={32} strokeWidth={1.5} /></span>
                   <h2>A place for your next delivery</h2><p>Add your home or work address for a quicker checkout.</p>
@@ -153,7 +153,7 @@ export default function AddressManagement({ route = '/profile/addresses', naviga
       </div>
       {isEditor && <AddressDialog label={editing ? 'Edit address' : 'Add new address'} onClose={goBack} busy={saving}>
         {loading ? <p role="status" className="sc-addresses__empty">Loading your address…</p>
-          : loadError ? <div className="sc-addresses__empty" role="alert"><p>{loadError}</p><button type="button" onClick={load}>Try again</button><button type="button" onClick={goBack}>Back to addresses</button></div>
+          : loadError ? <div className="sc-addresses__empty" role="alert"><p>{loadError}</p><button type="button" onClick={() => load(true)}>Try again</button><button type="button" onClick={goBack}>Back to addresses</button></div>
             : editing && !selected ? <div className="sc-addresses__empty"><h2>Address not found</h2><p>This address may have been removed.</p><button type="button" className="sc-addresses__secondary" onClick={goBack}>Back to addresses</button></div>
               : <AddressForm form={form} setForm={setForm} onSubmit={save} message={message} editing={editing} onCancel={goBack} saving={saving} />}
       </AddressDialog>}

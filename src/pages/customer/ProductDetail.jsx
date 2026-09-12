@@ -66,7 +66,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
   const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey ? { id: productKey, store: storeSlug, silent: true } : skipToken);
-  const { data: settingsData } = useGetSettingsQuery({ silent: true });
+  const { data: settingsData } = useGetSettingsQuery({ store: storeSlug, silent: true });
   const product = productData ? normalizeProduct(productData) : null;
   const productId = product?._id || product?.id || product?.slug;
   const relatedQuery = product?.categoryId ? { category: product.categoryId, store: storeSlug } : { sort: 'rating', store: storeSlug };
@@ -138,7 +138,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     let active = true;
     const loadReviewState = async () => {
       try {
-        const summary = await api.get(`/reviews/${productId}/summary`, { silent: true });
+        const summary = await api.get(`/reviews/${productId}/summary`, { silent: true, cacheFirst: true });
         if (active && summary) setReviewSummary(summary);
       } catch {
         if (active) setReviewSummary(null);
@@ -493,7 +493,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
       const nextPage = reviewPage + 1;
       const params = new URLSearchParams({ page: String(nextPage), limit: '20' });
       if (storeSlug) params.set('store', storeSlug);
-      const data = await api.get(`/reviews/${productId}?${params}`, { silent: true });
+      const data = await api.get(`/reviews/${productId}?${params}`, { silent: true, cacheFirst: true });
       const incoming = Array.isArray(data?.items) ? data.items : [];
       setReviewItems((current) => {
         const map = new Map(current.map((item) => [String(item._id), item]));

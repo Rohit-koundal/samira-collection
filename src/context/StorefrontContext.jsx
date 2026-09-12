@@ -43,7 +43,7 @@ export function StorefrontProvider({ route, children }) {
       return undefined;
     }
     let cancelled = false;
-    api.get(`/stores/resolve?host=${encodeURIComponent(window.location.host)}`)
+    api.get(`/stores/resolve?host=${encodeURIComponent(window.location.host)}`, { cacheFirst: true })
       .then((data) => {
         if (!cancelled) setHostStore(data?.slug && !data.isDefault ? data : null);
       })
@@ -60,7 +60,7 @@ export function StorefrontProvider({ route, children }) {
     }
     let cancelled = false;
     setPathResult({ slug: pathSlug, loading: true });
-    api.get(`/stores/${encodeURIComponent(pathSlug)}`)
+    api.get(`/stores/${encodeURIComponent(pathSlug)}`, { cacheFirst: true })
       .then((data) => {
         if (!data?.slug) throw new Error('The boutique returned incomplete information. Please try again.');
         if (!cancelled) setPathResult({ slug: pathSlug, store: data, loading: false });

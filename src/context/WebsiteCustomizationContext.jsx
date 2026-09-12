@@ -24,7 +24,7 @@ export function WebsiteCustomizationProvider({ children }) {
     const id = ++requestId.current;
     try {
       const storeSlug = parseStoreSlug(typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}`);
-      const data = await api.get(`/website-config${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`);
+      const data = await api.get(`/website-config${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`, { cacheFirst: true });
       if (id !== requestId.current) return data;
       setConfig((current) => reuseEqualBranches(current, mergeWebsiteConfig(data.config)));
       setTheme((current) => reuseEqualBranches(current, data.theme || null));

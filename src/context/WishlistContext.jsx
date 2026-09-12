@@ -65,12 +65,12 @@ export function WishlistProvider({ children }) {
     return next;
   }, [valid]);
 
-  const refresh = useCallback(() => enqueue(async () => {
+  const refresh = useCallback((forceRefetch = false) => enqueue(async () => {
     if (!valid()) return { ok: false };
     setLoading(true); setError('');
     try {
       if (authenticated) {
-        let remote = normalizeRemoteItems(await api.get('/wishlist', { silent: true }));
+        let remote = normalizeRemoteItems(await api.get('/wishlist', { silent: true, cacheFirst: true, cacheScope: account, forceRefetch }));
         if (!valid()) return { ok: false };
         commit(remote);
         let mergeFailed = false;
@@ -102,7 +102,7 @@ export function WishlistProvider({ children }) {
       if (valid()) setError(failure.message || 'Could not refresh your wishlist. Your saved items are still here.');
       return { ok: false };
     } finally { if (valid()) setLoading(false); }
-  }), [authenticated, commit, currentGuest, enqueue, valid]);
+  }), [account, authenticated, commit, currentGuest, enqueue, valid]);
 
   useEffect(() => {
     alive.current = true; itemsRef.current = authenticated ? [] : loadGuest(); setItems(itemsRef.current);
@@ -112,7 +112,7 @@ export function WishlistProvider({ children }) {
     const onStorage = event => {
       if (!authenticated && (event.key === GUEST_STORAGE.storageName || event.key === null)) { guestStorageFailed.current = false; commit(loadGuest()); }
       if (authenticated && event.key === SYNC_KEY) {
-        try { if (JSON.parse(event.newValue)?.account === account) refresh(); } catch { /* unrelated storage */ }
+        try { if (JSON.parse(event.newValue)?.account === account) refresh(true); } catch { /* unrelated storage */ }
       }
     };
     window.addEventListener('focus', onFocus); window.addEventListener('storage', onStorage);

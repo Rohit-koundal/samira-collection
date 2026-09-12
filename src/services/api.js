@@ -53,8 +53,8 @@ async function request(path, options = {}) {
   const body = options.body ? JSON.parse(options.body) : undefined;
   const endpoint = method === 'GET' ? samiraApi.endpoints.request : samiraApi.endpoints.mutate;
   const action = method === 'GET'
-    ? endpoint.initiate({ path, silent: options.silent, ...(options.cache ? { cache: options.cache } : {}), ...(options.cacheScope !== undefined ? { cacheScope: options.cacheScope } : {}) }, {
-      forceRefetch: options.forceRefetch !== false,
+    ? endpoint.initiate({ path, silent: options.silent, ...(options.cacheFirst ? { silentWhenCached: true } : {}), ...(options.cache ? { cache: options.cache } : {}), ...(options.cacheScope !== undefined ? { cacheScope: options.cacheScope } : {}) }, {
+      forceRefetch: options.forceRefetch !== undefined ? options.forceRefetch : !options.cacheFirst,
       subscribe: false,
     })
     : endpoint.initiate({ path, method, body, ...(options.silent ? { silent: true } : {}) });
@@ -62,8 +62,6 @@ async function request(path, options = {}) {
   const abort = () => promise.abort?.();
   options.signal?.addEventListener('abort', abort, { once: true });
   if (options.signal?.aborted) abort();
-  if (!options.silent) startMobileLoader();
-
   try {
     const result = await promise.unwrap();
     return result;
@@ -71,7 +69,6 @@ async function request(path, options = {}) {
     throw toCustomerError(error, path);
   } finally {
     options.signal?.removeEventListener('abort', abort);
-    if (!options.silent) stopMobileLoader();
     if (method === 'GET') promise?.unsubscribe?.();
   }
 }

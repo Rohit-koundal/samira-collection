@@ -117,7 +117,12 @@ describe('notification centre and navbar', () => {
     mount(); await screen.findByText('Order shipped');
     fireEvent.click(within(screen.getByRole('group', { name: 'Notification categories' })).getByRole('button', { name: 'Returns' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Unread only' }));
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/notifications?page=1&limit=20&category=returns&read=unread', { silent: true }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/notifications?page=1&limit=20&category=returns&read=unread', {
+      silent: true,
+      cacheFirst: true,
+      cacheScope: 'customer-1',
+      forceRefetch: false,
+    }));
     expect(await screen.findByText('There are no updates matching these filters.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'View all updates' }));
     expect(await screen.findByText('Order shipped')).toBeInTheDocument();

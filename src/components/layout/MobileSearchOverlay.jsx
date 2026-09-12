@@ -42,7 +42,7 @@ export default function MobileSearchOverlay({ initialValue = '', navigate, onClo
     setError('');
     const timer = window.setTimeout(async () => {
       try {
-        const response = await api.get(`/products?search=${encodeURIComponent(value)}&page=1&limit=8${storeSlug ? `&store=${encodeURIComponent(storeSlug)}` : ''}`);
+        const response = await api.get(`/products?search=${encodeURIComponent(value)}&page=1&limit=8${storeSlug ? `&store=${encodeURIComponent(storeSlug)}` : ''}`, { cacheFirst: true });
         if (sequence !== requestSequence.current) return;
         const items = Array.isArray(response) ? response : response?.products || response?.items || [];
         setResults(normalizeProducts(items));

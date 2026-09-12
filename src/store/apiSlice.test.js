@@ -125,6 +125,20 @@ test('catalog caches remain separate when switching between boutiques and the ma
   expect(mockRawQuery).toHaveBeenCalledTimes(3);
 });
 
+test('storefront transport options share one Redux cache entry while account scopes stay isolated', async () => {
+  mockRawQuery.mockImplementation(async args => ({ data: { path: args.url } }));
+  const read = (cacheScope, silent) => testStore.dispatch(samiraApi.endpoints.request.initiate(
+    { path: '/cart', cacheScope, silent, silentWhenCached: true },
+    { subscribe: false },
+  ));
+
+  await read('customer-one', false);
+  await read('customer-one', true);
+  await read('customer-two', true);
+
+  expect(mockRawQuery).toHaveBeenCalledTimes(2);
+});
+
 test('mobile home feed uses the shared global loader and keeps store scope explicit', async () => {
   mockRawQuery.mockResolvedValue({ data: { products: [], categories: [], banners: [] } });
   await testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'boutique-a' }, { subscribe: false }));

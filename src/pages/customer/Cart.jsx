@@ -59,23 +59,25 @@ export default function Cart({ navigate, route = '' }) {
 
   useEffect(() => {
     let alive = true; setSettingsError('');
-    api.get('/settings', { silent: true }).then(data => { if (alive) setSettings(data); }).catch(() => { if (alive) setSettingsError('Could not load delivery charges. Retry before continuing.'); });
+    const query = storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : '';
+    api.get(`/settings${query}`, { silent: true, cacheFirst: true, forceRefetch: reload > 0 }).then(data => { if (alive) setSettings(data); }).catch(() => { if (alive) setSettingsError('Could not load delivery charges. Retry before continuing.'); });
     return () => { alive = false; };
-  }, [reload]);
+  }, [reload, storeSlug]);
   useEffect(() => {
     let alive = true;
-    api.get('/products?sort=rating&limit=8', { silent: true }).then(data => { if (alive) setRecommendations(normalizeProducts(data).slice(0, 6)); }).catch(() => {});
+    const scope = storeSlug ? `&store=${encodeURIComponent(storeSlug)}` : '';
+    api.get(`/products?sort=rating&limit=8${scope}`, { silent: true, cacheFirst: true }).then(data => { if (alive) setRecommendations(normalizeProducts(data).slice(0, 6)); }).catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [storeSlug]);
   useEffect(() => {
     let alive = true;
     const query = storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : '';
-    api.get(`/banners${query}`, { silent: true }).then(data => { if (alive) setStorefrontBanners(Array.isArray(data) ? data : []); }).catch(() => {});
+    api.get(`/banners${query}`, { silent: true, cacheFirst: true }).then(data => { if (alive) setStorefrontBanners(Array.isArray(data) ? data : []); }).catch(() => {});
     return () => { alive = false; };
   }, [storeSlug]);
   useEffect(() => {
     let alive = true; setAddresses([]); setAddressId('');
-    if (user) api.get('/user/addresses', { silent: true }).then(data => {
+    if (user) api.get('/user/addresses', { silent: true, cacheFirst: true, cacheScope: String(user._id || user.id || user.phone || '') }).then(data => {
       if (!alive) return; const rows = Array.isArray(data) ? data : []; setAddresses(rows); setAddressId((rows.find(row => row.isDefault) || rows[0])?._id || '');
     }).catch(() => {});
     return () => { alive = false; };

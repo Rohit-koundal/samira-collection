@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Bell, CheckCheck, ChevronRight, CreditCard, Headphones, Package, RefreshCw, RotateCcw, Truck } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +25,7 @@ export default function Notifications({ navigate, route = '/notifications' }) {
   const [read, setRead] = useState('');
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
+  const refreshVersion = useRef({ reload, revision });
   const [busy, setBusy] = useState('');
   const userId = user?._id || user?.id;
   useEffect(() => {
@@ -34,7 +35,9 @@ export default function Notifications({ navigate, route = '/notifications' }) {
     if (category) query.set('category', category);
     if (read) query.set('read', read);
     if (!userId) { setData({ items: [], total: 0, totalPages: 1 }); setLoading(false); return undefined; }
-    api.get(`${notificationBase}?${query}`, { silent: true }).then((result) => {
+    const forceRefetch = refreshVersion.current.reload !== reload || refreshVersion.current.revision !== revision;
+    refreshVersion.current = { reload, revision };
+    api.get(`${notificationBase}?${query}`, { silent: true, cacheFirst: true, cacheScope: String(userId), forceRefetch }).then((result) => {
       if (!active) return;
       const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
       if (!Array.isArray(next?.items) || next.items.some((item) => !item || !item._id)) {

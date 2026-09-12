@@ -46,10 +46,11 @@ export default function OrderDetail({ route = '', navigate }) {
     setBusy(false); setNotice(''); setCancelReason(''); setExistingReview(null);
     setInvoiceOpen(false);
     if (!orderId) { setError('Order not found.'); setLoading(false); return undefined; }
-    api.get(`/orders/${orderId}`).then((data) => { if (active) setOrder(data); })
+    const cacheOptions = { cacheFirst: true, cacheScope: orderId, forceRefetch: reload > 0 };
+    api.get(`/orders/${orderId}`, cacheOptions).then((data) => { if (active) setOrder(data); })
       .catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
-    api.get(`/orders/${orderId}/receipt`).then((data) => { if (active) setReceipt(data); }).catch((err) => { if (active) setReceiptError(err.message); });
-    api.get(`/returns/order/${orderId}`).then((data) => { if (active) setReturns(data); }).catch((err) => { if (active) setReturnError(err.message); });
+    api.get(`/orders/${orderId}/receipt`, cacheOptions).then((data) => { if (active) setReceipt(data); }).catch((err) => { if (active) setReceiptError(err.message); });
+    api.get(`/returns/order/${orderId}`, cacheOptions).then((data) => { if (active) setReturns(data); }).catch((err) => { if (active) setReturnError(err.message); });
     return () => { active = false; };
   }, [orderId, reload]);
   const refresh = () => setReload((value) => value + 1);

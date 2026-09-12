@@ -184,7 +184,7 @@ export default function Checkout({ navigate }) {
     setAddressLoading(true);
     setAddressError('');
     try {
-      const items = await api.get('/user/addresses');
+      const items = await api.get('/user/addresses', { cacheFirst: true, cacheScope: String(user?._id || user?.id || user?.phone || '') });
       if (request !== addressRequest.current) return;
       adoptAddresses(items, preferredAddressId);
     } catch (err) {
@@ -201,7 +201,7 @@ export default function Checkout({ navigate }) {
     let alive = true;
     setPaymentLoading(true);
     setPaymentError('');
-    api.get('/settings/payment-methods')
+    api.get('/settings/payment-methods', { cacheFirst: true, forceRefetch: paymentAttempt > 0 })
       .then((data) => {
         if (!alive) return;
         const methods = Array.isArray(data?.methods) ? data.methods : [];

@@ -88,7 +88,7 @@ export default function Products({ navigate, route = '/products' }) {
   const hasMore = page < totalPages && catalog.length < totalProducts;
   useEffect(() => {
     let active = true;
-    api.get('/catalog-configuration').then((value) => { if (active) setCatalogStructure(value); }).catch(() => { if (active) setCatalogStructure(null); });
+    api.get(`/catalog-configuration${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`, { cacheFirst: true }).then((value) => { if (active) setCatalogStructure(value); }).catch(() => { if (active) setCatalogStructure(null); });
     return () => { active = false; };
   }, [storeSlug]);
   const fallbackDynamicFacets = useMemo(() => buildDynamicFacets(catalogStructure, catalog), [catalog, catalogStructure]);

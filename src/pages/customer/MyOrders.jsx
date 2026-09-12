@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Search, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -17,6 +17,7 @@ export default function MyOrders({ navigate, route = '/orders' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const refreshVersion = useRef(reload);
   useEffect(() => setDraft(search), [search]);
   useEffect(() => {
     let active = true;
@@ -26,7 +27,9 @@ export default function MyOrders({ navigate, route = '/orders' }) {
     if (status) query.set('status', status);
     if (days) query.set('days', days);
     if (!user) { setLoading(false); return undefined; }
-    api.get(`/orders/my-orders?${query}`).then((result) => {
+    const forceRefetch = refreshVersion.current !== reload;
+    refreshVersion.current = reload;
+    api.get(`/orders/my-orders?${query}`, { cacheFirst: true, cacheScope: String(user?._id || user?.id || user?.phone || ''), forceRefetch }).then((result) => {
       if (!active) return;
       const next = Array.isArray(result) ? { items: result, total: result.length, totalPages: 1 } : result;
       if (!Array.isArray(next?.items) || next.items.some((item) => !item || !item._id)) {

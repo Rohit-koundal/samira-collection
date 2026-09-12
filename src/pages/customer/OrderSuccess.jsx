@@ -64,7 +64,7 @@ function OrderConfirmation({ orderId, navigate }) {
     let current = true;
     setLoading(true); setError(''); setReceipt(null); setInvoiceError('');
     if (!orderId) { setError('This link is missing an order number. Open My orders to find your purchase.'); setLoading(false); return undefined; }
-    api.get(`/orders/${encodeURIComponent(orderId)}`).then((data) => {
+    api.get(`/orders/${encodeURIComponent(orderId)}`, { cacheFirst: true, cacheScope: orderId, forceRefetch: reload > 0 }).then((data) => {
       if (!data?._id || String(data._id) !== orderId || !Array.isArray(data.orderItems)) throw new Error('The order details could not be loaded. Please try again.');
       if (current) setOrder(data);
     }).catch((err) => { if (current) setError(err.message || 'Unable to load your order. Please try again.'); })
@@ -79,7 +79,7 @@ function OrderConfirmation({ orderId, navigate }) {
     if (invoiceLock.current) return;
     invoiceLock.current = true; setInvoiceBusy(action); setInvoiceError('');
     try {
-      const data = receipt || await api.get(`/orders/${encodeURIComponent(orderId)}/receipt`);
+      const data = receipt || await api.get(`/orders/${encodeURIComponent(orderId)}/receipt`, { cacheFirst: true, cacheScope: orderId });
       if (!active.current) return;
       if (String(data?.orderId || '') !== orderId || !Array.isArray(data.items) || !data.items.length) throw new Error('The invoice could not be loaded. Please try again.');
       setReceipt(data);
