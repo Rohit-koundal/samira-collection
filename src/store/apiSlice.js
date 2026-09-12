@@ -165,11 +165,26 @@ export const samiraApi = createApi({
     verifyOtp: builder.mutation({ query: (body) => ({ url: '/auth/verify-otp', method: 'POST', body }), invalidatesTags: ['Auth'] }),
     getCurrentUser: builder.query({ query: () => '/auth/me', providesTags: ['Auth'] }),
     switchMode: builder.mutation({ query: (body) => ({ url: '/auth/switch-mode', method: 'POST', body }), invalidatesTags: ['Auth', 'AdminDashboard'] }),
-    getProducts: builder.query({ query: (query) => ({ url: '/products', ...params(query) }), providesTags: ['Products'] }),
-    getProduct: builder.query({ query: (value) => typeof value === 'object' ? { url: `/products/${encodeURIComponent(value.id)}`, params: { store: value.store || '' } } : `/products/${encodeURIComponent(value)}`, providesTags: ['Products'] }),
+    getProducts: builder.query({
+      query: (query = {}) => {
+        const { silent = false, ...requestParams } = query || {};
+        return { url: '/products', ...params(requestParams), silent };
+      },
+      providesTags: ['Products'],
+    }),
+    getMobileHome: builder.query({
+      query: (query) => ({ url: '/storefront/home', ...params(query) }),
+      providesTags: ['Products', 'Categories', 'Banners', 'Settings'],
+    }),
+    getProduct: builder.query({
+      query: (value) => typeof value === 'object'
+        ? { url: `/products/${encodeURIComponent(value.id)}`, params: { store: value.store || '' }, silent: Boolean(value.silent) }
+        : `/products/${encodeURIComponent(value)}`,
+      providesTags: ['Products'],
+    }),
     getCategories: builder.query({ query: (query) => ({ url: '/categories', ...params(query) }), providesTags: ['Categories'] }),
     getBanners: builder.query({ query: (query) => ({ url: '/banners', ...params(query) }), providesTags: ['Banners'] }),
-    getSettings: builder.query({ query: () => '/settings', providesTags: ['Settings'] }),
+    getSettings: builder.query({ query: (options = {}) => ({ url: '/settings', silent: Boolean(options?.silent) }), providesTags: ['Settings'] }),
     getCart: builder.query({ query: () => '/cart', providesTags: ['Cart'] }),
     getWishlist: builder.query({ query: () => '/wishlist', providesTags: ['Wishlist'] }),
     getAddresses: builder.query({ query: () => '/user/addresses', providesTags: ['Addresses'] }),
@@ -177,7 +192,7 @@ export const samiraApi = createApi({
     getOrders: builder.query({ query: () => '/orders/my-orders', providesTags: ['Orders'] }),
     getReviews: builder.query({
       query: (value) => typeof value === 'object'
-        ? ({ url: `/reviews/${encodeURIComponent(value.productId)}`, params: { page: value.page || 1, limit: value.limit || 20, ...(value.store ? { store: value.store } : {}) } })
+        ? ({ url: `/reviews/${encodeURIComponent(value.productId)}`, params: { page: value.page || 1, limit: value.limit || 20, ...(value.store ? { store: value.store } : {}) }, silent: Boolean(value.silent) })
         : `/reviews/${encodeURIComponent(value)}`,
       providesTags: ['Reviews'],
     }),
@@ -201,7 +216,7 @@ export const samiraApi = createApi({
       query: (value) => {
         const input = typeof value === 'object' ? value : { id: value };
         const prefix = input.apiPrefix === '/seller' ? '/seller' : input.apiPrefix === '/admin' ? '/admin' : '';
-        return { url: `${prefix}/variant-groups/${encodeURIComponent(input.id)}`, params: input.store ? { store: input.store } : undefined };
+        return { url: `${prefix}/variant-groups/${encodeURIComponent(input.id)}`, params: input.store ? { store: input.store } : undefined, silent: Boolean(input.silent) };
       },
       providesTags: ['VariantGroups'],
     }),
@@ -358,6 +373,7 @@ export const {
   useGetVariantGroupQuery,
   useGetVariantGroupCandidatesQuery,
   useGetManagementCategoriesQuery,
+  useGetMobileHomeQuery,
   useGetVariantGroupsQuery,
   useGetReviewsQuery,
   useGetFeaturedReviewsQuery,

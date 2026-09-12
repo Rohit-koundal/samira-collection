@@ -262,9 +262,14 @@ function MarketingReport({ data, currency }) {
   if (!data) return <Empty text="No marketing data is available." />;
   return <div className="report-section"><div className="report-kpis"><PlainKpi label="Store conversion" value={`${number(data.conversionRate)}%`} Icon={TrendingUp} /><PlainKpi label="Tracked sources" value={number(data.sources?.length)} Icon={BarChart3} /><PlainKpi label="Attributed orders" value={number((data.attribution || []).reduce((sum, item) => sum + item.orders, 0))} Icon={ShoppingBag} /><PlainKpi label="Coupon orders" value={number((data.coupons || []).reduce((sum, item) => sum + item.orders, 0))} Icon={WalletCards} /></div>
     <Panel title="Storefront funnel" note="First-party activity recorded by this application."><Funnel rows={data.funnel || []} /></Panel>
+    <Panel title="Mobile home engagement" note="Section visibility and taps recorded on the mobile storefront home screen."><ResponsiveTable headers={['Interaction', 'Section / category', 'Action', 'Count']} rows={(data.homeEngagement || []).map(item => [homeEventLabel(item.event), item.category || item.section || (item.milestone ? `${item.milestone}% scroll depth` : 'Home'), item.action || '—', number(item.value)])} empty="No mobile home engagement has been recorded in this period." /></Panel>
     <div className="report-grid-2"><Panel title="Campaign and social attribution" note="Orders carrying a source, campaign or reel reference."><ResponsiveTable headers={['Source', 'Campaign / reel', 'Orders', 'Customers', 'Revenue']} rows={(data.attribution || []).map(item => [item.source || 'Direct', item.campaign || item.reelId || '—', number(item.orders), number(item.customers), money(item.revenue, currency)])} empty="No attributed orders in this period." /></Panel><Panel title="Coupon performance" note="Compare generated value with the discount granted."><ResponsiveTable headers={['Coupon', 'Orders', 'Discount', 'Revenue', 'Revenue / ₹1']} rows={(data.coupons || []).map(item => [item.code, number(item.orders), money(item.discount, currency), money(item.revenue, currency), item.returnOnDiscount == null ? '—' : number(item.returnOnDiscount)])} empty="No coupons were used." /></Panel></div>
     <Panel title="Banner performance" note={data.note}><ResponsiveTable headers={['Banner / campaign', 'Impressions', 'Clicks', 'CTR']} rows={(data.banners || []).map(item => [item.campaign || item.bannerId || 'Banner', number(item.impressions), number(item.clicks), `${number(item.ctr)}%`])} empty="No banner tracking data in this period." /></Panel>
   </div>;
+}
+
+function homeEventLabel(event) {
+  return ({ HOME_SECTION_VIEW: 'Section viewed', HOME_PRODUCT_CLICK: 'Product tap', HOME_CATEGORY_CLICK: 'Category tap', HOME_VIEW_ALL: 'View all tap', HOME_SCROLL: 'Scroll depth' })[event] || String(event || '').replaceAll('_', ' ').toLowerCase();
 }
 
 function FulfillmentReport({ data, currency, base }) {

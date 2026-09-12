@@ -21,6 +21,7 @@ import { getSelectableSizes } from '../../utils/productSizing';
 import { useStorefront } from '../../context/StorefrontContext';
 import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import SelectedSizeSummary from '../../components/product/SelectedSizeSummary';
+import { rememberRecentProduct } from '../../utils/recentProducts';
 
 const SizeChartModal = lazy(() => import('../../components/product/SizeChartModal'));
 const ReviewModal = lazy(() => import('../../components/product/ReviewModal'));
@@ -64,15 +65,15 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const [reviewPage, setReviewPage] = useState(1);
   const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
-  const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey ? { id: productKey, store: storeSlug } : skipToken);
-  const { data: settingsData } = useGetSettingsQuery();
+  const { data: productData, isLoading, error, refetch: refetchProduct } = useGetProductQuery(productKey ? { id: productKey, store: storeSlug, silent: true } : skipToken);
+  const { data: settingsData } = useGetSettingsQuery({ silent: true });
   const product = productData ? normalizeProduct(productData) : null;
   const productId = product?._id || product?.id || product?.slug;
   const relatedQuery = product?.categoryId ? { category: product.categoryId, store: storeSlug } : { sort: 'rating', store: storeSlug };
-  const { data: relatedData = [] } = useGetProductsQuery(product ? relatedQuery : skipToken);
-  const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating', store: storeSlug } : skipToken);
-  const { data: reviewsData, refetch: refetchReviews } = useGetReviewsQuery(productId ? { productId, store: storeSlug, page: 1, limit: 20 } : skipToken);
-  const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId ? { id: product.variantGroupId, store: storeSlug } : skipToken);
+  const { data: relatedData = [] } = useGetProductsQuery(product ? { ...relatedQuery, page: 1, limit: 12, silent: true } : skipToken);
+  const { data: fallbackRelatedData = [] } = useGetProductsQuery(product ? { sort: 'rating', store: storeSlug, page: 1, limit: 12, silent: true } : skipToken);
+  const { data: reviewsData, refetch: refetchReviews } = useGetReviewsQuery(productId ? { productId, store: storeSlug, page: 1, limit: 20, silent: true } : skipToken);
+  const { data: variantGroupData } = useGetVariantGroupQuery(product?.variantGroupId ? { id: product.variantGroupId, store: storeSlug, silent: true } : skipToken);
   const variantMembers = useMemo(() => {
     const group = variantGroupData?.data;
     if (Array.isArray(group?.members) && group.members.length) return group.members.filter((member) => member?.product);
@@ -92,7 +93,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
       byId.set(key, normalized);
     };
 
-    [...normalizeProducts(relatedData), ...normalizeProducts(fallbackRelatedData), ...normalizeProducts(variantProducts)].forEach(pushProduct);
+    [...normalizeProducts(catalogItems(relatedData)), ...normalizeProducts(catalogItems(fallbackRelatedData)), ...normalizeProducts(variantProducts)].forEach(pushProduct);
     return Array.from(byId.values()).slice(0, 12);
   }, [fallbackRelatedData, productId, relatedData, variantProducts]);
   const firstReviewItems = useMemo(() => Array.isArray(reviewsData) ? reviewsData : Array.isArray(reviewsData?.items) ? reviewsData.items : [], [reviewsData]);
@@ -128,15 +129,16 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
 
   useEffect(() => {
     if (!product?._id) return;
+    rememberRecentProduct(product._id, storeSlug);
     trackEvent('PRODUCT_VIEW', { productId: product._id });
-  }, [product?._id]);
+  }, [product?._id, storeSlug]);
 
   useEffect(() => {
     if (!productId) return undefined;
     let active = true;
     const loadReviewState = async () => {
       try {
-        const summary = await api.get(`/reviews/${productId}/summary`);
+        const summary = await api.get(`/reviews/${productId}/summary`, { silent: true });
         if (active && summary) setReviewSummary(summary);
       } catch {
         if (active) setReviewSummary(null);
@@ -149,7 +151,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         return;
       }
       try {
-        const eligibility = await api.get(`/reviews/${productId}/eligibility`);
+        const eligibility = await api.get(`/reviews/${productId}/eligibility`, { silent: true });
         if (active) {
           setReviewEligibility(eligibility);
           setHelpfulReviewIds(Array.isArray(eligibility?.helpfulReviewIds) ? eligibility.helpfulReviewIds.map(String) : []);
@@ -262,7 +264,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     setActionMessage('');
     setDeliveryResult(null);
     try {
-      const data = await api.get(`/settings/payment-methods?pincode=${encodeURIComponent(deliveryPin)}&amount=${encodeURIComponent(dealPrice)}`);
+      const data = await api.get(`/settings/payment-methods?pincode=${encodeURIComponent(deliveryPin)}&amount=${encodeURIComponent(dealPrice)}`, { silent: true });
       const cod = (data?.methods || []).find((method) => method.key === 'COD');
       const freeShippingThreshold = Math.max(0, Number(data?.freeShippingMinAmount || 0));
       const shippingCharge = freeShippingThreshold > 0 && Number(dealPrice) >= freeShippingThreshold
@@ -291,7 +293,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   if (!productKey || error) {
     return (
       <section className="container-page py-10">
-        <PageState error={error?.data?.message || error?.message || 'Product not found.'} onRetry={() => window.location.reload()} />
+        <PageState error={error?.data?.message || error?.message || 'Product not found.'} onRetry={refetchProduct} />
       </section>
     );
   }
@@ -385,7 +387,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   };
 
   const loadReviewEligibility = async () => {
-    const eligibility = await api.get(`/reviews/${productId}/eligibility`);
+    const eligibility = await api.get(`/reviews/${productId}/eligibility`, { silent: true });
     setReviewEligibility(eligibility);
     setHelpfulReviewIds(Array.isArray(eligibility?.helpfulReviewIds) ? eligibility.helpfulReviewIds.map(String) : []);
     return eligibility;
@@ -443,7 +445,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     setActionMessage(successMessage);
     await Promise.allSettled([refetchReviews(), refetchProduct()]);
     try {
-      const summary = await api.get(`/reviews/${productId}/summary`);
+      const summary = await api.get(`/reviews/${productId}/summary`, { silent: true });
       if (summary) setReviewSummary(summary);
     } catch {
       setReviewSummary(null);
@@ -491,7 +493,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
       const nextPage = reviewPage + 1;
       const params = new URLSearchParams({ page: String(nextPage), limit: '20' });
       if (storeSlug) params.set('store', storeSlug);
-      const data = await api.get(`/reviews/${productId}?${params}`);
+      const data = await api.get(`/reviews/${productId}?${params}`, { silent: true });
       const incoming = Array.isArray(data?.items) ? data.items : [];
       setReviewItems((current) => {
         const map = new Map(current.map((item) => [String(item._id), item]));
@@ -509,7 +511,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     const result = await api.patch(`/reviews/${review._id}/withdraw`, {});
     setReviewItems((current) => current.filter((item) => String(item._id) !== String(review._id)));
     setReviewEligibility((current) => ({ ...(current || {}), existingReview: result.review, canEdit: true }));
-    await Promise.allSettled([refetchProduct(), api.get(`/reviews/${productId}/summary`).then(setReviewSummary)]);
+    await Promise.allSettled([refetchProduct(), api.get(`/reviews/${productId}/summary`, { silent: true }).then(setReviewSummary)]);
   };
 
   const reportReview = async ({ reason, details }) => {
@@ -601,6 +603,8 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
     setActiveImage((index + total) % total);
   };
 
+  const backToCatalog = () => navigate(readCatalogReturnRoute(storeSlug));
+
   const handleTouchStart = (event) => {
     setTouchStartX(event.changedTouches[0]?.clientX || 0);
   };
@@ -688,13 +692,13 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         <section className="bg-[#f5f5f6] pb-40 md:bg-ivory md:pb-10 md:pt-8">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-3 md:hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <button type="button" onClick={() => navigate('/products')} className="grid h-10 w-10 place-items-center rounded-full text-slate-700 active:bg-slate-100" aria-label="Back"><ChevronLeft className="h-6 w-6" /></button>
+          <button type="button" onClick={backToCatalog} className="grid h-10 w-10 place-items-center rounded-full text-slate-700 active:bg-slate-100" aria-label="Back to products"><ChevronLeft className="h-6 w-6" /></button>
           <span className="truncate text-[14px] font-semibold text-[#1f2a44]">Product Details</span>
         </div>
         <div className="flex items-center gap-0.5 text-slate-800">
           <button type="button" onClick={() => navigate('/search')} className="grid h-10 w-10 place-items-center rounded-full active:bg-slate-100" aria-label="Search"><Icon name="search" className="h-5 w-5" /></button>
           <button type="button" onClick={handleShare} className="grid h-10 w-10 place-items-center rounded-full active:bg-slate-100" aria-label="Share product"><Share2 className="h-5 w-5" /></button>
-          <button type="button" onClick={() => navigate('/cart')} className="grid h-10 w-10 place-items-center rounded-full active:bg-slate-100" aria-label="Cart"><Icon name="bag" className="h-5 w-5" /></button>
+          <button type="button" onClick={() => navigate('/cart')} className="relative grid h-10 w-10 place-items-center rounded-full active:bg-slate-100" aria-label={cart.itemCount ? `Cart, ${cart.itemCount} items` : 'Cart'}><Icon name="bag" className="h-5 w-5" />{cart.itemCount > 0 ? <span aria-hidden="true" className="absolute right-0 top-0 rounded-full bg-rose px-1 text-[8px] font-bold leading-4 text-white">{cart.itemCount > 99 ? '99+' : cart.itemCount}</span> : null}</button>
         </div>
       </header>
       <div className="mx-auto max-w-6xl md:grid md:grid-cols-[0.95fr_1fr] md:gap-8 md:px-6">
@@ -958,9 +962,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
 
       {related.length > 0 && (
         <div className="mx-auto mt-4 max-w-6xl space-y-9 px-4 md:px-6">
-          <ProductRail title="Fastest Selling Similar Products" subtitle="Don't miss out on these in-demand products" products={related.slice(0, 6)} navigate={navigate} />
-          <ProductRail title="Similar Products" products={related.slice(2, 8)} navigate={navigate} />
-          <ProductRail title="Customers Also Liked" products={related.slice(4, 10)} navigate={navigate} />
+          <ProductRail title="You may also like" subtitle="More available styles from this collection" products={related.slice(0, 10)} navigate={navigate} />
         </div>
       )}
 
@@ -998,17 +1000,17 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
       </div>
 
       <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
-        <div className="grid grid-cols-[.9fr_1.2fr_.9fr] gap-2">
+        <div className={`grid gap-2 ${storeWhatsappNumber ? 'grid-cols-[.9fr_1.2fr_.9fr]' : 'grid-cols-2'}`}>
           <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={buyNow} className="h-12 rounded-[10px] border border-[#7a1f36] bg-white px-2 text-[12px] font-bold text-[#7a1f36] disabled:border-slate-200 disabled:text-slate-400">
-            {cartBusy ? 'Adding…' : 'Buy Now'}
+            {cartBusy ? 'Adding…' : selectableSizes.length && !size ? 'Select size' : 'Buy Now'}
           </button>
           <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`flex h-12 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12px] font-bold text-white disabled:bg-slate-300 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
             <Icon name="bag" className="h-4 w-4" />
-            {cartBusy ? 'Adding…' : isOutOfStock ? 'Out of Stock' : cartItem ? 'Add More' : 'Add to Cart'}
+            {cartBusy ? 'Adding…' : isOutOfStock ? 'Out of Stock' : selectableSizes.length && !size ? 'Select size' : cartItem ? 'Add More' : 'Add to Bag'}
           </button>
-          <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-12 rounded-[10px] border border-emerald-600 px-2 text-[12px] font-bold text-emerald-700 disabled:border-slate-200 disabled:text-slate-400">
+          {storeWhatsappNumber ? <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-12 rounded-[10px] border border-emerald-600 px-2 text-[12px] font-bold text-emerald-700 disabled:border-slate-200 disabled:text-slate-400">
             WhatsApp
-          </button>
+          </button> : null}
         </div>
       </div>
 
@@ -1206,6 +1208,24 @@ function ProductRail({ title, subtitle, products, navigate }) {
       </div>
     </section>
   );
+}
+
+function catalogItems(value) {
+  return Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
+}
+
+function readCatalogReturnRoute(storeSlug) {
+  const fallback = storeSlug ? `/store/${encodeURIComponent(storeSlug)}/products` : '/products';
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('samira_catalog_return') || 'null');
+    const route = String(saved?.route || '');
+    const path = route.split('?')[0];
+    const validPath = ['/products', '/search', '/category'].includes(path)
+      || /^\/store\/[^/]+\/(products|search|category)$/.test(path);
+    const fresh = Date.now() - Number(saved?.savedAt || 0) < 30 * 60 * 1000;
+    if (validPath && fresh) return route;
+  } catch { /* Ignore unavailable session storage. */ }
+  return fallback;
 }
 
 function RailProduct({ product, navigate }) {

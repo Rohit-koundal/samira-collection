@@ -15,6 +15,10 @@ import { DESIGNER_CONTROLS, matchMobileAppearance, reorderDesignerItems, restore
 
 const StorefrontPreview = lazy(() => import('../../components/admin/StorefrontPreview'));
 const editorTabs = DESIGNER_CONTROLS.map(({ id, label }) => [id, label]);
+const MOBILE_SECTION_LABELS = {
+  recentlyViewed: 'Recently Viewed',
+  recommended: 'Recommended Products',
+};
 
 export default function WebsiteCustomizer({ mode = 'admin' }) {
   const sellerMode = mode === 'seller';
@@ -485,13 +489,13 @@ function EditorPanel({ tab, draft, update, updateSection, moveSection, catalog, 
       ].map(([key, label]) => <Toggle key={key} label={label} checked={draft.mobile[key]} onChange={(value) => update(['mobile', key], value)} />)}</div>
       <h3 className="text-sm font-bold">Mobile home sections</h3>
       {[...draft.mobile.sections].sort((a, b) => a.order - b.order).map((section, index, list) => <div key={section.id} className="space-y-3 rounded-xl border p-3">
-        <div className="flex items-center gap-2"><label className="flex flex-1 items-center gap-2 text-sm font-bold"><input type="checkbox" className="accent-wine" checked={section.visible} onChange={(event) => update(['mobile', 'sections'], list.map((item) => item.id === section.id ? { ...item, visible: event.target.checked } : item))} />{draft.homepage.sections.find((item) => item.id === section.id)?.label}</label>
+        <div className="flex items-center gap-2"><label className="flex flex-1 items-center gap-2 text-sm font-bold"><input type="checkbox" className="accent-wine" checked={section.visible} onChange={(event) => update(['mobile', 'sections'], list.map((item) => item.id === section.id ? { ...item, visible: event.target.checked } : item))} />{draft.homepage.sections.find((item) => item.id === section.id)?.label || MOBILE_SECTION_LABELS[section.id] || section.id}</label>
           {[-1, 1].map((direction) => <IconButton key={direction} icon={direction < 0 ? ArrowUp : ArrowDown} label={direction < 0 ? 'Move mobile section up' : 'Move mobile section down'} disabled={index + direction < 0 || index + direction >= list.length} onClick={() => {
             const next = [...list]; [next[index], next[index + direction]] = [next[index + direction], next[index]];
             update(['mobile', 'sections'], next.map((item, position) => ({ ...item, order: position * 10 })));
           }} />)}
         </div>
-        {['hero', 'trending', 'newArrivals', 'ethnicSets', 'accessories'].includes(section.id) && <Field label="Mobile heading (blank keeps current wording)" value={section.heading} onChange={(value) => update(['mobile', 'sections'], list.map((item) => item.id === section.id ? { ...item, heading: value } : item))} />}
+        <Field label="Mobile heading (blank keeps current wording)" value={section.heading} onChange={(value) => update(['mobile', 'sections'], list.map((item) => item.id === section.id ? { ...item, heading: value } : item))} />
       </div>)}
     </fieldset>
   </Panel>;

@@ -76,7 +76,7 @@ describe('mobile product details', () => {
   test('shows factual API information without adding generic product claims', async () => {
     render(<ProductDetail navigate={jest.fn()} route="/product?id=product-1" />);
 
-    await waitFor(() => expect(mockApiGet).toHaveBeenCalledWith('/reviews/product-1/summary'));
+    await waitFor(() => expect(mockApiGet).toHaveBeenCalledWith('/reviews/product-1/summary', { silent: true }));
 
     expect(screen.getByText('Price details')).toBeInTheDocument();
     expect(screen.getByText('Delivery & services')).toBeInTheDocument();

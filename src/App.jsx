@@ -477,6 +477,7 @@ function RouteFallback() {
     && typeof window.matchMedia === 'function'
     && window.matchMedia('(max-width: 767px)').matches
   ));
+  const globalMobileLoading = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
@@ -487,7 +488,11 @@ function RouteFallback() {
     return () => media.removeEventListener('change', onChange);
   }, []);
 
-  if (isMobileViewport) return <MobileOverlayLoader />;
+  if (isMobileViewport) {
+    return globalMobileLoading
+      ? <div className="min-h-[50vh]" aria-hidden="true" />
+      : <MobileOverlayLoader />;
+  }
 
   return (
     <div className="grid min-h-[50vh] place-items-center px-4">

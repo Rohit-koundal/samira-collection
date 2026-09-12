@@ -1,31 +1,62 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import Home from './Home';
 import { mergeWebsiteConfig } from '../../config/websiteCustomization';
+
+jest.mock('../../services/api', () => ({ post: jest.fn() }));
+jest.mock('../../utils/analytics', () => ({ trackEvent: jest.fn() }));
 
 let mockWidth = 390;
 let mockConfig = mergeWebsiteConfig();
 let mockProduct;
+let mockMobileFeed;
+let mockMobileLoading;
+let mockToggleWishlist;
+let mockAddToCart;
 const mockDesktopModuleLoaded = jest.fn();
 jest.mock('@mantine/hooks', () => ({ useMediaQuery: (query) => mockWidth >= (query.includes('1024') ? 1024 : 768) }));
 jest.mock('../../context/WebsiteCustomizationContext', () => ({ useWebsiteCustomization: () => ({ config: mockConfig }) }));
-jest.mock('../../context/CartContext', () => ({ useCart: () => ({ getCartItem: jest.fn(), addToCart: jest.fn() }) }));
-jest.mock('../../context/WishlistContext', () => ({ useWishlist: () => ({ items: [], toggleWishlist: jest.fn() }) }));
+jest.mock('../../context/CartContext', () => ({ useCart: () => ({ getCartItem: jest.fn(), addToCart: mockAddToCart, loading: false }) }));
+jest.mock('../../context/WishlistContext', () => ({ useWishlist: () => ({ items: [], pendingIds: [], toggleWishlist: mockToggleWishlist }) }));
 jest.mock('./DesktopLuxuryHome', () => {
   mockDesktopModuleLoaded();
-  return ({ industry, websiteConfig }) => <div data-testid="desktop-home" data-industry={industry} data-ethnic-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'ethnicSets')?.visible)}>Desktop home layout</div>;
+  return ({ industry, websiteConfig }) => <div data-testid="desktop-home" data-industry={industry} data-ethnic-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'ethnicSets')?.visible)} data-reviews-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'reviews')?.visible)}>Desktop home layout</div>;
 });
 jest.mock('../../store/apiSlice', () => ({
+  samiraApi: { usePrefetch: () => jest.fn() },
   useGetProductsQuery: () => ({ data: [mockProduct] }),
+  useGetMobileHomeQuery: () => ({ data: mockMobileFeed, isLoading: mockMobileLoading, refetch: jest.fn() }),
   useGetCategoriesQuery: () => ({ data: [] }),
   useGetBannersQuery: () => ({ data: [] }),
   useGetFeaturedReviewsQuery: () => ({ data: [] }),
 }));
 
-beforeEach(() => { mockWidth = 390; mockConfig = mergeWebsiteConfig(); mockProduct = { _id: '0123456789abcdef01234567', name: 'API product', price: 100, images: ['/uploads/item.png'], showOnHomepage: true, isFeatured: true, category: 'Kurtis' }; });
+beforeEach(() => {
+  mockWidth = 390;
+  mockMobileLoading = false;
+  mockConfig = mergeWebsiteConfig();
+  mockToggleWishlist = jest.fn(() => Promise.resolve({ ok: true }));
+  mockAddToCart = jest.fn(() => ({ ok: true }));
+  mockProduct = { _id: '0123456789abcdef01234567', name: 'API product', price: 100, images: ['/uploads/item.png'], showOnHomepage: true, isFeatured: true, category: 'Kurtis' };
+  mockMobileFeed = {
+    products: [mockProduct],
+    collections: {
+      featured: [mockProduct], trending: [mockProduct], newArrivals: [mockProduct], bestSellers: [mockProduct],
+      ethnicSets: [], accessories: [], instagram: [mockProduct], recommended: [mockProduct], recentlyViewed: [], latest: [mockProduct],
+    },
+    categories: [], banners: [], reviews: [],
+    settings: { shippingFreeAboveEnabled: true, freeShippingMinAmount: 999, returnsEnabled: true, returnWindowDays: 7, codEnabled: true },
+    warnings: [],
+  };
+});
 
 test('mobile rails calculate discounts from actual prices and disable unavailable purchases', () => {
   mockProduct = { ...mockProduct, price: 1599, originalPrice: 2399, discountPercentage: 0, stock: 0 };
+  mockMobileFeed = {
+    ...mockMobileFeed,
+    products: [mockProduct],
+    collections: Object.fromEntries(Object.entries(mockMobileFeed.collections).map(([key, products]) => [key, products.length ? [mockProduct] : []])),
+  };
   render(<Home navigate={jest.fn()} />);
   expect(screen.getAllByText(/33% OFF/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/0% OFF/)).not.toBeInTheDocument();
@@ -76,6 +107,7 @@ test('a non-fashion desktop store receives the same industry visibility rules', 
   const desktop = await screen.findByTestId('desktop-home');
   expect(desktop).toHaveAttribute('data-industry', 'electronics');
   expect(desktop).toHaveAttribute('data-ethnic-visible', 'false');
+  expect(desktop).toHaveAttribute('data-reviews-visible', 'true');
 });
 
 test('mobile settings never render a second layout on desktop or affect tablet section content', async () => {
@@ -89,4 +121,90 @@ test('mobile settings never render a second layout on desktop or affect tablet s
   expect(screen.queryByText('Desktop home layout')).not.toBeInTheDocument();
   expect(screen.getByText('Celebrate in Style')).toBeInTheDocument();
   expect(screen.queryByText('Mobile only')).not.toBeInTheDocument();
+});
+
+test('mobile cards expose every configurable field and truthful store policies', () => {
+  mockProduct = { ...mockProduct, price: 900, originalPrice: 1200, rating: 4.5, numReviews: 8, stock: 2 };
+  mockMobileFeed = {
+    ...mockMobileFeed,
+    products: [mockProduct],
+    collections: { ...mockMobileFeed.collections, featured: [mockProduct], trending: [mockProduct], newArrivals: [], bestSellers: [], instagram: [], recommended: [] },
+    settings: { shippingFreeAboveEnabled: true, freeShippingMinAmount: 1499, returnsEnabled: false, codEnabled: true },
+  };
+  const { container } = render(<Home navigate={jest.fn()} />);
+  const card = container.querySelector('[data-mobile-product-card]');
+  ['title', 'price', 'discount', 'rating', 'wishlist', 'cart'].forEach((field) => expect(card.querySelector(`[data-card-field="${field}"]`)).not.toBeNull());
+  expect(screen.getByText('Above ₹1,499')).toBeInTheDocument();
+  expect(screen.getByText('Final Sale')).toBeInTheDocument();
+  expect(screen.getAllByText('Only 2 left').length).toBeGreaterThan(0);
+});
+
+test('a stale configured product selection falls back to live products', () => {
+  mockConfig = mergeWebsiteConfig({
+    mobile: { enabled: true, useDesktopCatalog: true },
+    homepage: { sectionProductIds: { featured: ['ffffffffffffffffffffffff'] } },
+  });
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.getAllByText('API product').length).toBeGreaterThan(0);
+});
+
+test('a live order pause stays visible and disables mobile quick add', () => {
+  mockMobileFeed = {
+    ...mockMobileFeed,
+    settings: { ...mockMobileFeed.settings, acceptingOrders: false, orderPauseMessage: 'Back tomorrow morning.' },
+  };
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.getByText('Online orders are temporarily paused')).toBeInTheDocument();
+  expect(screen.getByText('Back tomorrow morning.')).toBeInTheDocument();
+  screen.getAllByRole('button', { name: 'Orders are temporarily paused' }).forEach((button) => expect(button).toBeDisabled());
+});
+
+test('mobile home omits review and newsletter blocks even when an older theme still contains them', () => {
+  mockConfig = mergeWebsiteConfig({ homepage: { blocks: [
+    { id: 'mobile-review', type: 'reviews', title: 'Customer stories', items: ['Lovely product'] },
+    { id: 'mobile-join', type: 'newsletter', title: 'Join our list', buttonText: 'Join' },
+  ] } });
+  mockMobileFeed = { ...mockMobileFeed, reviews: [{ _id: 'review-1', rating: 5, comment: 'Lovely product' }] };
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.queryByText('Customer stories')).not.toBeInTheDocument();
+  expect(screen.queryByText('Join our list')).not.toBeInTheDocument();
+});
+
+test('mobile hero automatically advances through live banners', () => {
+  jest.useFakeTimers();
+  mockConfig = mergeWebsiteConfig({
+    mobile: { enabled: true },
+    homepage: { sections: [{ id: 'hero', image: '/uploads/designer-fallback.jpg', imageAlt: 'Designer fallback' }] },
+  });
+  mockMobileFeed = { ...mockMobileFeed, banners: [
+    { _id: 'hero-1', type: 'Hero', position: 'Home - Top', title: 'First offer', image: '/uploads/first.jpg' },
+    { _id: 'hero-2', type: 'Hero', position: 'Home - Middle', title: 'Second offer', image: '/uploads/second.jpg' },
+  ] };
+  const view = render(<Home navigate={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'First offer, slide 1 of 2' })).toBeInTheDocument();
+  act(() => jest.advanceTimersByTime(5200));
+  expect(screen.getByRole('button', { name: 'Second offer, slide 2 of 2' })).toBeInTheDocument();
+  view.unmount();
+  jest.useRealTimers();
+});
+
+test('mobile category rail includes every active category, including nested Sarees', () => {
+  const categories = Array.from({ length: 10 }, (_, index) => ({
+    _id: `category-${index}`,
+    name: index === 9 ? 'Sarees' : `Category ${index + 1}`,
+    ...(index === 9 ? { parent: 'fashion-root' } : {}),
+  }));
+  mockConfig = mergeWebsiteConfig({ mobile: { enabled: true, useDesktopCatalog: true }, homepage: { featuredCategoryIds: ['category-2'] } });
+  mockMobileFeed = { ...mockMobileFeed, categories };
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.getByText('Sarees')).toBeInTheDocument();
+  categories.forEach((category) => expect(screen.getByText(category.name)).toBeInTheDocument());
+});
+
+test('mobile home loading leaves the screen loader to the global app shell', () => {
+  mockMobileLoading = true;
+  mockMobileFeed = {};
+  const { container } = render(<Home navigate={jest.fn()} />);
+  expect(screen.getByLabelText('Loading the collection')).toBeInTheDocument();
+  expect(container.querySelector('[data-mobile-loader]')).toBeNull();
 });

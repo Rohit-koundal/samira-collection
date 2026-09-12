@@ -125,6 +125,13 @@ test('catalog caches remain separate when switching between boutiques and the ma
   expect(mockRawQuery).toHaveBeenCalledTimes(3);
 });
 
+test('mobile home feed uses the shared global loader and keeps store scope explicit', async () => {
+  mockRawQuery.mockResolvedValue({ data: { products: [], categories: [], banners: [] } });
+  await testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'boutique-a' }, { subscribe: false }));
+  expect(mockRawQuery.mock.calls[0][0]).toEqual({ url: '/storefront/home', params: { store: 'boutique-a' } });
+  expect(startMobileLoader).toHaveBeenCalledTimes(1);
+});
+
 test('explicit catalog scope wins over the previous tab session header, including the main shop', async () => {
   mockRawQuery.mockResolvedValue({ data: [] });
   await request('/settings');

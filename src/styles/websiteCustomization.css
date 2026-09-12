@@ -125,7 +125,7 @@
     flex-basis: calc((100% - (var(--site-mobile-columns) - 1) * var(--site-mobile-gap)) / var(--site-mobile-columns));
   }
   .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] [data-mobile-product-media] { aspect-ratio: var(--site-mobile-ratio, .92); }
-  .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] [role="button"] > div { border-radius: var(--site-mobile-radius); }
+  .site-storefront[data-mobile-custom="true"] [data-mobile-product-card] [data-mobile-product-shell] { border-radius: var(--site-mobile-radius); }
   .site-storefront[data-mobile-custom="true"] .sc-plp__grid {
     grid-template-columns: repeat(var(--site-mobile-columns), minmax(0, 1fr)) !important;
     gap: var(--site-mobile-gap) !important;

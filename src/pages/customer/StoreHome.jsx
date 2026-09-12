@@ -2,17 +2,11 @@ import { useEffect, useState } from 'react';
 import Home from './Home';
 import PageState from '../../components/ui/PageState';
 import { useStorefront } from '../../context/StorefrontContext';
-import { trackEvent } from '../../utils/analytics';
 import { storefrontPath } from '../../utils/routing';
 
 export default function StoreHome(props) {
   const { store, storeSlug, loading, error, retry } = useStorefront();
   const [remaining, setRemaining] = useState('');
-
-  useEffect(() => {
-    if (!storeSlug) return;
-    trackEvent('STORE_VIEW', { path: `/store/${storeSlug}` });
-  }, [storeSlug]);
 
   useEffect(() => {
     const end = store?.festivalCampaign?.countdownEndsAt;
@@ -23,23 +17,27 @@ export default function StoreHome(props) {
     return () => window.clearInterval(timer);
   }, [store?.festivalCampaign?.countdownEndsAt]);
 
-  if (loading) return <PageState loading loadingLabel="Opening boutique..." />;
+  if (loading) return <>
+    <section className="min-h-[70vh] bg-[#fcfaf7] md:hidden" aria-busy="true" aria-label="Opening boutique" />
+    <div className="hidden md:block"><PageState loading loadingLabel="Opening boutique..." /></div>
+  </>;
   if (error) return <PageState error={error} onRetry={retry} />;
   if (!store) return <PageState error="This boutique is not published yet." />;
 
   return (
     <div>
-      {campaignIsLive(store.festivalCampaign) && <section className={`border-b border-[#e6c58a] bg-gradient-to-r ${campaignGradient(store.festivalCampaign.preset)} px-4 py-3 text-[#351a21]`}>
-        <div className="container-page flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-65">{store.festivalCampaign.badgeText || 'Limited-time edit'}</p><h2 className="mt-0.5 text-base font-black sm:text-lg">{store.festivalCampaign.title}</h2></div>
-          <div className="flex items-center gap-2 text-xs font-black">{store.festivalCampaign.couponCode && <span className="rounded-full border border-current/20 bg-white/60 px-3 py-1.5">Use {store.festivalCampaign.couponCode}</span>}{remaining && <span className="rounded-full bg-[#751d39] px-3 py-1.5 text-white">{remaining}</span>}</div>
+      {campaignIsLive(store.festivalCampaign) && <section className={`border-b border-[#e6c58a] bg-gradient-to-r ${campaignGradient(store.festivalCampaign.preset)} px-3 py-2 text-[#351a21] sm:px-4 sm:py-3`}>
+        <div className="container-page flex items-center justify-between gap-2">
+          <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[0.16em] opacity-65 sm:text-[10px]">{store.festivalCampaign.badgeText || 'Limited-time edit'}</p><h2 className="truncate text-sm font-black sm:mt-0.5 sm:text-lg">{store.festivalCampaign.title}</h2></div>
+          <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-black sm:gap-2 sm:text-xs">{store.festivalCampaign.couponCode && <span className="rounded-full border border-current/20 bg-white/60 px-2 py-1 sm:px-3 sm:py-1.5">Use {store.festivalCampaign.couponCode}</span>}{remaining && <span className="rounded-full bg-[#751d39] px-2 py-1 text-white sm:px-3 sm:py-1.5">{remaining}</span>}</div>
         </div>
            </section>}
-      <div className="bg-wine px-4 py-6 text-white">
-        <div className="container-page">
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-white/70">Boutique</p>
-          <h1 className="mt-2 font-display text-3xl font-black">{store.name}</h1>
-          {store.bio && <p className="mt-2 max-w-2xl text-sm text-white/80">{store.bio}</p>}
+      <div className="bg-wine px-3 py-3 text-white sm:px-4 sm:py-5 lg:py-6">
+        <div className="container-page flex items-center gap-3 sm:block">
+          {store.logo && <img src={store.logo} alt="" className="h-10 w-10 shrink-0 rounded-full border border-white/20 bg-white object-cover sm:hidden" />}
+          <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/65 sm:text-xs sm:tracking-[0.24em]">Boutique</p>
+          <h1 className="truncate font-display text-lg font-black sm:mt-2 sm:text-3xl">{store.name}</h1>
+          {store.bio && <p className="mt-0.5 line-clamp-1 max-w-2xl text-[11px] text-white/75 sm:mt-2 sm:line-clamp-none sm:text-sm sm:text-white/80">{store.bio}</p>}</div>
         </div>
       </div>
       <Home

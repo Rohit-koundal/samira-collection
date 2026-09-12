@@ -1,4 +1,4 @@
-import { lazy, Suspense, memo, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -20,7 +20,7 @@ import { getHomepageSection } from '../../config/websiteCustomization';
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import styles from './DesktopLuxuryHome.module.css';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
-import { bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
+import { bannersForHero, bannersForPosition, openBanner, useBannerEngagement } from '../../components/banners/StorefrontBannerSlot';
 import StorefrontCustomBlocks from '../../components/storefront/StorefrontCustomBlocks';
 import { getSelectableSizes } from '../../utils/productSizing';
 
@@ -53,6 +53,7 @@ export default function DesktopLuxuryHome({
   const brand = useBrandIdentity();
   const fashion = industry === 'fashion';
   const [heroIndex, setHeroIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
 
   const productsWithImages = useMemo(
     () => uniqueProducts([...featuredProducts, ...trendingProducts, ...newArrivalProducts, ...catalog])
@@ -61,7 +62,7 @@ export default function DesktopLuxuryHome({
   );
 
   const heroSlides = useMemo(() => {
-    const heroes = bannersForPosition(banners, 'Home - Top', ['Hero']);
+    const heroes = bannersForHero(banners);
     if (heroes.length) return heroes;
     const closestBanner = banners.find((banner) => banner.image);
     return closestBanner ? [closestBanner] : [{}];
@@ -70,11 +71,12 @@ export default function DesktopLuxuryHome({
   const activeHero = heroSlides[heroIndex % heroSlides.length] || {};
   const heroEngagementRef = useBannerEngagement(activeHero);
   const heroSection = getHomepageSection(websiteConfig, 'hero');
-  const heroImage = heroSection.image
-    ? normalizeImageUrl(heroSection.image)
-    : activeHero.image
-    ? normalizeImageUrl(activeHero.image)
-    : getProductImage(productsWithImages[0]);
+  const activeHeroImage = normalizeImageUrl(activeHero.image);
+  const heroImage = activeHeroImage || normalizeImageUrl(heroSection.image) || getProductImage(productsWithImages[0]);
+  const heroAlt = activeHeroImage
+    ? activeHero.altText || activeHero.title || 'Featured collection'
+    : heroSection.imageAlt || 'Featured collection';
+  const heroImagePosition = activeHeroImage ? activeHero.focalPoint || 'center' : heroSection.imagePosition || 'center';
   const editorialProducts = productsWithImages.slice(0, 3);
   const hasSelection = (id) => Boolean(websiteConfig?.homepage?.sectionProductIds?.[id]?.length);
   const arrivals = uniqueProducts(hasSelection('newArrivals') ? newArrivalProducts : [
@@ -95,9 +97,30 @@ export default function DesktopLuxuryHome({
     setHeroIndex((current) => (current + direction + heroSlides.length) % heroSlides.length);
   };
 
+  useEffect(() => {
+    setHeroIndex((current) => current % heroSlides.length);
+  }, [heroSlides.length]);
+
+  useEffect(() => {
+    if (heroSlides.length < 2 || heroPaused || prefersReducedMotion()) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') setHeroIndex((current) => (current + 1) % heroSlides.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [heroPaused, heroSlides.length]);
+
   return (
     <div className={`${styles.desktopLuxuryHome} themed-home-flow themed-home-flow--desktop`}>
-      <ThemedDesktopSection config={websiteConfig} id="hero"><section ref={heroEngagementRef} className={styles.hero}>
+      <ThemedDesktopSection config={websiteConfig} id="hero"><section
+        ref={heroEngagementRef}
+        className={styles.hero}
+        aria-label="Featured offers"
+        aria-roledescription="carousel"
+        onMouseEnter={() => setHeroPaused(true)}
+        onMouseLeave={() => setHeroPaused(false)}
+        onFocusCapture={() => setHeroPaused(true)}
+        onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setHeroPaused(false); }}
+      >
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>{fashion ? 'New Festive Collection' : `New ${industryLabel(industry)} Collection`}</p>
@@ -116,25 +139,28 @@ export default function DesktopLuxuryHome({
             </div>
           </div>
           <div className={styles.heroVisual}>
-            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={heroSection.imageAlt || activeHero.altText || activeHero.title || 'Featured collection'} style={{ objectPosition: heroSection.imagePosition || activeHero.focalPoint || 'center' }} /> : <div className={styles.imageFallback}>{websiteConfig?.branding?.websiteName || brand.websiteName}</div>}
+            {heroImage ? <img loading="eager" fetchPriority="high" decoding="async" src={heroImage} alt={heroAlt} style={{ objectPosition: heroImagePosition }} /> : <div className={styles.imageFallback}>{websiteConfig?.branding?.websiteName || brand.websiteName}</div>}
           </div>
         </div>
-        <button type="button" className={`${styles.heroArrow} ${styles.heroArrowLeft}`} onClick={() => moveHero(-1)} aria-label="Previous hero slide"><IconChevronLeft /></button>
-        <button type="button" className={`${styles.heroArrow} ${styles.heroArrowRight}`} onClick={() => moveHero(1)} aria-label="Next hero slide"><IconChevronRight /></button>
-        <div className={styles.heroDots}>
-          {heroSlides.map((slide, index) => (
-            <button
-              key={slide._id || slide.id || index}
-              type="button"
-              className={index === heroIndex % heroSlides.length ? styles.heroDotActive : ''}
-              onClick={() => setHeroIndex(index)}
-              aria-label={`Show hero slide ${index + 1}`}
-            />
-          ))}
-        </div>
+        {heroSlides.length > 1 && <>
+          <button type="button" className={`${styles.heroArrow} ${styles.heroArrowLeft}`} onClick={() => moveHero(-1)} aria-label="Previous hero slide"><IconChevronLeft /></button>
+          <button type="button" className={`${styles.heroArrow} ${styles.heroArrowRight}`} onClick={() => moveHero(1)} aria-label="Next hero slide"><IconChevronRight /></button>
+          <div className={styles.heroDots} aria-label="Choose featured offer">
+            {heroSlides.map((slide, index) => (
+              <button
+                key={slide._id || slide.id || index}
+                type="button"
+                className={index === heroIndex % heroSlides.length ? styles.heroDotActive : ''}
+                onClick={() => setHeroIndex(index)}
+                aria-label={`Show hero slide ${index + 1}`}
+                aria-current={index === heroIndex % heroSlides.length ? 'true' : undefined}
+              />
+            ))}
+          </div>
+        </>}
       </section></ThemedDesktopSection>
 
-      <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={(categories.some((category) => !category.parent) ? categories.filter((category) => !category.parent) : categories).slice(0, 8)} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
+      <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={categories} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
 
       <ThemedDesktopSection config={websiteConfig} id="promotional"><section className={styles.luxuryContainer}>
         <EditorialGrid products={editorialProducts} navigate={navigate} section={getHomepageSection(websiteConfig, 'promotional')} />
@@ -577,4 +603,10 @@ function formatCategory(category) {
 
 function formatPrice(value) {
   return Number(value || 0).toLocaleString('en-IN');
+}
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

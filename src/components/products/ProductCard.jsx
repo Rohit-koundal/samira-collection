@@ -10,7 +10,7 @@ import { isUnavailable, wishlistId, wishlistOptions, wishlistStock } from '../..
 import { getSelectableSizes } from '../../utils/productSizing';
 import './ProductCard.css';
 
-export default function ProductCard({ product, navigate, onAddToCart, onWishlistToggle, isWishlisted: isWishlistedProp, badgeLabel }) {
+export default function ProductCard({ product, navigate, onAddToCart, onWishlistToggle, isWishlisted: isWishlistedProp, badgeLabel, onBeforeOpen, imagePriority = false }) {
   const cart = useCart();
   const wishlist = useWishlist();
   const { storeSlug } = useStorefront();
@@ -37,7 +37,10 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   const rating = Number(product.rating || 0);
   const reviews = Number(product.numReviews || 0);
 
-  const openProduct = () => navigate?.(productHref(product, storeSlug));
+  const openProduct = () => {
+    onBeforeOpen?.(product);
+    navigate?.(productHref(product, storeSlug));
+  };
   const toggleWishlist = async event => {
     event.stopPropagation();
     if (busy || wishlist.loading) return;
@@ -57,7 +60,7 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   return (
     <article className={'sc-product-card' + (unavailable || stock === 0 ? ' is-unavailable' : '')} data-theme-product-card data-mobile-catalog-card aria-label={product.name}>
       <div className="sc-product-card__media" data-theme-product-media>
-        <ProductImageCarousel product={product} className="sc-product-card__carousel" onOpen={openProduct} />
+        <ProductImageCarousel product={product} className="sc-product-card__carousel" onOpen={openProduct} priority={imagePriority} />
         {badge && !unavailable && <span className="sc-product-card__badge" data-badge-tone={badgeTone}>{badge}</span>}
         <button
           type="button"

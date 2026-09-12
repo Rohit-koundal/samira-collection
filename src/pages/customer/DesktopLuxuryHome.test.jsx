@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DesktopLuxuryHome from './DesktopLuxuryHome';
 import api from '../../services/api';
 import { mergeWebsiteConfig } from '../../config/websiteCustomization';
@@ -62,5 +62,32 @@ describe('desktop home workflows', () => {
     render(<DesktopLuxuryHome websiteConfig={config} navigate={jest.fn()} catalog={[automatic]} trendingProducts={[chosen]} newArrivalProducts={[chosen]} />);
     expect(screen.getByText('Chosen product')).toBeInTheDocument();
     expect(screen.queryByText('Automatic product')).not.toBeInTheDocument();
+  });
+
+  test('desktop hero automatically advances and keeps manual controls', () => {
+    jest.useFakeTimers();
+    const config = mergeWebsiteConfig({ homepage: { sections: [{ id: 'hero', image: '/uploads/designer-fallback.jpg', imageAlt: 'Designer fallback' }] } });
+    const banners = [
+      { _id: 'hero-1', type: 'Hero', position: 'Home - Top', title: 'First desktop offer', image: '/uploads/first.jpg' },
+      { _id: 'hero-2', type: 'Hero', position: 'Home - Bottom', title: 'Second desktop offer', image: '/uploads/second.jpg' },
+    ];
+    const view = render(<DesktopLuxuryHome navigate={jest.fn()} banners={banners} websiteConfig={config} />);
+    expect(screen.getByAltText('First desktop offer')).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(5200));
+    expect(screen.getByAltText('Second desktop offer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous hero slide' }));
+    expect(screen.getByAltText('First desktop offer')).toBeInTheDocument();
+    view.unmount();
+    jest.useRealTimers();
+  });
+
+  test('desktop category section renders every active category, including nested Sarees', () => {
+    const categories = Array.from({ length: 10 }, (_, index) => ({
+      _id: `category-${index}`,
+      name: index === 9 ? 'Sarees' : `Category ${index + 1}`,
+      ...(index === 9 ? { parent: 'fashion-root' } : {}),
+    }));
+    render(<DesktopLuxuryHome navigate={jest.fn()} categories={categories} />);
+    categories.forEach((category) => expect(screen.getByText(category.name)).toBeInTheDocument());
   });
 });

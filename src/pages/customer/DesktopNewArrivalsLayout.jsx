@@ -1,7 +1,9 @@
 import ProductListingPage from '../../components/products/ProductListingPage';
+import { storefrontPath } from '../../utils/routing';
 
 export default function DesktopNewArrivalsLayout({
   navigate,
+  storeSlug,
   route,
   routeQuery,
   collectionLabel,
@@ -9,6 +11,7 @@ export default function DesktopNewArrivalsLayout({
   error,
   onRetry,
   visibleProducts,
+  totalProducts,
   categories,
   filters,
   updateParam,
@@ -16,10 +19,17 @@ export default function DesktopNewArrivalsLayout({
   clearFilterParams,
   allProducts,
   dynamicFacets,
+  facets,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  loadMoreRef,
+  onBeforeProductOpen,
 }) {
-  const breadcrumbs = buildBreadcrumbs(route, routeQuery, collectionLabel);
+  const breadcrumbs = buildBreadcrumbs(route, routeQuery, collectionLabel)
+    .map((item) => ({ ...item, path: storefrontPath(item.path, storeSlug) }));
   const title = collectionLabel || 'Products';
-  const subtitle = loading ? 'Loading styles...' : `${visibleProducts.length} styles available`;
+  const subtitle = loading ? 'Loading styles...' : `${totalProducts} styles available`;
 
   return (
     <ProductListingPage
@@ -40,6 +50,13 @@ export default function DesktopNewArrivalsLayout({
       onClearFilters={clearFilterParams}
       allProducts={allProducts}
       dynamicFacets={dynamicFacets}
+      facetsOverride={facets}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={onLoadMore}
+      loadMoreRef={loadMoreRef}
+      totalProducts={totalProducts}
+      onBeforeProductOpen={onBeforeProductOpen}
     />
   );
 }

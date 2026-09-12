@@ -8,6 +8,7 @@ export default function ProductImageCarousel({
   className = 'aspect-[4/5] w-full rounded-[18px]',
   onOpen,
   children,
+  priority = false,
 }) {
   const images = useMemo(() => normalizeImageEntries(product?.images || []), [product?.images]);
   const hasMultiple = images.length > 1;
@@ -141,7 +142,8 @@ export default function ProductImageCarousel({
                   src={normalizeImageUrl(image.url)}
                   alt={product?.name || 'Product'}
                   className="h-full w-full object-cover object-center"
-                  loading="lazy"
+                  loading={priority && imageIndex === 0 ? 'eager' : 'lazy'}
+                  fetchPriority={priority && imageIndex === 0 ? 'high' : 'auto'}
                   decoding="async"
                   draggable="false"
                 />}

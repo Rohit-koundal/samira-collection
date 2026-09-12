@@ -43,7 +43,7 @@ test('applying a preset changes appearance without replacing business content or
 
 test('mobile settings are separately merged and exported as device-specific variables', () => {
   const config = mergeWebsiteConfig({ mobile: { enabled: true, columns: 1, sections: [{ id: 'hero', visible: false, order: 0 }] } });
-  expect(config.mobile.sections).toHaveLength(9);
+  expect(config.mobile.sections).toHaveLength(14);
   expect(config.mobile.sections.find((section) => section.id === 'hero').visible).toBe(false);
   expect(config.homepage.sections.find((section) => section.id === 'hero').visible).toBe(true);
   const vars = buildWebsiteCssVariables(config);
