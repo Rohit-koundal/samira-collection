@@ -132,6 +132,19 @@ test('mobile home feed uses the shared global loader and keeps store scope expli
   expect(startMobileLoader).toHaveBeenCalledTimes(1);
 });
 
+test('a cached mobile home refresh stays in Redux without reopening the blocking loader', async () => {
+  mockRawQuery.mockResolvedValue({ data: { products: [], categories: [], banners: [] } });
+  const subscription = testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'boutique-a' }));
+  await subscription.unwrap();
+  expect(startMobileLoader).toHaveBeenCalledTimes(1);
+
+  jest.clearAllMocks();
+  testStore.dispatch(samiraApi.util.invalidateTags(['Products']));
+  await waitFor(() => expect(mockRawQuery).toHaveBeenCalledTimes(1));
+  expect(startMobileLoader).not.toHaveBeenCalled();
+  subscription.unsubscribe();
+});
+
 test('explicit catalog scope wins over the previous tab session header, including the main shop', async () => {
   mockRawQuery.mockResolvedValue({ data: [] });
   await request('/settings');

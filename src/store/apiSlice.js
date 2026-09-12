@@ -64,8 +64,16 @@ function sameSession(left, right) {
 }
 
 async function baseQueryWithRefresh(args, api, extraOptions) {
-  const silent = typeof args === 'object' && args.silent;
-  if (typeof args === 'object') { const { silent: _silent, ...requestArgs } = args; args = requestArgs; }
+  const cachedQuery = api.queryCacheKey
+    ? api.getState()?.samiraApi?.queries?.[api.queryCacheKey]
+    : null;
+  const silent = Boolean(typeof args === 'object' && (
+    args.silent || (args.silentWhenCached && cachedQuery?.data !== undefined)
+  ));
+  if (typeof args === 'object') {
+    const { silent: _silent, silentWhenCached: _silentWhenCached, ...requestArgs } = args;
+    args = requestArgs;
+  }
   if (isWebsitePreview()) {
     const method = typeof args === 'string' ? 'GET' : (args.method || 'GET').toUpperCase();
     if (method !== 'GET') return { error: { status: 403, data: { message: 'Storefront preview is read-only.' } } };
@@ -173,8 +181,9 @@ export const samiraApi = createApi({
       providesTags: ['Products'],
     }),
     getMobileHome: builder.query({
-      query: (query) => ({ url: '/storefront/home', ...params(query) }),
+      query: (query) => ({ url: '/storefront/home', ...params(query), silentWhenCached: true }),
       providesTags: ['Products', 'Categories', 'Banners', 'Settings'],
+      keepUnusedDataFor: 900,
     }),
     getProduct: builder.query({
       query: (value) => typeof value === 'object'
@@ -182,8 +191,20 @@ export const samiraApi = createApi({
         : `/products/${encodeURIComponent(value)}`,
       providesTags: ['Products'],
     }),
-    getCategories: builder.query({ query: (query) => ({ url: '/categories', ...params(query) }), providesTags: ['Categories'] }),
-    getBanners: builder.query({ query: (query) => ({ url: '/banners', ...params(query) }), providesTags: ['Banners'] }),
+    getCategories: builder.query({
+      query: (query = {}) => {
+        const { silent = false, ...requestParams } = query || {};
+        return { url: '/categories', ...params(requestParams), silent };
+      },
+      providesTags: ['Categories'],
+    }),
+    getBanners: builder.query({
+      query: (query = {}) => {
+        const { silent = false, ...requestParams } = query || {};
+        return { url: '/banners', ...params(requestParams), silent };
+      },
+      providesTags: ['Banners'],
+    }),
     getSettings: builder.query({ query: (options = {}) => ({ url: '/settings', silent: Boolean(options?.silent) }), providesTags: ['Settings'] }),
     getCart: builder.query({ query: () => '/cart', providesTags: ['Cart'] }),
     getWishlist: builder.query({ query: () => '/wishlist', providesTags: ['Wishlist'] }),

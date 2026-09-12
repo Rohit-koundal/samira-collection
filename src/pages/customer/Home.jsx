@@ -73,19 +73,54 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
     { store: storeSlug, ...(recentIds.length ? { recent: recentIds.join(',') } : {}) },
     { skip: isDesktop },
   );
+  const useLegacyMobileFeed = !isDesktop && mobileFeedQuery.isError;
+  // Keep the existing public APIs as a compatibility path while an older
+  // backend deployment catches up with the combined mobile-home endpoint.
+  // These are background requests because the first feed request already owns
+  // the single page loader.
+  const mobileFallbackProductsQuery = useGetProductsQuery(
+    { store: storeSlug, silent: true },
+    { skip: !useLegacyMobileFeed },
+  );
+  const mobileFallbackCategoriesQuery = useGetCategoriesQuery(
+    { store: storeSlug, silent: true },
+    { skip: !useLegacyMobileFeed },
+  );
+  const mobileFallbackBannersQuery = useGetBannersQuery(
+    { store: storeSlug, silent: true },
+    { skip: !useLegacyMobileFeed },
+  );
   const desktopProductsQuery = useGetProductsQuery({ store: storeSlug }, { skip: !isDesktop });
   const desktopCategoriesQuery = useGetCategoriesQuery({ store: storeSlug }, { skip: !isDesktop });
   const desktopBannersQuery = useGetBannersQuery({ store: storeSlug }, { skip: !isDesktop });
   const mobileFeed = mobileFeedQuery.data || {};
-  const productData = isDesktop ? (desktopProductsQuery.data || emptyList) : (mobileFeed.products || emptyList);
-  const categories = isDesktop ? (desktopCategoriesQuery.data || emptyList) : (mobileFeed.categories || emptyList);
-  const banners = isDesktop ? (desktopBannersQuery.data || emptyList) : (mobileFeed.banners || emptyList);
+  const productData = isDesktop
+    ? (desktopProductsQuery.data || emptyList)
+    : useLegacyMobileFeed ? (mobileFallbackProductsQuery.data || emptyList) : (mobileFeed.products || emptyList);
+  const categories = isDesktop
+    ? (desktopCategoriesQuery.data || emptyList)
+    : useLegacyMobileFeed ? (mobileFallbackCategoriesQuery.data || emptyList) : (mobileFeed.categories || emptyList);
+  const banners = isDesktop
+    ? (desktopBannersQuery.data || emptyList)
+    : useLegacyMobileFeed ? (mobileFallbackBannersQuery.data || emptyList) : (mobileFeed.banners || emptyList);
   const settings = mobileFeed.settings || {};
   const feedWarnings = new Set(mobileFeed.warnings || []);
   const productFeedWarning = (mobileFeed.warnings || []).some((warning) => String(warning).startsWith('products.'));
-  const isLoading = isDesktop ? desktopProductsQuery.isLoading : mobileFeedQuery.isLoading;
-  const isError = isDesktop ? desktopProductsQuery.isError : mobileFeedQuery.isError;
-  const refetch = isDesktop ? desktopProductsQuery.refetch : mobileFeedQuery.refetch;
+  const fallbackLoading = useLegacyMobileFeed && [mobileFallbackProductsQuery, mobileFallbackCategoriesQuery, mobileFallbackBannersQuery]
+    .some((query) => query.isLoading || query.isFetching);
+  const fallbackUnavailable = useLegacyMobileFeed && [mobileFallbackProductsQuery, mobileFallbackCategoriesQuery, mobileFallbackBannersQuery]
+    .every((query) => query.isError);
+  const isLoading = isDesktop ? desktopProductsQuery.isLoading : mobileFeedQuery.isLoading || fallbackLoading;
+  const isError = isDesktop ? desktopProductsQuery.isError : fallbackUnavailable;
+  const refetch = isDesktop ? desktopProductsQuery.refetch : () => {
+    const requests = [mobileFeedQuery.refetch?.()];
+    if (useLegacyMobileFeed) requests.push(
+      mobileFallbackProductsQuery.refetch?.(),
+      mobileFallbackCategoriesQuery.refetch?.(),
+      mobileFallbackBannersQuery.refetch?.(),
+    );
+    return Promise.allSettled(requests.filter(Boolean));
+  };
   const reviewsSection = getHomepageSection(websiteConfig, 'reviews');
   const { data: desktopReviews = emptyList } = useGetFeaturedReviewsQuery({ store: storeSlug }, { skip: !isDesktop || !reviewsSection.visible });
   const customerReviews = desktopReviews;
@@ -222,7 +257,7 @@ export default function Home({ navigate, storeSlug = '', industry = 'fashion', i
             navigate={navigate}
             viewAllPath={entry.viewAllPath}
             acceptingOrders={settings.acceptingOrders !== false}
-            prefetchProduct={(productId) => prefetchProduct({ id: productId, store: storeSlug })}
+            prefetchProduct={(productId) => prefetchProduct({ id: productId, store: storeSlug, silent: true })}
           /> : null]),
         ].filter(([id, content]) => content && mobileSection(id)?.visible !== false && isIndustryHomepageSectionAllowed(industry, industrySections, id))
           .map(([id, content]) => <MobileSection key={id} id={id} section={mobileLayoutSection(id)} storeSlug={storeSlug}>{content}</MobileSection>)}

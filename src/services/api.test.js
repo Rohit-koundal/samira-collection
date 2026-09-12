@@ -1,5 +1,6 @@
 import api from './api';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
+import { trackEvent } from '../utils/analytics';
 
 const mockUnsubscribe = jest.fn();
 
@@ -56,6 +57,17 @@ test('imperative GET requests force a network refresh instead of returning stale
 test('background notification polling does not trigger the mobile loading overlay', async () => {
   await api.get('/notifications/summary', { silent: true });
   expect(mockInitiateQuery).toHaveBeenCalledWith({ path: '/notifications/summary', silent: true }, { forceRefetch: true, subscribe: false });
+  expect(startMobileLoader).not.toHaveBeenCalled();
+  expect(stopMobileLoader).not.toHaveBeenCalled();
+});
+
+test('scroll and section analytics never trigger the mobile loading overlay', () => {
+  trackEvent('HOME_SCROLL', { metadata: { milestone: 50, surface: 'mobile-home' } });
+  expect(mockInitiateMutation).toHaveBeenCalledWith(expect.objectContaining({
+    path: '/analytics/events',
+    method: 'POST',
+    silent: true,
+  }));
   expect(startMobileLoader).not.toHaveBeenCalled();
   expect(stopMobileLoader).not.toHaveBeenCalled();
 });

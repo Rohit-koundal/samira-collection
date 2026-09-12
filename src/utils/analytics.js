@@ -17,5 +17,8 @@ export function trackEvent(name, extra = {}) {
   delete payload.razorpay_order_id;
   delete payload.token;
   delete payload.password;
-  api.post('/analytics/events', payload).catch(() => null);
+  // Analytics must never open the customer-facing loader. Home section and
+  // scroll events are background telemetry and can fire several times while
+  // the customer browses an already-loaded page.
+  api.post('/analytics/events', payload, { silent: true }).catch(() => null);
 }

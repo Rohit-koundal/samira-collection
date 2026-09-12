@@ -11,8 +11,10 @@ let mockConfig = mergeWebsiteConfig();
 let mockProduct;
 let mockMobileFeed;
 let mockMobileLoading;
+let mockMobileError;
 let mockToggleWishlist;
 let mockAddToCart;
+let mockPrefetchProduct;
 const mockDesktopModuleLoaded = jest.fn();
 jest.mock('@mantine/hooks', () => ({ useMediaQuery: (query) => mockWidth >= (query.includes('1024') ? 1024 : 768) }));
 jest.mock('../../context/WebsiteCustomizationContext', () => ({ useWebsiteCustomization: () => ({ config: mockConfig }) }));
@@ -23,9 +25,9 @@ jest.mock('./DesktopLuxuryHome', () => {
   return ({ industry, websiteConfig }) => <div data-testid="desktop-home" data-industry={industry} data-ethnic-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'ethnicSets')?.visible)} data-reviews-visible={String(websiteConfig.homepage.sections.find((section) => section.id === 'reviews')?.visible)}>Desktop home layout</div>;
 });
 jest.mock('../../store/apiSlice', () => ({
-  samiraApi: { usePrefetch: () => jest.fn() },
+  samiraApi: { usePrefetch: () => mockPrefetchProduct },
   useGetProductsQuery: () => ({ data: [mockProduct] }),
-  useGetMobileHomeQuery: () => ({ data: mockMobileFeed, isLoading: mockMobileLoading, refetch: jest.fn() }),
+  useGetMobileHomeQuery: () => ({ data: mockMobileFeed, isLoading: mockMobileLoading, isError: mockMobileError, refetch: jest.fn() }),
   useGetCategoriesQuery: () => ({ data: [] }),
   useGetBannersQuery: () => ({ data: [] }),
   useGetFeaturedReviewsQuery: () => ({ data: [] }),
@@ -34,6 +36,8 @@ jest.mock('../../store/apiSlice', () => ({
 beforeEach(() => {
   mockWidth = 390;
   mockMobileLoading = false;
+  mockMobileError = false;
+  mockPrefetchProduct = jest.fn();
   mockConfig = mergeWebsiteConfig();
   mockToggleWishlist = jest.fn(() => Promise.resolve({ ok: true }));
   mockAddToCart = jest.fn(() => ({ ok: true }));
@@ -69,6 +73,12 @@ test('the wishlist keyboard action does not also open the product card', () => {
   const button = container.querySelector('[data-mobile-product-card] button[aria-label="Add to wishlist"]');
   fireEvent.keyDown(button, { key: 'Enter' });
   expect(navigate).not.toHaveBeenCalled();
+});
+
+test('touching a product while scrolling only starts a silent detail prefetch', () => {
+  const { container } = render(<Home navigate={jest.fn()} />);
+  fireEvent.pointerDown(container.querySelector('[data-mobile-product-card] button[aria-label^="View "]'));
+  expect(mockPrefetchProduct).toHaveBeenCalledWith({ id: mockProduct._id, store: '', silent: true });
 });
 
 test('desktop edits do not change the current mobile composition while overrides are disabled', () => {
@@ -207,4 +217,12 @@ test('mobile home loading leaves the screen loader to the global app shell', () 
   const { container } = render(<Home navigate={jest.fn()} />);
   expect(screen.getByLabelText('Loading the collection')).toBeInTheDocument();
   expect(container.querySelector('[data-mobile-loader]')).toBeNull();
+});
+
+test('mobile home uses cached public catalog APIs when the combined feed is unavailable', () => {
+  mockMobileError = true;
+  mockMobileFeed = {};
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.queryByText('The store could not be loaded')).not.toBeInTheDocument();
+  expect(screen.getAllByText('API product').length).toBeGreaterThan(0);
 });
