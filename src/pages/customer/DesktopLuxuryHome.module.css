@@ -508,14 +508,59 @@
   font-size: calc(13px * var(--designer-body-scale, 1));
 }
 
-.categoryGrid {
+.categoryRail {
+  position: relative;
   display: grid;
   width: min(1380px, calc(100% - 64px));
   margin: 24px auto 0;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.categoryGrid {
+  display: grid;
+  overflow-x: auto;
+  padding: 5px 2px 14px;
+  grid-auto-columns: max(112px, calc((100% - 210px) / 8));
+  grid-auto-flow: column;
   gap: 30px;
   align-items: start;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
 }
+
+.categoryGrid::-webkit-scrollbar {
+  display: none;
+}
+
+.categoryArrow {
+  position: absolute;
+  top: 44px;
+  z-index: 2;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(123, 24, 52, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--samira-primary);
+  box-shadow: 0 10px 26px rgba(75, 7, 27, 0.14);
+  transform: translateY(-50%);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.categoryArrow:not(:disabled):hover {
+  transform: translateY(-50%) scale(1.06);
+}
+
+.categoryArrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.categoryArrowPrevious { left: -20px; }
+.categoryArrowNext { right: -20px; }
 
 .categoryItem {
   min-width: 0;
@@ -523,6 +568,7 @@
   border: 0;
   background: transparent;
   color: #111;
+  scroll-snap-align: start;
   text-align: center;
 }
 
@@ -1210,7 +1256,7 @@
   .iconLabel { font-size: calc(9px * var(--designer-body-scale, 1)); }
   .heroCopy { padding-left: 28px; }
   .trustPoints { gap: 18px; }
-  .categoryGrid { gap: 22px; }
+  .categoryGrid { grid-auto-columns: max(112px, calc((100% - 154px) / 8)); gap: 22px; }
   .editorialProductsGrid { gap: 22px; }
   .productGridCompact { --product-gap: var(--designer-grid-gap, 11px); }
   .viewAllButton { width: 104px; }
@@ -1239,7 +1285,8 @@
   .trustPoint > span { width: 34px; height: 34px; }
   .trustPoint strong { font-size: calc(10px * var(--designer-body-scale, 1)); }
   .trustPoint small { font-size: calc(8px * var(--designer-body-scale, 1)); }
-  .categoryGrid { width: calc(100% - 70px); gap: 14px; }
+  .categoryRail { width: calc(100% - 70px); }
+  .categoryGrid { grid-auto-columns: max(92px, calc((100% - 98px) / 8)); gap: 14px; }
   .categoryImageWrap { width: 92px; height: 92px; }
   .editorialProductsGrid { grid-template-columns: 1fr; }
   .editorialGrid { height: 340px; grid-template-rows: 163px 163px; }

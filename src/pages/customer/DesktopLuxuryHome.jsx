@@ -272,24 +272,49 @@ function TrustPoint({ icon: IconComponent, title, text }) {
 }
 
 function CategorySection({ categories, products, navigate, section }) {
+  const railRef = useRef(null);
+  const [railState, setRailState] = useState({ previous: false, next: categories.length > 8 });
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return undefined;
+    const update = () => setRailState({
+      previous: rail.scrollLeft > 4,
+      next: rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 4,
+    });
+    update();
+    rail.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      rail.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [categories.length]);
+  const slide = (direction) => railRef.current?.scrollBy({
+    left: direction * Math.max(520, railRef.current.clientWidth * 0.72),
+    behavior: 'smooth',
+  });
   return (
     <section className={styles.categorySection}>
       <div className={styles.sectionTitleDecorated}><span /><h2>{section?.heading || 'Shop by Category'}</h2><span /></div>
       <p>{section?.description || 'Curated styles for every occasion'}</p>
-      <div className={styles.categoryGrid}>
-        {categories.map((category) => {
-          const categoryId = category._id || category.id || category.slug || category.name;
-          const matchingProduct = products.find((product) => normalizeName(product.category).includes(normalizeName(category.name)));
-          const image = category.image ? normalizeImageUrl(category.image) : getProductImage(matchingProduct || products[0]);
-          return (
-            <button key={categoryId} type="button" className={styles.categoryItem} onClick={() => navigate(`/products?category=${encodeURIComponent(categoryId)}`)}>
-              <span className={styles.categoryImageWrap}>
-                {image ? <img loading="lazy" decoding="async" src={image} alt={category.name} /> : <span className={styles.imageFallback}>{String(category.name || 'SC').slice(0, 2)}</span>}
-              </span>
-              <strong>{category.name}</strong>
-            </button>
-          );
-        })}
+      <div className={styles.categoryRail}>
+        {categories.length > 8 && <button type="button" className={`${styles.categoryArrow} ${styles.categoryArrowPrevious}`} aria-label="Previous categories" disabled={!railState.previous} onClick={() => slide(-1)}><IconChevronLeft size={22} /></button>}
+        <div className={styles.categoryGrid} ref={railRef}>
+          {categories.map((category) => {
+            const categoryId = category._id || category.id || category.slug || category.name;
+            const matchingProduct = products.find((product) => normalizeName(product.category).includes(normalizeName(category.name)));
+            const image = category.image ? normalizeImageUrl(category.image) : getProductImage(matchingProduct || products[0]);
+            return (
+              <button key={categoryId} type="button" className={styles.categoryItem} onClick={() => navigate(`/products?category=${encodeURIComponent(categoryId)}`)}>
+                <span className={styles.categoryImageWrap}>
+                  {image ? <img loading="lazy" decoding="async" src={image} alt={category.name} /> : <span className={styles.imageFallback}>{String(category.name || 'SC').slice(0, 2)}</span>}
+                </span>
+                <strong title={category.name}>{category.name}</strong>
+              </button>
+            );
+          })}
+        </div>
+        {categories.length > 8 && <button type="button" className={`${styles.categoryArrow} ${styles.categoryArrowNext}`} aria-label="Next categories" disabled={!railState.next} onClick={() => slide(1)}><IconChevronRight size={22} /></button>}
       </div>
     </section>
   );

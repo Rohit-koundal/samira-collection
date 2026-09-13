@@ -89,5 +89,7 @@ describe('desktop home workflows', () => {
     }));
     render(<DesktopLuxuryHome navigate={jest.fn()} categories={categories} />);
     categories.forEach((category) => expect(screen.getByText(category.name)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Previous categories' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next categories' })).toBeInTheDocument();
   });
 });
