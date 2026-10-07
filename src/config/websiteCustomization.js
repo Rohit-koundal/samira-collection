@@ -1,3 +1,5 @@
+import { onColor, rgbChannels } from './themeTokens';
+
 export const HOME_SECTION_DEFAULTS = [
   { id: 'hero', label: 'Hero Section', visible: true, order: 10, heading: 'Where Tradition Meets Modern Grace', description: 'Premium ethnic wear for every celebration.', buttonText: 'Shop New Arrivals', buttonLink: '/products?newArrival=true', image: '', backgroundImage: '' },
   { id: 'services', label: 'Service Highlights', visible: true, order: 15, heading: 'Why Shop With Us', description: 'Shipping, returns and secure payment benefits.', buttonText: '', buttonLink: '', image: '', backgroundImage: '' },
@@ -54,6 +56,7 @@ export const DEFAULT_WEBSITE_CONFIG = {
   layout: { mode: 'full', maxWidth: 1520, sectionSpacing: 72, gridGap: 20, productsPerRow: { desktop: 4, tablet: 3, mobile: 2 } },
   mobile: {
     enabled: false,
+    inheritThemeColors: true,
     headerBackground: '#ffffff', headerText: '#334155',
     pageBackground: '#fcfaf7', gridGap: 12, cardRadius: 14, imageRatio: 'original',
     columns: 2, useDesktopCatalog: false,
@@ -170,8 +173,23 @@ export function buildWebsiteCssVariables(input) {
   const shadows = { none: 'none', soft: '0 8px 24px rgba(22, 14, 17, .08)', elevated: '0 16px 36px rgba(22, 14, 17, .16)' };
   const buttonSizes = { small: ['36px', '12px'], medium: ['44px', '18px'], large: ['52px', '24px'] };
   const [buttonHeight, buttonPadding] = buttonSizes[config.buttons.size] || buttonSizes.medium;
+  const buttonFill = config.buttons.style === 'outline' ? 'transparent'
+    : config.buttons.style === 'soft' ? config.colors.secondary : config.buttons.background;
+  const buttonText = config.buttons.style === 'outline' ? config.buttons.background
+    : config.buttons.style === 'soft' ? config.colors.primary : config.buttons.textColor;
   return {
     '--site-primary': config.colors.primary,
+    '--site-primary-rgb': rgbChannels(config.colors.primary),
+    '--site-secondary-rgb': rgbChannels(config.colors.secondary),
+    '--site-accent-rgb': rgbChannels(config.colors.accent),
+    '--site-background-rgb': rgbChannels(config.colors.background),
+    '--site-text-rgb': rgbChannels(config.colors.text),
+    '--site-on-primary': onColor(config.colors.primary),
+    '--site-primary-dark': `color-mix(in srgb, ${config.colors.primary} 82%, black)`,
+    '--site-border': `color-mix(in srgb, ${config.colors.text} 16%, ${config.colors.surface})`,
+    '--site-skeleton': `color-mix(in srgb, ${config.colors.primary} 10%, ${config.colors.surface})`,
+    '--site-loader': config.colors.primary,
+    '--site-loader-track': `color-mix(in srgb, ${config.colors.primary} 18%, transparent)`,
     '--site-secondary': config.colors.secondary,
     '--site-accent': config.colors.accent,
     '--site-background': config.colors.background,
@@ -192,6 +210,12 @@ export function buildWebsiteCssVariables(input) {
     '--site-button-weight': config.typography.buttonWeight,
     '--site-button-bg': config.buttons.background,
     '--site-button-text': config.buttons.textColor,
+    '--site-action-bg': buttonFill,
+    '--site-action-text': buttonText,
+    '--site-action-border': config.buttons.style === 'outline' ? config.buttons.background : buttonFill,
+    '--site-button-hover-transform': config.buttons.hoverEffect === 'lift' ? 'translateY(-2px)' : 'none',
+    '--site-button-hover-filter': config.buttons.hoverEffect === 'darken' ? 'brightness(.88)' : 'none',
+    '--site-button-hover-shadow': config.buttons.hoverEffect === 'glow' ? '0 0 0 4px color-mix(in srgb, var(--site-accent) 24%, transparent)' : 'none',
     '--site-button-radius': `${config.buttons.borderRadius}px`,
     '--site-button-height': buttonHeight,
     '--site-button-padding': buttonPadding,
@@ -205,9 +229,9 @@ export function buildWebsiteCssVariables(input) {
     '--site-products-desktop': config.layout.productsPerRow.desktop,
     '--site-products-tablet': config.layout.productsPerRow.tablet,
     '--site-products-mobile': config.layout.productsPerRow.mobile,
-    '--site-mobile-bg': config.mobile.pageBackground,
-    '--site-mobile-header-bg': config.mobile.headerBackground,
-    '--site-mobile-header-text': config.mobile.headerText,
+    '--site-mobile-bg': config.mobile.inheritThemeColors ? config.colors.background : config.mobile.pageBackground,
+    '--site-mobile-header-bg': config.mobile.inheritThemeColors ? config.header.background : config.mobile.headerBackground,
+    '--site-mobile-header-text': config.mobile.inheritThemeColors ? config.header.textColor : config.mobile.headerText,
     '--site-mobile-gap': `${config.mobile.gridGap}px`,
     '--site-mobile-radius': `${config.mobile.cardRadius}px`,
     '--site-mobile-ratio': config.mobile.imageRatio === 'original' ? undefined : config.mobile.imageRatio,

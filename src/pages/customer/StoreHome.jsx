@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Home from './Home';
 import PageState from '../../components/ui/PageState';
+import StorefrontSkeleton from '../../components/ui/StorefrontSkeleton';
 import { useStorefront } from '../../context/StorefrontContext';
 import { storefrontPath } from '../../utils/routing';
 
@@ -17,19 +18,16 @@ export default function StoreHome(props) {
     return () => window.clearInterval(timer);
   }, [store?.festivalCampaign?.countdownEndsAt]);
 
-  if (loading) return <>
-    <section className="min-h-[70vh] bg-[#fcfaf7] md:hidden" aria-busy="true" aria-label="Opening boutique" />
-    <div className="hidden md:block"><PageState loading loadingLabel="Opening boutique..." /></div>
-  </>;
+  if (loading) return <StorefrontSkeleton label="Opening boutique" />;
   if (error) return <PageState error={error} onRetry={retry} />;
   if (!store) return <PageState error="This boutique is not published yet." />;
 
   return (
     <div>
-      {campaignIsLive(store.festivalCampaign) && <section className={`border-b border-[#e6c58a] bg-gradient-to-r ${campaignGradient(store.festivalCampaign.preset)} px-3 py-2 text-[#351a21] sm:px-4 sm:py-3`}>
+      {campaignIsLive(store.festivalCampaign) && <section className={`border-b border-[#e6c58a] bg-gradient-to-r ${campaignGradient(store.festivalCampaign.preset)} px-3 py-2 text-charcoal sm:px-4 sm:py-3`}>
         <div className="container-page flex items-center justify-between gap-2">
           <div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[0.16em] opacity-65 sm:text-[10px]">{store.festivalCampaign.badgeText || 'Limited-time edit'}</p><h2 className="truncate text-sm font-black sm:mt-0.5 sm:text-lg">{store.festivalCampaign.title}</h2></div>
-          <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-black sm:gap-2 sm:text-xs">{store.festivalCampaign.couponCode && <span className="rounded-full border border-current/20 bg-white/60 px-2 py-1 sm:px-3 sm:py-1.5">Use {store.festivalCampaign.couponCode}</span>}{remaining && <span className="rounded-full bg-[#751d39] px-2 py-1 text-white sm:px-3 sm:py-1.5">{remaining}</span>}</div>
+          <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-black sm:gap-2 sm:text-xs">{store.festivalCampaign.couponCode && <span className="rounded-full border border-current/20 bg-white/60 px-2 py-1 sm:px-3 sm:py-1.5">Use {store.festivalCampaign.couponCode}</span>}{remaining && <span className="rounded-full bg-wine px-2 py-1 text-white sm:px-3 sm:py-1.5">{remaining}</span>}</div>
         </div>
            </section>}
       <div className="bg-wine px-3 py-3 text-white sm:px-4 sm:py-5 lg:py-6">

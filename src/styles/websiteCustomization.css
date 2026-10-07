@@ -1,5 +1,5 @@
-/* Desktop appearance and opt-in handheld overrides are deliberately isolated.
-   Legacy themes preserve the established mobile and tablet composition. */
+/* Device-specific layout stays isolated. Shared colours and typography are
+   applied application-wide by applicationTheme.css, including portal content. */
 @media (min-width: 1024px) {
   .site-storefront[data-desktop-enhanced="true"] .themed-home-flow--desktop {
     --samira-primary: var(--site-primary);

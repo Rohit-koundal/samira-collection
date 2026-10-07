@@ -13,7 +13,9 @@ import {
 } from '@tabler/icons-react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl } from '../../services/normalize';
+import { getPrimaryImageUrl, normalizeImageEntries, normalizeImageUrl, normalizeProducts } from '../../services/normalize';
+import ShoppingShortcuts from '../../components/storefront/ShoppingShortcuts';
+import { clearRecentProducts } from '../../utils/recentProducts';
 import api from '../../services/api';
 import { isUnavailable, wishlistStock } from '../../utils/wishlist';
 import { getHomepageSection } from '../../config/websiteCustomization';
@@ -49,6 +51,7 @@ export default function DesktopLuxuryHome({
   customerReviews = [],
   industry = 'fashion',
   storeSlug = '',
+  discovery = null,
 }) {
   const brand = useBrandIdentity();
   const fashion = industry === 'fashion';
@@ -161,6 +164,7 @@ export default function DesktopLuxuryHome({
       </section></ThemedDesktopSection>
 
       <ThemedDesktopSection config={websiteConfig} id="categories"><CategorySection categories={categories} products={productsWithImages} navigate={navigate} section={getHomepageSection(websiteConfig, 'categories')} /></ThemedDesktopSection>
+      {discovery && <div className="themed-home-section" style={{ '--home-section-order': getHomepageSection(websiteConfig, 'categories').order + 1 }}><ShoppingShortcuts data={discovery} navigate={navigate} /></div>}
 
       <ThemedDesktopSection config={websiteConfig} id="promotional"><section className={styles.luxuryContainer}>
         <EditorialGrid products={editorialProducts} navigate={navigate} section={getHomepageSection(websiteConfig, 'promotional')} />
@@ -255,6 +259,7 @@ export default function DesktopLuxuryHome({
         />
       </section></ThemedDesktopSection>
 
+      {discovery?.recentlyViewedEnabled !== false && discovery?.recentlyViewed?.length > 0 && <div className="themed-home-section" style={{ '--home-section-order': 85 }}><section className={`${styles.luxuryContainer} ${styles.collectionSection}`}><ProductSection eyebrow="Recently viewed" title="Continue where you left off" subtitle="Your browsing history on this device, just for this store." products={normalizeProducts(discovery.recentlyViewed)} navigate={navigate} viewAllLabel="Clear history" onHeaderAction={() => clearRecentProducts(storeSlug)} /></section></div>}
       <ThemedDesktopSection config={websiteConfig} id="reviews"><TestimonialSection section={getHomepageSection(websiteConfig, 'reviews')} reviews={customerReviews} /></ThemedDesktopSection>
       <ThemedDesktopSection config={websiteConfig} id="newsletter"><NewsletterSection section={getHomepageSection(websiteConfig, 'newsletter')} /></ThemedDesktopSection>
       <StorefrontCustomBlocks blocks={websiteConfig?.homepage?.blocks || []} catalog={catalog} categories={categories} navigate={navigate} storeSlug={storeSlug} />
@@ -370,7 +375,7 @@ function EditorialCard({ className, product, eyebrow, text, action, navigate, ac
   );
 }
 
-function ProductSection({ eyebrow, title, subtitle, products = [], navigate, viewAllPath, viewAllLabel = 'View All', compact = false, className = '', emptyMessage = '' }) {
+function ProductSection({ eyebrow, title, subtitle, products = [], navigate, viewAllPath, viewAllLabel = 'View All', compact = false, className = '', emptyMessage = '', onHeaderAction }) {
   const scrollerRef = useRef(null);
   const hasSlider = products.length > 4;
 
@@ -391,7 +396,7 @@ function ProductSection({ eyebrow, title, subtitle, products = [], navigate, vie
               <button type="button" className={styles.sectionArrow} onClick={() => slideSection(1)} aria-label={`Slide ${title} right`}><IconChevronRight /></button>
             </>
           )}
-          <button type="button" className={styles.viewAllButton} onClick={() => navigate(viewAllPath)}>{viewAllLabel || 'View All'}</button>
+          <button type="button" className={styles.viewAllButton} onClick={() => onHeaderAction ? onHeaderAction() : navigate(viewAllPath)}>{viewAllLabel || 'View All'}</button>
         </div>
       </div>
       <div ref={scrollerRef} className={`${styles.productGrid} ${compact ? styles.productGridCompact : ''} ${!products.length ? styles.productGridEmpty : ''}`}>
@@ -418,7 +423,8 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
   const originalPrice = Number(product.originalPrice ?? price);
   const discount = Number(product.discountPercentage) || (originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0);
   const wishlisted = wishlist.items.some((item) => getProductId(item) === productId);
-  const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
+  const rental = product.commerceMode === 'RENTAL_ONLY';
+  const unavailable = !rental && (isUnavailable(product) || wishlistStock(product) === 0);
   const needsSize = getSelectableSizes(product).length > 0;
 
   const toggleWishlist = async (event) => {
@@ -428,7 +434,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
 
   const addToCart = (event) => {
     event.stopPropagation();
-    if (needsSize) navigate(`/product?id=${encodeURIComponent(productId)}`);
+    if (rental || needsSize) navigate(`/product?id=${encodeURIComponent(productId)}`);
     else cart.addToCart(product);
   };
 
@@ -443,7 +449,7 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
         <img loading="lazy" decoding="async" src={image} alt={product.name} />
         {(product.isNewArrival || product.isBestSeller) && <span className={styles.productBadge}>{product.isBestSeller ? 'Bestseller' : 'New'}</span>}
         <button type="button" className={styles.wishlistButton} onClick={toggleWishlist} disabled={wishlist.loading} aria-label="Toggle wishlist" data-card-field="wishlist"><IconHeart fill={wishlisted ? '#7b1834' : 'none'} /></button>
-        <button type="button" className={styles.cartButton} onClick={addToCart} disabled={unavailable || cart.loading} aria-label={unavailable ? 'Out of stock' : needsSize ? 'Select a size' : 'Add to cart'} data-card-field="cart"><IconShoppingBag /></button>
+        <button type="button" className={styles.cartButton} onClick={addToCart} disabled={unavailable || (!rental && cart.loading)} aria-label={rental ? 'Check rental dates' : unavailable ? 'Out of stock' : needsSize ? 'Select a size' : 'Add to cart'} data-card-field="cart"><IconShoppingBag /></button>
         <button type="button" data-card-field="quick-view" className="absolute bottom-3 right-3 z-20 rounded-lg bg-white/95 px-3 py-2 text-[10px] font-black uppercase text-wine shadow" onClick={(event) => { event.stopPropagation(); setQuickOpen(true); }}>Quick view</button>
         {productImages.length > 1 && (
           <>
@@ -469,9 +475,9 @@ const LuxuryProductCard = memo(function LuxuryProductCard({ product, navigate, l
       <h3 data-card-field="title" title={product.name}>{product.name}</h3>
       <p className={styles.productCategory}>{formatCategory(product.category) || product.fabric || 'Collection'}</p>
       <div className={styles.priceRow} data-card-field="price">
-        <strong>Rs. {formatPrice(price)}</strong>
-        {originalPrice > price && <del>Rs. {formatPrice(originalPrice)}</del>}
-        {discount > 0 && <span data-card-field="discount">{discount}% OFF</span>}
+        <strong>{rental ? 'Check rental rates' : `Rs. ${formatPrice(price)}`}</strong>
+        {!rental && originalPrice > price && <del>Rs. {formatPrice(originalPrice)}</del>}
+        {!rental && discount > 0 && <span data-card-field="discount">{discount}% OFF</span>}
       </div>
       {Number(product.numReviews) > 0 && <div className={styles.ratingRow} data-card-field="rating">
         <span><IconStarFilled />{Number(product.rating || 0).toFixed(1)}</span>

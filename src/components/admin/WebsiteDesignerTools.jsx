@@ -31,10 +31,10 @@ export const PresetGallery = memo(function PresetGallery({ presets, currentPrese
     <div className="designer-tools-heading"><span className="designer-eyebrow"><Sparkles size={14} />Curated for your store</span><h2>Find your signature look</h2><p>Coordinated colors, type, buttons and cards. Apply to your draft, then make it your own.</p></div>
     <div className="designer-gallery__toolbar">
       <input aria-label="Search presets" placeholder="Search looks…" value={search} maxLength={100} onChange={(event) => setSearch(event.target.value)} />
-      <label><input type="checkbox" checked={includeMobile} onChange={(event) => setIncludeMobile(event.target.checked)} />Also match mobile colors & corners</label>
+      <label><input type="checkbox" checked={includeMobile} onChange={(event) => setIncludeMobile(event.target.checked)} />Also match mobile card corners</label>
     </div>
     <div className="designer-gallery__filters" aria-label="Preset collections">{collections.map((item) => <button type="button" key={item} aria-pressed={collection === item} onClick={() => setCollection(item)}>{item}</button>)}</div>
-    <p className="designer-help">{includeMobile ? 'Enables mobile styling while keeping its columns, images and section order.' : 'Desktop appearance and shared footer colors. Mobile styling stays as it is.'} Your logo, content, links and product selections are kept.</p>
+    <p className="designer-help">Published colours apply to desktop, mobile, loaders and admin. {includeMobile ? 'Mobile card corners also match; columns, images and section order stay unchanged.' : 'Mobile layout stays unchanged.'} Your logo, content, links and product selections are kept.</p>
     <div className="designer-gallery__grid">{filtered.map((preset) => <PresetCard key={preset.id} preset={preset} selected={currentPreset === preset.id} onApply={onApply} includeMobile={includeMobile} />)}</div>
     {!filtered.length && <p className="designer-empty">No matching presets. <button type="button" onClick={() => { setSearch(''); setCollection('All'); }}>Clear filters</button></p>}
     <p className="designer-help">{filtered.length} of {presets.length} looks · Every preset is editable · Use Undo to try another</p>

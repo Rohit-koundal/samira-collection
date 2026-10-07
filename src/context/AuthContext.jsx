@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import AppToast from '../components/ui/AppToast';
 import api from '../services/api';
 import { samiraApi } from '../store/apiSlice';
 import { logout as logoutAction, selectUser, setCredentials, setUser as setUserAction } from '../store/authSlice';
@@ -122,11 +122,11 @@ export function AuthProvider({ children, navigate }) {
       const data = await api.post('/auth/switch-mode', { mode });
       persist(data);
       resetSessionCache();
-      setToast(mode === 'admin' ? 'Switched to Admin Mode' : mode === 'seller' ? 'Switched to Seller Mode' : 'Switched to Customer Mode');
+      setToast({ message: mode === 'admin' ? 'Admin mode active' : mode === 'seller' ? 'Seller mode active' : 'Customer mode active', type: 'success' });
       navigate(redirectTo || (mode === 'admin' ? '/admin' : mode === 'seller' ? '/seller' : '/'));
       return { ok: true };
     } catch (error) {
-      setToast(error.message);
+      setToast({ message: error.message, type: 'error' });
       return { ok: false, error: error.message };
     }
   }, [navigate, persist, resetSessionCache, setToast]);
@@ -198,37 +198,7 @@ export function AuthProvider({ children, navigate }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {toast && (
-        <div className="pointer-events-none fixed right-3 top-3 z-[100] w-[min(22rem,calc(100vw-1.5rem))] md:right-4 md:top-4">
-          <div
-            role="status"
-            aria-live="polite"
-            className={`pointer-events-auto flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left shadow-2xl transition ${
-              toast.type === 'success'
-                ? 'border-emerald-700 bg-emerald-600 text-white'
-                : toast.type === 'error'
-                  ? 'border-red-700 bg-red-600 text-white'
-                  : toast.type === 'warning'
-                    ? 'border-amber-500 bg-amber-400 text-amber-950'
-                    : 'border-slate-700 bg-slate-800 text-white'
-            }`}
-          >
-            <span className="mt-0.5 shrink-0" aria-hidden="true">
-              {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5" />
-                : toast.type === 'error' ? <XCircle className="h-5 w-5" />
-                  : toast.type === 'warning' ? <AlertTriangle className="h-5 w-5" />
-                    : <Info className="h-5 w-5" />}
-            </span>
-            <div className="min-w-0 flex-1">
-              {toast.title ? <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-80">{toast.title}</p> : null}
-              <p className={`${toast.title ? 'mt-1' : ''} text-sm font-semibold leading-5`}>{toast.message}</p>
-            </div>
-            <button type="button" onClick={() => setToast('')} className="shrink-0 rounded-lg p-1 hover:bg-black/10" aria-label="Dismiss notification">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <AppToast toast={toast} onDismiss={() => setToast('')} activeMode={user?.activeMode || 'customer'} />
     </AuthContext.Provider>
   );
 }

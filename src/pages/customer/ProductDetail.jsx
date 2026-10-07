@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, MapPin, RotateCcw
 import LazyBoundary from '../../components/ui/LazyBoundary';
 import { ProductVisual } from '../../components/product/ProductCard';
 import ProductDetailPage from '../../components/product/ProductDetailPage';
+import RentalOffer from '../../components/rentals/RentalOffer';
+import CompleteLook from '../../components/product/CompleteLook';
 import PublicReviewCard from '../../components/product/PublicReviewCard';
 import Icon from '../../components/layout/Icon';
 import { useAuth } from '../../context/AuthContext';
@@ -129,9 +131,15 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
 
   useEffect(() => {
     if (!product?._id) return;
-    rememberRecentProduct(product._id, storeSlug);
-    trackEvent('PRODUCT_VIEW', { productId: product._id });
+    const track = () => trackEvent('PRODUCT_VIEW', { productId: product._id });
+    track();
+    window.addEventListener('store:traffic-privacy', track);
+    return () => window.removeEventListener('store:traffic-privacy', track);
   }, [product?._id, storeSlug]);
+  const historyEnabled = Boolean(settingsData) && settingsData.recentlyViewedEnabled !== false;
+  useEffect(() => {
+    if (product?._id && historyEnabled) rememberRecentProduct(product._id, storeSlug);
+  }, [product?._id, storeSlug, historyEnabled]);
 
   useEffect(() => {
     if (!productId) return undefined;
@@ -214,7 +222,8 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
   const selectedStock = hasManagedVariants(product || {}) && selectionIncomplete
     ? null
     : variantStock(product || {}, { size, color, variantId: selectedVariant?._id });
-  const isOutOfStock = selectedStock !== null && Number(selectedStock) <= 0;
+  const rentalOnly = settingsData?.commerceMode === 'RENTAL_ONLY' || product?.commerceMode === 'RENTAL_ONLY';
+  const isOutOfStock = rentalOnly || (selectedStock !== null && Number(selectedStock) <= 0);
   const sizeStock = (item) => {
     if (!hasManagedVariants(product || {})) return null;
     const matching = activeVariants(product || {}).filter((variant) => (
@@ -689,11 +698,11 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         />
       </div>
       <div className="lg:hidden">
-        <section className="bg-[#f5f5f6] pb-40 md:bg-ivory md:pb-10 md:pt-8">
+        <section className="bg-ivory pb-40 md:bg-ivory md:pb-10 md:pt-8">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-3 md:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <button type="button" onClick={backToCatalog} className="grid h-10 w-10 place-items-center rounded-full text-slate-700 active:bg-slate-100" aria-label="Back to products"><ChevronLeft className="h-6 w-6" /></button>
-          <span className="truncate text-[14px] font-semibold text-[#1f2a44]">Product Details</span>
+          <span className="truncate text-[14px] font-semibold text-charcoal">Product Details</span>
         </div>
         <div className="flex items-center gap-0.5 text-slate-800">
           <button type="button" onClick={() => navigate('/search')} className="grid h-10 w-10 place-items-center rounded-full active:bg-slate-100" aria-label="Search"><Icon name="search" className="h-5 w-5" /></button>
@@ -769,23 +778,23 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
               <Icon name="heart" className="h-4.5 w-4.5 md:h-5 md:w-5" />
             </button>
             </div>
-            <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            {!rentalOnly && <><div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="text-[20px] font-bold text-charcoal md:text-2xl">{formatRupees(dealPrice)}</span>
               {originalPrice > dealPrice && <span className="text-[13px] text-slate-400">MRP <span className="line-through">{formatRupees(originalPrice)}</span></span>}
               {discountPercentage > 0 && <span className="text-[13px] font-bold text-[#ff3e6c]">({discountPercentage}% OFF)</span>}
             </div>
-            <p className="mt-1 text-[11px] font-semibold text-emerald-600">Inclusive of all taxes</p>
+            <p className="mt-1 text-[11px] font-semibold text-emerald-600">Inclusive of all taxes</p></>}
             <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white">{Number(product.rating || 0).toFixed(1)} <Star className="h-3 w-3 fill-white" /></span>
               <span className="text-[11px] font-medium text-slate-500">{product.numReviews || reviews.length || 0} rating{(product.numReviews || reviews.length || 0) === 1 ? '' : 's'}</span>
-              <span className="ml-auto text-[11px] font-semibold text-slate-500">{isOutOfStock ? 'Out of stock' : 'In stock'}</span>
+              <span className="ml-auto text-[11px] font-semibold text-slate-500">{rentalOnly ? 'Check rental dates below' : isOutOfStock ? 'Out of stock' : 'In stock'}</span>
             </div>
           </div>
 
-          <div className="rounded-[14px] bg-white p-4 md:rounded-2xl">
+          {!rentalOnly && <><div className="rounded-[14px] bg-white p-4 md:rounded-2xl">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[14px] font-bold text-charcoal">Price details</h2>
-              {discountPrice > 0 && <span className="rounded-full bg-[#fff0f4] px-3 py-1 text-[10px] font-bold text-[#ff3e6c]">You save {formatRupees(discountPrice)}</span>}
+              {discountPrice > 0 && <span className="rounded-full bg-blush px-3 py-1 text-[10px] font-bold text-[#ff3e6c]">You save {formatRupees(discountPrice)}</span>}
             </div>
             <dl className="mt-3 space-y-2 text-[12px]">
               <PriceRow label="Maximum retail price" value={formatRupees(originalPrice)} />
@@ -807,7 +816,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                     const remaining = sizeStock(item);
                     const available = isSizeAvailable(product, item);
                     return <span key={item} className="relative inline-grid place-items-center">
-                      <button type="button" disabled={!available} onClick={() => selectDesktopSize(item)} className={`grid h-12 min-w-12 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:h-14 md:min-w-14 ${size === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`} aria-label={`Size ${item}${available ? '' : ', unavailable'}`} aria-pressed={size === item}>{item}</button>
+                      <button type="button" disabled={!available} onClick={() => selectDesktopSize(item)} className={`grid h-12 min-w-12 place-items-center rounded-full border px-3 text-[12px] font-bold disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:line-through md:h-14 md:min-w-14 ${size === item ? 'border-[#ff3e6c] bg-blush text-[#ff3e6c] ring-1 ring-[#ff3e6c]' : 'border-slate-300 bg-white text-charcoal'}`} aria-label={`Size ${item}${available ? '' : ', unavailable'}`} aria-pressed={size === item}>{item}</button>
                       {available && Number.isFinite(remaining) && remaining > 0 && remaining <= 3 ? <small className="absolute -bottom-2 right-[-4px] rounded-[3px] bg-[#ff7f50] px-1.5 py-0.5 text-[8px] font-black leading-none text-white">{remaining} left</small> : null}
                     </span>;
                   })}
@@ -825,7 +834,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                       type="button"
                       disabled={!isColorAvailable(product, item, size)}
                       onClick={() => selectDesktopColor(item)}
-                      className={`inline-flex h-10 items-center gap-2 rounded-full border px-3 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-35 ${color === item ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}
+                      className={`inline-flex h-10 items-center gap-2 rounded-full border px-3 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-35 ${color === item ? 'border-[#ff3e6c] bg-blush text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}
                       aria-label={`Select color ${item}`}
                     >
                       <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: colorSwatches[item] || '#d8b4c0' }} />
@@ -843,7 +852,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                     const active = String(selectedVariant?._id || '') === String(variant._id || '');
                     const available = variant.isActive !== false && Number(variant.stock || 0) > 0;
                     return (
-                      <button key={variant._id || formatManagedVariant(variant)} type="button" disabled={!available} onClick={() => selectManagedVariant(variant)} className={`min-h-12 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}>
+                      <button key={variant._id || formatManagedVariant(variant)} type="button" disabled={!available} onClick={() => selectManagedVariant(variant)} className={`min-h-12 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'border-[#ff3e6c] bg-blush text-[#ff3e6c]' : 'border-slate-200 bg-white text-charcoal'}`}>
                         <span className="block">{formatManagedVariant(variant)}</span>
                         <small className="mt-1 block text-[9px] font-medium opacity-70">{available ? `${variant.stock} available` : 'Out of stock'}</small>
                       </button>
@@ -866,14 +875,15 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             </div>
           </section>
 
+          </>}
           {variantMembers.length > 1 ? (
-            <section className="rounded-[14px] bg-white p-4 md:rounded-2xl md:border md:border-[#eadfd5]">
+            <section className="rounded-[14px] bg-white p-4 md:rounded-2xl md:border md:border-theme-border">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-[.12em] text-[#9b3150]">Product family</p>
                   <h2 className="mt-1 text-[14px] font-bold text-charcoal md:text-xl">Choose {variantGroupData?.data?.optionDefinitions?.map((item) => item.label).join(' / ') || 'a style'}</h2>
                 </div>
-                <span className="rounded-full bg-[#f8eef1] px-2.5 py-1 text-[9px] font-bold text-[#7a1f36]">{variantMembers.length} choices</span>
+                <span className="rounded-full bg-[#f8eef1] px-2.5 py-1 text-[9px] font-bold text-wine">{variantMembers.length} choices</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {variantMembers.map((member) => {
@@ -891,14 +901,14 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
                       disabled={!available && !isCurrent}
                       onClick={() => navigate(`/product?id=${encodeURIComponent(variantId)}${compatibleSize ? `&size=${encodeURIComponent(compatibleSize)}` : ''}`)}
                       aria-current={isCurrent ? 'true' : undefined}
-                      className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${isCurrent ? 'border-[#7a1f36] bg-[#fff2f6] shadow-[inset_0_0_0_1px_#7a1f36]' : 'border-slate-200 bg-white hover:border-[#bd7589]'}`}
+                      className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${isCurrent ? 'border-wine bg-[#fff2f6] shadow-[inset_0_0_0_1px_#7a1f36]' : 'border-slate-200 bg-white hover:border-[#bd7589]'}`}
                     >
                       {member.swatch && /^#[0-9a-f]{3,8}$/i.test(member.swatch) ? <span className="h-9 w-9 shrink-0 rounded-lg border border-black/10" style={{ backgroundColor: member.swatch }} /> : image ? <img src={image} alt="" className="h-11 w-9 shrink-0 rounded-lg object-cover" /> : <span className="grid h-11 w-9 shrink-0 place-items-center rounded-lg bg-[#f5e9e4] text-[9px] font-black text-[#8c2947]">SC</span>}
                       <span className="min-w-0 flex-1">
                         <b className="block truncate text-[10px] font-bold text-charcoal md:text-[11px]" title={member.label}>{member.label || variantProduct.variantColor || variantProduct.name}</b>
                         <small className={`mt-1 block text-[9px] font-semibold ${available ? 'text-emerald-700' : 'text-rose'}`}>{available ? `₹${Number(variantProduct.price || 0).toLocaleString('en-IN')}${difference ? ` · ${difference > 0 ? '+' : '−'}₹${Math.abs(difference).toLocaleString('en-IN')}` : ''}` : 'Out of stock'}</small>
                       </span>
-                      {isCurrent && <CheckCircle2 className="h-4 w-4 shrink-0 text-[#7a1f36]" />}
+                      {isCurrent && <CheckCircle2 className="h-4 w-4 shrink-0 text-wine" />}
                     </button>
                   );
                 })}
@@ -906,7 +916,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             </section>
           ) : null}
 
-          <div className="hidden gap-3 md:flex">
+          {!rentalOnly && <div className="hidden gap-3 md:flex">
             <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`h-14 flex-1 rounded-xl px-5 py-4 text-sm font-black text-white disabled:opacity-50 ${cartItem ? 'bg-emerald-600' : 'bg-rose'}`}>
               {cartBusy ? 'Adding…' : cartItem ? 'Add More' : 'Add to Cart'}
             </button>
@@ -914,9 +924,11 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             <button disabled={isOutOfStock} onClick={orderOnWhatsApp} className="h-14 flex-1 rounded-xl border border-emerald-600 px-5 py-4 text-sm font-black text-emerald-700 disabled:opacity-50">
               Order on WhatsApp
             </button>
-          </div>
+          </div>}
 
           {actionMessage && <p className="rounded-[14px] bg-[#fff4f7] px-4 py-3 text-[12px] font-semibold leading-5 text-rose md:rounded-2xl" role="status">{actionMessage}</p>}
+
+          <RentalOffer productId={productId} navigate={navigate} />
 
           <section className="rounded-[14px] bg-white p-4 md:space-y-2 md:rounded-none md:bg-transparent md:p-0 md:pt-2">
             <div className="flex items-center gap-2">
@@ -925,7 +937,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             </div>
             <p className="mt-2 text-[10px] leading-4 text-slate-500">Enter your PIN code to check delivery and Cash on Delivery availability.</p>
             <div className="mt-3 flex gap-2">
-              <label className="flex h-12 min-w-0 flex-1 items-center rounded-[10px] border border-slate-300 bg-white px-3 focus-within:border-[#ff3e6c]">
+              <label className="sc-field-shell flex h-12 min-w-0 flex-1 items-center rounded-[10px] border border-slate-300 bg-white px-3 focus-within:border-[#ff3e6c]">
                 <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
                 <input value={deliveryPin} onChange={(event) => setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="min-w-0 flex-1 bg-transparent px-2 text-[12px] font-semibold outline-none" placeholder="Enter delivery PIN" inputMode="numeric" aria-label="Delivery PIN code" />
               </label>
@@ -990,7 +1002,7 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             `More ${product.colors?.[0] || ''} ${product.category}`,
             `More ${product.category}`,
           ].map((label) => (
-            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 py-3.5 text-left text-[12px] font-semibold text-[#1f2a44] last:border-b-0 md:text-lg md:font-black">
+            <button key={label} type="button" onClick={() => navigate(`/products?category=${product.categoryId || ''}`)} className="flex w-full items-center justify-between gap-3 border-b border-slate-100 py-3.5 text-left text-[12px] font-semibold text-charcoal last:border-b-0 md:text-lg md:font-black">
               {label.trim()}
               <ChevronRight className="h-4 w-4 text-rose" />
             </button>
@@ -999,12 +1011,12 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
         <p className="small-text mt-8 text-slate-500">Product Code: {product.sku || productId}</p>
       </div>
 
-      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      {!rentalOnly && <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
         <div className={`grid gap-2 ${storeWhatsappNumber ? 'grid-cols-[.9fr_1.2fr_.9fr]' : 'grid-cols-2'}`}>
-          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={buyNow} className="h-12 rounded-[10px] border border-[#7a1f36] bg-white px-2 text-[12px] font-bold text-[#7a1f36] disabled:border-slate-200 disabled:text-slate-400">
+          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={buyNow} className="h-12 rounded-[10px] border border-wine bg-white px-2 text-[12px] font-bold text-wine disabled:border-slate-200 disabled:text-slate-400">
             {cartBusy ? 'Adding…' : selectableSizes.length && !size ? 'Select size' : 'Buy Now'}
           </button>
-          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`flex h-12 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12px] font-bold text-white disabled:bg-slate-300 ${cartItem ? 'bg-emerald-600' : 'bg-[#7a1f36]'}`}>
+          <button disabled={isOutOfStock || cartBusy || cart.loading} onClick={add} className={`flex h-12 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12px] font-bold text-white disabled:bg-slate-300 ${cartItem ? 'bg-emerald-600' : 'bg-wine'}`}>
             <Icon name="bag" className="h-4 w-4" />
             {cartBusy ? 'Adding…' : isOutOfStock ? 'Out of Stock' : selectableSizes.length && !size ? 'Select size' : cartItem ? 'Add More' : 'Add to Bag'}
           </button>
@@ -1012,10 +1024,12 @@ export default function ProductDetail({ navigate: navigateRoute, route = '' }) {
             WhatsApp
           </button> : null}
         </div>
-      </div>
+      </div>}
 
         </section>
       </div>
+
+      <CompleteLook key={`${storeSlug}:${productId}`} productId={productId} storeSlug={storeSlug} navigate={navigate} />
 
       {reviewModalOpen && <LazyBoundary><Suspense fallback={<p role="status" className="p-4 text-sm">Loading review form…</p>}><ReviewModal
         open={reviewModalOpen}
@@ -1175,7 +1189,7 @@ function PriceRow({ label, value, strong = false, valueClass = '' }) {
 function ServiceRow({ icon: ServiceIcon, title, detail }) {
   return (
     <div className="flex gap-3 py-3.5">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#fff0f4] text-[#ff3e6c]">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blush text-[#ff3e6c]">
         <ServiceIcon className="h-4 w-4" />
       </span>
       <div className="min-w-0">
@@ -1314,7 +1328,7 @@ function ReviewsSection({
         </div>
 
         <div className="hide-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-          {[0, 5, 4, 3, 2, 1].map((value) => <button key={value} type="button" onClick={() => { setRatingFilter(value); setShowAll(false); }} className={`min-w-max rounded-full border px-3 py-1.5 text-[10px] font-bold ${ratingFilter === value ? 'border-[#ff3e6c] bg-[#fff0f4] text-[#ff3e6c]' : 'border-slate-200 bg-white text-slate-500'}`}>{value ? `${value} ★ (${distribution?.[value] || 0})` : `All (${total})`}</button>)}
+          {[0, 5, 4, 3, 2, 1].map((value) => <button key={value} type="button" onClick={() => { setRatingFilter(value); setShowAll(false); }} className={`min-w-max rounded-full border px-3 py-1.5 text-[10px] font-bold ${ratingFilter === value ? 'border-[#ff3e6c] bg-blush text-[#ff3e6c]' : 'border-slate-200 bg-white text-slate-500'}`}>{value ? `${value} ★ (${distribution?.[value] || 0})` : `All (${total})`}</button>)}
         </div>
 
         {visibleReviews.length ? (

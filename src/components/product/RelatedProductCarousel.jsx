@@ -7,7 +7,7 @@ import './RelatedProductCarousel.css';
 import { isUnavailable, wishlistPrice, wishlistStock } from '../../utils/wishlist';
 import { getSelectableSizes } from '../../utils/productSizing';
 
-export default function RelatedProductCarousel({ products = [], navigate }) {
+export default function RelatedProductCarousel({ products = [], navigate, title = 'You may also like', description = 'Curated styles that pair beautifully with this look' }) {
   const railRef = useRef(null);
   const cart = useCart();
   const wishlist = useWishlist();
@@ -23,8 +23,8 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
     <section className="sc-related">
       <div className="sc-related__head">
         <div>
-          <h2>You may also like</h2>
-          <p>Curated styles that pair beautifully with this look</p>
+          <h2>{title}</h2>
+          <p>{description}</p>
         </div>
         <div className="sc-related__nav">
           <button type="button" onClick={() => slide(-1)} aria-label="Previous products">
@@ -43,7 +43,8 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
           const price = Number(product.price || 0).toLocaleString('en-IN');
           const original = Number(product.originalPrice || product.price || 0).toLocaleString('en-IN');
           const discount = wishlistPrice(product).discount;
-          const unavailable = isUnavailable(product) || wishlistStock(product) === 0;
+          const rental = product.discoveryPurchase === 'RENTAL' || product.commerceMode === 'RENTAL_ONLY';
+          const unavailable = !rental && (isUnavailable(product) || wishlistStock(product) === 0);
           const isWishlisted = wishlist.items.some((item) => (item._id || item.id || item.slug) === productId);
           const cartItem = cart.getCartItem(product);
           const needsSize = getSelectableSizes(product).length > 0;
@@ -68,13 +69,14 @@ export default function RelatedProductCarousel({ products = [], navigate }) {
               <div className="sc-related__body">
                 <h3 title={product.name}>{product.name}</h3>
                 <div className="sc-related__meta">
-                  <span className="sc-related__price">Rs. {price}</span>
-                  {Number(product.originalPrice) > Number(product.price) && <span className="sc-related__original">Rs. {original}</span>}
+                  <span className="sc-related__price">{rental ? product.rentalPreview ? `₹${(product.rentalPreview.dailyRatePaise / 100).toLocaleString('en-IN')} / day` : 'Check rental rates' : `Rs. ${price}`}</span>
+                  {!rental && Number(product.originalPrice) > Number(product.price) && <span className="sc-related__original">Rs. {original}</span>}
                 </div>
-                {discount > 0 && <p className="sc-related__discount">({discount}% OFF)</p>}
-                <button type="button" disabled={unavailable || cart.loading} className={`sc-related__cart disabled:opacity-50${cartItem ? ' sc-related__cart--active' : ''}`} onClick={() => needsSize ? navigate(`/product?id=${productId}`) : cart.addToCart(product)}>
+                {rental && product.rentalPreview && <p>Refundable deposit: ₹{(product.rentalPreview.depositPaise / 100).toLocaleString('en-IN')}</p>}
+                {!rental && discount > 0 && <p className="sc-related__discount">({discount}% OFF)</p>}
+                <button type="button" disabled={unavailable || (!rental && cart.loading)} className={`sc-related__cart disabled:opacity-50${cartItem && !rental ? ' sc-related__cart--active' : ''}`} onClick={() => rental ? navigate(`/rental-book?product=${encodeURIComponent(productId)}`) : needsSize ? navigate(`/product?id=${productId}`) : cart.addToCart(product)}>
                   <ShoppingBag size={15} />
-                  {unavailable ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add More' : 'Add to Cart'}
+                  {rental ? 'Check rental dates' : unavailable ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add More' : 'Add to Cart'}
                 </button>
               </div>
             </article>

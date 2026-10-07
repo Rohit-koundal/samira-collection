@@ -169,6 +169,7 @@ function prepareImages(images) {
   return normalized.map((image) => ({
     url: image.url,
     publicId: image.publicId,
+      ...(image.background ? { background: image.background } : {}),
     primary: Boolean(image.primary),
   }));
 }

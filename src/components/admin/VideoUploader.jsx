@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
 import { useAuth } from '../../context/AuthContext';
+import { newUploadKey, selectionFingerprint } from '../../services/uploadRetry';
 
 const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 
@@ -20,6 +21,7 @@ export default function VideoUploader({
   const { notify } = useAuth();
   const inputRef = useRef(null);
   const uploadLock = useRef(false);
+  const pendingUpload = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -50,14 +52,18 @@ export default function VideoUploader({
     setUploading(true);
     onBusyChange?.(true);
     try {
+      const signature = `${uploadPath}:${uploadContext}:${await selectionFingerprint(incoming)}`;
+      if (pendingUpload.current?.signature !== signature) pendingUpload.current = { signature, key: newUploadKey() };
       setProgress(35);
-      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos' });
+      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, incoming, { fieldName: 'videos', idempotencyKey: pendingUpload.current.key });
       setProgress(100);
       const uploaded = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
-      if (!uploaded.length) throw new Error('No video was uploaded. Please try again.');
+      if (uploaded.length !== incoming.length) throw new Error('Not all videos were confirmed. Retry to finish this upload.');
       onChange(multiple ? [...videos, ...uploaded].slice(0, maxFiles) : uploaded.slice(0, 1));
+      pendingUpload.current = null;
       notify(`${uploaded.length} product video${uploaded.length > 1 ? 's' : ''} uploaded successfully.`, 'success', 'Product video');
     } catch (uploadError) {
+      if (uploadError.code === 'UPLOAD_RETRY_CONFLICT') pendingUpload.current = null;
       notify(uploadError.message || 'Video upload failed. Please try again.', 'error', 'Product video');
     } finally {
       if (inputRef.current) inputRef.current.value = '';

@@ -61,6 +61,8 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   const [publishing, setPublishing] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const publishingRef = useRef(false);
+  const deletingRef = useRef(false);
+  const uploadingRef = useRef(false);
   const { notify } = useDesktopFeedback();
 
   const loadStructure = useCallback(() => api.get('/catalog-configuration')
@@ -114,13 +116,16 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   }, [notify]);
 
   const onUpload = async () => {
+    if (uploadingRef.current) return;
     if (!files.length) return showFeedback('Choose one or more product photos first.', 'warning');
+    uploadingRef.current = true;
     try {
       const result = await bulkUploadProductDrafts({ files, groupMode, apiPrefix }).unwrap();
       const created = result?.data?.drafts?.length || (groupMode === 'single' ? 1 : files.length);
       setFiles([]); setUploadOpen(false); setPage(1);
       showFeedback(`${created} product draft${created === 1 ? '' : 's'} created.`, 'success');
-    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft upload failed.', 'error'); }
+    } catch (error) { showFeedback(error.data?.message || error.message || 'Draft upload failed. Your selected photos are kept; retry to continue.', 'error'); }
+    finally { uploadingRef.current = false; }
   };
 
   const saveDraft = useCallback(async (form, { silent = false } = {}) => {
@@ -155,16 +160,21 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
   };
 
   const permanentlyDelete = async () => {
-    if (!pendingDelete || actionBusy) return;
+    if (!pendingDelete || actionBusy || deletingRef.current) return;
     const expected = String(pendingDelete.name || draftId(pendingDelete)).trim();
     if (deleteConfirmation.trim() !== expected) return;
+    deletingRef.current = true;
     setActionBusy(true);
     try {
-      await deleteProductDraft({ id: draftId(pendingDelete), confirm: expected, apiPrefix }).unwrap();
+      await deleteProductDraft({ id: draftId(pendingDelete), confirm: expected, baseRevision: Number(pendingDelete.revision || 0), apiPrefix }).unwrap();
       setPendingDelete(null); setDeleteConfirmation('');
-      showFeedback('Archived draft deleted permanently.', 'success');
+      if (draftId(editorDraft) === draftId(pendingDelete)) setEditorDraft(null);
+      if (draftId(previewDraft) === draftId(pendingDelete)) setPreviewDraft(null);
+      setSelected(current => current.filter(id => id !== draftId(pendingDelete)));
+      try { localStorage.removeItem(`samira-product-draft:${draftId(pendingDelete)}`); } catch { /* Storage may be unavailable. */ }
+      showFeedback(pendingDelete.publishedProductId ? 'Published draft removed. Its product is unchanged.' : 'Draft deleted permanently.', 'success');
     } catch (error) { showFeedback(error.data?.message || error.message || 'Draft could not be deleted.', 'error'); }
-    finally { setActionBusy(false); }
+    finally { deletingRef.current = false; setActionBusy(false); }
   };
 
   const publishIds = async (ids) => {
@@ -231,11 +241,11 @@ export default function ProductDrafts({ route = '/admin/product-drafts' }) {
     {uploadOpen && <UploadPanel files={files} setFiles={setFiles} groupMode={groupMode} setGroupMode={setGroupMode} uploading={uploading} onUpload={onUpload} onClose={() => { setUploadOpen(false); setFiles([]); }} />}
 
     <div className="draft-summary-grid" aria-label="Draft summary">
-      <SummaryButton label="All active" value={Number(summary.draft || 0) + Number(summary.published || 0)} active={status === 'active' && !readiness} onClick={() => chooseSummary('', 'active')} />
+      <SummaryButton label="Draft queue" value={Number(summary.draft || 0)} active={status === 'active' && !readiness} onClick={() => chooseSummary('', 'active')} />
       <SummaryButton label="Needs details" value={summary.incomplete || 0} tone="danger" active={readiness === 'incomplete'} onClick={() => chooseSummary('incomplete')} />
       <SummaryButton label="Needs review" value={summary.review || 0} active={readiness === 'review'} onClick={() => chooseSummary('review')} />
       <SummaryButton label="Ready" value={summary.ready || 0} tone="success" active={readiness === 'ready'} onClick={() => chooseSummary('ready')} />
-      <SummaryButton label="Published" value={summary.published || 0} active={status === 'published'} onClick={() => chooseSummary('', 'published')} />
+      <SummaryButton label="Published history" value={summary.published || 0} active={status === 'published'} onClick={() => chooseSummary('', 'published')} />
       <SummaryButton label="Archived" value={summary.archived || 0} active={status === 'archived'} onClick={() => chooseSummary('', 'archived')} />
     </div>
 
@@ -262,7 +272,7 @@ function UploadPanel({ files, setFiles, groupMode, setGroupMode, uploading, onUp
   const previews = useMemo(() => files.map((file) => ({ file, url: URL.createObjectURL(file) })), [files]);
   useEffect(() => () => previews.forEach((item) => URL.revokeObjectURL(item.url)), [previews]);
   const add = (incoming) => setFiles((current) => [...current, ...Array.from(incoming || [])].slice(0, 30));
-  return <section className="admin-card draft-upload-panel" aria-label="Create drafts from photos"><div className="draft-panel-heading"><div><p>FAST CATALOG SETUP</p><h2>Create drafts from product photos</h2><span>Photos stay editable before anything is published.</span></div><button type="button" onClick={onClose} aria-label="Close upload panel"><X /></button></div><div className="draft-upload-options"><label className={groupMode === 'single' ? 'is-selected' : ''}><input type="radio" name="draft-group" checked={groupMode === 'single'} onChange={() => setGroupMode('single')} /><strong>One product, multiple photos</strong><span>Use when every photo shows the same item.</span></label><label className={groupMode === 'separate' ? 'is-selected' : ''}><input type="radio" name="draft-group" checked={groupMode === 'separate'} onChange={() => setGroupMode('separate')} /><strong>One draft per photo</strong><span>Use when each photo is a different item.</span></label></div><label className="draft-dropzone"><Upload size={24} /><strong>Choose up to 30 product photos</strong><span>JPG, PNG or WEBP. Each photo can be up to 2MB.</span><input type="file" multiple accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => add(event.target.files)} /></label>{!!previews.length && <div className="draft-upload-previews">{previews.map(({ file, url }, index) => <figure key={`${file.name}-${file.size}-${index}`}><img src={url} alt="" /><figcaption title={file.name}>{file.name}</figcaption><button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}><X size={14} /></button>{index === 0 && groupMode === 'single' && <b>Cover</b>}</figure>)}</div>}<div className="draft-upload-actions"><span>{files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} selected` : 'No photos selected'}</span><button type="button" className="admin-btn-ghost" disabled={!files.length || uploading} onClick={() => setFiles([])}>Clear</button><button type="button" className="admin-btn" disabled={!files.length || uploading} onClick={onUpload}>{uploading ? 'Creating drafts...' : groupMode === 'single' ? 'Create one draft' : `Create ${files.length} drafts`}</button></div></section>;
+  return <section className="admin-card draft-upload-panel" aria-label="Create drafts from photos"><div className="draft-panel-heading"><div><p>FAST CATALOG SETUP</p><h2>Create drafts from product photos</h2><span>Photos stay editable before anything is published.</span></div><button type="button" disabled={uploading} onClick={onClose} aria-label="Close upload panel"><X /></button></div><div className="draft-upload-options"><label className={groupMode === 'single' ? 'is-selected' : ''}><input type="radio" disabled={uploading} name="draft-group" checked={groupMode === 'single'} onChange={() => setGroupMode('single')} /><strong>One product, multiple photos</strong><span>Use when every photo shows the same item.</span></label><label className={groupMode === 'separate' ? 'is-selected' : ''}><input type="radio" disabled={uploading} name="draft-group" checked={groupMode === 'separate'} onChange={() => setGroupMode('separate')} /><strong>One draft per photo</strong><span>Use when each photo is a different item.</span></label></div><label className="draft-dropzone"><Upload size={24} /><strong>Choose up to 30 product photos</strong><span>JPG, PNG or WEBP. Each photo can be up to 2MB.</span><input type="file" disabled={uploading} multiple accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => add(event.target.files)} /></label>{!!previews.length && <div className="draft-upload-previews">{previews.map(({ file, url }, index) => <figure key={`${file.name}-${file.size}-${index}`}><img src={url} alt="" /><figcaption title={file.name}>{file.name}</figcaption><button type="button" disabled={uploading} onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}><X size={14} /></button>{index === 0 && groupMode === 'single' && <b>Cover</b>}</figure>)}</div>}<div className="draft-upload-actions"><span>{files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} selected` : 'No photos selected'}</span><button type="button" className="admin-btn-ghost" disabled={!files.length || uploading} onClick={() => setFiles([])}>Clear</button><button type="button" className="admin-btn" disabled={!files.length || uploading} onClick={onUpload}>{uploading ? 'Creating drafts...' : groupMode === 'single' ? 'Create one draft' : `Create ${files.length} drafts`}</button></div></section>;
 }
 
 function DraftQueueCard({ draft, selected, busy, onSelect, onEdit, onPreview, onArchive, onRestore, onDelete }) {
@@ -270,7 +280,14 @@ function DraftQueueCard({ draft, selected, busy, onSelect, onEdit, onPreview, on
   const image = draft.images?.find((item) => item.primary)?.url || draft.images?.[0]?.url || draft.image;
   const published = draft.status === 'published'; const archived = draft.status === 'archived';
   const statusLabel = published ? 'Published' : archived ? 'Archived' : readiness.state === 'incomplete' ? 'Needs details' : readiness.state === 'ready' ? 'Ready' : 'Review';
-  return <article className={`draft-queue-card ${selected ? 'is-selected' : ''}`}><div className="draft-queue-card__image">{image ? <img src={normalizeImageUrl(image)} alt={draft.name || 'Product draft'} loading="lazy" /> : <ImagePlus size={30} />}<span className={`draft-status is-${readiness.state}`}>{statusLabel}</span>{draft.status === 'draft' && <label aria-label={`Select ${draft.name || 'draft'}`}><input type="checkbox" checked={selected} disabled={busy} onChange={onSelect} /></label>}</div><div className="draft-queue-card__body"><div><p>{sourceLabel(draft.sourceType)}</p><h3 title={draft.name || 'Unnamed product'}>{draft.name || 'Unnamed product'}</h3><span>{categoryName(draft.category) || 'Category not selected'} · Updated {formatRelative(draft.updatedAt)}</span></div><div className="draft-progress"><span><i style={{ width: `${readiness.score || 0}%` }} /></span><b>{readiness.score || 0}% complete</b></div>{(draft.lastPublishError || readiness.issues?.[0]) && <p className="draft-first-issue">{draft.lastPublishError || readiness.issues[0]}</p>}</div><div className="draft-queue-card__actions">{published && draft.publishedProductId ? <a className="admin-btn" href={`/admin/products/edit?id=${encodeURIComponent(draft.publishedProductId)}`}><FilePenLine size={15} />Edit product</a> : archived ? <><button type="button" className="admin-btn" onClick={onRestore} disabled={busy}><ArchiveRestore size={15} />Restore</button><button type="button" className="draft-danger-button" onClick={onDelete} disabled={busy || draft.publishedProductId} title={draft.publishedProductId ? 'Published draft history is retained' : ''}><Trash2 size={15} />Delete</button></> : <><button type="button" className="admin-btn" onClick={onEdit} disabled={busy}><FilePenLine size={15} />Review</button><button type="button" className="admin-btn-ghost" onClick={onPreview}><Eye size={15} />Preview</button><button type="button" className="draft-icon-button" onClick={onArchive} disabled={busy} aria-label="Archive draft"><Archive size={16} /></button></>}</div></article>;
+  return <article className={`draft-queue-card ${selected ? 'is-selected' : ''}`}>
+    <div className="draft-queue-card__image">{image ? <img src={normalizeImageUrl(image)} alt={draft.name || 'Product draft'} loading="lazy" /> : <ImagePlus size={30} />}<span className={`draft-status is-${readiness.state}`}>{statusLabel}</span>{draft.status === 'draft' && <label aria-label={`Select ${draft.name || 'draft'}`}><input type="checkbox" checked={selected} disabled={busy} onChange={onSelect} /></label>}</div>
+    <div className="draft-queue-card__body"><div><p>{sourceLabel(draft.sourceType)}</p><h3 title={draft.name || 'Unnamed product'}>{draft.name || 'Unnamed product'}</h3><span>{categoryName(draft.category) || 'Category not selected'} · Updated {formatRelative(draft.updatedAt)}</span></div><div className="draft-progress"><span><i style={{ width: `${readiness.score || 0}%` }} /></span><b>{readiness.score || 0}% complete</b></div>{(draft.lastPublishError || readiness.issues?.[0]) && <p className="draft-first-issue">{draft.lastPublishError || readiness.issues[0]}</p>}</div>
+    <div className="draft-queue-card__actions">
+      {published && draft.publishedProductId ? draft.publishedProductDeleted ? <span className="draft-inline-note">Product permanently removed</span> : <a className="admin-btn" href={`/admin/products/edit?id=${encodeURIComponent(draft.publishedProductId)}`}><FilePenLine size={15} />Edit product</a> : archived ? <button type="button" className="admin-btn" onClick={onRestore} disabled={busy}><ArchiveRestore size={15} />Restore</button> : <><button type="button" className="admin-btn" onClick={onEdit} disabled={busy}><FilePenLine size={15} />Review</button><button type="button" className="admin-btn-ghost" onClick={onPreview}><Eye size={15} />Preview</button><button type="button" className="draft-icon-button" onClick={onArchive} disabled={busy} aria-label="Archive draft"><Archive size={16} /></button></>}
+      {(published || archived) && <button type="button" className="draft-danger-button" onClick={onDelete} disabled={busy}><Trash2 size={15} />{published ? 'Remove draft' : 'Delete'}</button>}
+    </div>
+  </article>;
 }
 
 function DraftEditor({ draft, categories, structure, apiPrefix, onClose, onSave, onPublish, onPreview }) {
@@ -415,7 +432,25 @@ function VisibilityFields({ form, update }) {
 
 function ConfirmDelete({ draft, value, onChange, busy, onCancel, onDelete }) {
   const expected = String(draft.name || draftId(draft)).trim();
-  return <div className="draft-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title"><div className="draft-confirm"><span className="draft-confirm__icon"><Trash2 /></span><h2 id="delete-draft-title">Delete archived draft permanently?</h2><p>This cannot be undone. Its published product is never deleted by this action.</p><label>Type <strong>{expected}</strong> to confirm<TextInput autoFocus value={value} onChange={(event) => onChange(event.target.value)} /></label><div><button type="button" className="admin-btn-ghost" onClick={onCancel}>Cancel</button><button type="button" className="draft-danger-button" disabled={busy || value.trim() !== expected} onClick={onDelete}>Delete permanently</button></div></div></div>;
+  const dialogRef = useRef(null);
+  const latest = useRef({ busy, onCancel });
+  latest.current = { busy, onCancel };
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const keydown = event => {
+      if (event.key === 'Escape' && !latest.current.busy) { event.preventDefault(); latest.current.onCancel(); }
+      if (event.key !== 'Tab') return;
+      const nodes = [...dialogRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+      if (!nodes.length) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes[nodes.length - 1].focus(); }
+      else if (!event.shiftKey && document.activeElement === nodes[nodes.length - 1]) { event.preventDefault(); nodes[0].focus(); }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', keydown); previousFocus?.focus?.(); };
+  }, []);
+  return <div ref={dialogRef} className="draft-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title"><div className="draft-confirm"><span className="draft-confirm__icon"><Trash2 /></span><h2 id="delete-draft-title">{draft.publishedProductId ? 'Remove published draft?' : 'Delete archived draft permanently?'}</h2><p>{draft.publishedProductId ? 'Only the draft record is removed. Its published product, images and inventory remain unchanged. A minimal publication receipt prevents duplicate imports.' : 'This cannot be undone. This removes the archived draft, not a live product.'}</p><label>Type <strong>{expected}</strong> to confirm<TextInput autoFocus value={value} disabled={busy} onChange={(event) => onChange(event.target.value)} /></label><div><button type="button" className="admin-btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button><button type="button" className="draft-danger-button" disabled={busy || value.trim() !== expected} onClick={onDelete}>{busy ? 'Deleting...' : 'Delete permanently'}</button></div></div></div>;
 }
 
 function Field({ label, required, children }) { return <label className="draft-field"><span>{label}{required && <b>Required</b>}</span>{children}</label>; }

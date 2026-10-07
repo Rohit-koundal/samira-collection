@@ -47,7 +47,7 @@
 .content-card__summary[aria-expanded="true"]>span:last-child>svg { transform:rotate(180deg); }
 .content-card__icon { display:grid; place-content:center; width:34px; height:34px; border-radius:10px; background:#f7e9ee; color:var(--cs-wine); }
 .content-pill { border-radius:999px; background:#f7e8ee; padding:.3rem .55rem; color:var(--cs-wine); font-size:.6rem; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
-.content-card fieldset { border-top:1px solid var(--cs-line); padding:1rem; background:#fffdfb; }
+.content-card fieldset { border-top:1px solid var(--cs-line); padding:1rem; background:var(--site-background, #fffdfb); }
 .content-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem; }
 .content-field { display:grid; align-content:start; gap:.4rem; min-width:0; }.content-field:has(textarea) { grid-column:1/-1; }
 .content-field>label { display:flex; justify-content:space-between; gap:.5rem; font-size:.7rem; font-weight:850; }

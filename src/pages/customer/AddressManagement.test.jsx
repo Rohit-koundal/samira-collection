@@ -136,3 +136,22 @@ test('an outdated pincode lookup cannot overwrite a newer location', async () =>
   expect(screen.getByLabelText('State')).toHaveValue('');
   jest.useRealTimers();
 });
+
+test.each(['/profile/addresses/new', '/profile/addresses/edit?id=home'])(
+  'every address input and dropdown uses a single bordered shell: %s', async initialRoute => {
+    render(<Page initialRoute={initialRoute} />);
+    await screen.findByLabelText('Full name');
+    const dialog = screen.getByRole('dialog');
+    const controls = [...dialog.querySelectorAll('.sc-address-form__field input, .sc-address-form__field select')];
+    expect(controls).toHaveLength(9);
+    controls.forEach(control => {
+      expect(control.parentElement).toHaveClass('sc-field-shell');
+      expect(control.parentElement.parentElement).toHaveClass('sc-address-form__field', 'min-w-0');
+      act(() => control.focus());
+      if (!control.disabled) expect(control).toHaveFocus();
+    });
+    const defaultToggle = within(dialog).getByRole('checkbox', { name: 'Make this my default address' });
+    expect(defaultToggle.closest('.sc-field-shell')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: /Personal deliveries/ }).closest('.sc-field-shell')).toBeNull();
+  },
+);

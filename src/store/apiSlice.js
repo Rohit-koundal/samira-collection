@@ -5,6 +5,8 @@ import { logout, setCredentials } from './authSlice';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 import { getOrCreateSessionId } from '../utils/attribution';
 import { isWebsitePreview } from '../config/websiteDesigner';
+import { expandHomeFeed, storefrontReadOptions } from './storefrontTransport';
+import { confirmUploadedReferences, finishUploadRetryKey, forgetUploadRetryKey, getDurableUploadRetryKey, getRecordRetryKey, hasUploadAttempt, isRetrySafeCreation, markUploadAttempt, uploadScope } from '../services/uploadRetry';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: getApiBaseUrl(),
@@ -64,10 +66,12 @@ function sameSession(left, right) {
 }
 
 async function baseQueryWithRefresh(args, api, extraOptions) {
+  const policy = storefrontReadOptions(args);
+  args = policy.request;
   const cachedQuery = api.queryCacheKey
     ? api.getState()?.samiraApi?.queries?.[api.queryCacheKey]
     : null;
-  const silent = Boolean(typeof args === 'object' && (
+  const silent = policy.readOnly || Boolean(typeof args === 'object' && (
     args.silent || (args.silentWhenCached && cachedQuery?.data !== undefined)
   ));
   if (typeof args === 'object') {
@@ -82,6 +86,14 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
   if (!silent) startMobileLoader();
   try {
     const requestedSession = sessionCredentials(api);
+    let creationKey;
+    if (typeof args === 'object' && args.method === 'POST' && isRetrySafeCreation(requestUrl(args)) && !(args.body instanceof FormData)) {
+      const scope = uploadScope(api.getState().auth);
+      const headers = args.headers instanceof Headers ? Object.fromEntries(args.headers.entries()) : args.headers || {};
+      creationKey = headers['Idempotency-Key'] || headers['idempotency-key'] || await getRecordRetryKey({ path: requestUrl(args), body: args.body, scope });
+      if (uploadScope(api.getState().auth) !== scope) return { error: { status: 409, data: { message: 'Your session changed. Please retry the save.' } } };
+      args = { ...args, headers: { ...headers, 'Idempotency-Key': creationKey } };
+    }
     let result = await rawBaseQuery(args, api, extraOptions);
 
     if (result.error?.status === 401 && !isCredentialAuthRequest(args)) {
@@ -136,6 +148,17 @@ async function baseQueryWithRefresh(args, api, extraOptions) {
       }
     }
 
+    if (result.error?.data?.code === 'SUBSCRIPTION_REQUIRED' && sameSession(requestedSession, sessionCredentials(api))) {
+      const user = api.getState().auth.user;
+      if (user?.role === 'admin' && user?.activeMode === 'admin') {
+        window.dispatchEvent(new CustomEvent('samira:subscription-required', {
+          detail: { userId: String(user._id || user.id || user.phone || ''), path: requestUrl(args) },
+        }));
+      }
+    }
+    if (result.data && result.data.success !== false && typeof args === 'object' && ['POST', 'PUT', 'PATCH'].includes(args.method) && args.body && !(args.body instanceof FormData)) await confirmUploadedReferences(args.body).catch(() => {});
+    if (creationKey && result.data && result.data.success !== false) finishUploadRetryKey(creationKey);
+    if (creationKey && result.error?.data?.code === 'UPLOAD_RETRY_CONFLICT') forgetUploadRetryKey(creationKey);
     return result;
   } finally {
     if (!silent) stopMobileLoader();
@@ -169,16 +192,17 @@ export const samiraApi = createApi({
       keepUnusedDataFor: 900,
     }),
     mutate: builder.mutation({
-      query: ({ path, method = 'POST', body, silent }) => ({ url: path, method, body, ...(silent ? { silent } : {}) }),
+      query: ({ path, method = 'POST', body, silent, idempotencyKey }) => ({ url: path, method, body, ...(silent ? { silent } : {}), ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}) }),
       invalidatesTags: (_result, _error, arg) => tagsForPath(arg.path, true),
     }),
     upload: builder.mutation({
-      query: ({ path, files, fieldName = 'images' }) => {
+      query: ({ path, files, fieldName = 'images', silent = false, fields = {}, idempotencyKey }) => {
         const formData = new FormData();
         Array.from(files || []).forEach((file) => formData.append(fieldName, file));
-        return { url: path, method: 'POST', body: formData };
+        Object.entries(fields).forEach(([key, value]) => formData.append(key, String(value)));
+        return { url: path, method: 'POST', body: formData, silent, ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}) };
       },
-      invalidatesTags: ['AdminProducts', 'Products'],
+      invalidatesTags: (_result, _error, arg) => arg.path.endsWith('/background') || /\/rentals\/bookings\/[^/]+\/proofs(?:\?|$)/.test(arg.path) ? [] : ['AdminProducts', 'Products'],
     }),
     sendOtp: builder.mutation({ query: (body) => ({ url: '/auth/send-otp', method: 'POST', body }) }),
     resendOtp: builder.mutation({ query: (body) => ({ url: '/auth/resend-otp', method: 'POST', body }) }),
@@ -194,8 +218,9 @@ export const samiraApi = createApi({
       keepUnusedDataFor: 900,
     }),
     getMobileHome: builder.query({
-      query: (query) => ({ url: '/storefront/home', ...params(query), silentWhenCached: true }),
-      providesTags: ['Products', 'Categories', 'Banners', 'Settings'],
+      query: (query) => ({ url: '/storefront/home', params: { ...query, format: 'compact' }, silentWhenCached: true }),
+      transformResponse: expandHomeFeed,
+      providesTags: ['Products', 'Categories', 'Banners', 'Settings', 'WebsiteCustomization'],
       keepUnusedDataFor: 900,
     }),
     getProduct: builder.query({
@@ -272,29 +297,50 @@ export const samiraApi = createApi({
     }),
     bulkUploadProductDrafts: builder.mutation({
       async queryFn({ files, groupMode = 'separate', apiPrefix = '/admin' }, api, extraOptions, baseQuery) {
-        const preparedFiles = [];
-        for (const file of Array.from(files || [])) {
-          if (!file) continue;
-          if (file.__compressionMeta) {
-            preparedFiles.push(file);
-            continue;
-          }
-          if (!isSupportedImageFile(file)) {
-            return { error: { status: 400, data: { message: 'Only JPG, JPEG, PNG, and WEBP images are allowed.' } } };
-          }
-          preparedFiles.push(await compressImageFile(file, {
-            maxOriginalSizeMb: 2,
-            targetMaxSizeMb: 0.7,
-            maxWidthOrHeight: 1600,
-          }));
-        }
-        const formData = new FormData();
-        preparedFiles.forEach((file) => formData.append('images', file));
-        formData.append('groupMode', groupMode === 'single' ? 'single' : 'separate');
         const prefix = apiPrefix === '/seller' ? '/seller' : '/admin';
-        const result = await baseQuery({ url: `${prefix}/product-drafts/bulk-upload`, method: 'POST', body: formData }, api, extraOptions);
-        if (result.error) return { error: result.error };
-        return { data: result.data };
+        const path = `${prefix}/product-drafts/bulk-upload`;
+        const mode = groupMode === 'single' ? 'single' : 'separate';
+        let idempotencyKey;
+        try {
+          idempotencyKey = await getDurableUploadRetryKey({ path, files, fields: { groupMode: mode }, scope: uploadScope(api.getState().auth) });
+          if (hasUploadAttempt(idempotencyKey)) {
+            // All photos may already be stored even though draft save/response
+            // failed. Resume by receipt, without posting the photos again.
+            const resumed = await baseQuery({ url: path, method: 'POST', body: { resumeUpload: true }, headers: { 'Idempotency-Key': idempotencyKey } }, api, extraOptions);
+            if (!resumed.error) { finishUploadRetryKey(idempotencyKey); return { data: resumed.data }; }
+            if (resumed.error.status !== 404 && resumed.error.data?.code !== 'UPLOAD_INCOMPLETE') {
+              if (resumed.error.data?.code === 'UPLOAD_RETRY_CONFLICT') forgetUploadRetryKey(idempotencyKey);
+              return { error: resumed.error };
+            }
+          }
+          const preparedFiles = [];
+          for (const file of Array.from(files || [])) {
+            if (!file) continue;
+            if (file.__compressionMeta) {
+              preparedFiles.push(file);
+              continue;
+            }
+            if (!isSupportedImageFile(file)) {
+              return { error: { status: 400, data: { message: 'Only JPG, JPEG, PNG, and WEBP images are allowed.' } } };
+            }
+            preparedFiles.push(await compressImageFile(file, {
+              maxOriginalSizeMb: 2,
+              targetMaxSizeMb: 0.7,
+              maxWidthOrHeight: 1600,
+            }));
+          }
+          const formData = new FormData();
+          preparedFiles.forEach((file) => formData.append('images', file));
+          formData.append('groupMode', groupMode === 'single' ? 'single' : 'separate');
+          markUploadAttempt(idempotencyKey);
+          const result = await baseQuery({ url: path, method: 'POST', body: formData, headers: { 'Idempotency-Key': idempotencyKey } }, api, extraOptions);
+          if (result.error) {
+            if (result.error.data?.code === 'UPLOAD_RETRY_CONFLICT') forgetUploadRetryKey(idempotencyKey);
+            return { error: result.error };
+          }
+          finishUploadRetryKey(idempotencyKey);
+          return { data: result.data };
+        } catch (error) { return { error: { status: 400, data: { message: error.message || 'Unable to prepare the product photos.' } } }; }
       },
       invalidatesTags: ['ProductDrafts'],
     }),
@@ -314,7 +360,7 @@ export const samiraApi = createApi({
       query: (input) => {
         const value = typeof input === 'object' ? input : { id: input };
         const prefix = value.apiPrefix === '/seller' ? '/seller' : '/admin';
-        return { url: `${prefix}/product-drafts/${value.id}`, method: 'DELETE', params: value.confirm ? { confirm: value.confirm } : undefined };
+        return { url: `${prefix}/product-drafts/${value.id}`, method: 'DELETE', params: value.confirm ? { confirm: value.confirm, ...(value.baseRevision !== undefined ? { baseRevision: value.baseRevision } : {}) } : undefined };
       },
       invalidatesTags: ['ProductDrafts'],
     }),
@@ -361,6 +407,8 @@ export const samiraApi = createApi({
 });
 
 function tagsForPath(path = '', mutation = false) {
+  if (/\/(?:admin|seller)\/rentals\/configuration(?:\?|$)/.test(path)) return mutation ? ['Settings', 'AdminSettings', 'Products', 'Cart'] : ['Settings'];
+  if (/\/smart-fill\//.test(path)) return mutation && /\/catalog\/save(?:\?|$)/.test(path) ? ['Products', 'AdminProducts', 'AdminDashboard'] : [];
   if (/\/products\/(?:smart-fill|quick-analyze)(?:\/status)?$/.test(path)) return [];
   if (path.includes('/admin/social-imports')) return mutation && path.endsWith('/draft') ? ['ProductDrafts'] : [];
   if (path.includes('/admin/reel-imports')) return ['ReelImports'];
@@ -368,6 +416,7 @@ function tagsForPath(path = '', mutation = false) {
   if (path.includes('/auth/')) return ['Auth'];
   if (path.includes('/admin/dashboard')) return ['AdminDashboard', 'Inventory'];
   if (path.includes('/quick-analyze')) return [];
+  if (/\/(?:admin|seller)\/products\/[^/]+\/permanent(?:\?|$)/.test(path)) return mutation ? ['AdminProducts', 'Products', 'AdminDashboard', 'Inventory', 'Cart', 'Wishlist', 'ProductDrafts'] : ['AdminProducts'];
   if (path.includes('/admin/products')) return mutation ? ['AdminProducts', 'Products', 'AdminDashboard'] : ['AdminProducts'];
   if (path.includes('/admin/categories')) return mutation ? ['AdminCategories', 'Categories'] : ['AdminCategories'];
   if (path.includes('/admin/orders')) return mutation ? ['AdminOrders', 'Orders', 'AdminDashboard'] : ['AdminOrders'];

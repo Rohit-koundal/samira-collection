@@ -305,9 +305,9 @@ export default function Login({ route = '/login' }) {
   };
 
   return (
-    <section className="auth-font min-h-screen bg-[#f6f7fb] px-0 py-0">
+    <section className="auth-font min-h-screen bg-ivory px-0 py-0">
       <div className="mx-auto min-h-screen w-full max-w-[470px] overflow-hidden bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:max-w-[560px]">
-        <div className="relative h-[160px] overflow-hidden bg-gradient-to-r from-[#f8e6db] via-[#fff1e6] to-[#f9e7f1] px-4 pt-4">
+        <div className="relative h-[160px] overflow-hidden bg-gradient-to-r from-blush via-ivory to-blush px-4 pt-4">
           <button
             type="button"
             onClick={() => {
@@ -326,14 +326,14 @@ export default function Login({ route = '/login' }) {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="absolute right-4 top-4 rounded-2xl bg-[#ff5f86] px-3 py-2 text-center text-white shadow-lg">
+          <div className="absolute right-4 top-4 rounded-2xl bg-wine px-3 py-2 text-center text-white shadow-lg">
             <p className="text-[8px] font-bold leading-none">UP TO</p>
             <p className="text-[13px] font-extrabold leading-none">₹200</p>
           </div>
           <div className="mt-11 flex items-end justify-between gap-4">
             <div className="max-w-[220px]">
               <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-wine">{brand.websiteName}</p>
-              <h1 className="mt-1.5 text-[18px] font-bold leading-[1.02] text-[#ff3f7f] sm:text-[21px]">GET 25% OFF, UP TO ₹200</h1>
+              <h1 className="mt-1.5 text-[18px] font-bold leading-[1.02] text-wine sm:text-[21px]">GET 25% OFF, UP TO ₹200</h1>
               <p className="mt-2 text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-600 sm:text-[9px]">On your 1st order + exciting offers</p>
             </div>
             <div className="relative h-18 w-14 shrink-0 sm:h-20 sm:w-16">
@@ -347,15 +347,15 @@ export default function Login({ route = '/login' }) {
           {step === 'otp' ? (
             <form onSubmit={submitOtp} className="space-y-5">
               <div className="flex items-center gap-4">
-                <div className="grid h-20 w-20 place-items-center rounded-full bg-[#f2f6ff] text-[#2f3851]">
+                <div className="grid h-20 w-20 place-items-center rounded-full bg-blush text-charcoal">
                   <Smartphone className="h-9 w-9" />
                 </div>
                 <div className="pt-1">
-                  <h2 className="text-[17px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Verify with OTP</h2>
+                  <h2 className="text-[17px] font-bold leading-[1.05] text-charcoal sm:text-[21px]">Verify with OTP</h2>
                   <p className="mt-1 text-[11px] text-slate-500 sm:text-[12px]">{demoOtp ? 'Demo verification for' : 'Sent to'} {maskPhone(phone)}</p>
                 </div>
               </div>
-              {demoOtp && <p role="status" className="rounded-xl bg-[#fff0f5] px-4 py-3 text-sm text-wine">Demo mode: enter <strong>{demoOtp}</strong>. No SMS is needed.</p>}
+              {demoOtp && <p role="status" className="rounded-xl bg-blush px-4 py-3 text-sm text-wine">Demo mode: enter <strong>{demoOtp}</strong>. No SMS is needed.</p>}
               <div className="grid grid-cols-6 gap-2">
                 {otp.map((digit, index) => (
                   <input
@@ -370,7 +370,7 @@ export default function Login({ route = '/login' }) {
                     onPaste={(event) => pasteOtp(event, index)}
                     onFocus={(event) => event.target.select()}
                     onClick={(event) => event.currentTarget.select()}
-                    className="h-10 w-full rounded-lg border border-slate-300 text-center text-[14px] font-semibold text-[#2f3851] outline-none focus:border-[#ff5f86] focus:ring-2 focus:ring-[#ff5f86]/10 sm:text-[15px]"
+                    className="h-10 w-full rounded-lg border border-theme-border text-center text-[14px] font-semibold text-charcoal outline-none focus:border-wine focus:ring-2 focus:ring-wine/10 sm:text-[15px]"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={index === 0 ? 6 : 1}
@@ -379,16 +379,16 @@ export default function Login({ route = '/login' }) {
                   />
                 ))}
               </div>
-              <p className="text-[11px] text-slate-400 sm:text-[12px]">Resend OTP in: <span className="font-bold text-[#2f3851]">{String(Math.floor(cooldown / 60)).padStart(2, '0')}:{String(cooldown % 60).padStart(2, '0')}</span></p>
+              <p className="text-[11px] text-theme-muted sm:text-[12px]">Resend OTP in: <span className="font-bold text-charcoal">{String(Math.floor(cooldown / 60)).padStart(2, '0')}:{String(cooldown % 60).padStart(2, '0')}</span></p>
               <Button
                 type="submit"
                 disabled={loading || !isOtpComplete}
-                className={`h-10 w-full rounded-xl text-white disabled:opacity-60 ${isOtpComplete ? 'bg-[#ff5f86] hover:bg-[#ff4c7b]' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
+                className={`h-10 w-full rounded-xl text-white disabled:opacity-60 ${isOtpComplete ? 'bg-wine hover:bg-wine/90' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
               >
                 {loading ? 'Verifying...' : 'Verify OTP'}
               </Button>
               <div className="flex flex-col items-start gap-4">
-                <button type="button" onClick={doResend} disabled={!!cooldown || resending} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff5f86] disabled:text-slate-400 sm:text-[12px]">
+                <button type="button" onClick={doResend} disabled={!!cooldown || resending} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-wine disabled:text-slate-400 sm:text-[12px]">
                   {resending ? 'Sending...' : 'Resend OTP'}
                 </button>
                 <HelpLink />
@@ -398,7 +398,7 @@ export default function Login({ route = '/login' }) {
           ) : (
             <form onSubmit={requestOtp} className="space-y-4">
               <div>
-                <h2 className="text-[18px] font-bold leading-[1.05] text-[#2f3851] sm:text-[21px]">Login or Signup</h2>
+                <h2 className="text-[18px] font-bold leading-[1.05] text-charcoal sm:text-[21px]">Login or Signup</h2>
                 <p className="mt-2 text-[11px] text-slate-500 sm:text-[12px]">Enter your mobile number to receive a one-time password.</p>
               </div>
               <PhoneField value={phone} onChange={setPhoneDigits} countryCode={countryCode} />
@@ -421,7 +421,7 @@ export default function Login({ route = '/login' }) {
               <Button
                 type="submit"
                 disabled={loading || !canSubmitPhone}
-                className={`h-10 w-full rounded-xl text-white disabled:opacity-60 ${canSubmitPhone ? 'bg-[#ff5f86] hover:bg-[#ff4c7b]' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
+                className={`h-10 w-full rounded-xl text-white disabled:opacity-60 ${canSubmitPhone ? 'bg-wine hover:bg-wine/90' : 'bg-[#a8a8b3] hover:bg-[#a8a8b3]'}`}
               >
                 {loading ? 'Sending...' : 'Continue'}
               </Button>
@@ -465,7 +465,7 @@ function readDemoOtp(response) {
 
 function PhoneField({ value, onChange, countryCode = '+91' }) {
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-slate-300">
+    <div className="sc-field-shell w-full overflow-hidden rounded-xl border border-slate-300 focus-within:border-wine focus-within:ring-2 focus-within:ring-wine/10">
       <div className="flex w-full items-center">
         <span className="shrink-0 px-4 text-[14px] font-semibold text-slate-500">{countryCode}</span>
         <span className="h-10 w-px shrink-0 bg-slate-300" />
@@ -487,7 +487,7 @@ function PhoneField({ value, onChange, countryCode = '+91' }) {
 
 function PolicyLink({ href, children }) {
   return (
-    <a href={href} className="font-semibold text-[#ff5f86] underline-offset-2 hover:underline">
+    <a href={href} className="font-semibold text-wine underline-offset-2 hover:underline">
       {children}
     </a>
   );
@@ -495,9 +495,9 @@ function PolicyLink({ href, children }) {
 
 function HelpLink() {
   return (
-    <p className="flex items-center gap-2 text-[11px] font-semibold text-[#2f3851] sm:text-[12px]">
+    <p className="flex items-center gap-2 text-[11px] font-semibold text-charcoal sm:text-[12px]">
       Having trouble logging in?
-      <a href="/contact" className="inline-flex items-center gap-1 text-[#ff5f86] underline-offset-2 hover:underline">
+      <a href="/contact" className="inline-flex items-center gap-1 text-wine underline-offset-2 hover:underline">
         Get help <HelpCircle className="h-4 w-4" />
       </a>
     </p>

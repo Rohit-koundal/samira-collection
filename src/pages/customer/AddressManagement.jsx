@@ -245,18 +245,18 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
   }, [form.pincode, setForm]);
 
   return (
-    <Card as="form" onSubmit={onSubmit} className="sc-address-form overflow-hidden border-0 bg-[#fffaf2] shadow-none">
-      <div className="flex items-center justify-between border-b border-[#ead8cb] bg-[#fffaf2] px-2 py-2">
+    <Card as="form" onSubmit={onSubmit} className="sc-address-form overflow-hidden border-0 bg-ivory shadow-none">
+      <div className="flex items-center justify-between border-b border-theme-border bg-ivory px-2 py-2">
         <button
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="grid h-10 w-10 place-items-center rounded-full text-[#6d1f34] hover:bg-white"
+          className="grid h-10 w-10 place-items-center rounded-full text-wine hover:bg-white"
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <CardTitle className="flex-1 text-center text-[16px] font-semibold text-[#6d1f34]">
+        <CardTitle className="flex-1 text-center text-[16px] font-semibold text-wine">
           {editing ? 'Update Address' : 'Add New Address'}
         </CardTitle>
         <div className="h-10 w-10" />
@@ -264,7 +264,7 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
 
       <CardContent className="space-y-6 px-4 py-5 pb-5">
         <div className="space-y-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b88945]">Contact details</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">Contact details</p>
           <LabeledField icon={UserRound} label="Full name">
             <TextInput autoComplete="name" value={form.fullName || ''} onChange={(event) => update('fullName', event.target.value)} placeholder="Name as on the parcel" disabled={saving} required />
           </LabeledField>
@@ -290,8 +290,8 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           </LabeledField>
         </div>
 
-        <div className="space-y-3 border-t border-[#ead8cb] pt-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b88945]">Delivery location</p>
+        <div className="space-y-3 border-t border-theme-border pt-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">Delivery location</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <LabeledField icon={Building2} label="State">
               <Select value={form.state || ''} onChange={(event) => selectState(event.target.value)} disabled={saving} required>
@@ -333,8 +333,8 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
           </LabeledField>
         </div>
 
-        <div className="space-y-3 border-t border-[#ead8cb] pt-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b88945]">Address type</p>
+        <div className="space-y-3 border-t border-theme-border pt-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">Address type</p>
           <div className="grid grid-cols-2 gap-3">
             {[
               { value: 'Home', label: 'Home', desc: 'Personal deliveries', icon: Home },
@@ -350,10 +350,10 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
                   onClick={() => update('addressType', option.value)}
                   disabled={saving}
                   className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                    active ? 'border-[#6d1f34] bg-white shadow-[0_0_0_1px_#6d1f34]' : 'border-[#ead8cb] bg-white'
+                    active ? 'border-wine bg-white shadow-[0_0_0_1px_#6d1f34]' : 'border-theme-border bg-white'
                   }`}
                 >
-                  <span className={`grid h-9 w-9 place-items-center rounded-full ${active ? 'bg-[#6d1f34] text-[#fffaf2]' : 'bg-[#fffaf2] text-[#b88945]'}`}>
+                  <span className={`grid h-9 w-9 place-items-center rounded-full ${active ? 'bg-wine text-ivory' : 'bg-ivory text-gold'}`}>
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
@@ -364,19 +364,19 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
               );
             })}
           </div>
-          <label className="flex items-center gap-2 rounded-xl border border-[#ead8cb] bg-white px-3 py-3 text-[12px] text-slate-600">
-            <input type="checkbox" checked={form.isDefault} onChange={(event) => update('isDefault', event.target.checked)} className="accent-[#6d1f34]" disabled={saving} />
+          <label className="flex items-center gap-2 rounded-xl border border-theme-border bg-white px-3 py-3 text-[12px] text-slate-600">
+            <input type="checkbox" checked={form.isDefault} onChange={(event) => update('isDefault', event.target.checked)} className="accent-wine" disabled={saving} />
             Make this my default address
           </label>
         </div>
 
-        {message && <p role="alert" className="error-text font-semibold text-[#6d1f34]">{message}</p>}
+        {message && <p role="alert" className="error-text font-semibold text-wine">{message}</p>}
 
-        <div className="grid grid-cols-2 gap-3 border-t border-[#ead8cb] pt-5">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={saving} className="h-11 rounded-xl border border-[#ead8cb] bg-white text-[#3f2a22]">
+        <div className="grid grid-cols-2 gap-3 border-t border-theme-border pt-5">
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={saving} className="h-11 rounded-xl border border-theme-border bg-white text-[#3f2a22]">
             Cancel
           </Button>
-          <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-[#6d1f34] text-[#fffaf2] hover:bg-[#5a192b]">
+          <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-wine text-ivory hover:bg-[#5a192b]">
             {saving ? 'Saving...' : editing ? 'Update Address' : 'Save Address'}
           </Button>
         </div>
@@ -387,12 +387,12 @@ export function AddressForm({ form, setForm, onSubmit, message, editing, onCance
 
 function LabeledField({ icon: Icon, label, children }) {
   return (
-    <label className="sc-address-form__field block">
-      <span className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold text-[#6d1f34]">
-        <Icon className="h-3.5 w-3.5 text-[#b88945]" />
+    <label className="sc-address-form__field block min-w-0">
+      <span className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold text-wine">
+        <Icon className="h-3.5 w-3.5 text-gold" />
         {label}
       </span>
-      <div className="rounded-xl border border-[#ead8cb] bg-white px-3 py-1 [&_input]:border-0 [&_input]:px-0 [&_input]:shadow-none [&_input:focus]:ring-0 [&_select]:border-0 [&_select]:px-0 [&_select]:shadow-none [&_select:focus]:ring-0">
+      <div className="sc-field-shell min-w-0 max-w-full rounded-xl border border-theme-border bg-white px-3 py-1">
         {children}
       </div>
     </label>

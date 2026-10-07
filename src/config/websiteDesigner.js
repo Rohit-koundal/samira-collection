@@ -14,7 +14,7 @@ export const PREVIEW_PAGES = [
 export const isWebsitePreview = () => typeof window !== 'undefined' && window.location.pathname === PREVIEW_PATH;
 
 // Presets only replace appearance. Store identity, content, selected products,
-// contact information, navigation and mobile settings always stay with the store.
+// contact information, navigation and mobile layout stay with the store.
 export function applyAppearancePreset(current, preset) {
   const base = mergeWebsiteConfig(current);
   const look = mergeWebsiteConfig(preset);
@@ -22,6 +22,7 @@ export function applyAppearancePreset(current, preset) {
     ...base,
     colors: look.colors, typography: look.typography, buttons: look.buttons,
     productCards: look.productCards, theme: { ...look.theme, enhancedStyles: true },
+    mobile: { ...base.mobile, inheritThemeColors: true },
     header: { ...base.header, background: look.header.background, textColor: look.header.textColor,
       announcementBackground: look.header.announcementBackground, announcementTextColor: look.header.announcementTextColor },
     footer: { ...base.footer, background: look.footer.background, textColor: look.footer.textColor },

@@ -18,13 +18,13 @@
   color-scheme: light;
   --font-sans-app: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-auth-app: 'Figtree', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --wine: #6d1f34;
+  --wine: var(--site-primary, #6d1f34);
   --rose: #ff5f86;
-  --blush: #fff0f4;
-  --ivory: #fffaf2;
-  --gold: #b8914a;
-  --charcoal: #17161a;
-  --text-body: #282c3f;
+  --blush: var(--site-secondary, #fff0f4);
+  --ivory: var(--site-background, #fffaf2);
+  --gold: var(--site-accent, #b8914a);
+  --charcoal: var(--site-text, #17161a);
+  --text-body: var(--site-text, #282c3f);
 }
 
 * {
@@ -94,9 +94,9 @@ img {
 }
 
 .glass-card {
-  border: 1px solid rgba(109, 31, 52, 0.12);
+  border: 1px solid color-mix(in srgb, var(--site-primary) 12%, transparent);
   background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 20px 60px rgba(23, 22, 26, 0.08);
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--site-text) 8%, transparent);
 }
 
 .auth-font {

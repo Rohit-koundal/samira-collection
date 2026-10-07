@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import api from '../../services/api';
+import { getRecentProductIds, rememberRecentProduct } from '../../utils/recentProducts';
 import Home from './Home';
 import { mergeWebsiteConfig } from '../../config/websiteCustomization';
 
-jest.mock('../../services/api', () => ({ post: jest.fn() }));
+jest.mock('../../services/api', () => ({ post: jest.fn(), get: jest.fn() }));
 jest.mock('../../utils/analytics', () => ({ trackEvent: jest.fn() }));
 
 let mockWidth = 390;
@@ -12,6 +14,9 @@ let mockProduct;
 let mockMobileFeed;
 let mockMobileLoading;
 let mockMobileError;
+let mockMobileErrorStatus;
+let mockMobileFetching;
+let mockPreviousFeed;
 let mockToggleWishlist;
 let mockAddToCart;
 let mockPrefetchProduct;
@@ -27,16 +32,20 @@ jest.mock('./DesktopLuxuryHome', () => {
 jest.mock('../../store/apiSlice', () => ({
   samiraApi: { usePrefetch: () => mockPrefetchProduct },
   useGetProductsQuery: () => ({ data: [mockProduct] }),
-  useGetMobileHomeQuery: () => ({ data: mockMobileFeed, isLoading: mockMobileLoading, isError: mockMobileError, refetch: jest.fn() }),
+  useGetMobileHomeQuery: () => ({ data: mockPreviousFeed || mockMobileFeed, currentData: mockMobileFeed, isLoading: mockMobileLoading, isFetching: mockMobileFetching, isError: mockMobileError, error: { status: mockMobileErrorStatus }, refetch: jest.fn() }),
   useGetCategoriesQuery: () => ({ data: [] }),
   useGetBannersQuery: () => ({ data: [] }),
   useGetFeaturedReviewsQuery: () => ({ data: [] }),
 }));
 
 beforeEach(() => {
+  localStorage.clear(); api.get.mockReset(); api.get.mockResolvedValue(null);
   mockWidth = 390;
   mockMobileLoading = false;
   mockMobileError = false;
+  mockMobileErrorStatus = undefined;
+  mockMobileFetching = false;
+  mockPreviousFeed = undefined;
   mockPrefetchProduct = jest.fn();
   mockConfig = mergeWebsiteConfig();
   mockToggleWishlist = jest.fn(() => Promise.resolve({ ok: true }));
@@ -52,6 +61,37 @@ beforeEach(() => {
     settings: { shippingFreeAboveEnabled: true, freeShippingMinAmount: 999, returnsEnabled: true, returnWindowDays: 7, codEnabled: true },
     warnings: [],
   };
+});
+
+test('occasion and rental shortcuts appear below existing categories without adding mobile search', async () => {
+  const navigate = jest.fn();
+  api.get.mockResolvedValue({ mode: 'SALE_AND_RENTAL', rentalEnabled: true, occasions: [{ key: 'wedding', label: 'Wedding' }], recentlyViewed: [] });
+  const { container } = render(<Home navigate={navigate} industry="jewellery" industrySections={['hero', 'categories', 'featured']} storeSlug="nishaya" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Wedding' }));
+  expect(navigate).toHaveBeenCalledWith('/products?occasion=Wedding');
+  fireEvent.click(screen.getByRole('button', { name: 'Explore rentals & check dates' }));
+  expect(navigate).toHaveBeenCalledWith('/rental-book');
+  expect(container.querySelector('[data-home-section="categories"]')).toBeInTheDocument();
+  expect(container.querySelector('[data-home-section="shoppingShortcuts"]')).toHaveStyle({ order: '21' });
+  expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+});
+
+test('mobile recently viewed preserves browser order, can be cleared, and respects owner disable', async () => {
+  const second = { ...mockProduct, _id: 'abcdef0123456789abcdef01', name: 'Viewed second' };
+  rememberRecentProduct(mockProduct._id, 'nishaya'); rememberRecentProduct(second._id, 'nishaya');
+  api.get.mockResolvedValue({ mode: 'SALE_ONLY', rentalEnabled: false, occasions: [], recentlyViewed: [second, mockProduct] });
+  const { container, unmount } = render(<Home navigate={jest.fn()} storeSlug="nishaya" />);
+  const clear = await screen.findByRole('button', { name: /Clear history/i });
+  expect(container.querySelector('[data-home-section="recentlyViewed"] h2')).toHaveTextContent('Continue where you left off');
+  fireEvent.click(clear);
+  await waitFor(() => expect(screen.queryByRole('button', { name: /Clear history/i })).not.toBeInTheDocument());
+  expect(getRecentProductIds('nishaya')).toEqual([]);
+  unmount(); rememberRecentProduct(mockProduct._id, 'nishaya');
+  mockMobileFeed.settings.recentlyViewedEnabled = false;
+  api.get.mockResolvedValue({ recentlyViewedEnabled: false, occasions: [], recentlyViewed: [] });
+  render(<Home navigate={jest.fn()} storeSlug="nishaya" />);
+  await waitFor(() => expect(api.get).toHaveBeenCalled());
+  expect(screen.queryByText('Continue where you left off')).not.toBeInTheDocument();
 });
 
 test('mobile rails calculate discounts from actual prices and disable unavailable purchases', () => {
@@ -211,7 +251,7 @@ test('mobile category rail includes every active category, including nested Sare
   categories.forEach((category) => expect(screen.getByText(category.name)).toBeInTheDocument());
 });
 
-test('mobile home loading leaves the screen loader to the global app shell', () => {
+test('mobile home loading renders an accessible in-page skeleton, not a blocking spinner', () => {
   mockMobileLoading = true;
   mockMobileFeed = {};
   const { container } = render(<Home navigate={jest.fn()} />);
@@ -219,10 +259,37 @@ test('mobile home loading leaves the screen loader to the global app shell', () 
   expect(container.querySelector('[data-mobile-loader]')).toBeNull();
 });
 
-test('mobile home uses cached public catalog APIs when the combined feed is unavailable', () => {
+test('mobile home uses cached public catalog APIs when an older server has no combined feed', () => {
   mockMobileError = true;
+  mockMobileErrorStatus = 404;
   mockMobileFeed = {};
   render(<Home navigate={jest.fn()} />);
   expect(screen.queryByText('The store could not be loaded')).not.toBeInTheDocument();
   expect(screen.getAllByText('API product').length).toBeGreaterThan(0);
+});
+
+test.each(['TIMEOUT_ERROR', 'FETCH_ERROR', 429, 503])('a %s shows retry instead of starting a second full-catalog waterfall', status => {
+  mockMobileError = true;
+  mockMobileErrorStatus = status;
+  mockMobileFeed = undefined;
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.getByText('The store could not be loaded')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  expect(screen.queryByText('API product')).not.toBeInTheDocument();
+});
+
+test('a background refresh keeps the current collection usable', () => {
+  mockMobileFetching = true;
+  render(<Home navigate={jest.fn()} />);
+  expect(screen.queryByLabelText('Loading the collection')).not.toBeInTheDocument();
+  expect(screen.getAllByText('API product').length).toBeGreaterThan(0);
+});
+
+test('a store switch cannot show the previous store products while the new feed loads', () => {
+  mockPreviousFeed = mockMobileFeed;
+  mockMobileFeed = undefined;
+  mockMobileFetching = true;
+  render(<Home navigate={jest.fn()} storeSlug="another-store" />);
+  expect(screen.getByLabelText('Loading the collection')).toBeInTheDocument();
+  expect(screen.queryByText('API product')).not.toBeInTheDocument();
 });

@@ -1,3 +1,6 @@
+import { rememberOriginalUpload } from './uploadRetry';
+
+const compressionCache = new WeakMap();
 const supportedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
 const DEFAULT_MAX_WIDTH_OR_HEIGHT = 1600;
@@ -13,7 +16,19 @@ export function isSupportedImageFile(file) {
   return supportedExtensions.some((extension) => name.endsWith(extension));
 }
 
-export async function compressImageFile(file, options = {}) {
+export function compressImageFile(file, options = {}) {
+  if (!file || typeof file !== 'object') return compressImage(file, options);
+  const key = JSON.stringify(Object.keys(options).filter(key => typeof options[key] !== 'function').sort().map(key => [key, options[key]]));
+  if (!compressionCache.has(file)) compressionCache.set(file, new Map());
+  const entries = compressionCache.get(file);
+  if (!entries.has(key)) {
+    const pending = compressImage(file, options).then(prepared => { rememberOriginalUpload(prepared, file); return prepared; }).catch(error => { entries.delete(key); throw error; });
+    entries.set(key, pending);
+  }
+  return entries.get(key);
+}
+
+async function compressImage(file, options = {}) {
   if (!isSupportedImageFile(file)) {
     throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
   }

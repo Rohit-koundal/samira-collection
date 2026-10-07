@@ -1,17 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 import {
-  captureAttribution,
-  getOrCreateSessionId,
   parseStoreSlug,
   setStoreSlug,
 } from '../utils/attribution';
-import { trackEvent } from '../utils/analytics';
 
 const StorefrontContext = createContext({
   store: null,
   storeSlug: '',
   loading: false,
+  hostResolved: false,
   isHostStore: false,
 });
 
@@ -19,36 +17,23 @@ export function StorefrontProvider({ route, children }) {
   const pathSlug = parseStoreSlug(route);
   const [pathResult, setPathResult] = useState(null);
   const [hostStore, setHostStore] = useState(null);
+  const [hostResolved, setHostResolved] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt(value => value + 1), []);
 
   useEffect(() => {
-    getOrCreateSessionId();
-    const attribution = captureAttribution(route);
-    if (attribution?.source === 'instagram') {
-      try {
-        if (!sessionStorage.getItem('samira_ig_source_sent')) {
-          sessionStorage.setItem('samira_ig_source_sent', '1');
-          trackEvent('INSTAGRAM_SOURCE', { reelId: attribution.reelId, campaign: attribution.campaign });
-        }
-      } catch {
-        // ignore storage failures
-      }
-    }
-  }, [route]);
-
-  useEffect(() => {
     if (pathSlug) {
       setHostStore(null);
+      setHostResolved(false);
       return undefined;
     }
     let cancelled = false;
     api.get(`/stores/resolve?host=${encodeURIComponent(window.location.host)}`, { cacheFirst: true })
       .then((data) => {
-        if (!cancelled) setHostStore(data?.slug && !data.isDefault ? data : null);
+        if (!cancelled) { setHostStore(data?.slug && !data.isDefault ? data : null); setHostResolved(true); }
       })
       .catch(() => {
-        if (!cancelled) setHostStore(null);
+        if (!cancelled) { setHostStore(null); setHostResolved(true); }
       });
     return () => { cancelled = true; };
   }, [pathSlug]);
@@ -83,8 +68,8 @@ export function StorefrontProvider({ route, children }) {
   }, [storeSlug]);
 
   const value = useMemo(
-    () => ({ store, storeSlug, loading, error, retry, isHostStore }),
-    [isHostStore, loading, error, retry, store, storeSlug],
+    () => ({ store, storeSlug, loading, error, retry, isHostStore, hostResolved }),
+    [hostResolved, isHostStore, loading, error, retry, store, storeSlug],
   );
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
 }

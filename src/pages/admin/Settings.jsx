@@ -11,6 +11,11 @@ import logoFallback from '../../assets/samira-collection-logo.png';
 import StoreLogo from '../../components/ui/StoreLogo';
 import './Settings.css';
 import DeliverySettings from '../../components/admin/DeliverySettings';
+import SmsSettings from '../../components/admin/SmsSettings';
+import OrderAlertSettings from '../../components/admin/OrderAlertSettings';
+import TrafficSettings from '../../components/admin/TrafficSettings';
+import RentalSettings from '../../components/rentals/RentalSettings';
+import WorkflowSmartFill from '../../components/admin/WorkflowSmartFill';
 
 const ICONS = { brand: Building2, invoice: ReceiptText, contact: Mail, delivery: Truck, payment: CreditCard, policy: ShieldCheck, social: Link2, website: Globe2 };
 const POLICIES = [['returnPolicy', 'Return Policy'], ['shippingPolicy', 'Shipping Policy'], ['cancellationPolicy', 'Cancellation Policy'], ['privacyPolicy', 'Privacy Policy'], ['termsConditions', 'Terms and Conditions'], ['sizeGuide', 'Size Guide'], ['faqs', 'FAQs'], ['ourStory', 'Our Story']];
@@ -32,9 +37,21 @@ export default function Settings({ route = '' }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [readinessError, setReadinessError] = useState('');
+  const [smsOpened, setSmsOpened] = useState(false);
+  const [smsDirty, setSmsDirty] = useState(false);
+  const [smsBusy, setSmsBusy] = useState(false);
+  const [alertsOpened, setAlertsOpened] = useState(false);
+  const [alertsDirty, setAlertsDirty] = useState(false);
+  const [alertsBusy, setAlertsBusy] = useState(false);
+  const [trafficOpened, setTrafficOpened] = useState(false);
+  const [trafficDirty, setTrafficDirty] = useState(false);
+  const [trafficBusy, setTrafficBusy] = useState(false);
+  const [rentalsOpened, setRentalsOpened] = useState(false);
+  const [rentalsDirty, setRentalsDirty] = useState(false);
+  const [rentalsBusy, setRentalsBusy] = useState(false);
   const lock = useRef(false);
   const dirty = !!baseline && JSON.stringify(form) !== JSON.stringify(baseline);
-  useUnsavedChanges(dirty, saving || uploading);
+  useUnsavedChanges(dirty || smsDirty || alertsDirty || trafficDirty || rentalsDirty, saving || uploading || smsBusy || alertsBusy || trafficBusy || rentalsBusy);
   const update = (field, value) => { setMessage(null); setForm(current => ({ ...current, ...(['contactEmail', 'contactPhone', 'address', 'footerText', 'socialLinks'].includes(field) ? { contactDetailsEnabled: true } : {}), [field]: value })); };
   const updateIdentity = (field, value) => {
     setMessage(null);
@@ -58,6 +75,7 @@ export default function Settings({ route = '' }) {
 
   const submit = async event => {
     event.preventDefault();
+    if (['sms', 'order-alerts', 'traffic', 'rentals'].includes(active) || smsBusy || alertsBusy || trafficBusy || rentalsBusy) return;
     if (lock.current || uploadLock.current || loading || loadError || !dirty) return;
     lock.current = true; setSaving(true); setMessage(null);
     try {
@@ -83,8 +101,9 @@ export default function Settings({ route = '' }) {
   const input = (field, label, options = {}) => <Field key={field} label={label} value={form[field] ?? ''} onChange={value => update(field, value)} {...options} />;
   const number = (field, label, note = '', options = {}) => input(field, label, { type: 'number', note, min: 0, step: 'any', ...options });
   const toggle = (field, label, note = '', options = {}) => <Toggle key={field} label={label} note={note} checked={!!form[field]} onChange={value => update(field, value)} {...options} />;
-  const selected = SETTINGS_SECTIONS.find(section => section.id === active);
-  const sections = SETTINGS_SECTIONS.filter(section => (section.title + ' ' + section.note + ' ' + section.keywords).toLowerCase().includes(search.toLowerCase().trim()));
+  const availableSections = SETTINGS_SECTIONS.filter(section => !section.deploymentOnly || !route.startsWith('/seller'));
+  const selected = availableSections.find(section => section.id === active) || availableSections[0];
+  const sections = availableSections.filter(section => (section.title + ' ' + section.note + ' ' + section.keywords).toLowerCase().includes(search.toLowerCase().trim()));
   const logo = normalizeImageUrl(form.brandIdentityEnabled ? form.logoUrl : form.logoUrl ?? brand.logo) || logoFallback;
 
   return <section className="store-settings">
@@ -99,13 +118,14 @@ export default function Settings({ route = '' }) {
         <div className="store-settings__layout">
           <aside className="store-settings__sidebar">
             <label className="store-settings__search"><Search size={17} /><input aria-label="Find a settings section" placeholder="Find settings" value={search} onChange={event => setSearch(event.target.value)} /></label>
-            <nav aria-label="Settings sections">{sections.map(section => { const Icon = ICONS[section.icon]; return <button type="button" key={section.id} disabled={uploading} aria-current={active === section.id ? 'page' : undefined} onClick={() => setActive(section.id)}><Icon size={18} /><span>{section.title}</span><ChevronRight size={15} /></button>; })}</nav>
+            <nav aria-label="Settings sections">{sections.map(section => { const Icon = ICONS[section.icon]; return <button type="button" key={section.id} disabled={uploading || smsBusy || alertsBusy || trafficBusy || rentalsBusy} aria-current={active === section.id ? 'page' : undefined} onClick={() => { setActive(section.id); if (section.id === 'sms') setSmsOpened(true); if (section.id === 'order-alerts') setAlertsOpened(true); if (section.id === 'traffic') setTrafficOpened(true); if (section.id === 'rentals') setRentalsOpened(true); }}><Icon size={18} /><span>{section.title}</span><ChevronRight size={15} /></button>; })}</nav>
             {!sections.length && <p className="store-settings__muted">No matching section. Try payments, logo or delivery.</p>}
             <p className="store-settings__sidebar-note"><ShieldCheck size={16} /> Changes are saved securely and recorded in your audit log.</p>
           </aside>
           <div className="store-settings__panel">
-            <div className="store-settings__panel-heading"><span>{String(SETTINGS_SECTIONS.indexOf(selected) + 1).padStart(2, '0')} / 08</span><h2>{selected.title}</h2><p>{selected.note}</p></div>
-            <fieldset disabled={saving || uploading} className="store-settings__fields">
+            <div className="store-settings__panel-heading"><span>{String(availableSections.indexOf(selected) + 1).padStart(2, '0')} / {String(availableSections.length).padStart(2, '0')}</span><h2>{selected.title}</h2><p>{selected.note}</p></div>
+            <fieldset disabled={saving || uploading} style={['sms', 'order-alerts', 'traffic', 'rentals'].includes(active) ? { display: 'none' } : undefined} className="store-settings__fields">
+              {['identity', 'business', 'contact'].includes(active) && <WorkflowSmartFill workflow="store" form={form} onChange={setForm} apiBase={settingsApi.startsWith('/seller') ? '/seller/smart-fill' : '/admin/smart-fill'} documents disabled={saving || uploading} />}
               {active === 'identity' && <>
                 <Field label="Store Name" value={form.storeName || ''} onChange={value => updateIdentity('storeName', value)} required maxLength={100} note="Shown on your storefront, admin workspace and new invoices." />
                 <Field label="Tagline" value={form.tagline ?? brand.tagline ?? ''} onChange={value => updateIdentity('tagline', value)} maxLength={180} note="A short line that describes your brand." />
@@ -154,10 +174,10 @@ export default function Settings({ route = '' }) {
                 {number('codMinAmount', 'COD minimum order amount', '0 means no minimum.')}
                 {number('codMaxAmount', 'COD maximum order amount', '0 means no maximum.')}
                 <Field label="COD pincodes" multiline value={Array.isArray(form.codPincodes) ? form.codPincodes.join(', ') : form.codPincodes || ''} onChange={value => update('codPincodes', value)} note="Six-digit pincodes, separated by commas. Leave empty to offer COD everywhere you deliver." />
-                {toggle('codConfirmationRequired', 'Require COD confirmation', 'New COD orders require confirmation before fulfilment.')}
+                {toggle('smartCodVerificationEnabled', 'Smart COD verification', 'Ask for OTP on first COD orders and after an RTO, while trusted customers continue without repeated OTPs.')}
                 <label className="store-settings__field"><span>Prepaid discount type</span><select value={form.prepaidDiscountType || ''} onChange={event => update('prepaidDiscountType', event.target.value)}><option value="">None</option><option value="Flat">Flat amount (INR)</option><option value="Percentage">Percentage (%)</option></select><small>Applied only to online payments.</small></label>
                 {number('prepaidDiscountValue', 'Prepaid discount value', form.prepaidDiscountType === 'Percentage' ? 'A percentage between 0 and 100.' : 'Amount in rupees for a flat discount.')}
-                <details className="store-settings__advanced"><summary>Advanced COD and RTO controls</summary><div className="store-settings__fields">{toggle('rtoBlockEnabled', 'RTO COD blocking', 'Restrict COD for customers with a high rate of orders returned to origin.')}{number('rtoBlockMinOrders', 'RTO block minimum orders', 'At least 1 when blocking is enabled.', { step: 1 })}{number('rtoBlockThreshold', 'RTO block rate', 'A value between 0 and 1. For example, 0.5 means 50%.', { max: 1, step: 0.01 })}{number('rtoRefundDeduction', 'Prepaid RTO refund deduction', 'Optional fixed amount retained from prepaid RTO refunds when your published policy allows it. Staff can waive it during inspection.')}</div></details>
+                <details className="store-settings__advanced"><summary>Advanced COD and RTO controls</summary><div className="store-settings__fields">{number('codRtoRestrictionLimit', 'Repeated RTO limit for COD', 'After this many RTO orders, COD is unavailable. Use 0 to disable the count limit.', { max: 100, step: 1 })}{toggle('rtoBlockEnabled', 'RTO rate COD blocking', 'Also restrict COD when the configured RTO rate is reached.')}{number('rtoBlockMinOrders', 'RTO block minimum orders', 'At least 1 when rate blocking is enabled.', { step: 1 })}{number('rtoBlockThreshold', 'RTO block rate', 'A value between 0 and 1. For example, 0.5 means 50%.', { max: 1, step: 0.01 })}{number('rtoRefundDeduction', 'Prepaid RTO refund deduction', 'Optional fixed amount retained from prepaid RTO refunds when your published policy allows it. Staff can waive it during inspection.')}</div></details>
               </>}
               {active === 'policies' && <>
                 {toggle('returnsEnabled', 'Accept returns and exchanges', 'Disable this only when the complete store catalogue is final sale. Product-level rules still apply when enabled.')}
@@ -170,6 +190,20 @@ export default function Settings({ route = '' }) {
                 {toggle('refundDeliveryChargeOnFullReturn', 'Refund delivery charge on a full return', 'Applied only when all active items in the order are covered by returns.')}
                 {toggle('refundPlatformFeeOnFullReturn', 'Refund platform fee on a full return', 'Keep disabled when the platform fee is non-refundable under your policy.')}
                 {toggle('refundCodChargeOnFullReturn', 'Refund COD charge on a full return', 'Applies only after COD collection has been recorded.')}
+                <details className="store-settings__advanced" open><summary>Return fraud protection</summary><div className="store-settings__fields">
+                  {toggle('requireProductQrScan', 'Require unique item scan before packing', 'Each physical unit must match its order product and variant before the order can be packed.')}
+                  {toggle('requirePackingPhotos', 'Require packing photos', 'Keep product condition and sealed-package proof with the order.')}
+                  {toggle('requirePackingVideo', 'Require packing video', 'Useful for high-value products; videos require persistent media storage in production.')}
+                  {toggle('requireDispatchWeight', 'Require dispatch weight', 'Compare dispatch and returned parcel weight during inspection.')}
+                  {toggle('requireSecuritySeal', 'Require package seal ID', 'A scanned or entered seal ID is saved with the dispatch record.')}
+                  {toggle('enableSecurityTag', 'Enable return security tags', 'Attach a unique tag to fashion items and verify it when the item returns.')}
+                  {toggle('requireReturnPhotos', 'Require return inspection photos', 'Staff must attach returned-item proof before completing inspection.')}
+                  {toggle('requireReturnVideo', 'Require return unboxing video', 'Staff must record parcel opening for stronger dispute evidence.')}
+                  {toggle('enableCustomerRiskDetection', 'Enable internal customer risk signals', 'Shows neutral internal review signals. Customers are never labelled or automatically blocked.')}
+                  {toggle('autoApproveVerifiedReturns', 'Recommend approval for verified returns', 'A clean match is marked ready for approval; money is never refunded automatically.')}
+                  {number('returnWeightToleranceGrams', 'Weight tolerance (grams)', 'Differences above this value create a manual-review flag.', { max: 10000, step: 1 })}
+                  {number('highValueVerificationThreshold', 'High-value verification threshold', 'Orders at or above this amount require dispatch weight even when the general weight rule is off.', { step: 1 })}
+                </div></details>
                 {POLICIES.map(([key, label]) => <div key={key} className="store-settings__wide">{input(key, label, { multiline: true, maxLength: 20000, rows: 5 })}</div>)}
               </>}
               {active === 'social' && <>
@@ -179,6 +213,9 @@ export default function Settings({ route = '' }) {
                 <div className="store-settings__tip"><Link2 size={19} /><p>These are public storefront links. Connect messaging and publishing accounts from <a href="/admin/social">Social studio</a>.</p></div>
               </>}
               {active === 'website' && <>
+                {toggle('occasionShoppingEnabled', 'Shop by occasion', 'Desktop and mobile shortcuts use Occasion values from this store’s published products. Empty occasions are hidden.')}
+                {toggle('recentlyViewedEnabled', 'Recently viewed products', 'Continue browsing on desktop and mobile. History stays on the shopper’s device, is limited to 12 products and can be cleared.')}
+                {toggle('completeLookEnabled', 'Complete the look', 'Show optional matching items on product details. Set matching products in the product editor, or use occasion, colour and tag matching.')}
                 <Toggle label="Show announcement bar" checked={form.announcementEnabled ?? true} onChange={value => update('announcementEnabled', value)} note="Displays above the desktop navigation and in the mobile shopping menu." />
                 {input('announcementText', 'Announcement text', { maxLength: 240, placeholder: 'Leave empty for an automatic free delivery message', note: 'Clear this field to use a message based on your delivery settings.' })}
                 {input('seoTitle', 'Browser page title', { maxLength: 100, note: 'Leave empty to use your store name.' })}
@@ -188,12 +225,16 @@ export default function Settings({ route = '' }) {
                 <div className="store-settings__tip"><Globe2 size={19} /><p>Colours, typography, navigation and homepage layouts are available in <a href="/admin/customization">Website Designer</a>.</p></div>
               </>}
             </fieldset>
+            {smsOpened && !route.startsWith('/seller') && <div hidden={active !== 'sms'} className="p-5"><SmsSettings apiBase={settingsApi} onDirtyChange={setSmsDirty} onBusyChange={setSmsBusy} /></div>}
+            {alertsOpened && <div hidden={active !== 'order-alerts'} className="p-5"><OrderAlertSettings key={settingsApi} apiBase={settingsApi} onDirtyChange={setAlertsDirty} onBusyChange={setAlertsBusy} /></div>}
+            {trafficOpened && <div hidden={active !== 'traffic'} className="p-5"><TrafficSettings key={settingsApi} apiBase={settingsApi} onDirtyChange={setTrafficDirty} onBusyChange={setTrafficBusy} /></div>}
+            {rentalsOpened && <div className="p-5" hidden={active !== 'rentals'}><RentalSettings apiBase={route.startsWith('/seller') ? '/seller/rentals' : '/admin/rentals'} onDirtyChange={setRentalsDirty} onBusyChange={setRentalsBusy} /></div>}
           </div>
         </div>
-        <div className="store-settings__savebar">
+        {!['sms', 'order-alerts', 'traffic', 'rentals'].includes(active) && <div className="store-settings__savebar">
           <div aria-live="polite">{message ? <p className={message.error ? 'is-error' : 'is-success'} role={message.error ? 'alert' : 'status'}>{!message.error && <Check size={17} />}{message.text}</p> : <p>{dirty ? 'You have unsaved changes' : 'All changes saved'}<small>{dirty ? 'Save to apply your updates across the store.' : 'Changes apply after you save.'}</small></p>}{message?.conflict && <button type="button" disabled={saving} onClick={reloadLatest} className="text-xs font-bold text-wine underline">Reload latest and keep my edits</button>}</div>
           <div className="store-settings__save-actions"><button type="button" className="admin-btn-ghost" disabled={!dirty || saving || uploading} onClick={discard}><RotateCcw size={16} /><span>Discard</span></button><button type="submit" className="admin-btn" disabled={!dirty || saving || uploading}><Save size={17} />{uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save Settings'}</button></div>
-        </div>
+        </div>}
       </form>
     </>}
   </section>;

@@ -1,8 +1,15 @@
 import api from './api';
 import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
 import { trackEvent } from '../utils/analytics';
+import { configureTraffic, setTrafficConsent, flushTraffic, resetTrafficRuntime } from '../utils/trafficTracker';
 
 const mockUnsubscribe = jest.fn();
+
+test('workflow document AI shows sanitized configuration guidance while unrelated 503 errors stay generic', async () => {
+  mockDispatch.mockReturnValue({ unwrap: () => Promise.reject({ status: 503, data: { code: 'AI_KEY_MISSING', message: 'Configure document extraction. Pasted notes still work.' } }) });
+  await expect(api.post('/admin/smart-fill/preview', {})).rejects.toMatchObject({ code: 'AI_KEY_MISSING', message: 'Configure document extraction. Pasted notes still work.' });
+  await expect(api.post('/admin/orders', {})).rejects.toMatchObject({ message: 'Checkout service is temporarily unavailable. Please try again in a few minutes.' });
+});
 
 test('Smart Fill can be cancelled without opening the global mobile loader', async () => {
   const abort = jest.fn();
@@ -72,15 +79,24 @@ test('background notification polling does not trigger the mobile loading overla
   expect(stopMobileLoader).not.toHaveBeenCalled();
 });
 
-test('scroll and section analytics never trigger the mobile loading overlay', () => {
+test('consented batched analytics never trigger the mobile loading overlay or authenticated API middleware', async () => {
+  resetTrafficRuntime(); localStorage.clear();
+  let sequence = 0;
+  Object.defineProperty(window, 'crypto', { configurable: true, value: { randomUUID: () => `test_uuid_${String(++sequence).padStart(24, '0')}` } });
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ accepted: 2 }) });
+  configureTraffic({ storeKey: 'test-traffic-store', privacyGeneration: 1, enabled: true, consentRequired: true, sessionTimeoutMinutes: 30, attributionDays: 7, excludeLocalhost: false }, { route: '/', storeSlug: 'test-shop' });
+  await setTrafficConsent(true);
   trackEvent('HOME_SCROLL', { metadata: { milestone: 50, surface: 'mobile-home' } });
-  expect(mockInitiateMutation).toHaveBeenCalledWith(expect.objectContaining({
-    path: '/analytics/events',
+  await flushTraffic();
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/analytics/collect?store=test-shop'), expect.objectContaining({
     method: 'POST',
-    silent: true,
+    credentials: 'omit',
   }));
+  expect(mockInitiateMutation).not.toHaveBeenCalled();
   expect(startMobileLoader).not.toHaveBeenCalled();
   expect(stopMobileLoader).not.toHaveBeenCalled();
+  resetTrafficRuntime(); global.fetch = originalFetch;
 });
 
 test('bag requests use separate query identities for guests and customer accounts', async () => {

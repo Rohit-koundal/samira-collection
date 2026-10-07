@@ -92,7 +92,7 @@ export function improveThemeReadability(config) {
 }
 
 export function matchMobileAppearance(config) {
-  return { ...config, mobile: { ...config.mobile, enabled: true,
+  return { ...config, mobile: { ...config.mobile, enabled: true, inheritThemeColors: true,
     headerBackground: config.header.background, headerText: config.header.textColor,
     pageBackground: config.colors.background, cardRadius: Math.min(24, config.productCards.borderRadius) } };
 }

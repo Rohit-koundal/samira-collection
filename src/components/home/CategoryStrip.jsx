@@ -44,7 +44,7 @@ export default function CategoryStrip({ navigate, categories = [] }) {
       <button
         type="button"
         onClick={() => navigate('/products?discount=50')}
-        className="overflow-hidden rounded-[16px] border border-[#eadfd5] bg-wine px-4 py-4 text-left text-white shadow-[0_10px_20px_rgba(122,31,54,0.14)]"
+        className="overflow-hidden rounded-[16px] border border-theme-border bg-wine px-4 py-4 text-left text-white shadow-[0_10px_20px_rgba(122,31,54,0.14)]"
       >
         <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/65 xl:text-[11px]">Sale</p>
         <h3 className="mt-2 text-[22px] font-semibold leading-[1.02] xl:text-[26px]">Up to 50% off</h3>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Monitor, Smartphone, Tablet, WandSparkles } from 'lucide-react';
 import { Select, TextInput } from '../ui/Field';
 import ImageUploader from './ImageUploader';
+import WorkflowSmartFill from './WorkflowSmartFill';
 import { normalizeImageUrl } from '../../services/normalize';
 
 const types = ['Hero', 'Offer', 'Category', 'Sale'];
@@ -37,13 +38,14 @@ export default function BannerForm({ initialValues, saving = false, message = ''
   };
 
   return <form onSubmit={submit} className="admin-card overflow-hidden">
-    <header className="border-b border-[#eee2da] bg-gradient-to-r from-[#fff9f5] to-[#fff4f7] p-5 md:p-6">
+    <header className="border-b border-[#eee2da] bg-gradient-to-r from-ivory to-[#fff4f7] p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="admin-kicker">Campaign creative</p><h2 className="mt-1">{initialValues?._id ? 'Edit banner' : 'Create banner'}</h2><p className="admin-note">Responsive artwork, destination, schedule and tracking stay together.</p></div>{onCancel ? <button type="button" onClick={onCancel} className="admin-btn-ghost">Cancel</button> : null}</div>
       {!initialValues?._id ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{presets.map(([name, type, position, buttonText]) => <button key={name} type="button" onClick={() => setForm((current) => ({ ...current, type, position, buttonText }))} className="inline-flex min-w-max items-center gap-2 rounded-full border border-[#ead8cf] bg-white px-3 py-2 text-xs font-black text-wine"><WandSparkles className="h-3.5 w-3.5" />{name}</button>)}</div> : null}
     </header>
 
     <div className="grid gap-6 p-5 xl:grid-cols-[1.05fr_.95fr] md:p-6">
       <div className="space-y-6">
+        <WorkflowSmartFill key={initialValues?._id || "new"} workflow="banner" form={form} onChange={setForm} disabled={saving} />
         <Panel title="Message" note="Keep the main message short enough for a phone."><div className="grid gap-4 md:grid-cols-2"><Field label="Banner Title" value={form.title} onChange={(value) => update('title', value)} maxLength={120} required /><Field label="CTA Label" value={form.buttonText} onChange={(value) => update('buttonText', value)} maxLength={60} /><Field label="Subtitle" value={form.subtitle} onChange={(value) => update('subtitle', value)} maxLength={300} className="md:col-span-2" /><Field label="Image alt text" value={form.altText} onChange={(value) => update('altText', value)} maxLength={180} className="md:col-span-2" placeholder="Describe the artwork for accessibility" /></div></Panel>
 
         <Panel title="Responsive artwork" note="Desktop is required. Tablet and phone fall back to desktop when empty.">

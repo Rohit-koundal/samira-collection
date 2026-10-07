@@ -311,6 +311,7 @@ vite.config.ts.timestamp-*
 !backend/models/CheckoutAttempt.js
 !backend/controllers/deliveryController.js
 !backend/SHIPPING.md
+!backend/SMS.md
 !backend/tests/shippingProviders.unit.test.js
 !backend/services/productSmartFillMedia.js
 !backend/controllers/productSmartFillController.js
@@ -393,3 +394,7 @@ backend/scripts/*
 !backend/workers/*.js
 !backend/scripts/*.js
 !backend/tests/*.js
+
+# Downloaded background-removal model; source remains tracked.
+ai-video-worker/.models/
+ai-video-worker/**/__pycache__/

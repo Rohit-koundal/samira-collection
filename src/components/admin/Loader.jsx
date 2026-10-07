@@ -7,9 +7,9 @@ export default function Loader({ label = 'Loading...' }) {
       <div className="hidden min-h-36 place-items-center admin-card p-6 md:grid" role="status" aria-busy="true">
         <div className="flex flex-col items-center gap-3 text-center">
           <span className="relative block h-10 w-10" aria-hidden="true">
-            <span className="absolute inset-0 rounded-full border-[3px] border-[#f3d3da]" />
+            <span className="absolute inset-0 rounded-full border-[3px]" style={{ borderColor: 'var(--site-loader-track)' }} />
             <span
-              className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-[#6d1f34] border-t-[#6d1f34]"
+              className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-wine border-t-wine"
               style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
             />
           </span>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, BarChart3, CalendarDays, ChevronDown, Download, FileText, Filter,
-  Info, Package, RefreshCw, Save, Send, ShoppingBag, Trash2, TrendingDown,
+  Info, Package, RefreshCw, Save, Send, ShoppingBag, Trash2, TrendingDown, Globe2,
   TrendingUp, Truck, Users, WalletCards, X,
 } from 'lucide-react';
 import PageHeader from '../../components/admin/PageHeader';
@@ -11,15 +11,17 @@ import { normalizeImageUrl } from '../../services/normalize';
 import api from '../../services/api';
 import { downloadReportPdf, downloadTextFile } from '../../utils/reportExport';
 import './Reports.css';
+import TrafficReport from '../../components/admin/TrafficReport';
 
-const REPORT_SECTIONS = ['summary', 'products', 'customers', 'marketing', 'fulfillment'];
-const ranges = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['month', 'This month'], ['90d', '90 days'], ['custom', 'Custom']];
+const REPORT_SECTIONS = ['summary', 'products', 'customers', 'marketing', 'fulfillment', 'traffic'];
+const ranges = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', '7 days'], ['30d', '30 days'], ['month', 'This month'], ['90d', '90 days'], ['custom', 'Custom']];
 const tabs = [
   ['overview', 'Overview', BarChart3], ['finance', 'Sales & finance', WalletCards],
   ['products', 'Products & inventory', Package], ['customers', 'Customers', Users],
   ['marketing', 'Marketing', TrendingUp], ['fulfillment', 'Shipping & returns', Truck],
+  ['traffic', 'Traffic & visitors', Globe2],
 ];
-const tabSection = { overview: 'summary', finance: 'summary', products: 'products', customers: 'customers', marketing: 'marketing', fulfillment: 'fulfillment' };
+const tabSection = { overview: 'summary', finance: 'summary', products: 'products', customers: 'customers', marketing: 'marketing', fulfillment: 'fulfillment', traffic: 'traffic' };
 const todayForTimezone = (timezone = 'Asia/Kolkata') => {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -40,9 +42,9 @@ export default function Reports({ route = '/admin/reports' }) {
   const isSeller = route.startsWith('/seller');
   const base = isSeller ? '/seller' : '/admin';
   const { notify } = useAuth() || {};
-  const [activeTab, setActiveTab] = useState('overview');
-  const [filters, setFilters] = useState({ range: '30d' });
-  const [draft, setDraft] = useState({ range: '30d' });
+  const [activeTab, setActiveTab] = useState(route.endsWith('/traffic') ? 'traffic' : 'overview');
+  const [filters, setFilters] = useState({ range: route.endsWith('/traffic') ? 'today' : '30d' });
+  const [draft, setDraft] = useState({ range: route.endsWith('/traffic') ? 'today' : '30d' });
   const [options, setOptions] = useState(null);
   const [sections, setSections] = useState({});
   const [loading, setLoading] = useState({});
@@ -58,7 +60,7 @@ export default function Reports({ route = '/admin/reports' }) {
   const query = useMemo(() => new URLSearchParams(cleanFilters(filters)).toString(), [filters]);
   const scopeQuery = useMemo(() => new URLSearchParams(cleanFilters({ scope: filters.scope, store: filters.store })).toString(), [filters.scope, filters.store]);
   const currency = sections.summary?.currency || options?.currentStore?.currency || 'INR';
-  const maximumDate = todayForTimezone(sections.summary?.timezone || options?.timezone || options?.currentStore?.timezone);
+  const maximumDate = todayForTimezone((activeTab === 'traffic' ? sections.traffic?.timezone : sections.summary?.timezone) || options?.timezone || options?.currentStore?.timezone);
   const capabilities = options?.capabilities || sections.summary?.capabilities || {};
   const permittedSections = useMemo(() => REPORT_SECTIONS.filter((section) => capabilities.sections?.[section] !== false), [capabilities.sections]);
   const visibleTabs = useMemo(() => tabs.filter(([value]) => permittedSections.includes(tabSection[value])), [permittedSections]);
@@ -75,6 +77,18 @@ export default function Reports({ route = '/admin/reports' }) {
   }, [base, notify, query, scopeQuery]);
 
   useEffect(() => loadOptions(), [loadOptions]);
+  useEffect(() => { if (route.split('?')[0].endsWith('/traffic')) { setActiveTab('traffic'); setFilters({ range: 'today' }); setDraft({ range: 'today' }); } }, [route]);
+  useEffect(() => {
+    if (activeTab !== 'traffic' || capabilities.sections?.traffic === false) return undefined;
+    let active = true; const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      api.get(`${base}/reports/center/traffic?${query}`, { silent: true, cache: 'no-store', signal: controller.signal })
+        .then(data => { if (active) { setSections(current => ({ ...current, traffic: data })); setErrors(current => ({ ...current, traffic: '' })); } })
+        .catch(error => { if (active && error.name !== 'AbortError') setErrors(current => ({ ...current, traffic: error.message })); });
+    }, 30000);
+    return () => { active = false; controller.abort(); window.clearInterval(timer); };
+  }, [activeTab, base, query, capabilities.sections?.traffic]);
 
   useEffect(() => {
     const version = ++requestVersion.current;
@@ -117,7 +131,7 @@ export default function Reports({ route = '/admin/reports' }) {
   const exportReport = async (type) => {
     setExporting(type);
     try {
-      const result = await api.post(`${base}/reports/export?${scopeQuery}`, { filters, sections: permittedSections }, { silent: true });
+      const result = await api.post(`${base}/reports/export?${scopeQuery}`, { filters, sections: activeTab === 'traffic' ? ['traffic'] : permittedSections }, { silent: true });
       if (type === 'csv') downloadTextFile(result.csv, result.filename);
       else await downloadReportPdf(result.bundle, result.filename);
       notify?.(`${type.toUpperCase()} report downloaded.`, 'success', 'Reports');
@@ -142,7 +156,7 @@ export default function Reports({ route = '/admin/reports' }) {
     } catch (error) { notify?.(error.message, 'error', 'Reports'); }
   };
   const currentSection = tabSection[activeTab];
-  const rangeInfo = sections.summary?.range || sections[currentSection]?.range;
+  const rangeInfo = sections[currentSection]?.range || sections.summary?.range;
   const activeFilters = Object.entries(filters).filter(([key, value]) => !['range', 'from', 'to', 'scope', 'store'].includes(key) && value);
 
   return <section className="report-center">
@@ -180,11 +194,12 @@ export default function Reports({ route = '/admin/reports' }) {
       {activeTab === 'customers' && <CustomersReport data={sections.customers?.data} currency={currency} />}
       {activeTab === 'marketing' && <MarketingReport data={sections.marketing?.data} currency={currency} />}
       {activeTab === 'fulfillment' && <FulfillmentReport data={sections.fulfillment?.data} currency={currency} base={base} />}
+      {activeTab === 'traffic' && <TrafficReport data={sections.traffic?.data} base={base} currency={currency} />}
     </SectionState>
 
     {saveOpen && <SaveDialog initial={editingView} customRange={filters.range === 'custom'} onClose={() => { setSaveOpen(false); setEditingView(null); }} onSave={async (payload) => {
       try {
-        const body = { ...payload, filters, sections: permittedSections };
+        const body = { ...payload, filters, sections: activeTab === 'traffic' ? ['traffic'] : permittedSections };
         const view = editingView ? await api.put(`${base}/reports/views/${editingView.id}?${scopeQuery}`, body) : await api.post(`${base}/reports/views?${scopeQuery}`, body);
         setSavedViews((items) => editingView ? items.map((item) => item.id === view.id ? view : item) : [view, ...items]);
         setSaveOpen(false); setEditingView(null); notify?.(editingView ? 'Saved report updated.' : 'Report view saved.', 'success', 'Reports');
@@ -208,6 +223,7 @@ function FilterPanel({ values, setValues, options, showStore, onApply, onClear }
     {field('status', 'Order status', options.statuses)}{field('paymentMethod', 'Payment method', options.paymentMethods)}
     {field('coupon', 'Coupon', options.coupons, 'code', 'code')}{field('campaign', 'Campaign', options.campaigns)}
     {field('source', 'Source', options.sources)}{field('city', 'City', options.cities)}{field('provider', 'Courier', options.providers)}
+    {field('device', 'Traffic device', ['mobile', 'desktop', 'tablet'])}{field('browser', 'Traffic browser', ['Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Other'])}
     <label>PIN code<input inputMode="numeric" maxLength={6} placeholder="All PIN codes" value={values.pincode || ''} onChange={(event) => setValues({ ...values, pincode: event.target.value.replace(/\D/g, '').slice(0, 6) })} /></label>
     <div className="report-filter-actions"><button type="button" className="admin-btn-ghost" onClick={onClear}>Clear</button><button type="submit" className="admin-btn-primary">Apply filters</button></div>
   </form>;

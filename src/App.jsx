@@ -1,6 +1,6 @@
 import { NotificationProvider } from './context/NotificationContext';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { MantineProvider, createTheme } from '@mantine/core';
+import ApplicationTheme from './components/ui/ApplicationTheme';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -18,6 +18,8 @@ import { buildWebsiteCssVariables } from './config/websiteCustomization';
 import { reelProductImportEnabled } from './config/features';
 import { clearLoginPromptDismissed, isLoginPromptDismissed, markLoginPromptDismissed } from './utils/loginPromptStorage';
 import MobileOverlayLoader from './components/ui/MobileOverlayLoader';
+import StorefrontSkeleton from './components/ui/StorefrontSkeleton';
+import TrafficTracking from './components/analytics/TrafficTracking';
 import MobileAppCompanion from './components/pwa/MobileAppCompanion';
 import { useAuth } from './context/AuthContext';
 import { getMobileLoaderSnapshot, subscribeMobileLoader } from './utils/mobileLoader';
@@ -45,6 +47,9 @@ const Profile = lazy(() => import('./pages/customer/Profile'));
 const ProfileDetails = lazy(() => import('./pages/customer/ProfileDetails'));
 const AddressManagement = lazy(() => import('./pages/customer/AddressManagement'));
 const MyOrders = lazy(() => import('./pages/customer/MyOrders'));
+const MyRentals = lazy(() => import('./pages/customer/MyRentals'));
+const RentalCheckout = lazy(() => import('./pages/customer/RentalCheckout'));
+const RentalOperations = lazy(() => import('./pages/admin/Rentals'));
 const OrderDetail = lazy(() => import('./pages/customer/OrderDetail'));
 const OrderSuccess = lazy(() => import('./pages/customer/OrderSuccess'));
 const PaymentFailed = lazy(() => import('./pages/customer/PaymentFailed'));
@@ -112,6 +117,8 @@ const customerRoutes = {
   '/profile/addresses/new': AddressManagement,
   '/profile/addresses/edit': AddressManagement,
   '/orders': MyOrders,
+  '/rentals': MyRentals,
+  '/rental-book': RentalCheckout,
   '/order-detail': OrderDetail,
   '/order-success': OrderSuccess,
   '/payment-failed': PaymentFailed,
@@ -138,6 +145,7 @@ const sellerRoutes = {
   '/seller/products/edit': SellerProductForm,
   '/seller/inventory': Inventory,
   '/seller/orders': SellerOrders,
+  '/seller/rentals': RentalOperations,
   '/seller/returns': Returns,
   '/seller/orders/detail': AdminOrderDetail,
   '/seller/crm': SellerCrm,
@@ -151,6 +159,7 @@ const sellerRoutes = {
   '/seller/audit': SellerAudit,
   '/seller/analytics': SellerAnalytics,
   '/seller/reports': Reports,
+  '/seller/traffic': Reports,
   '/seller/business': BusinessCenter,
   '/seller/subscription': SellerSubscription,
   '/seller/settings': Settings,
@@ -170,6 +179,7 @@ const adminRoutes = {
   '/admin/categories/edit': EditCategory,
   '/admin/variant-groups': VariantGroups,
   '/admin/orders': Orders,
+  '/admin/rentals': RentalOperations,
   '/admin/orders/detail': AdminOrderDetail,
   '/admin/customers': Customers,
   '/admin/coupons': Coupons,
@@ -179,6 +189,7 @@ const adminRoutes = {
   '/admin/returns': Returns,
   '/admin/inventory': Inventory,
   '/admin/reports': Reports,
+  '/admin/traffic': Reports,
   '/admin/support': Support,
   '/admin/subscribers': Subscribers,
   '/admin/audit': AuditLogs,
@@ -197,19 +208,6 @@ const masterPages = {
   '/master/stores': PlatformStores,
   '/master/clients': ClientInstallations,
 };
-
-const samiraTheme = createTheme({
-  primaryColor: 'maroon',
-  primaryShade: 8,
-  defaultRadius: 'md',
-  fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
-  headings: {
-    fontFamily: '"Playfair Display", Georgia, serif',
-  },
-  colors: {
-    maroon: ['#f9ecef', '#f2d8de', '#e8bcc8', '#db93a6', '#cc6d87', '#ba4668', '#a92d4f', '#951c3e', '#7b1834', '#5f1128'],
-  },
-});
 
 function useAppRoute() {
   const [route, setRoute] = useState(() => readAppRoute());
@@ -255,21 +253,23 @@ export default function App() {
   const [route, navigate] = useAppRoute();
 
   return (
-    <MantineProvider theme={samiraTheme}>
-      <WebsiteCustomizationProvider>
+    <WebsiteCustomizationProvider route={route}>
+      <ApplicationTheme>
         {isWebsitePreview() ? <Suspense fallback={<RouteFallback />}><WebsitePreview /></Suspense> : <AuthProvider navigate={navigate}>
           <NotificationProvider navigate={navigate}><StorefrontProvider route={route}>
+            <TrafficTracking route={route} />
             <AppShell route={route} navigate={navigate} />
           </StorefrontProvider></NotificationProvider>
         </AuthProvider>}
-      </WebsiteCustomizationProvider>
-    </MantineProvider>
+      </ApplicationTheme>
+    </WebsiteCustomizationProvider>
   );
 }
 
 function AppShell({ route, navigate }) {
   const routePath = route.split('?')[0];
   const logicalPath = boutiquePath(routePath);
+  const routeGuardPath = /^\/store\/[^/]+\/(rentals|rental-book)$/.test(logicalPath) ? `/${logicalPath.split('/').at(-1)}` : routePath;
   const isMaster = routePath === '/master' || routePath.startsWith('/master/');
   const isAdmin = routePath.startsWith('/admin') || isMaster;
   const isSeller = routePath.startsWith('/seller');
@@ -287,6 +287,8 @@ function AppShell({ route, navigate }) {
     '/profile/addresses/new',
     '/profile/addresses/edit',
     '/orders',
+    '/rentals',
+    '/rental-book',
     '/checkout',
     '/order-detail',
     '/order-success',
@@ -321,6 +323,8 @@ function AppShell({ route, navigate }) {
       if (parts[2] === 'product') return ProductDetail;
       if (parts[2] === 'products' && parts[3]) return ProductDetail;
       if (parts[2] === 'products' || parts[2] === 'search' || parts[2] === 'category') return Products;
+      if (parts[2] === 'rentals') return MyRentals;
+      if (parts[2] === 'rental-book') return RentalCheckout;
       return StoreHome;
     }
     if (routePath === '/product' || routePath.startsWith('/product/')) return ProductDetail;
@@ -395,13 +399,13 @@ function AppShell({ route, navigate }) {
   const desktopProfileLogin = routePath === '/profile' && !user && !isMobile;
   const shouldShowStandaloneAuth =
     standaloneAuthRoutes.includes(routePath) ||
-    ((protectedRoutes.includes(routePath) && !user) && !desktopProfileLogin);
-  const authContent = protectedRoutes.includes(routePath) && !user ? loginFallback : page;
+    ((protectedRoutes.includes(routeGuardPath) && !user) && !desktopProfileLogin);
+  const authContent = protectedRoutes.includes(routeGuardPath) && !user ? loginFallback : page;
   const showShell = !(isMobile && immersiveRoutes.includes(routePath));
   const websiteStyle = useMemo(() => buildWebsiteCssVariables(websiteConfig), [websiteConfig]);
   const mainContent = desktopProfileLogin
     ? loginFallback
-    : protectedRoutes.includes(routePath)
+    : protectedRoutes.includes(routeGuardPath)
       ? (
         <ProtectedRoute>
           {page}
@@ -472,40 +476,6 @@ function AppShell({ route, navigate }) {
 }
 
 function RouteFallback() {
-  const [isMobileViewport, setIsMobileViewport] = useState(() => (
-    typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(max-width: 767px)').matches
-  ));
-  const globalMobileLoading = useSyncExternalStore(subscribeMobileLoader, getMobileLoaderSnapshot, getMobileLoaderSnapshot);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const media = window.matchMedia('(max-width: 767px)');
-    const onChange = (event) => setIsMobileViewport(event.matches);
-    media.addEventListener('change', onChange);
-    setIsMobileViewport(media.matches);
-    return () => media.removeEventListener('change', onChange);
-  }, []);
-
-  if (isMobileViewport) {
-    return globalMobileLoading
-      ? <div className="min-h-[50vh]" aria-hidden="true" />
-      : <MobileOverlayLoader />;
-  }
-
-  return (
-    <div className="grid min-h-[50vh] place-items-center px-4">
-      <div className="flex flex-col items-center gap-3 rounded-3xl border border-[#eadfd5] bg-white px-8 py-10 text-center shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-        <span className="relative block h-12 w-12" aria-hidden="true">
-          <span className="absolute inset-0 rounded-full border-[3px] border-[#f3d3da]" />
-          <span
-            className="absolute inset-0 rounded-full border-[3px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
-            style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
-          />
-        </span>
-        <p className="text-sm font-black text-slate-500">Loading...</p>
-      </div>
-    </div>
-  );
+  // Chunk downloads never cover the header, search, back button or cart.
+  return <StorefrontSkeleton label="Loading page" />;
 }

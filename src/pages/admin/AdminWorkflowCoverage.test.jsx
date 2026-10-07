@@ -175,3 +175,31 @@ test('optional payment readiness failure leaves settings editable and reports su
   expect(api.put).toHaveBeenCalledWith('/admin/settings', expect.objectContaining({ storeName: 'Updated shop', returnWindowDays: 0, gstRate: 5.5 }));
   expect(screen.getByRole('button', { name: 'Retry payment check' })).toBeInTheDocument();
 });
+
+test('OTP settings are available in the admin sidebar and never mix credentials into general settings saves', async () => {
+  api.get.mockImplementation(async path => path.endsWith('/sms') ? {
+    revision: 0, active: { provider: 'twofactor', source: 'environment', configured: true }, pending: null,
+    providers: [{ id: 'twofactor', label: '2Factor', fields: [{ key: 'apiKey', label: 'API key', required: true }] }],
+    environment: { configured: true, provider: 'twofactor', label: '2Factor' }, phoneMasked: '••••••3210',
+  } : { storeName: 'My shop', returnWindowDays: 7, gstRate: 5 });
+  api.put.mockResolvedValue({ storeName: 'Updated shop', returnWindowDays: 7, gstRate: 5 });
+  render(<Settings />);
+  fireEvent.click(await screen.findByRole('button', { name: 'OTP & SMS' }));
+  fireEvent.change(await screen.findByLabelText('API key'), { target: { value: 'not-for-general-settings' } });
+  expect(screen.queryByRole('button', { name: 'Save Settings' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Brand & identity' }));
+  fireEvent.change(screen.getByLabelText('Store Name'), { target: { value: 'Updated shop' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+  expect(JSON.stringify(api.put.mock.calls)).not.toContain('not-for-general-settings');
+  fireEvent.click(screen.getByRole('button', { name: 'OTP & SMS' }));
+  expect(await screen.findByLabelText('API key')).toHaveValue('not-for-general-settings');
+});
+
+test('store-scoped sellers do not get a deployment OTP settings control', async () => {
+  api.get.mockResolvedValue({ storeName: 'Seller store', returnWindowDays: 7 });
+  render(<Settings route="/seller/settings" />);
+  await screen.findByLabelText('Store Name');
+  expect(screen.queryByRole('button', { name: 'OTP & SMS' })).not.toBeInTheDocument();
+  expect(api.get.mock.calls.some(([path]) => path.endsWith('/sms'))).toBe(false);
+});

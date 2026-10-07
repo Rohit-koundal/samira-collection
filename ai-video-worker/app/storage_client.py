@@ -5,6 +5,7 @@ import time
 
 import boto3
 import requests
+from botocore.exceptions import ClientError
 
 
 class StorageError(RuntimeError):
@@ -54,15 +55,30 @@ class StorageClient:
         return destination
 
     def upload_candidate(self, image_path: Path, job_id: str, group_number: int, timestamp: float) -> dict:
-        key = f"reel-imports/candidates/{job_id}/{group_number:03d}-{int(timestamp * 1000):010d}.jpg"
+        # Job isolation plus a content version: retries reuse an immutable frame,
+        # while a different job or genuinely changed frame cannot overwrite it.
+        digest = hashlib.sha256()
+        with image_path.open("rb") as image:
+            for chunk in iter(lambda: image.read(1024 * 1024), b""):
+                digest.update(chunk)
+        identity = hashlib.sha256(f"{job_id}:{int(timestamp * 1000)}:{digest.hexdigest()}".encode()).hexdigest()
+        key = f"reel-imports/candidates/retry-{identity}.jpg"
         if self.provider == "r2":
             try:
-                self.s3.upload_file(
-                    str(image_path),
-                    os.environ["R2_BUCKET_NAME"],
-                    key,
-                    ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "private, max-age=86400"},
-                )
+                exists = False
+                try:
+                    self.s3.head_object(Bucket=os.environ["R2_BUCKET_NAME"], Key=key)
+                    exists = True
+                except ClientError as exc:
+                    if str(exc.response.get("Error", {}).get("Code", "")) not in ("404", "NotFound", "NoSuchKey"):
+                        raise
+                if not exists:
+                    self.s3.upload_file(
+                        str(image_path),
+                        os.environ["R2_BUCKET_NAME"],
+                        key,
+                        ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "private, max-age=86400"},
+                    )
             except Exception as exc:
                 raise StorageError("A candidate frame could not be uploaded to R2.") from exc
             return {
@@ -76,18 +92,29 @@ class StorageClient:
         timestamp = int(time.time())
         folder = f"{os.getenv('CLOUDINARY_FOLDER', 'samira-products')}/reel-imports/candidates"
         public_id = key.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-        signature_text = f"folder={folder}&public_id={public_id}&timestamp={timestamp}{os.environ['CLOUDINARY_API_SECRET']}"
+        resource_id = f"{folder}/{public_id}"
+        from urllib.parse import quote
+        existing = requests.get(
+            f"https://api.cloudinary.com/v1_1/{os.environ['CLOUDINARY_CLOUD_NAME']}/resources/image/upload/{quote(resource_id, safe='')}",
+            auth=(os.environ["CLOUDINARY_API_KEY"], os.environ["CLOUDINARY_API_SECRET"]), timeout=30,
+        )
+        if existing.ok:
+            payload = existing.json()
+            if not payload.get("public_id") or not payload.get("secure_url"):
+                raise StorageError("Cloudinary did not return the stored candidate frame.")
+            return {"provider": "cloudinary", "storageKey": payload["public_id"], "url": payload["secure_url"]}
+        if existing.status_code != 404:
+            raise StorageError("The previous Cloudinary candidate upload could not be checked.")
+        parameters = {"folder": folder, "public_id": public_id, "timestamp": timestamp, "overwrite": "false"}
+        signature_text = "&".join(f"{name}={parameters[name]}" for name in sorted(parameters)) + os.environ["CLOUDINARY_API_SECRET"]
         signature = hashlib.sha1(signature_text.encode("utf-8")).hexdigest()
         with image_path.open("rb") as image:
             response = requests.post(
                 f"https://api.cloudinary.com/v1_1/{os.environ['CLOUDINARY_CLOUD_NAME']}/image/upload",
                 data={
                     "api_key": os.environ["CLOUDINARY_API_KEY"],
-                    "folder": folder,
-                    "public_id": public_id,
-                    "timestamp": timestamp,
+                    **parameters,
                     "signature": signature,
-                    "overwrite": "true",
                 },
                 files={"file": ("candidate.jpg", image, "image/jpeg")},
                 timeout=120,
@@ -95,4 +122,6 @@ class StorageClient:
         if not response.ok:
             raise StorageError("A candidate frame could not be uploaded to Cloudinary.")
         payload = response.json()
+        if not payload.get("public_id") or not payload.get("secure_url"):
+            raise StorageError("Cloudinary did not return the uploaded candidate frame.")
         return {"provider": "cloudinary", "storageKey": payload["public_id"], "url": payload["secure_url"]}

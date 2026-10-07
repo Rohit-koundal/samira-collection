@@ -2,7 +2,7 @@
 .sc-addresses {
   --address-primary: var(--site-primary, #6d1f34);
   --address-muted: var(--site-muted, #766b68);
-  --address-border: #ead8cb;
+  --address-border: var(--site-border, #ead8cb);
   min-height: 65vh;
   padding: 24px 0 48px;
   background: var(--site-background, #fffaf2);
@@ -48,7 +48,7 @@
 .sc-addresses__empty p { font-size: 14px; color: var(--address-muted); }
 .sc-addresses__notice { display: flex; align-items: center; gap: 8px; margin: 16px 0; color: #2f6744; font-size: 14px; }
 .sc-addresses__error { background: #fff0f0; color: #a52236; border-radius: 6px; padding: 12px; margin: 16px 0; font-size: 14px; }
-.sc-address-dialog { --address-primary: var(--site-primary, #6d1f34); --address-muted: var(--site-muted, #766b68); --address-border: #ead8cb; margin: auto; padding: 0; width: min(640px, calc(100% - 40px)); max-height: calc(100dvh - 64px); border: 1px solid var(--address-border); border-radius: 14px; color: var(--site-text, #30272b); background: var(--site-background, #fffaf2); box-shadow: 0 24px 80px #2f152a38; overscroll-behavior: contain; }
+.sc-address-dialog { --address-primary: var(--site-primary, #6d1f34); --address-muted: var(--site-muted, #766b68); --address-border: var(--site-border, #ead8cb); margin: auto; padding: 0; width: min(640px, calc(100% - 40px)); max-height: calc(100dvh - 64px); border: 1px solid var(--address-border); border-radius: 14px; color: var(--site-text, #30272b); background: var(--site-background, #fffaf2); box-shadow: 0 24px 80px #2f152a38; overscroll-behavior: contain; }
 .sc-address-dialog::backdrop { background: #25161e80; backdrop-filter: blur(3px); }
 .sc-address-dialog--compact { max-width: 460px; }
 .sc-addresses__confirm { padding: 30px; }
@@ -60,7 +60,6 @@
 .sc-address-dialog .sc-address-form > div:first-child { position: sticky; top: 0; z-index: 1; padding: 12px; background: var(--site-background, #fffaf2); }
 .sc-address-dialog .sc-address-form input, .sc-address-dialog .sc-address-form select { width: 100%; font-size: 14px; }
 .sc-address-dialog .sc-address-form label > span { font-size: 14px; color: var(--address-primary); }
-.sc-address-dialog .sc-address-form label > div:focus-within { outline: 2px solid var(--address-primary); outline-offset: 2px; }
 .sc-address-dialog .sc-address-form button[type=submit] { background: var(--address-primary); }
 .sc-address-dialog .sc-address-form button[aria-pressed=true] { border-color: var(--address-primary); box-shadow: 0 0 0 1px var(--address-primary); }
 .sc-address-dialog .sc-address-form input[type=checkbox] { width: auto; accent-color: var(--address-primary); }
@@ -130,7 +129,6 @@
   .sc-address-form .sc-address-form__field > span, .sc-address-dialog .sc-address-form label > span { color: var(--text-body, #282c3f); font-size: 12px; }
   .sc-address-form .sc-address-form__field > span svg { color: #94a3b8; }
   .sc-address-form .sc-address-form__field > div { border-color: var(--address-border); border-radius: 10px; }
-  .sc-address-form .sc-address-form__field > div:focus-within { outline: 2px solid var(--address-primary); outline-offset: 1px; }
   .sc-address-form .sc-address-form__field :is(input, select) { min-height: 44px; width: 100%; font-size: 16px; color: var(--text-body, #282c3f); }
   .sc-address-form button[aria-pressed] { border-color: var(--address-border); gap: 8px; padding: 12px 8px; box-shadow: none; }
   .sc-address-form button[aria-pressed=true], .sc-address-dialog .sc-address-form button[aria-pressed=true] { border-color: var(--address-primary); background: var(--blush, #fff0f4); box-shadow: none; }
@@ -141,4 +139,20 @@
   .sc-address-form button[type=submit], .sc-address-dialog .sc-address-form button[type=submit] { background: var(--address-primary); color: white; }
   .sc-address-form button[type=submit], .sc-address-form button[type=submit] + button { min-height: 48px; }
   .sc-address-form > div:last-child > div:last-child > button:first-child { border-color: var(--address-border); color: var(--text-body, #282c3f); min-height: 48px; }
+}
+
+/* Profile dialogs and desktop/mobile checkout share AddressForm. Its shell
+   owns the only border/focus edge; inner controls must not render a second
+   rounded box, including disabled dropdowns and focused TextInput controls. */
+.sc-address-form .sc-address-form__field > .sc-field-shell > :is(input, select) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0;
+  outline: none;
+  box-shadow: none;
 }

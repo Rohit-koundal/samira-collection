@@ -87,6 +87,22 @@ test('shared inbox opens a customer thread and sends only the explicit reply', a
   await waitFor(() => expect(api.post).toHaveBeenCalledWith(expect.stringContaining('/threads/thread-1/reply'), expect.objectContaining({ text: 'Yes, medium is available.', clientId: expect.any(String) })));
   await waitFor(() => expect(textarea).toHaveValue(''));
 });
+test('order Smart Fill stays scoped to the social workspace and fills only a reviewed unsent reply', async () => {
+  fixtureStatus = { ...status, workspace: 'admin', permissions: { ...status.permissions, customerContext: true } };
+  const get = api.get.getMockImplementation(), post = api.post.getMockImplementation();
+  api.get.mockImplementation(path => path.includes('/threads/thread-1/context')
+    ? Promise.resolve({ customer: { _id: 'customer-one' }, orders: [{ _id: 'order-one', invoiceNumber: 'INV-ONE' }] }) : get(path));
+  api.post.mockImplementation((path, body) => path.startsWith('/admin/smart-fill/preview')
+    ? Promise.resolve({ suggestions: [{ path: 'reply', label: 'Customer reply', value: 'Order INV-ONE is confirmed.', source: 'database' }, { path: 'summary', label: 'Private summary', value: 'INV-ONE confirmed.', source: 'database' }] }) : post(path, body));
+  render(<SocialWorkspace />); fireEvent.click(await screen.findByRole('button', { name: /Ananya/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Order support Smart Fill/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Suggest draft fields' }));
+  await screen.findByText('Order INV-ONE is confirmed.');
+  fireEvent.click(screen.getByRole('button', { name: /Apply 2/ }));
+  expect(screen.getByRole('textbox', { name: 'Write your reply' })).toHaveValue('Order INV-ONE is confirmed.');
+  expect(api.post).toHaveBeenCalledWith('/admin/smart-fill/preview?storeId=store-1', expect.objectContaining({ workflow: 'support', context: { orderId: 'order-one', threadId: 'thread-1' } }), expect.objectContaining({ silent: true }));
+  expect(api.post.mock.calls.filter(([path]) => path.includes('/reply') && !path.includes('reply-presence'))).toHaveLength(0);
+});
 
 test('expired reply window disables sending and provides the Meta inbox link', async () => {
   fixtureThread.canReply = false;

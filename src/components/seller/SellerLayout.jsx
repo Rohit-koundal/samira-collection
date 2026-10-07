@@ -12,6 +12,7 @@ const links = [
   ['Variant Families', '/seller/variant-groups'],
   ['Inventory', '/seller/inventory'],
   ['Orders', '/seller/orders'],
+  ['Rental studio', '/seller/rentals'],
   ['Returns / Exchange', '/seller/returns'],
   ['Customers', '/seller/crm'],
   ['Offers', '/seller/offers'],
@@ -21,6 +22,7 @@ const links = [
   ['Inbox', '/seller/inbox'],
   ['Analytics', '/seller/analytics'],
   ['Reports', '/seller/reports'],
+  ['Traffic & visitors', '/seller/traffic'],
   ['Business Center', '/seller/business'],
   ['Plan & billing', '/seller/subscription'],
   ['Store settings', '/seller/settings'],
@@ -38,6 +40,7 @@ const icons = {
   'Variant Families': GitBranch,
   Inventory: Package,
   Orders: ShoppingBag,
+  'Rental studio': ShoppingBag,
   'Returns / Exchange': RotateCcw,
   Customers: Users,
   Offers: HeartPulse,
@@ -47,6 +50,7 @@ const icons = {
   Inbox: MessageCircle,
   Analytics: BarChart3,
   Reports: BarChart3,
+  'Traffic & visitors': BarChart3,
   'Business Center': HeartPulse,
   'Plan & billing': CreditCard,
   'Store settings': Settings,
@@ -59,17 +63,22 @@ const LINK_FEATURES = {
   '/seller/crm': 'crm',
   '/seller/analytics': 'analytics',
   '/seller/reports': 'analytics',
+  '/seller/traffic': 'analytics',
   '/seller/campaigns': 'festival',
   '/seller/design': 'advancedCustomization',
   '/seller/social': 'socialStudio',
 };
-const LINK_PERMISSIONS = { '/seller/content': 'content.read' };
+const LINK_PERMISSIONS = { '/seller/content': 'content.read', '/seller/traffic': 'reports.read', '/seller/rentals': 'orders.read' };
 
 export default function SellerLayout({ children }) {
   const path = useAppPath();
   const { user } = useAuth();
   const stores = useMemo(() => (user?.stores || []).filter((item) => item?.id && item?.status !== 'SUSPENDED'), [user]);
-  const [storeId, setStoreId] = useState(() => sessionStorage.getItem('samira_seller_store_id') || '');
+  const [storeId, setStoreId] = useState(() => {
+    const linked = window.location.pathname === '/seller/rentals' ? new URLSearchParams(window.location.search).get('storeId') : '';
+    if (linked && stores.some(item => item.id === linked)) { sessionStorage.setItem('samira_seller_store_id', linked); return linked; }
+    return sessionStorage.getItem('samira_seller_store_id') || '';
+  });
 
   useEffect(() => {
     if (!stores.length) return;
@@ -118,7 +127,7 @@ export default function SellerLayout({ children }) {
       </aside>
       {stores.length > 1 && <div className="border-b border-[#e8dcd4] bg-white px-4 pt-3 lg:hidden"><select aria-label="Active seller store" value={storeId || stores[0].id} onChange={(event) => chooseStore(event.target.value)} className="h-10 w-full rounded-xl border border-[#e8dcd4] bg-[#fbf8f4] px-3 text-sm font-bold">{stores.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.role}</option>)}</select></div>}
       <nav className="flex gap-2 overflow-x-auto border-b border-[#e8dcd4] bg-white px-4 py-3 lg:hidden" aria-label="Seller workspace navigation">
-        {items.map(item => <a key={item.path} href={item.path} aria-current={item.active ? 'page' : undefined} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${item.active ? 'bg-[#751d39] text-white' : 'text-[#75656f]'}`}><item.Icon size={15} />{item.label}</a>)}
+        {items.map(item => <a key={item.path} href={item.path} aria-current={item.active ? 'page' : undefined} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${item.active ? 'bg-wine text-white' : 'text-[#75656f]'}`}><item.Icon size={15} />{item.label}</a>)}
       </nav>
       <div className="p-4 lg:p-8">{licenceRestricted && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div><strong>{activeStore.platform.name} subscription {activeStore.platform.status.toLowerCase()}</strong><p className="mt-1 text-xs">{activeStore.platform.renewalMessage || 'Your data is safe. Renew to create products, accept orders and make changes.'}</p></div><a href="/seller/subscription" className="rounded-xl bg-amber-900 px-4 py-2 text-xs font-black text-white">View plans</a></div>}{children}</div>
     </div>

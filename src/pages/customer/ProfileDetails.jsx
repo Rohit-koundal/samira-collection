@@ -225,7 +225,7 @@ export default function ProfileDetails() {
     <section className="min-h-screen bg-[#f6f7fb] pb-28">
       <div className="mx-auto w-full max-w-[470px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06)] md:mt-6 md:rounded-[24px] md:pb-6">
         <div className="border-b border-slate-100 px-5 py-6">
-          <h1 className="text-[18px] font-bold text-[#1f2a44] md:text-[22px]">Edit Details</h1>
+          <h1 className="text-[18px] font-bold text-charcoal md:text-[22px]">Edit Details</h1>
         </div>
 
         <div className="space-y-8 px-5 py-6">
@@ -240,7 +240,7 @@ export default function ProfileDetails() {
             <button
               type="button"
               onClick={() => setMobileEditable((value) => !value)}
-              className="h-[48px] border border-[#e5e7eb] text-[14px] font-bold text-[#1f2a44]"
+              className="h-[48px] border border-[#e5e7eb] text-[14px] font-bold text-charcoal"
             >
               {mobileEditable ? 'DONE' : 'CHANGE'}
             </button>
@@ -263,7 +263,7 @@ export default function ProfileDetails() {
                 {phoneChanged ? (
                   <>
                     <div className="flex gap-3">
-                      <button type="button" onClick={requestPhoneOtp} disabled={phoneOtpSending || phoneOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
+                      <button type="button" onClick={requestPhoneOtp} disabled={phoneOtpSending || phoneOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-charcoal disabled:opacity-60">
                         {phoneOtpSending ? 'Sending...' : (phoneOtpSent ? 'Resend OTP' : 'Send OTP')}
                       </button>
                       <input
@@ -298,7 +298,7 @@ export default function ProfileDetails() {
             <button
               type="button"
               onClick={() => setEmailEditable((value) => !value)}
-              className="h-[48px] border border-[#e5e7eb] text-[14px] font-bold text-[#1f2a44]"
+              className="h-[48px] border border-[#e5e7eb] text-[14px] font-bold text-charcoal"
             >
               {emailEditable ? 'DONE' : 'CHANGE'}
             </button>
@@ -315,7 +315,7 @@ export default function ProfileDetails() {
                 {normalizedDraftEmail && emailChanged ? (
                   <>
                     <div className="flex gap-3">
-                      <button type="button" onClick={requestEmailOtp} disabled={emailOtpSending || emailOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-[#1f2a44] disabled:opacity-60">
+                      <button type="button" onClick={requestEmailOtp} disabled={emailOtpSending || emailOtpVerifying || saving} className="h-[44px] min-w-[128px] border border-[#e5e7eb] px-4 text-[13px] font-bold text-charcoal disabled:opacity-60">
                         {emailOtpSending ? 'Sending...' : (emailOtpSent ? 'Resend OTP' : 'Send OTP')}
                       </button>
                       <input
@@ -366,10 +366,10 @@ export default function ProfileDetails() {
           </div>
 
           <div>
-            <h2 className="text-[16px] font-bold text-[#1f2a44]">Alternate mobile details</h2>
+            <h2 className="text-[16px] font-bold text-charcoal">Alternate mobile details</h2>
             <div className="mt-5 space-y-5">
               <div>
-                <div className="flex h-[48px] overflow-hidden border border-[#e5e7eb]">
+                <div className="sc-field-shell flex h-[48px] overflow-hidden border border-[#e5e7eb] focus-within:border-wine focus-within:ring-2 focus-within:ring-wine/10">
                   <div className="flex w-[64px] items-center justify-center border-r border-[#e5e7eb] text-[13px] text-slate-400">+91</div>
                   <input value={form.alternatePhone} onChange={(event) => onChange('alternatePhone', digitsOnly(event.target.value, 10))} className="h-full w-full px-4 text-[14px] text-[#182033] outline-none placeholder:text-slate-400" placeholder="Alternate mobile number" inputMode="numeric" autoComplete="tel" maxLength={10} pattern="[0-9]*" />
                 </div>

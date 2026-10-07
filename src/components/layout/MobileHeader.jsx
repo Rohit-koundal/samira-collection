@@ -109,7 +109,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
             <button onClick={() => navigate('/wishlist')} className="relative grid h-11 w-11 place-items-center text-slate-700" aria-label="Open wishlist">
               <Icon name="heart" className="h-5.5 w-5.5" />
               {wishlist.items.length > 0 && (
-                <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-rose px-1 text-[9px] font-black leading-none text-white">
+                <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-wine px-1 text-[9px] font-black leading-none text-white">
                   {wishlist.items.length}
                 </span>
               )}
@@ -142,7 +142,7 @@ export default function MobileHeader({ navigate, route = '/' }) {
             aria-modal="true"
             aria-label="Shopping menu"
           >
-            <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#5f102d] via-wine to-[#a7164b] px-5 pb-5 pt-[calc(env(safe-area-inset-top)+18px)] text-white">
+            <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-wine via-wine to-wine px-5 pb-5 pt-[calc(env(safe-area-inset-top)+18px)] text-white">
               <div className="pointer-events-none absolute -right-10 -top-12 z-0 h-36 w-36 rounded-full border-[24px] border-white/5" />
               <button
                 type="button"

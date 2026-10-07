@@ -201,7 +201,7 @@ test('preset search and mobile opt-in keep content and can be undone together', 
   fireEvent.change(screen.getByLabelText('Search presets'), { target: { value: 'not a preset' } });
   expect(screen.queryByRole('button', { name: /Apply Botanical Sage/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-  fireEvent.click(screen.getByLabelText('Also match mobile colors & corners'));
+  fireEvent.click(screen.getByLabelText('Also match mobile card corners'));
   fireEvent.click(screen.getByRole('button', { name: /Apply Botanical Sage/ }));
   expect(configInPreview().mobile.enabled).toBe(true);
   expect(configInPreview().homepage).toEqual(original.homepage);

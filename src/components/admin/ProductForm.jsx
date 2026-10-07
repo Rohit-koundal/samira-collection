@@ -6,6 +6,7 @@ import VideoUploader from './VideoUploader';
 import ProductSmartFill from './ProductSmartFill';
 import ProductPreviewModal from './ProductPreviewModal';
 import BarcodeScanner from './BarcodeScanner';
+import CompleteLookPicker from './CompleteLookPicker';
 import { applySmartPatch } from '../../utils/productSmartFill';
 import { normalizeImageEntries, normalizeImageUrl, normalizeVideoEntries } from '../../services/normalize';
 import {
@@ -66,6 +67,7 @@ const emptyProduct = {
   tags: '',
   fabric: '',
   occasion: '',
+  completeLookProductIds: [],
   description: '',
   attributeValues: {},
   images: [],
@@ -87,6 +89,7 @@ const emptyProduct = {
   showInFestive: false,
   isActive: true,
   trackVariants: false,
+  commerceMode: 'SALE_ONLY',
   variantOptionValues: {},
   variants: [],
 };
@@ -167,6 +170,7 @@ export default function ProductForm({
   const formRef = useRef(null);
   const autosaveIdRef = useRef('');
   const autosavePauseRef = useRef(false);
+  const draftSaveLock = useRef(false);
   const submitIntentRef = useRef('save');
   const draftKey = getDraftKey(productId, apiPrefix);
   const autosaveKey = `active-add-product:${apiPrefix.replace(/[^a-z]/gi, '') || 'admin'}`;
@@ -561,7 +565,7 @@ export default function ProductForm({
   };
 
   const saveServerDraft = async () => {
-    if (saving || mode !== 'Add') return;
+    if (saving || draftSaveLock.current || mode !== 'Add') return;
     if (mediaActivity.images || mediaActivity.videos) {
       setMessage('Please wait for the media upload to finish before saving the draft.');
       return;
@@ -570,6 +574,7 @@ export default function ProductForm({
       setMessage('Add a product name, SKU, description or photo before saving a draft.');
       return;
     }
+    draftSaveLock.current = true;
     setSaving(true);
     setMessage('');
     try {
@@ -591,6 +596,7 @@ export default function ProductForm({
     } catch (error) {
       setMessage(error.message);
     } finally {
+      draftSaveLock.current = false;
       setSaving(false);
     }
   };
@@ -717,6 +723,7 @@ export default function ProductForm({
       {!!duplicateReview.conflicts.length && <div className="product-duplicate-warning" role="status"><strong>{duplicateReview.conflicts.some((item) => item.blocking) ? 'Resolve duplicate catalog values' : 'Similar product found'}</strong>{duplicateReview.conflicts.map((item) => <p key={item.id}><span>{item.name}</span> matches {item.reasons.join(' and ')}. <a href={`${apiPrefix}/products/edit?id=${item.id}`}>Review product</a></p>)}</div>}
 
       <Section id="product-pricing" step="02" title="Category, Pricing and Inventory" note="Where it sits in the catalog and how it is sold.">
+        <label className="admin-field"><span>Available for</span><select className="admin-field__control" value={form.commerceMode || 'SALE_ONLY'} onChange={event => setForm(current => ({ ...current, commerceMode: event.target.value }))}><option value="SALE_ONLY">Sale only</option><option value="RENTAL_ONLY">Rental only</option><option value="SALE_AND_RENTAL">Sale and rental</option></select><small>Rental rates and physical pieces are configured in Rental studio. Sale stock remains separate.</small></label>
         <label className="admin-field">
           <span>Category<em>*</em></span>
           <select
@@ -753,7 +760,8 @@ export default function ProductForm({
             {availableSubcategories.map((item) => <option key={item} value={item} />)}
           </datalist>
         </label>}
-        {viewMode === 'advanced' && <Input label="Occasion" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding" />}
+        <Input label="Occasions (comma-separated)" value={form.occasion} onChange={(value) => update('occasion', value)} placeholder="Wedding, Party, Daily wear" />
+        <small className="text-slate-500">Use consistent occasion names. Homepage shortcuts use this store’s published products.</small>
         {viewMode === 'advanced' && <Input label="Fabric" value={form.fabric} onChange={(value) => update('fabric', value)} placeholder="Silk" />}
         <Input field="originalPrice" label="Original price" type="number" min="0.01" step="0.01" value={form.originalPrice} onChange={(value) => update('originalPrice', value)} error={errors.originalPrice} placeholder="2499" />
         <Input field="price" label="Selling price" type="number" min="0.01" step="0.01" value={form.price} onChange={(value) => update('price', value)} error={errors.price} placeholder="1299" />
@@ -787,10 +795,10 @@ export default function ProductForm({
           </div>
         )}
         {effectiveSizingMode === 'sized' && form.trackVariants ? (
-          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-[#eadfd5]" data-error-field="variants" tabIndex="-1">
+          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-theme-border" data-error-field="variants" tabIndex="-1">
             <VariantBulkTools form={form} setForm={setForm} />
             <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm">
-              <thead className="bg-[#fffaf4] text-xs uppercase tracking-[0.12em] text-slate-500">
+              <thead className="bg-ivory text-xs uppercase tracking-[0.12em] text-slate-500">
                 <tr><th className="p-3">Size</th><th className="p-3">Colour</th><th className="p-3">Variant SKU</th><th className="p-3">Stock</th><th className="p-3">Selling price</th><th className="p-3">MRP</th><th className="p-3">Photo</th><th className="p-3">Available</th></tr>
               </thead>
               <tbody>
@@ -896,13 +904,13 @@ export default function ProductForm({
         {viewMode === 'advanced' && <Input label="Care Instructions" value={form.careInstructions} onChange={(value) => update('careInstructions', value)} placeholder="Dry clean preferred" />}
 
         {effectiveSizingMode === 'sized' ? (
-          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-[#eadfd5] bg-white">
+          <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-theme-border bg-white">
             <div className="flex flex-col gap-3 border-b border-[#f0e5dc] bg-[#fffaf6] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-sm font-black text-charcoal">Garment size chart</h3>
                 <p className="mt-1 text-xs font-semibold text-slate-500">Enter the actual finished-garment measurements from your supplier for every available size. Size labels such as S or M do not determine these measurements.</p>
               </div>
-              <div className="inline-flex w-fit rounded-full border border-[#ead8cb] bg-white p-1" aria-label="Size chart unit">
+              <div className="inline-flex w-fit rounded-full border border-theme-border bg-white p-1" aria-label="Size chart unit">
                 {['in', 'cm'].map((unit) => (
                   <button key={unit} type="button" onClick={() => updateSizeChartUnit(unit)} className={`h-8 rounded-full px-4 text-xs font-black uppercase ${form.sizeChart?.unit === unit ? 'bg-wine text-white' : 'text-slate-500'}`}>{unit}</button>
                 ))}
@@ -956,6 +964,7 @@ export default function ProductForm({
         ) : null}
       </Section>
 
+      <Section id="complete-look" title="Complete the look" note="Optional complementary products on the product-detail page; no automatic bundles or cart changes."><CompleteLookPicker apiPrefix={apiPrefix} productId={productId} value={form.completeLookProductIds || []} onChange={value => update('completeLookProductIds', value)} disabled={saving} /></Section>
       {viewMode === 'advanced' && <Section id="product-fulfilment" step="04" title="Shipping, Supplier and Schedule" note="Operational details used for courier planning, restocking and controlled publishing.">
         <Input field="packageDimensions" label="Package length (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.lengthCm || 0} onChange={(value) => { updateNested(setForm, 'packageDimensions', 'lengthCm', value); clearErrors(setErrors, 'packageDimensions'); }} error={errors.packageDimensions} />
         <Input label="Package width (cm)" type="number" min="0" step="0.1" value={form.packageDimensions?.widthCm || 0} onChange={(value) => { updateNested(setForm, 'packageDimensions', 'widthCm', value); clearErrors(setErrors, 'packageDimensions'); }} />
@@ -1142,7 +1151,7 @@ export default function ProductForm({
       {previewOpen && <ProductPreviewModal product={{ ...form, sizes: splitList(form.sizes), colors: splitList(form.colors) }} onClose={() => setPreviewOpen(false)} />}
 
       {(mediaActivity.images || mediaActivity.videos) && <p role="status" className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">Media upload in progress. Saving will be available when it finishes.</p>}
-      {message && <p role="status" className="rounded-2xl border border-[#eadfd5] bg-white px-4 py-3 text-sm font-semibold text-wine">{message}</p>}
+      {message && <p role="status" className="rounded-2xl border border-theme-border bg-white px-4 py-3 text-sm font-semibold text-wine">{message}</p>}
       <div className="admin-form-actions">
         {onCancel ? (
           <button type="button" disabled={saving || mediaActivity.images || mediaActivity.videos} onClick={onCancel} className="admin-btn-ghost disabled:opacity-60">
@@ -1201,7 +1210,7 @@ function AssistantPreviewModal({ suggestions, selection, setSelection, mode, onC
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="grid gap-3 lg:grid-cols-2">
             {fields.map(([key, label, value]) => (
-              <label key={key} className="rounded-2xl border border-slate-200 bg-[#fcfaf7] p-3">
+              <label key={key} className="rounded-2xl border border-slate-200 bg-ivory p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-black text-charcoal">{label}</span>
                   <input
@@ -1372,7 +1381,7 @@ function DynamicAttributeField({ attribute, value, onChange }) {
       return (
         <fieldset className="admin-field" data-required-attribute={attribute.required && !String(value ?? '').trim() ? attribute.key : undefined} tabIndex={attribute.required ? -1 : undefined}>
           <legend>{label}</legend>
-          <div className="flex flex-wrap gap-2 rounded-xl border border-[#eadfd5] bg-white p-3">
+          <div className="flex flex-wrap gap-2 rounded-xl border border-theme-border bg-white p-3">
             {attribute.options.map((option) => (
               <label key={option} className={`admin-flag ${selected.has(option) ? 'is-on' : ''}`}>
                 <input type="checkbox" checked={selected.has(option)} onChange={() => {
@@ -1425,7 +1434,7 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
   };
 
   return (
-    <div className="lg:col-span-2 rounded-2xl border border-[#eadfd5] bg-[#fffaf6] p-4 sm:p-5">
+    <div className="lg:col-span-2 rounded-2xl border border-theme-border bg-[#fffaf6] p-4 sm:p-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div><h3 className="font-bold text-charcoal">Variant inventory</h3><p className="mt-1 text-xs text-slate-500">Create only the combinations you sell. Every row can have its own SKU, price and stock.</p></div>
         <button type="button" onClick={generate} className="admin-btn-secondary h-10">Generate combinations</button>
@@ -1446,7 +1455,7 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
       {form.trackVariants && form.variants?.length ? (
         <><div className="mt-4"><VariantBulkTools form={form} setForm={setForm} /></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {form.variants.map((variant, index) => (
-            <article key={dynamicVariantKey(variant.optionValues)} className="rounded-xl border border-[#eadfd5] bg-white p-3">
+            <article key={dynamicVariantKey(variant.optionValues)} className="rounded-xl border border-theme-border bg-white p-3">
               <strong className="block truncate text-sm text-charcoal" title={formatVariantOptions(variant.optionValues)}>{formatVariantOptions(variant.optionValues)}</strong>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <CompactVariantInput label="SKU" value={variant.sku} onChange={(value) => onUpdateVariant(index, 'sku', value)} />
@@ -1454,7 +1463,7 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
                 <CompactVariantInput label="Selling price" type="number" min={0.01} step={0.01} value={variant.price} onChange={(value) => onUpdateVariant(index, 'price', value)} />
                 <CompactVariantInput label="MRP" type="number" min={0.01} step={0.01} value={variant.originalPrice} onChange={(value) => onUpdateVariant(index, 'originalPrice', value)} />
               </div>
-              <label className="mt-3 grid gap-1 text-[11px] font-semibold text-slate-500"><span>Variant photo</span><select value={variant.images?.[0]?.url || ''} onChange={(event) => onUpdateVariant(index, 'images', event.target.value ? [{ url: event.target.value, primary: true }] : [])} className="h-9 rounded-lg border border-[#eadfd5] px-2"><option value="">Main product photo</option>{form.images.map((image, imageIndex) => <option key={`${image.url}-${imageIndex}`} value={image.url}>Photo {imageIndex + 1}</option>)}</select></label>
+              <label className="mt-3 grid gap-1 text-[11px] font-semibold text-slate-500"><span>Variant photo</span><select value={variant.images?.[0]?.url || ''} onChange={(event) => onUpdateVariant(index, 'images', event.target.value ? [{ url: event.target.value, primary: true }] : [])} className="h-9 rounded-lg border border-theme-border px-2"><option value="">Main product photo</option>{form.images.map((image, imageIndex) => <option key={`${image.url}-${imageIndex}`} value={image.url}>Photo {imageIndex + 1}</option>)}</select></label>
               <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => onUpdateVariant(index, 'isActive', event.target.checked)} /> Available for sale</label>
             </article>
           ))}
@@ -1465,7 +1474,7 @@ function DynamicVariantEditor({ variantConfiguration, attributes, form, setForm,
 }
 
 function CompactVariantInput({ label, value, onChange, type = 'text', min, step }) {
-  return <label className="grid gap-1 text-[11px] font-semibold text-slate-500"><span>{label}</span><input type={type} min={min} step={step} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-[#eadfd5] px-2 text-xs text-charcoal" /></label>;
+  return <label className="grid gap-1 text-[11px] font-semibold text-slate-500"><span>{label}</span><input type={type} min={min} step={step} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-theme-border px-2 text-xs text-charcoal" /></label>;
 }
 
 function VariantBulkTools({ form, setForm }) {
@@ -1848,6 +1857,7 @@ function prepareImages(images) {
   return normalized.map((image) => ({
     url: image.url,
     publicId: image.publicId,
+    ...(image.background ? { background: image.background } : {}),
     primary: Boolean(image.primary),
     ...(image.sourceFrame ? { sourceFrame: image.sourceFrame } : {}),
   }));

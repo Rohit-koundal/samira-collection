@@ -236,7 +236,7 @@ function matchesDelimitedTextValue(value, activeValue) {
     .map(normalizeKey)
     .filter(Boolean);
   const selectedValues = splitFilterValues(activeValue).map(normalizeKey);
-  return selectedValues.some((selected) => productValues.includes(selected));
+  return selectedValues.some((selected) => productValues.some(value => value.replace(/\s+/g, ' ') === selected.replace(/\s+/g, ' ')));
 }
 
 function getProductOptionValues(product, type) {

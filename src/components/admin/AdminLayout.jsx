@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AdminHeader from './AdminHeader';
 import AdminSidebar from './AdminSidebar';
+import ClientSubscriptionNotice from './ClientSubscriptionNotice';
 import './AdminShell.css';
 
 export default function AdminLayout({ children }) {
@@ -33,7 +34,7 @@ export default function AdminLayout({ children }) {
       />
       <div className="admin-shell__main">
         <AdminHeader onOpenSidebar={() => setSidebarOpen(true)} />
-        <main className="admin-shell__content">{children}</main>
+        <main className="admin-shell__content"><ClientSubscriptionNotice />{children}</main>
       </div>
     </div>
   );

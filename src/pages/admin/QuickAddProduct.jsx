@@ -25,6 +25,7 @@ export default function QuickAddProduct() {
   const [subcategories, setSubcategories] = useState([]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [message, setMessage] = useState('');
   const [visionNote, setVisionNote] = useState('');
@@ -200,7 +201,7 @@ export default function QuickAddProduct() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (saving || analyzing || setupLoading || setupError || !structure) return;
+    if (saving || mediaBusy || analyzing || setupLoading || setupError || !structure) return;
     const nextErrors = validateQuickAdd(form);
     const sizing = importSizingProduct(form, categories, structure);
     if (!getSizeChartValidation(sizing).valid) nextErrors.sizing = 'Complete the available sizes and actual measurements below.';
@@ -325,6 +326,8 @@ export default function QuickAddProduct() {
               targetSizeMb={0.7}
               showPrimaryControl={false}
               value={form.images}
+              disabled={saving}
+              onBusyChange={setMediaBusy}
               onChange={onImagesChange}
             />
             {analyzing && <p className="admin-quick-add__status is-busy">Looking at the garment…</p>}
@@ -499,7 +502,7 @@ export default function QuickAddProduct() {
 
         <div className="admin-form-actions admin-quick-add__actions">
           <a href="/admin/products" className="admin-btn-ghost">Cancel</a>
-          <button type="submit" disabled={saving || analyzing || setupLoading || Boolean(setupError) || !structure} className="admin-btn disabled:opacity-60">
+          <button type="submit" disabled={saving || mediaBusy || analyzing || setupLoading || Boolean(setupError) || !structure} className="admin-btn disabled:opacity-60">
             {saving ? 'Saving...' : analyzing ? 'Reading photo…' : 'Looks good, add product'}
           </button>
         </div>

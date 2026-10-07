@@ -51,8 +51,10 @@ export async function downloadReportPdf(bundle, filename = 'business-report.pdf'
   const customers = bundle?.sections?.customers?.data;
   const marketing = bundle?.sections?.marketing?.data;
   const fulfillment = bundle?.sections?.fulfillment?.data;
+  const traffic = bundle?.sections?.traffic?.data;
   const currency = summary?.currency || Object.values(bundle?.sections || {})[0]?.currency || 'INR';
   const period = summary?.range || Object.values(bundle?.sections || {})[0]?.range || {};
+  const timezone = summary?.timezone || Object.values(bundle?.sections || {})[0]?.timezone || 'Asia/Kolkata';
   const metrics = summary?.data?.metrics || {};
   const financial = summary?.data?.current || {};
   const metricRows = [
@@ -73,7 +75,16 @@ export async function downloadReportPdf(bundle, filename = 'business-report.pdf'
   const fulfillmentSummary = fulfillment?.summary || {};
   const content = [
     { columns: [{ stack: [{ text: bundle?.storeName || 'Business report', style: 'brand' }, { text: 'Reports & Insights Center', style: 'subtitle' }] }, { stack: [{ text: 'PERFORMANCE REPORT', style: 'eyebrow', alignment: 'right' }, { text: `${period.fromDate || ''} to ${period.toDate || ''}`, alignment: 'right' }], width: 180 }] },
-    { text: `Generated ${new Date(bundle?.generatedAt || Date.now()).toLocaleString('en-IN')} · ${summary?.timezone || 'Asia/Kolkata'}`, color: '#6b6470', fontSize: 8, margin: [0, 8, 0, 12] },
+    { text: `Generated ${new Date(bundle?.generatedAt || Date.now()).toLocaleString('en-IN', { timeZone: timezone })} · ${timezone}`, color: '#6b6470', fontSize: 8, margin: [0, 8, 0, 12] },
+    ...table('Traffic & visitors (browser-based estimates)', ['Metric', 'Current', 'Previous'], Object.entries(traffic?.metrics || {}).map(([key, value]) => [key, String(value.value), String(value.previous)])),
+    ...(traffic ? [{ text: `Traffic timezone: ${traffic.timezone}. Collection: ${traffic.health?.state}. ${traffic.funnel?.note || ''}`, margin: [0, 8, 0, 8] }] : []),
+    ...table('Traffic trend', ['Period', 'Visitors', 'Visits', 'Page views'], (traffic?.series || []).map(row => [row.key, String(row.visitors), String(row.sessions), String(row.pageViews)])),
+    ...table('Visit acquisition', ['Source', 'Visitors', 'Visits'], (traffic?.sources || []).map(row => [row.label, String(row.visitors), String(row.sessions)])),
+    ...['firstSources', 'campaigns', 'devices', 'browsers', 'operatingSystems'].flatMap(key => table(`Traffic: ${key}`, ['Label', 'Visitors', 'Visits', 'Page views'], (traffic?.[key] || []).map(row => [row.label, String(row.visitors), String(row.sessions), String(row.pageViews)]))),
+    ...table('Verified traffic funnel', ['Step', 'Visits', 'Rate from previous'], (traffic?.funnel?.steps || []).map(row => [row.label, String(row.value), `${row.rate}%`])),
+    ...Object.entries(traffic?.details || {}).flatMap(([key, rows]) => table(`Traffic: ${key}`, ['Label', 'Count'], rows.map(row => [row.label, String(row.value)]))),
+    ...table('All-store order cohort (not limited to tracked visitors)', ['Metric', 'Value'], traffic ? ['ordersPlaced', 'codPlaced', 'onlinePaid', 'codCollected', 'cancelled', 'refunds'].map(key => [key, key === 'refunds' ? money(traffic.commerce?.[key], currency) : String(traffic.commerce?.[key] || 0)]) : []),
+    ...(traffic ? [{ text: traffic.commerce?.note || '', margin: [0, 8, 0, 8] }, { text: `Active visitors in last 5 minutes: ${traffic.activeVisitors || 0}. Detailed retention: ${traffic.retention?.rawDays || 90} days; compact retention: ${traffic.retention?.summaryDays || 365} days.`, margin: [0, 8, 0, 8] }, ...Object.values(traffic.definitions || {}).map(text => ({ text, margin: [0, 2, 0, 2] }))] : []),
     ...table('Key performance indicators', ['Metric', 'Current', 'Change'], metricRows),
     ...table('Financial reconciliation', ['Metric', 'Amount'], reconciliationRows),
     ...table('Inventory position', ['Products', 'Units', 'Retail value', 'Low / out'], products ? [[String(inventory.products || 0), String(inventory.units || 0), money(inventory.valueAtRetail, currency), `${inventory.lowStock || 0} / ${inventory.outOfStock || 0}`]] : []),

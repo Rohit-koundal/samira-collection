@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ExternalLink, Headphones, MapPin, RefreshCw, Star, Truck } from 'lucide-react';
+import { Check, ExternalLink, Headphones, MapPin, RefreshCw, ShieldCheck, Star, Truck } from 'lucide-react';
 import api from '../../services/api';
 import Receipt from '../../components/order/Receipt';
 import DeliveryTracking from '../../components/order/DeliveryTracking';
@@ -8,7 +8,7 @@ import ReviewModal from '../../components/product/ReviewModal';
 import ReturnRequestForm from '../../components/order/ReturnRequestForm';
 import { OrderItem, OrderModal, OrderShell, OrderState, StatusBadge } from '../../components/order/OrderUi';
 import { canCancelOrder, canCancelOrderItem, productIdOf } from '../../utils/orderActions';
-import { money, orderCode, orderDate, paymentLabel, paymentNote, priceLines, safeTrackingUrl } from '../../utils/orderPresentation';
+import { money, orderCode, orderDate, paymentLabel, paymentNote, priceLines } from '../../utils/orderPresentation';
 
 export default function OrderDetail({ route = '', navigate }) {
   const orderId = new URLSearchParams(route.split('?')[1] || '').get('id');
@@ -39,6 +39,8 @@ export default function OrderDetail({ route = '', navigate }) {
   const [returnItem, setReturnItem] = useState(null);
   const [reviewItem, setReviewItem] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
+  const [verificationOtp, setVerificationOtp] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
   useEffect(() => {
     let active = true;
     setLoading(true); setError(''); setOrder(null); setReturns(null); setReceipt(null); setReturnError(''); setReceiptError('');
@@ -108,8 +110,22 @@ export default function OrderDetail({ route = '', navigate }) {
     const result = existingReview?._id ? await api.put(`/reviews/${existingReview._id}`, payload) : await api.post(`/reviews/${productIdOf(reviewItem)}`, payload);
     return { ...result, message: result.isVisible === false ? 'Your review is awaiting moderation.' : 'Your review has been saved.' };
   };
+  const verifyCod = async (event) => {
+    event.preventDefault();
+    if (scope.pending || !/^\d{6}$/.test(verificationOtp)) return;
+    scope.pending = true; setBusy(true); setVerificationMessage('');
+    try { const updated = await api.post(`/orders/${orderId}/cod-verification/verify`, { otp: verificationOtp }); if (isCurrent()) { setOrder(updated); setVerificationOtp(''); setNotice('Your COD order is confirmed.'); } }
+    catch (err) { if (isCurrent()) setVerificationMessage(err.message); }
+    finally { scope.pending = false; if (isCurrent()) setBusy(false); }
+  };
+  const resendCod = async () => {
+    if (scope.pending) return;
+    scope.pending = true; setBusy(true); setVerificationMessage('');
+    try { const result = await api.post(`/orders/${orderId}/cod-verification/send`, {}); if (isCurrent()) setVerificationMessage(result.demoOtp ? `Demo code: ${result.demoOtp}` : 'A new code has been sent to your registered mobile number.'); }
+    catch (err) { if (isCurrent()) setVerificationMessage(err.message); }
+    finally { scope.pending = false; if (isCurrent()) setBusy(false); }
+  };
   const canReview = order && ['Delivered', 'Return Requested', 'Exchange Requested', 'Returned', 'Refunded'].includes(order.orderStatus);
-  const tracking = safeTrackingUrl(order?.shipment?.trackingUrl);
   const events = [...(order?.statusTimeline || [])];
   const activeReturnEligibility = returns?.items?.find((entry) => entry.orderItemId === String(returnItem?._id));
   return <OrderShell title={order ? `Order #${orderCode(order)}` : 'Order details'} detail navigate={navigate}>
@@ -117,14 +133,12 @@ export default function OrderDetail({ route = '', navigate }) {
       <div className="sc-order-detail__top"><p>Placed on {orderDate(order.createdAt, true) || 'date unavailable'}</p><button className="sc-orders__text" onClick={refresh} disabled={busy}><RefreshCw size={15} />Refresh status</button></div>
       {notice && <p role="status" className="sc-orders__notice"><Check size={17} />{notice}</p>}
       {actionError && !cancelOpen && !itemCancellation && !returnItem && <p role="alert" className="sc-orders__error">{actionError}</p>}
+      {order.codVerification?.required && order.codVerification.status === 'PENDING' && <section className="sc-order-panel sc-order-verification"><header><ShieldCheck size={20} /><h2>Confirm your COD order</h2></header><p>Enter the one-time code sent to your registered mobile number before we prepare this parcel.</p><form onSubmit={verifyCod}><input aria-label="6-digit COD verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationOtp} onChange={event => setVerificationOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /><button className="sc-orders__button" disabled={busy || verificationOtp.length !== 6}>{busy ? 'Checking…' : 'Verify order'}</button></form><button type="button" className="sc-orders__text" onClick={resendCod} disabled={busy}>Resend code</button>{verificationMessage && <p role="status" className="sc-orders__muted">{verificationMessage}</p>}</section>}
       <div className="sc-order-detail__grid"><div className="sc-order-detail__primary">
         <section className="sc-order-panel"><header><Truck size={20} /><h2>Order & delivery status</h2><StatusBadge status={order.orderStatus} /></header>
           {order.rto?.status && order.rto.status !== 'NONE' && <div className="sc-orders__error" role="status"><strong>Return to origin: {String(order.rto.status).replaceAll('_', ' ').toLowerCase()}</strong><p>{order.rto.reason || order.rto.notes || 'The courier is returning this parcel to the store. Refund updates will appear here when applicable.'}</p>{order.paymentMethod !== 'COD' && order.rto.refundStatus && <p>Refund: {String(order.rto.refundStatus).replaceAll('_', ' ').toLowerCase()}{order.rto.refundAmount !== undefined ? ` · ${money(order.rto.refundAmount)}` : ''}{Number(order.rto.refundDeduction || 0) > 0 ? ` after a ${money(order.rto.refundDeduction)} policy deduction` : ''}.</p>}</div>}
           <ol className="sc-order-timeline">{events.length ? events.map((entry, index) => <li key={index} className={index === events.length - 1 ? 'is-current' : ''}><span className="sc-order-timeline__dot" /><div><h3>{entry.status}</h3>{entry.date && <time>{orderDate(entry.date, true)}</time>}{entry.note && <p>{entry.note}</p>}</div></li>) : <li><span className="sc-order-timeline__dot" /><div><h3>{order.orderStatus}</h3><p>Detailed updates will appear here when available.</p></div></li>}</ol>
-          {order.shipment?.provider && order.shipment.provider !== 'manual' ? <DeliveryTracking orderId={orderId} onUpdate={data => setOrder(current => ({ ...current, ...(data.order || {}), shipment: data.shipment || current.shipment }))} /> : order.shipment && typeof order.shipment === 'object' ? <div className="sc-order-shipment"><p><strong>{order.shipment.courierName || 'Courier details pending'}</strong></p>{(order.shipment.trackingNumber || order.shipment.awb) && <p>Tracking ID: {order.shipment.trackingNumber || order.shipment.awb}</p>}
-            {tracking && <a className="sc-orders__text" href={tracking} target="_blank" rel="noopener noreferrer">Track with courier<ExternalLink size={14} /></a>}
-            {order.shipment.events?.length > 0 && <details><summary>Courier updates</summary><ol>{[...order.shipment.events].reverse().map((event, index) => <li key={index}><strong>{String(event.status || '').replaceAll('_', ' ')}</strong><p>{event.note}</p><time>{orderDate(event.date, true)}</time></li>)}</ol></details>}
-          </div> : !['Delivered', 'Cancelled', 'Returned', 'Refunded'].includes(order.orderStatus) && <p className="sc-orders__muted">Courier tracking will appear after dispatch.</p>}
+          {(order.shipment || !['Delivered', 'Cancelled', 'Returned', 'Refunded'].includes(order.orderStatus)) && <DeliveryTracking key={orderId} orderId={orderId} initialShipment={order.shipment} onUpdate={data => setOrder(current => current && ({ ...current, ...(data.order || {}), shipment: data.shipment || current.shipment }))} />}
           <div className="sc-order-panel__actions">{canCancelOrder(order) && <button className="sc-orders__outline" disabled={busy} onClick={() => { setActionError(''); setCancelReason(''); setCancelComment(''); setCancelOpen(true); }}>Cancel order</button>}<button className="sc-orders__outline" onClick={help}><Headphones size={16} />Need help?</button></div>
         </section>
         <section className="sc-order-panel"><header><h2>Items in this order</h2><span>{order.orderItems?.reduce((sum, item) => sum + Math.max(0, Number(item.quantity || 0) - Number(item.cancelledQuantity || 0)), 0)} active items</span></header>

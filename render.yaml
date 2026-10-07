@@ -27,7 +27,7 @@ services:
         value: max-age=31536000; includeSubDomains
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: http://localhost:5000 http://127.0.0.1:5000; frame-src 'self' https://*.razorpay.com https://*.facebook.com https://*.instagram.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; manifest-src 'self'"
+        value: "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: http://localhost:5000 http://127.0.0.1:5000; frame-src 'self' https://*.razorpay.com https://*.facebook.com https://*.instagram.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; manifest-src 'self'"
       - path: /index.html
         name: Cache-Control
         value: no-cache, no-store, must-revalidate
@@ -87,6 +87,8 @@ services:
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 15m
+      - key: JWT_ADMIN_EXPIRES_IN
+        value: 24h
       - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
       - key: PUBLIC_API_URL
@@ -122,6 +124,8 @@ services:
         value: "60"
       - key: SMS_PROVIDER
         value: twilio
+      # For MSG91 or 2Factor, change SMS_PROVIDER in the backend environment
+      # and add only that provider's keys documented in backend/SMS.md.
       - key: SMS_ACCOUNT_SID
         sync: false
       - key: SMS_AUTH_TOKEN

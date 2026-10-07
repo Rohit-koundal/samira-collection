@@ -20,6 +20,13 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function close() { this.removeAttribute('open'); };
 });
 beforeEach(() => { jest.clearAllMocks(); api.get.mockImplementation(defaults); api.post.mockReset(); fetchCategories.mockResolvedValue([{ _id: 'category-1', name: 'Kurtis' }]); });
+test('deleted published products retain import history without a broken edit link or republish form', async () => {
+  api.get.mockImplementation(path => path === '/admin/social-imports/' + id ? Promise.resolve({ data: { ...ready, publishedProductId: 'removed-product', publishedProductDeleted: true, draftRemoved: true } }) : defaults(path));
+  render(<SocialProductImport route={'/admin/social-import?id=' + id} />);
+  expect(await screen.findByRole('heading', { name: 'Published product removed' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /Edit product/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Publish product' })).not.toBeInTheDocument();
+});
 test('pasting a link starts the backend import and opens the actual review without publishing', async () => {
   const navigate = jest.fn(); api.post.mockResolvedValue({ success: true, data: ready });
   render(<SocialProductImport navigate={navigate} />);

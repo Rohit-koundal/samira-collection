@@ -77,3 +77,34 @@ test('suspending a client uses the protected lifecycle endpoint', async () => {
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
   await waitFor(() => expect(api.patch).toHaveBeenCalledWith(`/master/installations/${client.id}/lifecycle`, { baseRevision: 0, action: 'SUSPEND', reason: 'Payment investigation in progress' }));
 });
+
+test('expired clients have a direct renewal action using the protected access grant', async () => {
+  const expired = { ...client, status: 'EXPIRED', billingCycle: 'YEARLY', daysRemaining: 0 };
+  api.get.mockImplementation(async (path) => path.includes('/operations') ? { ...operations, installation: expired } : { ...list, installations: [expired] });
+  api.post.mockResolvedValue({ installation: { ...expired, revision: 1, status: 'ACTIVE' }, duplicate: false });
+  render(<ClientInstallations />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Renew access' }))[0]);
+  expect(await screen.findByText('Client access has expired')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Renew 1 year' }));
+  const dialog = screen.getByRole('alertdialog');
+  expect(within(dialog).getByText('Renew 1 year access?')).toBeInTheDocument();
+  fireEvent.change(within(dialog).getByLabelText('Grant source'), { target: { value: 'MANUAL_PAYMENT' } });
+  fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Annual renewal payment confirmed' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith(`/master/installations/${client.id}/subscription/grants`, expect.objectContaining({ baseRevision: 0, billingCycle: 'YEARLY', source: 'MANUAL_PAYMENT', reason: 'Annual renewal payment confirmed' })));
+});
+
+test('a failed renewal retains its reason and operation key for an idempotent retry', async () => {
+  api.post.mockRejectedValueOnce(new Error('Connection interrupted')).mockResolvedValueOnce({ installation: { ...client, revision: 1, status: 'ACTIVE' }, duplicate: true });
+  await openClient(); fireEvent.click(screen.getByRole('button', { name: 'Subscription' }));
+  fireEvent.click(screen.getByRole('button', { name: '1 month' }));
+  fireEvent.change(within(screen.getByRole('alertdialog')).getByLabelText('Reason'), { target: { value: 'Renewal received through bank transfer' } });
+  fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(mockNotify).toHaveBeenCalledWith('Connection interrupted', 'error', 'Client control'));
+  const operationKey = api.post.mock.calls[0][1].idempotencyKey;
+  expect(within(screen.getByRole('alertdialog')).getByLabelText('Reason')).toHaveValue('Renewal received through bank transfer');
+  fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Confirm' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post.mock.calls[1][1].idempotencyKey).toBe(operationKey);
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+});

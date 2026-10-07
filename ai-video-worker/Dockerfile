@@ -8,8 +8,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /worker
+ENV U2NET_HOME=/worker/models OMP_NUM_THREADS=1
 COPY ai-video-worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "from rembg import new_session; new_session('u2netp', providers=['CPUExecutionProvider'])"
 COPY ai-video-worker/app ./app
 
 RUN useradd --system --uid 10001 worker \

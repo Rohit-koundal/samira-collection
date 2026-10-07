@@ -1,6 +1,7 @@
 export const RESERVED_PATHS = new Set([
   'products', 'product', 'category', 'search', 'wishlist', 'cart', 'checkout',
   'login', 'register', 'profile', 'orders', 'order-detail', 'order-success',
+  'rentals', 'rental-book',
   'payment-failed', 'contact', 'privacy-policy', 'terms', 'return-policy',
   'shipping-policy', 'cancellation-policy', 'size-guide', 'faqs', 'our-story',
   'returns', 'notifications', 'seller', 'admin', 'master', 'store', 'share', 'api', 'health', 'uploads',
@@ -82,7 +83,7 @@ export function productHref(product, storeSlug = '') {
 }
 
 export function storefrontPath(path, storeSlug = '') {
-  if (!storeSlug || !/^\/(?:$|\?|products(?:[/?]|$)|product(?:[/?]|$)|search(?:[/?]|$)|category(?:[/?]|$))/.test(String(path || ''))) return path;
+  if (!storeSlug || !/^\/(?:$|\?|products(?:[/?]|$)|product(?:[/?]|$)|search(?:[/?]|$)|category(?:[/?]|$)|rentals(?:[/?]|$)|rental-book(?:[/?]|$))/.test(String(path || ''))) return path;
   return `/store/${encodeURIComponent(storeSlug)}${path === '/' ? '' : path}`;
 }
 

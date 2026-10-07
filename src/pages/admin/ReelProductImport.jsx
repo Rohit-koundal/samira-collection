@@ -197,7 +197,7 @@ function ImportWorkspace({ navigate }) {
           </button>
           <input ref={inputRef} type="file" accept=".mp4,.mov,.webm" className="hidden" onChange={(event) => chooseFile(event.target.files)} />
           {file && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#eadfd5] bg-[#fffdfa] p-4">
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-theme-border bg-[#fffdfa] p-4">
               <FileVideo className="h-6 w-6 text-wine" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-charcoal">{file.name}</p>
@@ -235,7 +235,7 @@ function ImportWorkspace({ navigate }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-lg font-black text-charcoal">Import history</h2><p className="text-xs font-semibold text-slate-500">{pagination.total || items.length} imports</p></div>
           <div className="flex flex-1 flex-wrap justify-end gap-2">
-            <label className="flex h-10 min-w-[190px] items-center gap-2 rounded-xl border border-slate-200 px-3"><Search className="h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPagination((current) => ({ ...current, page: 1 })); }} placeholder="Search reels" className="w-full bg-transparent text-sm outline-none" /></label>
+            <label className="sc-field-shell flex h-10 min-w-[190px] items-center gap-2 rounded-xl border border-slate-200 px-3"><Search className="h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPagination((current) => ({ ...current, page: 1 })); }} placeholder="Search reels" className="w-full bg-transparent text-sm outline-none" /></label>
             <Select value={status} onChange={(event) => { setStatus(event.target.value); setPagination((current) => ({ ...current, page: 1 })); }} className="h-10">
               {STATUS_OPTIONS.map((option) => <option key={option || 'all'} value={option}>{option ? labelStatus(option) : 'All statuses'}</option>)}
             </Select>
@@ -620,7 +620,7 @@ function ReviewWorkspace({ jobId }) {
 
       {candidates.length > 0 && (
         <>
-          <div className="relative overflow-hidden rounded-[24px] border border-wine/15 bg-gradient-to-br from-[#fff8f4] via-white to-[#f8edf1] p-5 shadow-sm md:p-6">
+          <div className="relative overflow-hidden rounded-[24px] border border-wine/15 bg-gradient-to-br from-ivory via-white to-[#f8edf1] p-5 shadow-sm md:p-6">
             <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-wine/5" />
             <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-4">
@@ -651,7 +651,7 @@ function ReviewWorkspace({ jobId }) {
               </button>
             </div>
           </div>
-          <div className="sticky top-[74px] z-20 flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-[#eadfd5] bg-white/95 p-3 shadow-lg backdrop-blur">
+          <div className="sticky top-[74px] z-20 flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-theme-border bg-white/95 p-3 shadow-lg backdrop-blur">
             <p className="text-xs font-black text-slate-500">{draftSelected.length} selected for drafts · {selected.length} selected to merge</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={merge} disabled={selected.length < 2} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black disabled:opacity-40"><GitMerge className="h-4 w-4" />Merge</button>
@@ -701,7 +701,7 @@ function CandidateCard({ candidate, candidates, categories, structure, form, sma
   useEffect(() => {
     fetchSubcategories(api, form.category).then(setSubcategories);
   }, [form.category]);
-  if (candidate.savedDraft?.publishedProductId) return <article className="admin-card p-5"><h2 className="font-bold">{candidate.savedDraft.name}</h2><p className="my-3 text-sm text-emerald-700">Published product</p><a className="admin-btn-ghost" href={'/admin/products/edit?id=' + candidate.savedDraft.publishedProductId}>Edit product</a></article>;
+  if (candidate.savedDraft?.publishedProductId) return <article className="admin-card p-5"><h2 className="font-bold">{candidate.savedDraft.name}</h2><p className="my-3 text-sm text-emerald-700">{candidate.savedDraft.publishedProductDeleted ? 'Product permanently removed. Import history retained; a duplicate cannot be created.' : 'Published product'}</p>{!candidate.savedDraft.publishedProductDeleted && <a className="admin-btn-ghost" href={'/admin/products/edit?id=' + candidate.savedDraft.publishedProductId}>Edit product</a>}</article>;
   return (
     <article className="admin-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -808,7 +808,7 @@ function MoveFrame({ frame, sourceId, candidates, onMove }) {
 }
 
 function Stat({ label, value }) {
-  return <div className="rounded-2xl border border-[#eadfd5] bg-white p-4"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine/60">{label}</p><p className="mt-2 truncate text-lg font-black text-charcoal">{value}</p></div>;
+  return <div className="rounded-2xl border border-theme-border bg-white p-4"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-wine/60">{label}</p><p className="mt-2 truncate text-lg font-black text-charcoal">{value}</p></div>;
 }
 
 function Labeled({ label, hint = '', children }) {

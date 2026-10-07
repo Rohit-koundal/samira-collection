@@ -3,6 +3,7 @@ import { Boxes, CalendarHeart, ChevronDown, Grid3X3, Palette, Percent, Ruler, Sl
 import { splitFilterValues, toggleFilterValue } from '../../store/catalogSlice';
 import { getColorSwatch } from '../../utils/catalogFacets';
 import { normalizeImageUrl } from '../../services/normalize';
+import './MobileFilterSheet.css';
 
 const navItems = [
   { key: 'category', label: 'Category', icon: Grid3X3 },
@@ -32,6 +33,9 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
   const [activeSection, setActiveSection] = useState('category');
   const [draft, setDraft] = useState(() => buildDraft(params));
   const dialogRef = useRef(null);
+  const overlayRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const [expanded, setExpanded] = useState({
     size: true,
     price: true,
@@ -53,23 +57,42 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
     const previousFocus = document.activeElement;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
+    // Mobile keyboards (especially iOS) can resize the visual viewport without
+    // resizing the layout viewport. Keep the footer above the keyboard.
+    const viewport = window.visualViewport;
+    const syncViewport = () => {
+      if (!overlayRef.current || !viewport) return;
+      const unzoomed = !viewport.scale || viewport.scale === 1;
+      overlayRef.current.style.height = unzoomed ? `${viewport.height}px` : '';
+      overlayRef.current.style.top = unzoomed ? `${viewport.offsetTop}px` : '';
+    };
+    syncViewport();
+    viewport?.addEventListener('resize', syncViewport);
+    viewport?.addEventListener('scroll', syncViewport);
+    const desktop = window.matchMedia?.('(min-width: 1024px)');
+    const closeOnDesktop = (event) => { if (event.matches) closeRef.current?.(); };
+    desktop?.addEventListener?.('change', closeOnDesktop);
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose?.(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); closeRef.current?.(); return; }
       if (event.key !== 'Tab' || !dialogRef.current) return;
       const focusable = [...dialogRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')];
       if (!focusable.length) return;
       const first = focusable[0]; const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      const outside = !dialogRef.current.contains(document.activeElement) || document.activeElement === dialogRef.current;
+      if (event.shiftKey && (document.activeElement === first || outside)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || outside)) { event.preventDefault(); first.focus(); }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKeyDown);
+      viewport?.removeEventListener('resize', syncViewport);
+      viewport?.removeEventListener('scroll', syncViewport);
+      desktop?.removeEventListener?.('change', closeOnDesktop);
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus?.();
     };
-  }, [onClose, open]);
+  }, [open]);
 
   const selectedCount = useMemo(() => {
     const multiKeys = ['category', 'size', 'color', 'fabric', 'occasion', ...dynamicFacets.map((facet) => `attr_${facet.key}`)];
@@ -91,33 +114,43 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
   };
 
   const resetFilters = () => {
-    setDraft(buildDraft(new URLSearchParams()));
+    // Apply merges this draft with URL filters: explicit empty values are needed
+    // to clear custom attributes as well as the built-in filters.
+    setDraft((current) => ({
+      ...buildDraft(new URLSearchParams()),
+      ...Object.fromEntries([
+        ...Object.keys(current).filter((key) => key.startsWith('attr_')),
+        ...dynamicFacets.map((facet) => `attr_${facet.key}`),
+      ].map((key) => [key, ''])),
+    }));
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/40 lg:hidden" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}>
-      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-filter-title" className="absolute inset-x-0 bottom-0 top-14 overflow-hidden rounded-t-[28px] bg-white shadow-2xl outline-none">
-        <div className="flex justify-center pt-2">
-          <div className="h-1 w-12 rounded-full bg-slate-200" />
-        </div>
-
-        <div className="flex items-start justify-between border-b border-slate-100 px-4 pb-3 pt-3">
-          <div>
-            <h2 id="mobile-filter-title" className="text-[22px] font-bold text-[#1f2a44]">Filters</h2>
-            <p className="mt-1 text-[11px] text-slate-500">{selectedCount} selected · {totalResults} current results</p>
+    <div ref={overlayRef} className="mobile-filter-overlay z-[80] bg-black/40 lg:hidden" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-filter-title" className="mobile-filter-sheet bg-white shadow-2xl outline-none">
+        <header className="mobile-filter__header">
+          <div className="flex justify-center pt-2">
+            <div className="h-1 w-12 rounded-full bg-slate-200" />
           </div>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={resetFilters} className="text-[11px] font-bold text-[#ff4f7d]">
-              Clear All
-            </button>
-            <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-slate-500">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-[104px_minmax(0,1fr)]" style={{ height: 'calc(100% - 148px - env(safe-area-inset-bottom))' }}>
-          <aside className="overflow-y-auto border-r border-slate-100 bg-[#fbfbfc] px-2 py-3">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-3">
+            <div className="min-w-0">
+              <h2 id="mobile-filter-title" className="text-[22px] font-bold text-charcoal">Filters</h2>
+              <p className="mt-1 text-[11px] text-slate-500">{selectedCount} selected · {totalResults} current results</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" onClick={resetFilters} className="min-h-11 text-[11px] font-bold text-wine">
+                Clear All
+              </button>
+              <button type="button" onClick={onClose} aria-label="Close filters" className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="mobile-filter__body">
+          <aside className="mobile-filter__nav border-r border-slate-100 bg-ivory px-2 py-3" aria-label="Filter sections">
             <div className="space-y-1.5">
               {visibleNavItems.map((item) => {
                 const active = activeSection === item.key;
@@ -125,18 +158,19 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
                   <button
                     key={item.key}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setActiveSection(item.key)}
-                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-2.5 text-left ${active ? 'bg-[#fff1f5] text-[#ff4f7d]' : 'text-[#1f2a44]'}`}
+                    className={`flex min-h-11 w-full items-center gap-2 rounded-xl px-2 py-2.5 text-left ${active ? 'bg-blush text-wine' : 'text-charcoal'}`}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="text-[11px] font-semibold">{item.label}</span>
+                    <span className="mobile-filter__label text-[11px] font-semibold">{item.label}</span>
                   </button>
                 );
               })}
             </div>
           </aside>
 
-          <div className="overflow-y-auto px-4 py-3">
+          <div className="mobile-filter__content px-4 py-3" key={activeSection}>
             {activeSection === 'category' && (
               <FilterSection title="Category">
                 <div className="space-y-2">
@@ -148,15 +182,16 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
                       <button
                         key={value}
                         type="button"
+                        aria-pressed={selected}
                         disabled={!count && !selected}
                         onClick={() => setDraft((current) => ({ ...current, category: toggleFilterValue(current.category, value) }))}
                         className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-left disabled:opacity-40"
                       >
-                        <div className="flex items-center gap-3">
-                          {category.image ? <img src={normalizeImageUrl(category.image)} alt="" className="h-10 w-8 rounded-md bg-[#f5ede7] object-cover" /> : <div className="h-10 w-8 rounded-md bg-[#f5ede7]" />}
-                          <span className="text-[13px] font-medium text-[#1f2a44]">{category.name} <small className="text-slate-400">({count})</small></span>
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          {category.image ? <img src={normalizeImageUrl(category.image)} alt="" className="h-10 w-8 shrink-0 rounded-md bg-blush object-cover" /> : <div className="h-10 w-8 shrink-0 rounded-md bg-blush" />}
+                          <span className="mobile-filter__label text-[13px] font-medium text-charcoal">{category.name} <small className="text-slate-400">({count})</small></span>
                         </div>
-                        <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#ff4f7d] bg-[#ff4f7d]' : 'border-slate-300 bg-white'}`}>
+                        <span className={`mobile-filter__mark grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-wine bg-wine' : 'border-slate-300 bg-white'}`}>
                           {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
                         </span>
                       </button>
@@ -181,7 +216,7 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
             {activeSection === 'price' && (
               <FilterSection>
                 <Accordion title="Price" open={expanded.price} onToggle={() => toggleExpanded('price', setExpanded)}>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="mobile-filter__prices">
                     <PriceInput label="Min Price" value={draft.minPrice} onChange={(value) => setDraft((current) => ({ ...current, minPrice: digitsOnly(value) }))} />
                     <PriceInput label="Max Price" value={draft.maxPrice} onChange={(value) => setDraft((current) => ({ ...current, maxPrice: digitsOnly(value) }))} />
                   </div>
@@ -255,14 +290,14 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-          <button type="button" onClick={resetFilters} className="h-12 rounded-lg border border-slate-300 text-[14px] font-semibold text-[#1f2a44]">
+        <footer className="mobile-filter__footer grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+          <button type="button" onClick={resetFilters} className="min-h-12 min-w-0 rounded-lg border border-slate-300 px-2 py-3 text-[14px] font-semibold text-charcoal">
             Reset
           </button>
-          <button type="button" onClick={applyFilters} className="h-12 rounded-lg bg-wine text-[14px] font-semibold text-white">
+          <button type="button" onClick={applyFilters} className="min-h-12 min-w-0 rounded-lg bg-wine px-2 py-3 text-[14px] font-semibold text-white">
             Apply Filters
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );
@@ -270,8 +305,8 @@ export default function MobileFilterSheet({ open, onClose, categories = [], para
 
 function FilterSection({ title, children }) {
   return (
-    <section>
-      {title ? <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[#1f2a44]">{title}</h3> : null}
+    <section className="min-w-0">
+      {title ? <h3 className="mobile-filter__label mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-charcoal">{title}</h3> : null}
       {children}
     </section>
   );
@@ -280,9 +315,9 @@ function FilterSection({ title, children }) {
 function Accordion({ title, open, onToggle, children }) {
   return (
     <div className="border-b border-slate-100">
-      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between py-3 text-left text-[13px] font-semibold text-[#1f2a44]">
-        <span>{title}</span>
-        <ChevronDown className={`h-4 w-4 transition ${open ? 'rotate-180' : ''}`} />
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-2 py-3 text-left text-[13px] font-semibold text-charcoal">
+        <span className="mobile-filter__label">{title}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? 'rotate-180' : ''}`} />
       </button>
       {open ? <div className="pb-3">{children}</div> : null}
     </div>
@@ -298,11 +333,12 @@ function CheckboxList({ items, value, onChange }) {
           <button
             key={item.value || 'all'}
             type="button"
+            aria-pressed={selected}
             onClick={() => onChange(item.value)}
-            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-left"
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-left"
           >
-            <span className="text-[13px] text-[#1f2a44]">{item.label}</span>
-            <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#ff4f7d] bg-[#ff4f7d]' : 'border-slate-300 bg-white'}`}>
+            <span className="mobile-filter__label text-[13px] text-charcoal">{item.label}</span>
+            <span className={`mobile-filter__mark grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-wine bg-wine' : 'border-slate-300 bg-white'}`}>
               {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
             </span>
           </button>
@@ -323,12 +359,13 @@ function SelectionCardList({ items, value, onChange }) {
           <button
             key={item.value}
             type="button"
+            aria-pressed={selected}
             disabled={disabled}
             onClick={() => onChange(item.value)}
             className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#f0e7e2] bg-white px-4 py-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.03)] disabled:opacity-40"
           >
-            <span className="text-[13px] font-medium text-[#1f2a44]">{item.label} <small className="text-slate-400">({item.count || 0})</small></span>
-            <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>
+            <span className="mobile-filter__label text-[13px] font-medium text-charcoal">{item.label} <small className="text-slate-400">({item.count || 0})</small></span>
+            <span className={`mobile-filter__mark grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-wine bg-wine' : 'border-slate-300 bg-white'}`}>
               {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
             </span>
           </button>
@@ -349,18 +386,19 @@ function ColorOptionList({ items, value, onChange }) {
           <button
             key={item.value}
             type="button"
+            aria-pressed={selected}
             disabled={disabled}
             onClick={() => onChange(item.value)}
-            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-left disabled:opacity-40"
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-1 py-1.5 text-left disabled:opacity-40"
           >
-            <span className="flex items-center gap-3">
+            <span className="flex min-w-0 flex-1 items-center gap-3">
               <span
-                className={`h-4 w-4 rounded-full border border-white shadow-sm ring-1 ${selected ? 'ring-[#7a1f36]' : 'ring-slate-300'}`}
+                className={`h-4 w-4 shrink-0 rounded-full border border-white shadow-sm ring-1 ${selected ? 'ring-wine' : 'ring-slate-300'}`}
                 style={{ backgroundColor: getColorSwatch(item.value) }}
               />
-              <span className="text-[13px] text-[#1f2a44]">{item.label} <small className="text-slate-400">({item.count || 0})</small></span>
+              <span className="mobile-filter__label text-[13px] text-charcoal">{item.label} <small className="text-slate-400">({item.count || 0})</small></span>
             </span>
-            <span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>
+            <span className={`mobile-filter__mark grid h-4 w-4 place-items-center rounded-[4px] border ${selected ? 'border-wine bg-wine' : 'border-slate-300 bg-white'}`}>
               {selected ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}
             </span>
           </button>
@@ -372,12 +410,12 @@ function ColorOptionList({ items, value, onChange }) {
 
 function PriceInput({ label, value, onChange }) {
   return (
-    <label className="grid gap-1">
-      <span className="text-[11px] font-medium text-slate-500">{label}</span>
+    <label className="grid min-w-0 gap-1">
+      <span className="mobile-filter__label text-[11px] font-medium text-slate-500">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-lg border border-slate-200 px-3 text-[13px] text-[#1f2a44] outline-none"
+        className="mobile-filter__price-input h-11 rounded-lg border border-slate-200 px-3 text-charcoal"
         placeholder="0"
         inputMode="numeric"
       />
@@ -389,7 +427,7 @@ function DynamicFilterOptions({ items = [], value, onChange }) {
   const selected = new Set(splitFilterValues(value).map((item) => item.toLowerCase()));
   return <div className="space-y-2">{items.map((item) => {
     const active = selected.has(String(item.value).toLowerCase());
-    return <button key={item.value} type="button" disabled={!item.count && !active} onClick={() => onChange(item.value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-3 text-left disabled:opacity-40"><span className="text-[13px] text-[#1f2a44]">{item.label} <small className="text-slate-400">({item.count})</small></span><span className={`grid h-4 w-4 place-items-center rounded-[4px] border ${active ? 'border-[#7a1f36] bg-[#7a1f36]' : 'border-slate-300 bg-white'}`}>{active ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}</span></button>;
+    return <button key={item.value} type="button" aria-pressed={active} disabled={!item.count && !active} onClick={() => onChange(item.value)} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-3 text-left disabled:opacity-40"><span className="mobile-filter__label text-[13px] text-charcoal">{item.label} <small className="text-slate-400">({item.count})</small></span><span className={`mobile-filter__mark grid h-4 w-4 place-items-center rounded-[4px] border ${active ? 'border-wine bg-wine' : 'border-slate-300 bg-white'}`}>{active ? <span className="h-1.5 w-1.5 rounded-[2px] bg-white" /> : null}</span></button>;
   })}</div>;
 }
 

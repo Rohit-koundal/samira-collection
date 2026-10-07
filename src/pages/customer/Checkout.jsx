@@ -27,7 +27,7 @@ import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 import { useBrandIdentity } from '../../context/BrandIdentityContext';
 import { SETTINGS_CHANGED_EVENT, SETTINGS_STORAGE_KEY } from '../../config/storeSettings';
 import { trackEvent } from '../../utils/analytics';
-import { readAttribution } from '../../utils/attribution';
+import { readTrafficAttribution, getTrafficContext } from '../../utils/trafficTracker';
 import { clearPendingPayment, pendingPaymentKey, readPendingPayment, savePendingPayment } from '../../utils/pendingPayment';
 import { AddressForm } from './AddressManagement';
 import { getPrimaryImageUrl, normalizeImageUrl } from '../../services/normalize';
@@ -139,6 +139,10 @@ export default function Checkout({ navigate }) {
   const [quoteError, setQuoteError] = useState('');
   const [error, setError] = useState('');
   const [placing, setPlacing] = useState(false);
+  const [pendingCodVerification, setPendingCodVerification] = useState(null);
+  const [codOtp, setCodOtp] = useState('');
+  const [codVerificationMessage, setCodVerificationMessage] = useState('');
+  const [codVerificationBusy, setCodVerificationBusy] = useState(false);
   const [pendingReceipt, setPendingReceipt] = useState(() => readPendingPayment(receiptStorageKey));
   const [savingAddress, setSavingAddress] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
@@ -160,7 +164,10 @@ export default function Checkout({ navigate }) {
   }, [receiptStorageKey]);
 
   useEffect(() => {
-    trackEvent('BEGIN_CHECKOUT');
+    const track = () => trackEvent('BEGIN_CHECKOUT');
+    track();
+    window.addEventListener('store:traffic-privacy', track);
+    return () => window.removeEventListener('store:traffic-privacy', track);
   }, []);
   const showFeedback = (text, type = 'error') => {
     if (!text) return;
@@ -192,7 +199,7 @@ export default function Checkout({ navigate }) {
     } finally {
       if (request === addressRequest.current) setAddressLoading(false);
     }
-  }, [adoptAddresses]);
+  }, [adoptAddresses, user?._id, user?.id, user?.phone]);
 
   useEffect(() => { loadAddresses(new URLSearchParams(window.location.search).get('addressId')); return () => { addressRequest.current += 1; }; }, [loadAddresses]);
 
@@ -421,7 +428,8 @@ export default function Checkout({ navigate }) {
       shippingAddress: selectedAddress,
       paymentMethod,
       coupon: cart.coupon ? { code: cart.coupon.code } : undefined,
-      attribution: readAttribution(),
+      attribution: readTrafficAttribution(),
+      traffic: getTrafficContext(),
     };
     payload.checkoutAttemptId = getCheckoutAttempt(user, checkoutPayloadSignature(payload));
     return payload;
@@ -456,6 +464,36 @@ export default function Checkout({ navigate }) {
     finally { orderLock.current = false; setPlacing(false); }
   };
 
+  const completeCodCheckout = async (orderId, checkoutAttemptId) => {
+    checkoutCompletedRef.current = true;
+    clearCheckoutAttempt(user, checkoutAttemptId);
+    const cleanup = await (buyNowItemId ? fullCart.refresh() : fullCart.completeCheckout(cart.items)).catch(() => ({ ok: false }));
+    setToast(cleanup.ok ? 'COD order confirmed successfully' : 'Order confirmed. Refresh your bag to check remaining items.');
+    navigate(`/order-success?id=${orderId}`);
+  };
+
+  const verifyCodOrder = async () => {
+    if (!pendingCodVerification || codVerificationBusy) return;
+    if (!/^\d{6}$/.test(codOtp)) { setCodVerificationMessage('Enter the 6-digit code sent to your mobile number.'); return; }
+    setCodVerificationBusy(true); setCodVerificationMessage('');
+    try {
+      const order = await api.post(`/orders/${pendingCodVerification.orderId}/cod-verification/verify`, { otp: codOtp });
+      await completeCodCheckout(order._id, pendingCodVerification.checkoutAttemptId);
+    } catch (err) { setCodVerificationMessage(err.message || 'The code could not be verified. Please try again.'); }
+    finally { setCodVerificationBusy(false); }
+  };
+
+  const resendCodOtp = async () => {
+    if (!pendingCodVerification || codVerificationBusy) return;
+    setCodVerificationBusy(true); setCodVerificationMessage('');
+    try {
+      const delivery = await api.post(`/orders/${pendingCodVerification.orderId}/cod-verification/send`, {});
+      setPendingCodVerification(value => ({ ...value, delivery }));
+      setCodVerificationMessage(delivery.demoOtp ? `Demo code: ${delivery.demoOtp}` : 'A new verification code has been sent.');
+    } catch (err) { setCodVerificationMessage(err.message || 'Please wait before requesting another code.'); }
+    finally { setCodVerificationBusy(false); }
+  };
+
   const placeOrder = async () => {
     if (orderLock.current || checkoutCompletedRef.current) return;
     const storedReceipt = readPendingPayment(receiptStorageKey);
@@ -479,11 +517,13 @@ export default function Checkout({ navigate }) {
       checkoutAttemptId = payload.checkoutAttemptId;
       if (paymentMethod === 'COD') {
         const order = await api.post('/orders/cod', payload);
-        checkoutCompletedRef.current = true;
-        clearCheckoutAttempt(user, payload.checkoutAttemptId);
-        const cleanup = await (buyNowItemId ? fullCart.refresh() : fullCart.completeCheckout(cart.items)).catch(() => ({ ok: false }));
-        setToast(cleanup.ok ? 'COD order placed successfully' : 'Order placed successfully. Refresh your bag to check remaining items.');
-        navigate(`/order-success?id=${order._id}`);
+        if (order.codVerification?.required && order.codVerification.status === 'PENDING') {
+          setPendingCodVerification({ orderId: order._id, checkoutAttemptId: payload.checkoutAttemptId, delivery: order.codVerificationDelivery });
+          setCodVerificationMessage(order.codVerificationDelivery?.message || (order.codVerificationDelivery?.demoOtp ? `Demo code: ${order.codVerificationDelivery.demoOtp}` : 'Enter the code sent to your registered mobile number.'));
+          setCodOtp('');
+          return;
+        }
+        await completeCodCheckout(order._id, payload.checkoutAttemptId);
         return;
       }
 
@@ -635,6 +675,7 @@ export default function Checkout({ navigate }) {
   const paymentStatus = paymentLoading || paymentError ? <CheckoutLoadState label="payment options" loading={paymentLoading} error={paymentError} onRetry={() => setPaymentAttempt(value => value + 1)} /> : null;
   const retryQuote = () => setQuoteAttempt(value => value + 1);
 
+  if (pendingCodVerification) return <CodVerificationStep verification={pendingCodVerification} otp={codOtp} setOtp={setCodOtp} message={codVerificationMessage} busy={codVerificationBusy} onVerify={verifyCodOrder} onResend={resendCodOtp} onOrders={() => navigate('/orders')} />;
   if (pendingReceipt) return <section className="sc-checkout-status sc-checkout-pending">
     <ShieldCheck size={32} aria-hidden="true" /><h1>Payment confirmation pending</h1>
     <p>The payment provider responded, but we could not confirm your order with the store. Retry confirmation or check My orders before making another payment.</p>
@@ -755,6 +796,24 @@ export default function Checkout({ navigate }) {
       retryQuote={retryQuote}
     />
   );
+}
+
+function CodVerificationStep({ verification, otp, setOtp, message, busy, onVerify, onResend, onOrders }) {
+  const deliveryFailed = verification.delivery?.deliveryStatus === 'FAILED';
+  return <main className="sc-cod-verification" aria-labelledby="cod-verification-title">
+    <section className="sc-cod-verification__card">
+      <span className="sc-cod-verification__icon"><ShieldCheck size={30} aria-hidden="true" /></span>
+      <p className="sc-cod-verification__eyebrow">Secure cash on delivery</p>
+      <h1 id="cod-verification-title">Confirm your COD order</h1>
+      <p>Enter the one-time code sent to your registered mobile number. This quick check helps us prepare your parcel safely.</p>
+      <label htmlFor="cod-order-otp">6-digit verification code</label>
+      <input id="cod-order-otp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" autoFocus />
+      {message && <p className={deliveryFailed ? 'is-error' : 'sc-cod-verification__message'} role="status">{message}</p>}
+      <button className="sc-cod-verification__primary" type="button" disabled={busy || otp.length !== 6} onClick={onVerify}>{busy ? 'Checking…' : 'Verify and confirm order'}</button>
+      <div className="sc-cod-verification__actions"><button type="button" disabled={busy} onClick={onResend}>Resend code</button><button type="button" disabled={busy} onClick={onOrders}>View my orders</button></div>
+      <small>Payment will still be collected only when your order is delivered.</small>
+    </section>
+  </main>;
 }
 
 function DesktopCheckout({

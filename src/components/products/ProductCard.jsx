@@ -21,8 +21,9 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   const isWishlisted = typeof isWishlistedProp === 'boolean'
     ? isWishlistedProp
     : wishlist.items.some(item => wishlistId(item) === productId);
-  const unavailable = isUnavailable(product);
-  const stock = wishlistStock(product);
+  const rental = product.commerceMode === 'RENTAL_ONLY';
+  const unavailable = !rental && isUnavailable(product);
+  const stock = rental ? null : wishlistStock(product);
   const options = wishlistOptions(product);
   const needsSize = getSelectableSizes(product).length > 0;
   const price = Number(product.sellingPrice ?? product.price ?? 0);
@@ -52,7 +53,7 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
   };
   const addToCart = event => {
     event.stopPropagation();
-    if (needsSize) { openProduct(); return; }
+    if (rental || needsSize) { openProduct(); return; }
     if (onAddToCart) onAddToCart(product);
     else cart.addToCart(product);
   };
@@ -81,9 +82,9 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
           <h3 className="sc-product-card__title" title={product.name} data-card-field="title">{product.name}</h3>
         </button>
         <div className="sc-product-card__price-copy" data-card-field="price">
-          <strong className="sc-product-card__price">{money(price)}</strong>
-          {originalPrice > price && <del className="sc-product-card__original">{money(originalPrice)}</del>}
-          {discount > 0 && <span className="sc-product-card__discount" data-card-field="discount">{discount}% off</span>}
+          <strong className="sc-product-card__price">{rental ? 'Check rental rates' : money(price)}</strong>
+          {!rental && originalPrice > price && <del className="sc-product-card__original">{money(originalPrice)}</del>}
+          {!rental && discount > 0 && <span className="sc-product-card__discount" data-card-field="discount">{discount}% off</span>}
         </div>
         <div className="sc-product-card__footer">
           <div className="sc-product-card__meta">
@@ -94,12 +95,12 @@ export default function ProductCard({ product, navigate, onAddToCart, onWishlist
             type="button"
             className={'sc-product-card__cart' + (cartItem ? ' is-active' : '')}
             onClick={addToCart}
-            disabled={unavailable || stock === 0 || cart.loading}
-            aria-label={unavailable ? product.name + ' is unavailable' : stock === 0 ? product.name + ' is out of stock' : needsSize ? `Select a size for ${product.name}` : (cartItem ? 'Add more ' : 'Add ') + product.name + ' to bag'}
+            disabled={unavailable || stock === 0 || (!rental && cart.loading)}
+            aria-label={rental ? `Check rental dates for ${product.name}` : unavailable ? product.name + ' is unavailable' : stock === 0 ? product.name + ' is out of stock' : needsSize ? `Select a size for ${product.name}` : (cartItem ? 'Add more ' : 'Add ') + product.name + ' to bag'}
             data-card-field="cart"
           >
             <ShoppingBag size={17} strokeWidth={1.6} />
-            <span>{unavailable ? 'Unavailable' : stock === 0 ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add more' : 'Add to bag'}</span>
+            <span>{rental ? 'Check dates' : unavailable ? 'Unavailable' : stock === 0 ? 'Out of stock' : needsSize ? 'Select size' : cartItem ? 'Add more' : 'Add to bag'}</span>
           </button>
         </div>
       </div>

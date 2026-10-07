@@ -107,7 +107,7 @@ test('archived drafts require typed confirmation before permanent deletion', asy
   expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
   fireEvent.change(confirmation, { target: { value: 'Rose saree' } });
   fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
-  await waitFor(() => expect(mockDelete).toHaveBeenCalledWith({ id: 'draft-a', confirm: 'Rose saree', apiPrefix: '/admin' }));
+  await waitFor(() => expect(mockDelete).toHaveBeenCalledWith({ id: 'draft-a', confirm: 'Rose saree', baseRevision: 2, apiPrefix: '/admin' }));
 });
 
 test('load errors keep retry available', async () => {
@@ -117,4 +117,44 @@ test('load errors keep retry available', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(mockQuery.refetch).toHaveBeenCalledTimes(1);
   await screen.findByText('Rose saree');
+});
+
+test('draft queue count excludes published records and exposes separate published history', async () => {
+  mockQuery.data.meta.summary = { draft: 2, published: 4, archived: 0 };
+  render(<ProductDrafts />);
+  expect(await screen.findByRole('button', { name: 'Draft queue 2' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Published history 4' }));
+  expect(screen.getByRole('button', { name: 'Published history 4' })).toHaveClass('is-active');
+});
+
+test('published draft cleanup explains product safety and requires typed confirmation', async () => {
+  mockQuery.data = { data: [{ ...draft, status: 'published', publishedProductId: 'product-a' }], meta: { summary: { published: 1 } } };
+  render(<ProductDrafts />);
+  expect(await screen.findByRole('link', { name: 'Edit product' })).toHaveAttribute('href', '/admin/products/edit?id=product-a');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove draft' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('product, images and inventory remain unchanged');
+  const button = screen.getByRole('button', { name: 'Delete permanently' });
+  expect(button).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Type Rose saree to confirm/), { target: { value: draft.name } });
+  fireEvent.click(button);
+  await waitFor(() => expect(mockDelete).toHaveBeenCalledWith({ id: 'draft-a', confirm: draft.name, baseRevision: 2, apiPrefix: '/admin' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Its product is unchanged');
+});
+
+test('archived published draft history is also removable without restoring its product', async () => {
+  mockQuery.data.data = [{ ...draft, status: 'archived', publishedProductId: 'product-a' }];
+  render(<ProductDrafts />);
+  expect(await screen.findByRole('button', { name: 'Delete' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(mockDelete).not.toHaveBeenCalled();
+});
+
+test('published history does not offer an edit link to a permanently deleted product', async () => {
+  mockQuery.data.data = [{ ...draft, status: 'published', publishedProductId: 'product-a', publishedProductDeleted: true }];
+  render(<ProductDrafts />);
+  expect(await screen.findByText('Product permanently removed')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Edit product' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove draft' })).toBeEnabled();
 });

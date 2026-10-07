@@ -2,13 +2,15 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import {
   AlertTriangle, Archive, Banknote, Camera, Check, ChevronDown, Copy, Download, Eye,
   FilePlus2, MessageSquareText, MoreHorizontal, Package, PackageCheck, PackageSearch,
-  PackageX, PencilLine, Plus, RotateCcw, Sparkles, Square, X,
+  PackageX, PencilLine, Plus, RotateCcw, Sparkles, Square, Trash2, X,
 } from 'lucide-react';
 import api from '../../services/api';
 import ConfirmModal from '../../components/admin/ConfirmModal';
+import ProductDeleteDialog from '../../components/admin/ProductDeleteDialog';
 import PageHeader from '../../components/admin/PageHeader';
 import StatusBadge from '../../components/admin/StatusBadge';
 import ProductForm from '../../components/admin/ProductForm';
+import BulkCatalogSmartFill from '../../components/admin/BulkCatalogSmartFill';
 import { Select as UiSelect } from '../../components/ui/Field';
 import { fetchCategories } from '../../utils/catalogOptions';
 import { getPrimaryImageUrl } from '../../services/normalize';
@@ -49,10 +51,13 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
   const [bulkAction, setBulkAction] = useState('');
   const [actionBusy, setActionBusy] = useState('');
   const [confirmTarget, setConfirmTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [editor, setEditor] = useState(null);
   const [settings, setSettings] = useState(null);
   const [posterProduct, setPosterProduct] = useState(null);
   const [captionProduct, setCaptionProduct] = useState(null);
+  const [smartBatch, setSmartBatch] = useState(null);
+  const [smartBusy, setSmartBusy] = useState(false);
   const requestRevision = useRef(0);
   const isDesktop = useResponsiveDesktop();
 
@@ -187,16 +192,18 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
         <button type="button" onClick={exportCatalog} disabled={actionBusy === 'export'} className="admin-btn-ghost disabled:opacity-50"><Download className="h-4 w-4" />{actionBusy === 'export' ? 'Exporting...' : selectedIds.length ? `Export ${selectedIds.length}` : 'Export CSV'}</button>
         {isAdmin && <details className="relative">
           <summary className="admin-btn-ghost cursor-pointer list-none"><Plus className="h-4 w-4" />More ways to add <ChevronDown className="h-4 w-4" /></summary>
-          <div className="absolute right-0 z-40 mt-2 grid w-64 gap-1 rounded-2xl border border-[#eadfd5] bg-white p-2 shadow-xl">
+          <div className="absolute right-0 z-40 mt-2 grid w-64 gap-1 rounded-2xl border border-theme-border bg-white p-2 shadow-xl">
             <AddLink href="/admin/products/quick-add" icon={Sparkles} title="Quick Add from photos" note="Create a product with fewer fields" />
             <AddLink href="/admin/social-import" icon={Download} title="Import social link" note="Instagram or Facebook post" />
             <AddLink href="/admin/reel-import" icon={Camera} title="Import product reel" note="Choose clear video frames" />
             <AddLink href="/admin/product-drafts" icon={FilePlus2} title="Product drafts" note="Review saved and imported work" />
           </div>
         </details>}
+        <button type="button" disabled={!!actionBusy || smartBusy || !selectedIds.length} onClick={() => { if (!smartBatch || window.confirm('Replace the open Smart Fill batch? Unsaved staged content will be discarded.')) setSmartBatch([...selectedIds]); }} className="admin-btn-ghost"><Sparkles className="h-4 w-4" />Smart Fill selected</button>
         <button type="button" onClick={openAdd} className="admin-btn"><Plus className="h-4 w-4" />Add Product</button>
       </PageHeader>
 
+      {smartBatch && <BulkCatalogSmartFill key={`${prefix}:${routeStoreId}`} ids={smartBatch} apiBase={`${prefix}/smart-fill${routeStoreId ? `?storeId=${encodeURIComponent(routeStoreId)}` : ''}`} disabled={!!actionBusy} onBusyChange={setSmartBusy} onClose={() => setSmartBatch(null)} onSaved={count => { setMessage({ tone: 'success', text: `${count} products: reviewed content saved. Any individual failures are shown in the Smart Fill panel.` }); reload(); }} />}
       <div className="admin-kpi-strip">
         <KpiTile icon={Package} tone="wine" label="Current catalog" value={summary.total} note="All current products" active={!archive && !status && !stock} onClick={() => applyMetric('total')} />
         <KpiTile icon={PackageCheck} tone="green" label="Active" value={summary.active} note="Enabled listings" active={!archive && status === 'active'} onClick={() => applyMetric('active')} />
@@ -212,7 +219,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
           <button type="button" onClick={clearFilters} className="admin-btn-ghost"><X className="h-4 w-4" />Clear filters</button>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.5fr)_repeat(5,minmax(135px,0.8fr))]">
-          <label className="flex h-11 items-center gap-2 rounded-full border border-[#eadfd5] bg-white px-4"><PackageSearch className="h-4 w-4 text-slate-400" /><input aria-label="Search products" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Name, SKU, fabric or details" className="w-full bg-transparent text-sm outline-none" /></label>
+          <label className="sc-field-shell flex h-11 items-center gap-2 rounded-full border border-theme-border bg-white px-4"><PackageSearch className="h-4 w-4 text-slate-400" /><input aria-label="Search products" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Name, SKU, fabric or details" className="w-full bg-transparent text-sm outline-none" /></label>
           <Select label="Category filter" value={category} onChange={changeFilter(setCategory)} options={[['', 'All categories'], ...categories.map((item) => [item._id, item.name])]} />
           <Select label="Status filter" value={status} onChange={changeFilter(setStatus)} options={[['', 'All visibility'], ['active', 'Active'], ['inactive', 'Inactive']]} />
           <Select label="Stock filter" value={stock} onChange={changeFilter(setStock)} options={[['', 'All stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['in', 'In stock']]} />
@@ -233,7 +240,7 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
       </div>}
 
       <div className="admin-card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfd5] px-4 py-3 lg:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-theme-border px-4 py-3 lg:px-5">
           <div><h2>{archive === 'only' ? 'Archived products' : 'Product catalog'} ({total})</h2><p className="mt-1 text-xs text-slate-500">Page {page} of {pageCount}{selectedIds.length ? ` · ${selectedIds.length} selected` : ''}</p></div>
           <button type="button" onClick={toggleSelectAll} disabled={!products.length || loading} className="admin-btn-ghost"><span className="grid h-5 w-5 place-items-center rounded border border-[#d9cec3] bg-white">{selectedOnPage ? <Check className="h-3 w-3 text-wine" /> : <Square className="h-3 w-3 text-slate-400" />}</span>{selectedOnPage ? 'Clear this page' : 'Select this page'}</button>
         </div>
@@ -242,28 +249,33 @@ export default function ProductCatalogManager({ route = '/admin/products', apiPr
           {isDesktop ? <div className="overflow-x-auto">
             <table className="admin-catalog-table">
               <thead><tr><th className="w-12">Select</th><th className="admin-catalog-product">Product</th><th>SKU / category</th><th>Pricing</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{products.map((product) => <DesktopRow key={product._id} product={product} inventoryPath={`${prefix}/inventory`} selected={selectedIds.includes(product._id)} busy={actionBusy} onSelect={toggleSelected} onEdit={openEdit} onStatus={setVisibility} onStock={updateStock} onPoster={setPosterProduct} onCaption={setCaptionProduct} onOut={requestOutOfStock} onArchive={requestArchive} onRestore={restore} onDuplicate={duplicate} />)}</tbody>
+              <tbody>{products.map((product) => <DesktopRow key={product._id} product={product} inventoryPath={`${prefix}/inventory`} selected={selectedIds.includes(product._id)} busy={actionBusy} onSelect={toggleSelected} onEdit={openEdit} onStatus={setVisibility} onStock={updateStock} onPoster={setPosterProduct} onCaption={setCaptionProduct} onOut={requestOutOfStock} onArchive={requestArchive} onRestore={restore} onDuplicate={duplicate} onDelete={setDeleteTarget} />)}</tbody>
             </table>
-          </div> : <div className="divide-y divide-[#f0e5dc]">{products.map((product) => <MobileProductCard key={product._id} product={product} selected={selectedIds.includes(product._id)} busy={actionBusy} onSelect={toggleSelected} onEdit={openEdit} onStatus={setVisibility} onOut={requestOutOfStock} onArchive={requestArchive} onRestore={restore} onDuplicate={duplicate} />)}</div>}
+          </div> : <div className="divide-y divide-[#f0e5dc]">{products.map((product) => <MobileProductCard key={product._id} product={product} selected={selectedIds.includes(product._id)} busy={actionBusy} onSelect={toggleSelected} onEdit={openEdit} onStatus={setVisibility} onOut={requestOutOfStock} onArchive={requestArchive} onRestore={restore} onDuplicate={duplicate} onDelete={setDeleteTarget} />)}</div>}
         </> : <div className="grid min-h-[280px] place-items-center p-8 text-center"><div><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-wine/10 text-wine">{archive === 'only' ? <Archive /> : <PackageSearch />}</span><h3 className="mt-4 text-xl font-black">{archive === 'only' ? 'No archived products' : hasCatalogFilters ? 'No products match these filters' : 'No products yet'}</h3><p className="mt-2 text-sm text-slate-500">{archive === 'only' ? 'Archived products will stay recoverable here.' : hasCatalogFilters ? 'Clear filters to see the full catalog.' : 'Add your first product to start building the catalog.'}</p>{archive !== 'only' && hasCatalogFilters && <button type="button" onClick={clearFilters} className="admin-btn-ghost mt-5">Clear filters</button>}</div></div>}
       </div>
 
       <div className="admin-card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
-        <label className="flex items-center gap-2 text-slate-600">Rows <select aria-label="Products per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="h-9 rounded-xl border border-[#eadfd5] bg-white px-3 font-bold"><option>10</option><option>25</option><option>50</option></select></label>
+        <label className="flex items-center gap-2 text-slate-600">Rows <select aria-label="Products per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="h-9 rounded-xl border border-theme-border bg-white px-3 font-bold"><option>10</option><option>25</option><option>50</option></select></label>
         <span className="text-slate-500">Showing {products.length} of {total}</span>
         <div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="admin-btn-ghost min-h-9 px-3 disabled:opacity-40">Previous</button><span className="min-w-16 text-center font-bold">{page} / {pageCount}</span><button type="button" disabled={page >= pageCount || loading} onClick={() => setPage((value) => value + 1)} className="admin-btn-ghost min-h-9 px-3 disabled:opacity-40">Next</button></div>
       </div>
 
-      {editor && <div className="fixed inset-0 z-[90] bg-black/45 p-2 sm:p-4 lg:p-6"><div className="mx-auto flex h-full w-full max-w-[1180px] flex-col overflow-hidden rounded-[24px] bg-[#fbf7f3] shadow-2xl"><div className="flex items-center justify-between border-b border-[#eadfd5] bg-white px-4 py-3 lg:px-6"><div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-wine/60">Catalog editor</p><h2 className="text-xl font-black">{editor.mode === 'Add' ? 'Add product' : 'Edit product'}</h2></div><button type="button" onClick={closeEditor} className="grid h-10 w-10 place-items-center rounded-full border border-[#eadfd5]" aria-label="Close product editor"><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6"><ProductForm mode={editor.mode} productId={editor.id} apiPrefix={prefix} uploadPrefix={`${prefix}/uploads`} cancelPath={`${prefix}/products`} onCancel={closeEditor} onSaved={() => { closeEditor(); reload(); }} /></div></div></div>}
+      {editor && <div className="fixed inset-0 z-[90] bg-black/45 p-2 sm:p-4 lg:p-6"><div className="mx-auto flex h-full w-full max-w-[1180px] flex-col overflow-hidden rounded-[24px] bg-[#fbf7f3] shadow-2xl"><div className="flex items-center justify-between border-b border-theme-border bg-white px-4 py-3 lg:px-6"><div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-wine/60">Catalog editor</p><h2 className="text-xl font-black">{editor.mode === 'Add' ? 'Add product' : 'Edit product'}</h2></div><button type="button" onClick={closeEditor} className="grid h-10 w-10 place-items-center rounded-full border border-theme-border" aria-label="Close product editor"><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6"><ProductForm mode={editor.mode} productId={editor.id} apiPrefix={prefix} uploadPrefix={`${prefix}/uploads`} cancelPath={`${prefix}/products`} onCancel={closeEditor} onSaved={() => { closeEditor(); reload(); }} /></div></div></div>}
 
       <ConfirmModal open={!!confirmTarget} title={confirmTarget?.title} message={confirmTarget?.message} confirmLabel={confirmTarget?.label} onClose={() => setConfirmTarget(null)} onConfirm={async () => { await confirmTarget?.run(); setConfirmTarget(null); }} />
+      {deleteTarget && <ProductDeleteDialog product={deleteTarget} productsPath={productsPath} onClose={() => setDeleteTarget(null)} onArchived={reload} onDeleted={id => {
+        setDeleteTarget(null); setSelectedIds(current => current.filter(item => item !== id));
+        setProducts(current => current.filter(item => item._id !== id));
+        setMessage({ tone: 'success', text: 'Product permanently deleted. Uploaded files and audit history were retained.' }); reload();
+      }} />}
       <ProductPosterModal open={!!posterProduct} product={posterProduct} settings={settings} onClose={() => setPosterProduct(null)} />
       <ProductCaptionModal open={!!captionProduct} product={captionProduct} settings={settings} onClose={() => setCaptionProduct(null)} />
     </section>
   );
 }
 
-function DesktopRow({ product, inventoryPath, selected, busy, onSelect, onEdit, onStatus, onStock, onPoster, onCaption, onOut, onArchive, onRestore, onDuplicate }) {
+function DesktopRow({ product, inventoryPath, selected, busy, onSelect, onEdit, onStatus, onStock, onPoster, onCaption, onOut, onArchive, onRestore, onDuplicate, onDelete }) {
   const state = productState(product);
   const score = completenessScore(product);
   return <tr className={selected ? 'is-selected' : ''}>
@@ -271,19 +283,20 @@ function DesktopRow({ product, inventoryPath, selected, busy, onSelect, onEdit, 
     <td className="admin-catalog-product"><ProductIdentity product={product} score={score} /></td>
     <td><p className="admin-catalog-sku" title={product.sku || ''}>{product.sku || 'No SKU'}</p><p className="mt-1 whitespace-nowrap text-xs text-slate-500">{product.category?.name || 'Unassigned'}</p></td>
     <td><p className="whitespace-nowrap text-[15px] font-black">Rs. {formatNumber(product.price)}</p>{Number(product.originalPrice) > Number(product.price) && <p className="text-xs text-slate-400 line-through">Rs. {formatNumber(product.originalPrice)}</p>}{Number(product.costPrice) > 0 && <p className="mt-1 text-[10px] font-bold text-emerald-700">{marginLabel(product)}</p>}</td>
-    <td>{product.isArchived ? <span className="text-xs text-slate-400">Archived</span> : product.variants?.length ? <a href={inventoryPath} className="admin-table-action-link" title="Update each variant in inventory">{product.stock} · Variants</a> : <StockInput value={product.stock} disabled={!!busy} onSave={(value) => onStock(product, value)} className="h-9 w-[76px] rounded-lg border border-[#eadfd5] bg-white px-2.5 text-sm font-semibold" aria-label={`${product.name} stock`} />}</td>
+    <td>{product.isArchived ? <span className="text-xs text-slate-400">Archived</span> : product.variants?.length ? <a href={inventoryPath} className="admin-table-action-link" title="Update each variant in inventory">{product.stock} · Variants</a> : <StockInput value={product.stock} disabled={!!busy} onSave={(value) => onStock(product, value)} className="h-9 w-[76px] rounded-lg border border-theme-border bg-white px-2.5 text-sm font-semibold" aria-label={`${product.name} stock`} />}</td>
     <td><button type="button" disabled={!!busy || product.isArchived} onClick={() => onStatus(product)} aria-label={`Toggle ${product.name} status`} className="disabled:cursor-not-allowed disabled:opacity-60"><StatusBadge value={state.label} /></button><p className={`mt-1 text-[10px] font-bold ${state.tone}`}>{state.note}</p></td>
-    <td><ProductActions product={product} busy={busy} onEdit={onEdit} onPoster={onPoster} onCaption={onCaption} onOut={onOut} onArchive={onArchive} onRestore={onRestore} onDuplicate={onDuplicate} /></td>
+    <td><div className="flex items-center gap-1.5"><ProductActions product={product} busy={busy} onEdit={onEdit} onPoster={onPoster} onCaption={onCaption} onOut={onOut} onArchive={onArchive} onRestore={onRestore} onDuplicate={onDuplicate} /><button type="button" disabled={!!busy} onClick={() => onDelete(product)} className="admin-catalog-action text-rose-700" aria-label={`Delete ${product.name} permanently`} title="Delete permanently"><Trash2 className="h-4 w-4" /></button></div></td>
   </tr>;
 }
 
-function MobileProductCard({ product, selected, busy, onSelect, onEdit, onStatus, onOut, onArchive, onRestore, onDuplicate }) {
+function MobileProductCard({ product, selected, busy, onSelect, onEdit, onStatus, onOut, onArchive, onRestore, onDuplicate, onDelete }) {
   const state = productState(product);
   const score = completenessScore(product);
   return <article className={`p-4 ${selected ? 'bg-[#fff4f6]' : 'bg-white'}`}>
     <div className="flex gap-3"><button type="button" onClick={() => onSelect(product._id)} className={`mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-md border ${selected ? 'border-wine bg-wine text-white' : 'border-[#d9cec3]'}`} aria-label={`Select ${product.name}`}>{selected && <Check className="h-3.5 w-3.5" />}</button><div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-[#fbf2eb]"><img src={getPrimaryImageUrl(product.images) || '/uploads/placeholder.jpg'} alt="" className="h-full w-full object-cover" /></div><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-black" title={product.name}>{product.name}</h3><p className="mt-1 truncate text-xs text-slate-500">{product.sku || 'No SKU'} · {product.category?.name || 'Unassigned'}</p><div className="mt-2 flex flex-wrap items-center gap-2"><strong>Rs. {formatNumber(product.price)}</strong><StatusBadge value={state.label} /><span className={`rounded-full px-2 py-1 text-[10px] font-black ${score === 100 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{score}% complete</span></div><p className="mt-2 text-xs font-bold text-slate-500">{Number(product.stock || 0)} units · Alert at {product.lowStockAlert ?? 5}</p></div></div>
     <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => onEdit(product)} className="admin-btn"><PencilLine className="h-4 w-4" />Edit</button><a href={`/product?id=${encodeURIComponent(product._id)}`} target="_blank" rel="noreferrer" className="admin-btn-ghost"><Eye className="h-4 w-4" />Preview</a></div>
     <div className="mt-2 flex flex-wrap gap-2">{product.isArchived ? <button type="button" disabled={!!busy} onClick={() => onRestore(product)} className="admin-table-action-link"><RotateCcw className="mr-1 h-3.5 w-3.5" />Restore</button> : <><button type="button" disabled={!!busy} onClick={() => onStatus(product)} className="admin-table-action-link">{product.isActive ? 'Hide' : 'Make active'}</button><button type="button" disabled={!!busy} onClick={() => onDuplicate(product)} className="admin-table-action-link">Duplicate</button>{Number(product.stock || 0) > 0 && <button type="button" disabled={!!busy} onClick={() => onOut(product)} className="admin-table-action-link">Out of stock</button>}<button type="button" disabled={!!busy} onClick={() => onArchive(product)} className="admin-table-action-link is-danger">Archive</button></>}</div>
+    <button type="button" disabled={!!busy} onClick={() => onDelete(product)} className="admin-table-action-link is-danger mt-2 inline-flex min-h-11 items-center gap-1" aria-label={`Delete ${product.name} permanently`}><Trash2 className="h-3.5 w-3.5" />Delete permanently</button>
   </article>;
 }
 
@@ -293,7 +306,7 @@ function ProductIdentity({ product, score }) {
 }
 
 function ProductActions({ product, busy, onEdit, onPoster, onCaption, onOut, onArchive, onRestore, onDuplicate }) {
-  return <div className="flex items-center gap-1.5"><button type="button" disabled={!!busy} onClick={() => onEdit(product)} className="admin-catalog-action" aria-label={`Edit ${product.name}`} title="Edit"><PencilLine className="h-4 w-4" /></button><a href={`/product?id=${encodeURIComponent(product._id)}`} target="_blank" rel="noreferrer" className="admin-catalog-action" aria-label={`Preview ${product.name}`} title="Preview storefront"><Eye className="h-4 w-4" /></a><details className="relative"><summary className="admin-catalog-action cursor-pointer list-none" aria-label={`More actions for ${product.name}`} title="More actions"><MoreHorizontal className="h-4 w-4" /></summary><div className="absolute right-0 z-30 mt-2 grid min-w-52 gap-1 rounded-2xl border border-[#eadfd5] bg-white p-2 shadow-xl">{product.isArchived ? <Action onClick={() => onRestore(product)} icon={RotateCcw}>Restore as inactive</Action> : <><Action onClick={() => onDuplicate(product)} icon={Copy}>Duplicate product</Action><Action onClick={() => onPoster(product)} icon={Camera}>Create poster</Action><Action onClick={() => onCaption(product)} icon={MessageSquareText}>Create caption</Action>{Number(product.stock || 0) > 0 && <Action onClick={() => onOut(product)} icon={PackageX}>Mark out of stock</Action>}<Action onClick={() => onArchive(product)} icon={Archive} danger>Archive product</Action></>}</div></details></div>;
+  return <div className="flex items-center gap-1.5"><button type="button" disabled={!!busy} onClick={() => onEdit(product)} className="admin-catalog-action" aria-label={`Edit ${product.name}`} title="Edit"><PencilLine className="h-4 w-4" /></button><a href={`/product?id=${encodeURIComponent(product._id)}`} target="_blank" rel="noreferrer" className="admin-catalog-action" aria-label={`Preview ${product.name}`} title="Preview storefront"><Eye className="h-4 w-4" /></a><details className="relative"><summary className="admin-catalog-action cursor-pointer list-none" aria-label={`More actions for ${product.name}`} title="More actions"><MoreHorizontal className="h-4 w-4" /></summary><div className="absolute right-0 z-30 mt-2 grid min-w-52 gap-1 rounded-2xl border border-theme-border bg-white p-2 shadow-xl">{product.isArchived ? <Action onClick={() => onRestore(product)} icon={RotateCcw}>Restore as inactive</Action> : <><Action onClick={() => onDuplicate(product)} icon={Copy}>Duplicate product</Action><Action onClick={() => onPoster(product)} icon={Camera}>Create poster</Action><Action onClick={() => onCaption(product)} icon={MessageSquareText}>Create caption</Action>{Number(product.stock || 0) > 0 && <Action onClick={() => onOut(product)} icon={PackageX}>Mark out of stock</Action>}<Action onClick={() => onArchive(product)} icon={Archive} danger>Archive product</Action></>}</div></details></div>;
 }
 
 function Action({ icon: Icon, children, onClick, danger }) { return <button type="button" onClick={onClick} className={`flex min-h-10 items-center gap-2 rounded-xl px-3 text-left text-xs font-bold hover:bg-[#fff7f2] ${danger ? 'text-rose-700' : 'text-slate-700'}`}><Icon className="h-4 w-4" />{children}</button>; }

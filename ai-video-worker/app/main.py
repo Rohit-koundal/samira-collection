@@ -1,6 +1,7 @@
 import secrets
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from .config import settings
@@ -10,6 +11,24 @@ from .video_normalizer import VideoValidationError
 
 
 app = FastAPI(title="Samira Reel Processing Worker", docs_url=None, redoc_url=None)
+
+
+@app.post("/internal/images/remove-background")
+async def image_background(request: Request, authorization: str = Header(default="")):
+    require_service_token(authorization)
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > 3 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Image too large.")
+    try:
+        from .image_background import remove_background
+        output = await run_in_threadpool(remove_background, bytes(data))
+        return Response(output, media_type="image/png", headers={"Cache-Control": "no-store"})
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Image processor unavailable. Retry or keep the original.") from error
 
 
 class VideoSource(BaseModel):

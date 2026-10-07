@@ -15,6 +15,10 @@ test('designer navigation guard cancels a route change without changing the URL'
 test('the preview route is never interpreted as a boutique slug', () => {
   expect(boutiquePath('/website-preview')).toBe('/website-preview');
 });
+test.each(['/rentals', '/rental-book'])('rental route %s is not a boutique slug and retains tenant navigation', path => {
+  expect(boutiquePath(path)).toBe(path);
+  expect(storefrontPath(`${path}?id=booking`, 'occasion')).toBe(`/store/occasion${path}?id=booking`);
+});
 
 test.each(['/', '/products?category=silk', '/search?search=kurta', '/product?id=one', '/category?category=silk'])('catalog navigation %s remains in the selected boutique', path => {
   expect(storefrontPath(path, 'silk')).toBe(`/store/silk${path === '/' ? '' : path}`);

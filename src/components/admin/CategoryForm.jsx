@@ -3,6 +3,7 @@ import { Eye, Link2, Search, Sparkles } from 'lucide-react';
 import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
 import ImageUploader from './ImageUploader';
+import WorkflowSmartFill from './WorkflowSmartFill';
 
 const emptyCategory = {
   name: '', slug: '', parent: '', definitionKey: '', description: '', image: '', metaTitle: '', metaDescription: '', socialImage: '', displayOrder: 0, isActive: true,
@@ -184,6 +185,7 @@ export default function CategoryForm({ mode = 'Add', categoryId, onSaved, onCanc
   return (
     <form onSubmit={submit} className="category-form">
       <div className="category-form__main">
+        <WorkflowSmartFill key={categoryId || "new"} workflow="category" form={form} disabled={saving} onChange={(next, rows, undoing) => { setForm(next); if (rows.some(row => row.path === 'slug')) setAutoSlug(undoing && !categoryId && !next.slug); }} />
         <section className="category-form__section">
           <div className="category-form__section-head">
             <div><span>01</span><h3>Category essentials</h3><p>Name it, place it in the catalogue and choose where it appears.</p></div>

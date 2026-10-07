@@ -49,6 +49,7 @@ test.each([
 
 test('account mobile number accepts digits only and reports an invalid number', () => {
   render(<ProfileDetails />);
+  expect(screen.getByPlaceholderText('Alternate mobile number').closest('.focus-within\\:border-wine')).not.toBeNull();
 
   fireEvent.click(screen.getAllByRole('button', { name: 'CHANGE' })[0]);
   const phone = screen.getByPlaceholderText('Enter mobile number');

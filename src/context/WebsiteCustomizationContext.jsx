@@ -12,7 +12,7 @@ import { parseStoreSlug } from '../utils/attribution';
 
 const WebsiteCustomizationContext = createContext(null);
 
-export function WebsiteCustomizationProvider({ children }) {
+export function WebsiteCustomizationProvider({ children, route = '' }) {
   const [config, setConfig] = useState(DEFAULT_WEBSITE_CONFIG);
   const [theme, setTheme] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,11 +20,24 @@ export function WebsiteCustomizationProvider({ children }) {
   const [brandIdentityManaged, setBrandIdentityManaged] = useState(false);
   const requestId = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const scope = parseStoreSlug(route || (typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}`));
+  const sellerScope = (route || (typeof window === 'undefined' ? '' : window.location.pathname)).startsWith('/seller/');
+  const refresh = useCallback(async (options = {}) => {
     const id = ++requestId.current;
     try {
-      const storeSlug = parseStoreSlug(typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}`);
-      const data = await api.get(`/website-config${storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : ''}`, { cacheFirst: true });
+      // Explicit empty scope prevents a previously visited boutique's header
+      // from leaking its theme into the default store/admin.
+      let slug = scope;
+      if (sellerScope) {
+        const current = await api.get('/stores/me/current', { cacheFirst: true, silent: true });
+        slug = current?.store?.slug || '';
+      } else if (!slug && typeof window !== 'undefined') {
+        // Share StorefrontProvider's cached/in-flight host lookup. Custom
+        // domains must not inherit the last boutique visited in this tab.
+        const hosted = await api.get(`/stores/resolve?host=${encodeURIComponent(window.location.host)}`, { cacheFirst: true, silent: true }).catch(() => null);
+        if (hosted?.slug && !hosted.isDefault) slug = hosted.slug;
+      }
+      const data = await api.get(`/website-config?store=${encodeURIComponent(slug)}`, { cacheFirst: true, forceRefetch: options.force === true });
       if (id !== requestId.current) return data;
       setConfig((current) => reuseEqualBranches(current, mergeWebsiteConfig(data.config)));
       setTheme((current) => reuseEqualBranches(current, data.theme || null));
@@ -37,10 +50,14 @@ export function WebsiteCustomizationProvider({ children }) {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, []);
+  }, [scope, sellerScope]);
 
   useEffect(() => {
-    if (!isWebsitePreview()) { refresh(); return undefined; }
+    if (!isWebsitePreview()) {
+      setConfig(DEFAULT_WEBSITE_CONFIG); setTheme(null); setMetadata({}); setBrandIdentityManaged(false);
+      refresh();
+      return () => { requestId.current += 1; };
+    }
     const token = new URLSearchParams(window.location.search).get('token');
     const receive = (event) => {
       if (window.parent === window || event.source !== window.parent || event.origin !== window.location.origin ||
@@ -56,14 +73,14 @@ export function WebsiteCustomizationProvider({ children }) {
     const storage = event => {
       if (event.key !== SETTINGS_STORAGE_KEY) return;
       store.dispatch(samiraApi.util.invalidateTags(['Settings', 'AdminSettings', 'WebsiteCustomization']));
-      refresh();
+      refresh({ force: true });
     };
-    const focus = () => refresh();
-    window.addEventListener(SETTINGS_CHANGED_EVENT, refresh);
+    const focus = () => refresh({ force: true });
+    window.addEventListener(SETTINGS_CHANGED_EVENT, focus);
     window.addEventListener('storage', storage);
     window.addEventListener('focus', focus);
     return () => {
-      window.removeEventListener(SETTINGS_CHANGED_EVENT, refresh);
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, focus);
       window.removeEventListener('storage', storage);
       window.removeEventListener('focus', focus);
     };

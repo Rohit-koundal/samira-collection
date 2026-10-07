@@ -25,6 +25,53 @@ function useMobileViewport(width = 390) {
   window.matchMedia = jest.fn(query => ({ matches: width <= Number(query.match(/max-width: (\d+)/)?.[1] || 0), addEventListener: jest.fn(), removeEventListener: jest.fn() }));
 }
 
+test.each([390, 820, 1280])('new checkout address fields use borderless inner controls at %ipx', async width => {
+  useMobileViewport(width);
+  const savedGet = api.get.getMockImplementation();
+  api.get.mockImplementation(path => path === '/user/addresses' ? Promise.resolve([]) : savedGet(path));
+  render(<Checkout navigate={jest.fn()} />);
+  if (width <= 1023) {
+    fireEvent.click(await screen.findByRole('button', { name: 'Select address', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add new address', exact: true }));
+  }
+  await screen.findByLabelText('Full name');
+  const form = screen.getByLabelText('Full name').closest('form');
+  expect(form).toHaveClass('sc-address-form');
+  const controls = [...form.querySelectorAll('.sc-address-form__field input, .sc-address-form__field select')];
+  expect(controls).toHaveLength(9);
+  controls.forEach(control => expect(control.parentElement).toHaveClass('sc-field-shell'));
+  expect(screen.getByLabelText('District')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('State'), { target: { value: 'Delhi' } });
+  expect(screen.getByLabelText('District')).toBeEnabled();
+  expect(screen.getByLabelText('District').parentElement).toHaveClass('sc-field-shell');
+  expect(screen.getByLabelText('Make this my default address').closest('.sc-field-shell')).toBeNull();
+});
+
+test.each([390, 820, 1280])('editing a checkout address keeps every control in its outer shell at %ipx', async width => {
+  useMobileViewport(width);
+  render(<Checkout navigate={jest.fn()} />);
+  await screen.findByText('Test Customer');
+  if (width <= 1023) {
+    fireEvent.click(screen.getByRole('button', { name: 'Change', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+  } else {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Address' }));
+  }
+  const name = await screen.findByLabelText('Full name');
+  expect(name).toHaveValue('Test Customer');
+  const controls = [...name.closest('form').querySelectorAll('.sc-address-form__field input, .sc-address-form__field select')];
+  expect(controls).toHaveLength(9);
+  controls.forEach(control => {
+    expect(control.parentElement).toHaveClass('sc-field-shell');
+    if (!control.disabled) {
+      act(() => control.focus());
+      expect(control).toHaveFocus();
+    }
+  });
+  expect(screen.getByLabelText('District')).toBeEnabled();
+  expect(screen.getByLabelText('Full name')).toHaveValue('Test Customer');
+});
+
 test('tablet checkout renders the address step and mobile COD submits only selected variants', async () => {
   useMobileViewport(820);
   mockCart.items = [{ ...selected, price: 1199 }, later];

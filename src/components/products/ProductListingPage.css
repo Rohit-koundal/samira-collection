@@ -84,7 +84,7 @@
     background: #fff;
     padding: 0 14px;
     font-size: 12px;
-    color: #17161a;
+    color: var(--site-text, #17161a);
   }
 
   .sc-plp__divider {

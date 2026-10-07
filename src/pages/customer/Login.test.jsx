@@ -28,6 +28,8 @@ describe('customer login', () => {
     render(<Login route="/login" />);
 
     const phone = screen.getByPlaceholderText('Mobile Number*');
+    expect(phone.closest('.focus-within\\:border-wine')).not.toBeNull();
+    expect(phone).toHaveClass('border-0', 'outline-none', 'focus:ring-0');
     const consent = screen.getByRole('checkbox');
     const continueButton = screen.getByRole('button', { name: 'Continue' });
 
@@ -98,6 +100,7 @@ describe('customer login', () => {
   test('the storefront login prompt accepts local numbers beginning with 91', () => {
     const onContinue = jest.fn();
     render(<LoginPrompt open onClose={jest.fn()} onContinue={onContinue} />);
+    expect(screen.getByPlaceholderText('Mobile Number*').closest('.focus-within\\:border-wine')).not.toBeNull();
     fireEvent.change(screen.getByPlaceholderText('Mobile Number*'), { target: { value: '9123456789' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));

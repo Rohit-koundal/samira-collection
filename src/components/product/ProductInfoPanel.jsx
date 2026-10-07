@@ -7,6 +7,7 @@ import './ProductInfoPanel.css';
 
 export default function ProductInfoPanel({
   product,
+  rentalOnly = false,
   size,
   setSize,
   color,
@@ -81,7 +82,7 @@ export default function ProductInfoPanel({
           )}
         </button>
 
-        <div className="sc-info__price-row">
+        {!rentalOnly && <><div className="sc-info__price-row">
           <span className="sc-info__price">₹{formatIndian(currentPrice)}</span>
           {originalPrice > currentPrice ? <span className="sc-info__original">MRP ₹{formatIndian(originalPrice)}</span> : null}
           {discount > 0 ? <span className="sc-info__discount">({Math.round(discount)}% OFF)</span> : null}
@@ -235,6 +236,7 @@ export default function ProductInfoPanel({
           ) : null}
         </div>
 
+        </>}
         {actionMessage && actionMessage !== deliveryResult?.message ? (
           <p role="status" className={`sc-info__message${positiveMessage ? ' sc-info__message--success' : ''}`}>{actionMessage}</p>
         ) : null}

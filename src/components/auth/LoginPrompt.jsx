@@ -33,7 +33,7 @@ export default function LoginPrompt({ open, onClose, onContinue }) {
           </div>
           <Card className="rounded-none border-0 shadow-none">
             <CardContent className="space-y-4 p-5">
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="sc-field-shell overflow-hidden rounded-xl border border-slate-200 bg-white focus-within:border-wine focus-within:ring-2 focus-within:ring-wine/10">
                 <div className="flex items-center">
                   <span className="px-4 text-base font-semibold text-slate-500">+91</span>
                   <span className="h-12 w-px bg-slate-200" />

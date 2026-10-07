@@ -31,6 +31,15 @@ test('recommended selection restores the clear cover and keeps alternatives visi
   expect(screen.getByText('Alternative view')).toBeInTheDocument();
 });
 
+test('deleted published product receipt never offers a broken edit link or editable candidate', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation(async path => path.endsWith('/candidates') ? { data: [{ ...candidate, status: 'draft_created', savedDraft: { name: 'Deleted product', publishedProductId: 'removed', publishedProductDeleted: true, draftRemoved: true } }] } : original(path));
+  render(<ReelProductImport route="/admin/reel-import?jobId=job" />);
+  expect(await screen.findByText(/Product permanently removed/)).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Edit product' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save candidate' })).not.toBeInTheDocument();
+});
+
 test('a stated price is filled and the reviewed reel publishes without visiting drafts', async () => {
   fetchCategories.mockResolvedValue([{ _id: 'sarees', name: 'Sarees' }]);
   const ready = { ...candidate, suggestions: { ...candidate.suggestions, category: 'sarees', price: 1299, fieldSources: { price: { source: 'speech', quote: 'Price is 1299 rupees' } } } };

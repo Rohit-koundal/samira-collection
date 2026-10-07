@@ -4,6 +4,8 @@ import api from '../../services/api';
 import { normalizeImageUrl } from '../../services/normalize';
 import { compressImageFile, isSupportedImageFile } from '../../services/imageCompression';
 import { inspectProductImage } from '../../utils/imageQuality';
+import ImageBackgroundEditor from './ImageBackgroundEditor';
+import { newUploadKey, selectionFingerprint } from '../../services/uploadRetry';
 
 const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
@@ -25,7 +27,10 @@ export default function ImageUploader({
   onBusyChange,
 }) {
   const inputRef = useRef(null);
+  const originalFiles = useRef(new Map());
+  const [editing, setEditing] = useState(null);
   const uploadLock = useRef(false);
+  const pendingUpload = useRef(null);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [phase, setPhase] = useState('');
@@ -36,7 +41,7 @@ export default function ImageUploader({
   const files = (Array.isArray(value) ? value : value ? [value] : []).filter((file) => file?.url);
 
   const addFiles = async (selected) => {
-    if (uploadLock.current || disabled) return;
+    if (uploadLock.current || disabled || editing) return;
     setError('');
     setPhase('');
     setProgress(0);
@@ -51,47 +56,55 @@ export default function ImageUploader({
     setUploading(true);
     onBusyChange?.(true);
     try {
-      const converted = [];
-      const uploadStats = [];
-      const inspections = [];
-      for (const file of incoming) {
-        if (!isSupportedImageFile(file) || !allowedTypes.includes(file.type)) {
-          throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
+      const signature = `${uploadPath}:${uploadContext}:${await selectionFingerprint(incoming)}`;
+      const retry = pendingUpload.current?.signature === signature ? pendingUpload.current : null;
+      const converted = retry?.converted || [];
+      const uploadStats = retry?.uploadStats || [];
+      const inspections = retry?.inspections || [];
+      if (!retry) {
+        for (const file of incoming) {
+          if (!isSupportedImageFile(file) || !allowedTypes.includes(file.type)) {
+            throw new Error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
+          }
+          if (file.size > maxUploadMb * 1024 * 1024) {
+            throw new Error(`Each image must be under ${maxUploadMb}MB before compression.`);
+          }
+          inspections.push(await inspectProductImage(file));
+          setPhase('compressing');
+          const compressedFile = await compressImageFile(file, {
+            maxOriginalSizeMb: compressAboveMb,
+            targetMaxSizeMb: targetSizeMb,
+            maxWidthOrHeight: 1600,
+            onProgress: (value) => setProgress(Math.max(0, Math.min(100, Math.round(value || 0)))),
+          });
+          converted.push(compressedFile);
+          uploadStats.push({
+            name: file.name,
+            originalSize: Number(file.size || 0),
+            compressedSize: Number(compressedFile.size || 0),
+            convertedToWebp: Boolean(compressedFile.__compressionMeta?.convertedToWebp),
+          });
         }
-        if (file.size > maxUploadMb * 1024 * 1024) {
-          throw new Error(`Each image must be under ${maxUploadMb}MB before compression.`);
-        }
-        inspections.push(await inspectProductImage(file));
-        setPhase('compressing');
-        const compressedFile = await compressImageFile(file, {
-          maxOriginalSizeMb: compressAboveMb,
-          targetMaxSizeMb: targetSizeMb,
-          maxWidthOrHeight: 1600,
-          onProgress: (value) => setProgress(Math.max(0, Math.min(100, Math.round(value || 0)))),
-        });
-        converted.push(compressedFile);
-        uploadStats.push({
-          name: file.name,
-          originalSize: Number(file.size || 0),
-          compressedSize: Number(compressedFile.size || 0),
-          convertedToWebp: Boolean(compressedFile.__compressionMeta?.convertedToWebp),
-        });
       }
+      pendingUpload.current = retry || { signature, converted, uploadStats, inspections, key: newUploadKey() };
       setRecentUploads(uploadStats);
       setQualityChecks(inspections.filter(Boolean));
 
       setPhase('uploading');
       setProgress(100);
-      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, converted, { fieldName: 'images' });
+      const data = await api.upload(`${uploadPath}?folder=${encodeURIComponent(uploadContext)}`, converted, { fieldName: 'images', idempotencyKey: pendingUpload.current.key });
       const uploadedFiles = Array.isArray(data.files) ? data.files.filter((file) => file?.url) : [];
-      if (!uploadedFiles.length) throw new Error('No image was uploaded. Please try again.');
+      if (uploadedFiles.length !== incoming.length) throw new Error('Not all images were confirmed. Retry to finish this upload.');
       const uploaded = uploadedFiles.map((file, index) => ({
         ...file,
         originalName: file.originalName || incoming[index]?.name || converted[index]?.name || '',
         primary: files.length === 0 && index === 0,
       }));
+      uploaded.forEach((file, index) => originalFiles.current.set(file.url, converted[index]));
       onChange(multiple ? [...files, ...uploaded] : uploaded.slice(0, 1));
+      pendingUpload.current = null;
     } catch (uploadError) {
+      if (uploadError.code === 'UPLOAD_RETRY_CONFLICT') pendingUpload.current = null;
       setError(uploadError.message || 'Image upload failed. Please try again.');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
@@ -104,6 +117,7 @@ export default function ImageUploader({
   };
 
   const remove = (index) => {
+    originalFiles.current.delete(files[index]?.background?.original?.url || files[index]?.url);
     const next = files.filter((_, itemIndex) => itemIndex !== index);
     const existingPrimary = next.findIndex((item) => item.primary);
     onChange(next.map((item, itemIndex) => ({ ...item, primary: itemIndex === (existingPrimary >= 0 ? existingPrimary : 0) })));
@@ -117,6 +131,8 @@ export default function ImageUploader({
     [next[index], next[destination]] = [next[destination], next[index]];
     onChange(next);
   };
+
+  const closeEditor = () => { setEditing(null); onBusyChange?.(false); };
 
   return (
     <div className="space-y-3">
@@ -170,6 +186,7 @@ export default function ImageUploader({
           <div key={`${file.url}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
             <img src={normalizeImageUrl(file.url)} alt={file.originalName || file.name || 'Upload preview'} className="h-28 w-full object-cover" />
             {file.primary && <span className="absolute left-2 top-2 rounded-full bg-wine px-2 py-1 text-[10px] font-black text-white">Primary</span>}
+            {uploadContext === 'products' && <button type="button" disabled={disabled || uploading || !!editing} onClick={() => { setEditing({ index, file }); onBusyChange?.(true); }} className="min-h-11 w-full border-t border-slate-100 px-2 text-xs font-bold text-wine" aria-label={`Edit background for image ${index + 1}`}>Background{file.background ? ' · Edited' : ''}</button>}
             {file.sourceFrame && <div className="grid gap-2 p-2 text-xs text-slate-600"><a href={normalizeImageUrl(file.url)} target="_blank" rel="noreferrer" className="flex min-h-9 items-center text-wine underline">View full photo</a><label className="grid gap-1"><span>Product view</span><select aria-label={'Product view for image ' + (index + 1)} value={file.sourceFrame.viewType || 'unknown'} onChange={(event) => onChange(files.map((item, itemIndex) => itemIndex === index ? { ...item, sourceFrame: { ...item.sourceFrame, viewType: event.target.value } } : item))} className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2"><option value="unknown">Unspecified</option><option value="front">Front</option><option value="back">Back</option><option value="side">Side</option><option value="detail">Detail</option></select></label></div>}
             {showPrimaryControl ? (
               <div className="grid grid-cols-4 border-t border-slate-100">
@@ -184,6 +201,7 @@ export default function ImageUploader({
           </div>
         ))}
       </div>
+      {editing && <ImageBackgroundEditor image={editing.file} originalFile={originalFiles.current.get(editing.file.background?.original?.url || editing.file.url)} uploadPath={uploadPath} onClose={closeEditor} onApply={updated => { onChange(files.map((file, index) => index === editing.index ? updated : file)); closeEditor(); }} />}
     </div>
   );
 }

@@ -3,9 +3,9 @@
 .audit-filters, .audit-detail, .audit-pagination, .audit-error, .audit-explorer--seller > header { padding: 20px; }
 .audit-explorer .admin-btn, .audit-explorer .admin-btn-ghost { gap: 8px; }
 .audit-explorer button:disabled { opacity: .5; cursor: not-allowed; }
-.audit-explorer :focus-visible { outline: 2px solid #751d39; outline-offset: 3px; }
+.audit-explorer :focus-visible { outline: 2px solid var(--site-primary, #751d39); outline-offset: 3px; }
 .audit-notice { display: flex; align-items: flex-start; gap: 10px; color: #655a59; font-size: 13px; line-height: 1.6; }
-.audit-notice > svg { flex-shrink: 0; color: #751d39; }
+.audit-notice > svg { flex-shrink: 0; color: var(--site-primary, #751d39); }
 .audit-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .audit-search { grid-column: span 2; }
 .audit-filters label, .audit-pagination label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; color: #52464a; }

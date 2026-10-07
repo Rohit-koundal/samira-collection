@@ -12,9 +12,9 @@ export default function MobileOverlayLoader({ label = 'Loading', overlay = true 
       aria-label={label}
     >
       <span className="relative block h-8 w-8">
-        <span className="absolute inset-0 rounded-full border-[2.5px] border-[#f4b6c5]" />
+        <span className="absolute inset-0 rounded-full border-[2.5px]" style={{ borderColor: 'var(--site-loader-track)' }} />
         <span
-          className="absolute inset-0 rounded-full border-[2.5px] border-transparent border-r-[#a7284c] border-t-[#a7284c]"
+          className="absolute inset-0 rounded-full border-[2.5px] border-transparent border-r-wine border-t-wine"
           style={{ animation: 'samira-loader-spin 0.85s linear infinite', willChange: 'transform' }}
         />
       </span>

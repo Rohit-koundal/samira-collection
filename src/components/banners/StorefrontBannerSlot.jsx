@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { normalizeImageUrl } from '../../services/normalize';
 import { getApiBaseUrl } from '../../store/apiBaseUrl';
-import { getOrCreateSessionId, readStoreSlug } from '../../utils/attribution';
+import { readStoreSlug } from '../../utils/attribution';
+import { getTrafficContext, recordTrafficEvent, trafficAllowed, TRAFFIC_CHANGE_EVENT } from '../../utils/trafficTracker';
 
 export function bannersForPosition(banners, position, fallbackTypes = []) {
   const positioned = (banners || []).filter((banner) => banner.position === position && banner.image);
@@ -26,18 +27,25 @@ export function useBannerEngagement(banner) {
   useEffect(() => {
     const element = ref.current;
     if (!element || !banner?._id || typeof IntersectionObserver === 'undefined') return undefined;
-    const key = `samira_banner_impression_${banner._id}`;
+    const key = `traffic_banner_impression_${readStoreSlug() || 'default'}_${banner._id}`;
     let alreadySeen = false;
     try { alreadySeen = sessionStorage.getItem(key) === '1'; } catch { /* storage is optional */ }
     if (alreadySeen) return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5)) return;
+    let visible = false;
+    const trackVisible = () => {
+      if (!visible || !trafficAllowed()) return;
       try { sessionStorage.setItem(key, '1'); } catch { /* storage is optional */ }
       trackBannerEvent(banner._id, 'impression');
       observer.disconnect();
+      window.removeEventListener(TRAFFIC_CHANGE_EVENT, trackVisible);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5);
+      trackVisible();
     }, { threshold: [0.5] });
     observer.observe(element);
-    return () => observer.disconnect();
+    window.addEventListener(TRAFFIC_CHANGE_EVENT, trackVisible);
+    return () => { observer.disconnect(); window.removeEventListener(TRAFFIC_CHANGE_EVENT, trackVisible); };
   }, [banner?._id]);
   return ref;
 }
@@ -51,7 +59,10 @@ export function openBanner(banner, navigate) {
 }
 
 function trackBannerEvent(bannerId, event) {
-  if (!bannerId || typeof fetch !== 'function') return;
+  if (!bannerId || typeof fetch !== 'function' || !trafficAllowed()) return;
+  const context = getTrafficContext();
+  if (!context) return;
+  recordTrafficEvent(event === 'impression' ? 'BANNER_IMPRESSION' : 'BANNER_CLICK', { metadata: { bannerId: String(bannerId) } });
   const storeSlug = readStoreSlug();
   fetch(`${getApiBaseUrl()}/banners/${encodeURIComponent(bannerId)}/events`, {
     method: 'POST',
@@ -60,7 +71,7 @@ function trackBannerEvent(bannerId, event) {
       'Content-Type': 'application/json',
       ...(storeSlug ? { 'x-store-slug': storeSlug } : {}),
     },
-    body: JSON.stringify({ event, sessionId: getOrCreateSessionId() }),
+    body: JSON.stringify({ event, sessionId: context.sessionId, consent: true, trafficHandled: true }),
   }).catch(() => null);
 }
 

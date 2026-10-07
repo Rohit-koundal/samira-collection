@@ -2,7 +2,40 @@ import { configureStore } from '@reduxjs/toolkit';
 import { waitFor } from '@testing-library/react';
 import authReducer, { logout, setCredentials } from './authSlice';
 import { samiraApi } from './apiSlice';
-import { startMobileLoader } from '../utils/mobileLoader';
+import { startMobileLoader, stopMobileLoader } from '../utils/mobileLoader';
+import { STOREFRONT_READ_TIMEOUT } from './storefrontTransport';
+import { getDurableUploadRetryKey, hasUploadAttempt, retainUploadedReceipt, uploadScope } from '../services/uploadRetry';
+test('multipart condition proof uploads preserve stage/consent/revision fields and stay silent', async () => {
+  mockRawQuery.mockResolvedValue({ data: { booking: { revision: 5 } } });
+  const photo = new File(['photo'], 'photo.webp', { type: 'image/webp' });
+  await testStore.dispatch(samiraApi.endpoints.upload.initiate({ path: '/admin/rentals/bookings/b/proofs', files: [photo], silent: true, fields: { stage: 'RETURN', consent: true, revision: 4, assetId: 'piece1' } })).unwrap();
+  const body = mockRawQuery.mock.calls[0][0].body;
+  expect(body).toBeInstanceOf(FormData); expect(body.get('stage')).toBe('RETURN'); expect(body.get('revision')).toBe('4'); expect(body.get('consent')).toBe('true'); expect(body.getAll('images')).toHaveLength(1);
+  expect(startMobileLoader).not.toHaveBeenCalled();
+});
+
+test('bulk draft retries preserve the upload key while a changed grouping is a new operation', async () => {
+  const photo = new File(['photo'], 'photo.webp', { type: 'image/webp' });
+  mockRawQuery.mockResolvedValueOnce({ error: { status: 500, data: { message: 'Save failed' } } }).mockResolvedValue({ data: { success: true, data: { drafts: [] } } });
+  await testStore.dispatch(samiraApi.endpoints.bulkUploadProductDrafts.initiate({ files: [photo], groupMode: 'single' }));
+  await testStore.dispatch(samiraApi.endpoints.bulkUploadProductDrafts.initiate({ files: [photo], groupMode: 'single' })).unwrap();
+  await testStore.dispatch(samiraApi.endpoints.bulkUploadProductDrafts.initiate({ files: [photo], groupMode: 'separate' })).unwrap();
+  const keys = mockRawQuery.mock.calls.map(([value]) => value.headers['Idempotency-Key']);
+  expect(keys[0]).toBe(keys[1]); expect(keys[2]).not.toBe(keys[0]);
+  expect(mockRawQuery.mock.calls[0][0].body).toBeInstanceOf(FormData);
+  expect(mockRawQuery.mock.calls[1][0].body).toEqual({ resumeUpload: true });
+});
+
+test('an incomplete bulk receipt continues the multipart upload with the original key', async () => {
+  const photo = new File(['photo'], 'retry.webp', { type: 'image/webp' });
+  mockRawQuery.mockResolvedValueOnce({ error: { status: 'FETCH_ERROR' } });
+  await testStore.dispatch(samiraApi.endpoints.bulkUploadProductDrafts.initiate({ files: [photo] }));
+  mockRawQuery.mockResolvedValueOnce({ error: { status: 409, data: { code: 'UPLOAD_INCOMPLETE' } } }).mockResolvedValue({ data: { success: true } });
+  await testStore.dispatch(samiraApi.endpoints.bulkUploadProductDrafts.initiate({ files: [photo] })).unwrap();
+  expect(mockRawQuery.mock.calls[1][0].body).toEqual({ resumeUpload: true });
+  expect(mockRawQuery.mock.calls[2][0].body).toBeInstanceOf(FormData);
+  expect(mockRawQuery.mock.calls[0][0].headers['Idempotency-Key']).toBe(mockRawQuery.mock.calls[2][0].headers['Idempotency-Key']);
+});
 
 test('Smart Fill suggestions do not refetch catalog subscriptions or block the mobile screen', async () => {
   mockRawQuery.mockResolvedValue({ data: [] });
@@ -15,6 +48,19 @@ test('Smart Fill suggestions do not refetch catalog subscriptions or block the m
 });
 
 const mockRawQuery = jest.fn();
+
+test('workflow previews never invalidate subscribed catalogs, but reviewed catalog saves do', async () => {
+  mockRawQuery.mockResolvedValue({ data: [] });
+  const catalog = testStore.dispatch(samiraApi.endpoints.request.initiate({ path: '/admin/products' }));
+  await catalog.unwrap(); jest.clearAllMocks();
+  for (const path of ['/admin/smart-fill/preview', '/seller/smart-fill/catalog/preview']) {
+    await testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path, body: {}, silent: true })).unwrap();
+  }
+  expect(mockRawQuery).toHaveBeenCalledTimes(2);
+  await testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path: '/admin/smart-fill/catalog/save', body: {}, silent: true })).unwrap();
+  await waitFor(() => expect(mockRawQuery.mock.calls.some(([args]) => args.url === '/admin/products')).toBe(true));
+  expect(startMobileLoader).not.toHaveBeenCalled(); catalog.unsubscribe();
+});
 let mockBaseOptions;
 // CRA's Jest resolver predates conditional package exports; use the package's
 // CommonJS build while exercising the actual Redux Query implementation.
@@ -47,6 +93,45 @@ beforeEach(() => {
   testStore.dispatch(setCredentials(original));
 });
 afterEach(() => testStore.dispatch(samiraApi.util.resetApiState()));
+
+test('typed create requests automatically retain a retry key after failure and clear it after confirmation', async () => {
+  mockRawQuery.mockResolvedValueOnce({ error: { status: 'FETCH_ERROR' } }).mockResolvedValue({ data: { success: true, data: { _id: 'saved' } } });
+  const action = () => testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path: '/admin/product-drafts', method: 'POST', body: { name: 'Typed draft' } }));
+  await action(); await action().unwrap(); await action().unwrap();
+  const keys = mockRawQuery.mock.calls.map(([value]) => value.headers['Idempotency-Key']);
+  expect(keys[0]).toMatch(/^[a-zA-Z0-9_-]{16,100}$/); expect(keys[1]).toBe(keys[0]); expect(keys[2]).not.toBe(keys[0]);
+});
+
+test('only a successful business mutation releases its referenced media receipt', async () => {
+  const options = { path: '/admin/uploads', files: [new File(['one'], 'one.webp')], scope: uploadScope(testStore.getState().auth) };
+  const key = await getDurableUploadRetryKey(options);
+  await retainUploadedReceipt(key, [{ url: '/uploads/one.webp' }]);
+  mockRawQuery.mockResolvedValueOnce({ error: { status: 503 } }).mockResolvedValue({ data: { success: true } });
+  const action = () => testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path: '/admin/products/one', method: 'PUT', body: { images: [{ url: '/uploads/one.webp' }] } }));
+  await action(); expect(hasUploadAttempt(key)).toBe(true);
+  await action().unwrap(); expect(hasUploadAttempt(key)).toBe(false);
+});
+
+test('license restrictions notify the admin monitor without clearing the authenticated session', async () => {
+  const listener = jest.fn(); window.addEventListener('samira:subscription-required', listener);
+  try {
+    mockRawQuery.mockResolvedValue({ error: { status: 402, data: { code: 'SUBSCRIPTION_REQUIRED', message: 'Renew store access' } } });
+    await expect(request('/admin/products').unwrap()).rejects.toMatchObject({ status: 402 });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail.userId).toBe(user._id);
+    expect(testStore.getState().auth.token).toBe(original.token);
+  } finally { window.removeEventListener('samira:subscription-required', listener); }
+});
+
+test('license restrictions on the storefront do not trigger an owner subscription popup', async () => {
+  testStore.dispatch(setCredentials({ ...original, user: { _id: 'buyer', role: 'customer', activeMode: 'customer' } }));
+  const listener = jest.fn(); window.addEventListener('samira:subscription-required', listener);
+  try {
+    mockRawQuery.mockResolvedValue({ error: { status: 402, data: { code: 'SUBSCRIPTION_REQUIRED' } } });
+    await expect(request('/orders').unwrap()).rejects.toMatchObject({ status: 402 });
+    expect(listener).not.toHaveBeenCalled();
+  } finally { window.removeEventListener('samira:subscription-required', listener); }
+});
 
 test.each(['FETCH_ERROR', 'TIMEOUT_ERROR', 503])('a %s during token refresh preserves the restored admin login', async (status) => {
   mockRawQuery.mockImplementation(async ({ url }) => url === '/auth/refresh'
@@ -139,18 +224,18 @@ test('storefront transport options share one Redux cache entry while account sco
   expect(mockRawQuery).toHaveBeenCalledTimes(2);
 });
 
-test('mobile home feed uses the shared global loader and keeps store scope explicit', async () => {
+test('mobile home feed is bounded and never blocks navigation, including the first load', async () => {
   mockRawQuery.mockResolvedValue({ data: { products: [], categories: [], banners: [] } });
   await testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'boutique-a' }, { subscribe: false }));
-  expect(mockRawQuery.mock.calls[0][0]).toEqual({ url: '/storefront/home', params: { store: 'boutique-a' } });
-  expect(startMobileLoader).toHaveBeenCalledTimes(1);
+  expect(mockRawQuery.mock.calls[0][0]).toEqual({ url: '/storefront/home', params: { store: 'boutique-a', format: 'compact' }, timeout: STOREFRONT_READ_TIMEOUT });
+  expect(startMobileLoader).not.toHaveBeenCalled();
 });
 
 test('a cached mobile home refresh stays in Redux without reopening the blocking loader', async () => {
   mockRawQuery.mockResolvedValue({ data: { products: [], categories: [], banners: [] } });
   const subscription = testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'boutique-a' }));
   await subscription.unwrap();
-  expect(startMobileLoader).toHaveBeenCalledTimes(1);
+  expect(startMobileLoader).not.toHaveBeenCalled();
 
   jest.clearAllMocks();
   testStore.dispatch(samiraApi.util.invalidateTags(['Products']));
@@ -178,8 +263,41 @@ test('product detail, categories and banners carry their own explicit store scop
   await testStore.dispatch(samiraApi.endpoints.getCategories.initiate({ store: 'boutique' }, { subscribe: false }));
   await testStore.dispatch(samiraApi.endpoints.getBanners.initiate({ store: 'boutique' }, { subscribe: false }));
   expect(mockRawQuery.mock.calls.map(([args]) => args)).toEqual([
-    { url: '/products/item', params: { store: 'boutique' } },
-    { url: '/categories', params: { store: 'boutique' } },
-    { url: '/banners', params: { store: 'boutique' } },
+    { url: '/products/item', params: { store: 'boutique' }, timeout: STOREFRONT_READ_TIMEOUT },
+    { url: '/categories', params: { store: 'boutique' }, timeout: STOREFRONT_READ_TIMEOUT },
+    { url: '/banners', params: { store: 'boutique' }, timeout: STOREFRONT_READ_TIMEOUT },
   ]);
+});
+
+test('a pending or timed-out background read cannot hold the mobile overlay open', async () => {
+  const pending = defer(); mockRawQuery.mockReturnValue(pending.promise);
+  const response = request('/website-config');
+  expect(startMobileLoader).not.toHaveBeenCalled();
+  pending.resolve({ error: { status: 'TIMEOUT_ERROR' } });
+  expect((await response).error.status).toBe('TIMEOUT_ERROR');
+  expect(stopMobileLoader).not.toHaveBeenCalled();
+});
+
+test('checkout writes retain the busy indicator, do not gain a read timeout, and are not retried on network failure', async () => {
+  const pending = defer(); mockRawQuery.mockReturnValue(pending.promise);
+  const response = testStore.dispatch(samiraApi.endpoints.mutate.initiate({ path: '/payments/create-order', body: { orderId: 'one' } }));
+  expect(startMobileLoader).toHaveBeenCalledTimes(1);
+  expect(stopMobileLoader).not.toHaveBeenCalled();
+  expect(mockRawQuery.mock.calls[0][0]).not.toHaveProperty('timeout');
+  pending.resolve({ error: { status: 'FETCH_ERROR' } });
+  await response;
+  expect(stopMobileLoader).toHaveBeenCalledTimes(1);
+  expect(mockRawQuery).toHaveBeenCalledTimes(1);
+});
+
+test('compact home feed is expanded transparently and simultaneous subscribers share one request', async () => {
+  const pending = defer(); mockRawQuery.mockReturnValue(pending.promise);
+  const first = testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'one' }));
+  const second = testStore.dispatch(samiraApi.endpoints.getMobileHome.initiate({ store: 'one' }));
+  const product = { _id: 'product-one', price: 100 };
+  pending.resolve({ data: { format: 'compact-v1', products: [product], collections: { featured: ['product-one'] } } });
+  expect((await first).data.collections.featured).toEqual([product]);
+  expect((await second).data.products).toEqual([product]);
+  expect(mockRawQuery).toHaveBeenCalledTimes(1);
+  first.unsubscribe(); second.unsubscribe();
 });
